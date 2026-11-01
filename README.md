@@ -19,6 +19,8 @@ Abra http://127.0.0.1:4173 e escolha o modelo no topo. Também é possível abri
 - [Direção da plataforma](DIRECAO-DA-PLATAFORMA.md)
 - [Design e UX](DESIGN-UI-UX.md)
 - [Mapas e gráficos: implementado e próximos passos](MAPAS-E-GRAFICOS.md)
+- [Plano de ingestão e qualidade dos dados oficiais](docs/PLANO-DADOS-REAIS.md)
+- [Matriz de validação dos dados reais — a implementar](docs/MATRIZ-DE-VALIDACAO.md)
 - [Proposta de stack futura](STACK-TECNICA.md)
 - [MVP, funcionalidades e verificação](mvp/README.md)
 
