@@ -18,6 +18,7 @@ Abra http://127.0.0.1:4173 e escolha o modelo no topo. Também é possível abri
 
 - [Direção da plataforma](DIRECAO-DA-PLATAFORMA.md)
 - [Design e UX](DESIGN-UI-UX.md)
+- [Mapas e gráficos: implementado e próximos passos](MAPAS-E-GRAFICOS.md)
 - [Proposta de stack futura](STACK-TECNICA.md)
 - [MVP, funcionalidades e verificação](mvp/README.md)
 
@@ -30,6 +31,7 @@ Com o servidor ativo, Playwright e seu Chromium instalados:
 ```sh
 node mvp/verify.cjs
 node mvp/verify-portal.cjs
+node mvp/verify-discovery.cjs
 ```
 
 Os relatórios e screenshots são gerados em `output/qa/` e não são versionados. As referências visuais e a origem das imagens estão em `mvp/assets/README.md`.

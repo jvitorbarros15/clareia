@@ -83,6 +83,7 @@ Com o servidor ativo e Playwright disponível:
 ```powershell
 node mvp/verify.cjs
 node mvp/verify-portal.cjs
+node mvp/verify-discovery.cjs
 ```
 
 O script usa `playwright` instalado no projeto ou, no Windows, a instalação global em `%APPDATA%/npm/node_modules/playwright`. Relatório em [verification.json](../output/qa/verification.json).

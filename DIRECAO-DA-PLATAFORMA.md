@@ -1,6 +1,7 @@
 # Clareia — ideias e direção da plataforma
 
 > Documento de trabalho · 31 de outubro de 2026  
+> Atualização: 1º de novembro de 2026 — [mapas e gráficos conectados](MAPAS-E-GRAFICOS.md), com distinção entre recursos demonstrativos implementados e expansões dependentes de fontes reais.
 > Idioma do produto: português brasileiro.  
 > **Clareia é um nome provisório.** Marca e domínio ainda não foram verificados.
 
