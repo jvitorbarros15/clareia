@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+*.log
+.codex/
+.agents/
+.vercel/
+data/raw/
+data/private/
+output/qa/
+playwright-report/
+test-results/
+
