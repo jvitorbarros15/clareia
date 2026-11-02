@@ -84,7 +84,7 @@
   function header() {
     const nav = model === 'editorial' ? '<a href="#rankings">Pessoas</a><a href="#comparison">Gastos</a><a href="#" data-action="votes">Votações</a>' : '<a href="#rankings">Explorar</a><a href="#" data-action="compare">Comparar</a><a href="#" data-action="methodology">Metodologia</a>';
     return `<header class="site-header"><a class="logo" href="${modelURL(model)}" aria-label="Clareia, início">clareia<svg class="brand-rays" viewBox="0 0 25 30" aria-hidden="true"><path d="M5 8 8 3M10 13l8-3M11 19l9 2M6 23l4 5"/></svg></a>
-      ${model === 'explorador' ? searchForm(true) : `<nav class="nav" aria-label="Navegação principal">${nav}</nav>`}
+      ${model === 'explorador' ? searchForm(true) : model === 'editorial' ? '' : `<nav class="nav" aria-label="Navegação principal">${nav}</nav>`}
       ${model === 'editorial' ? `<button class="header-search" data-action="focus-search" aria-label="Ir para a busca">${icon('search')}</button>` : `<span class="demo-badge">${model === 'explorador' ? 'Dados fictícios' : 'Conceito • dados fictícios'}</span>`}</header>`;
   }
   function select(key, label, options) {
@@ -123,7 +123,7 @@
   }
   function rankingSection() {
     if (model === 'investigacao') return `<section class="rank-section" id="rankings" aria-labelledby="rank-title"><h2 id="rank-title" class="section-heading">Mude o recorte. Descubra o contexto.</h2>${tabs()}<div class="filters"><div class="selects">${yearSelect()}${ufSelect()}${categorySelect()}</div>${metricToggle()}</div><div class="cards">${cards()}</div><p class="rank-note">${icon('info')}${rankNote()}</p></section>`;
-    if (model === 'editorial') return `<section class="editorial-rank" id="rankings" aria-label="Rankings de parlamentares">${tabs()}<div class="editorial-controls"><div class="selects">${yearSelect()}${ufSelect()}</div>${metricToggle(true)}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}</section>`;
+    if (model === 'editorial') return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Rankings de parlamentares</h2>${tabs()}<div class="editorial-controls"><div class="selects">${yearSelect()}${ufSelect()}</div>${metricToggle(true)}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}</section>`;
     return `<section class="explorer-rank" id="rankings" aria-label="Explore os rankings">${tabs()}<div class="cards explorer-cards">${cards()}</div><div class="filters explorer-filters">${metricToggle(true)}<div class="selects">${ufSelect()}${yearSelect()}</div></div><div class="explorer-extra">${categorySelect()}<button data-action="reverse">${state.tab === 'menos' ? 'Ver maiores gastos ↑' : 'Ver menores gastos ↓'}</button></div>${barSection()}<p class="ranking-context">${rankNote()}</p></section>`;
   }
   function monthly(p) { return monthNames.map((_, month) => month < p.months ? sum(records(p).filter(r => r.month === month)) : null); }

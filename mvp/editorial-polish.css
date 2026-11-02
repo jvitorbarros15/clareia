@@ -1,0 +1,250 @@
+/* Editorial polish layer, loaded last. Scoped to the editorial model. Fonts are local (OFL, see assets/fonts). */
+@font-face{font-family:"Newsreader";src:url(assets/fonts/newsreader-latin.woff2) format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
+@font-face{font-family:"Public Sans";src:url(assets/fonts/public-sans-latin.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Caveat";src:url(assets/fonts/caveat-latin.woff2) format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
+
+/* Text floor: every rule below 12px raised for the editorial model. :where() keeps the original specificity, so file order decides. */
+:where(body[data-model=editorial]) .prototype-bar{font-size:13px}
+:where(body[data-model=editorial]) .demo-badge{font-size:13px}
+:where(body[data-model=editorial]) .suggestions p{font-size:12px}
+:where(body[data-model=editorial]) .eyebrow{font-size:13px}
+:where(body[data-model=editorial]) .answer .eyebrow{font-size:12px}
+:where(body[data-model=editorial]) .card-info .text-button{font-size:13px}
+:where(body[data-model=editorial]) .rank-note{font-size:13px}
+:where(body[data-model=editorial]) .ranking-context{font-size:13px}
+:where(body[data-model=editorial]) .chart-legend button{font-size:13px}
+:where(body[data-model=editorial]) .line-chart text{font-size:13px}
+:where(body[data-model=editorial]) .chart-table-toggle{font-size:13px}
+:where(body[data-model=editorial]) .footer{font-size:13px}
+:where(body[data-model=editorial]) .editorial-subtitle{font-size:13px}
+:where(body[data-model=editorial]) .editorial-feature .eyebrow{font-size:12px}
+:where(body[data-model=editorial]) .editorial-controls .select-label select{font-size:13px}
+:where(body[data-model=editorial]) .editorial-controls .metric-toggle button{font-size:13px}
+:where(body[data-model=editorial]) .editorial-card .card-caption{font-size:12px}
+:where(body[data-model=editorial]) .rank-more{font-size:13px}
+:where(body[data-model=editorial]) .evidence-pop dl{font-size:13px}
+:where(body[data-model=editorial]) .evidence-pop .context{font-size:12px}
+:where(body[data-model=editorial]) .avatar .initials{font-size:12px}
+:where(body[data-model=editorial]) .section-dock{font-size:13px}
+:where(body[data-model=editorial]) .motion-toggle{font-size:12px}
+:where(body[data-model=editorial]) .p-kicker{font-size:12px}
+:where(body[data-model=editorial]) .p-badge{font-size:12px}
+:where(body[data-model=editorial]) .p-small{font-size:13px}
+:where(body[data-model=editorial]) .p-overview-head>span{font-size:12px}
+:where(body[data-model=editorial]) .p-stat-label{font-size:13px}
+:where(body[data-model=editorial]) .p-stat-detail{font-size:12px}
+:where(body[data-model=editorial]) .donut-hole>span{font-size:13px}
+:where(body[data-model=editorial]) .donut-hole small{font-size:12px}
+:where(body[data-model=editorial]) .month-markers{font-size:12px}
+:where(body[data-model=editorial]) .p-mini-bars small{font-size:12px}
+:where(body[data-model=editorial]) .supplier-index{font-size:12px}
+:where(body[data-model=editorial]) .supplier-list small{font-size:12px}
+:where(body[data-model=editorial]) .map-topline{font-size:12px}
+:where(body[data-model=editorial]) .map-topline button{font-size:12px}
+:where(body[data-model=editorial]) .map-key{font-size:12px}
+:where(body[data-model=editorial]) .map-select{font-size:12px}
+:where(body[data-model=editorial]) .map-select select{font-size:13px}
+:where(body[data-model=editorial]) .atlas-numbers span{font-size:13px}
+:where(body[data-model=editorial]) .atlas-people small,:where(body[data-model=editorial]) .saved-people small{font-size:12px}
+:where(body[data-model=editorial]) .follow-button{font-size:12px}
+:where(body[data-model=editorial]) .compare-controls>label{font-size:12px}
+:where(body[data-model=editorial]) .p-metric button{font-size:13px}
+:where(body[data-model=editorial]) .compare-person p{font-size:12px}
+:where(body[data-model=editorial]) .comparison-center p{font-size:13px}
+:where(body[data-model=editorial]) .comparison-center button{font-size:13px}
+:where(body[data-model=editorial]) .compare-category b{font-size:13px}
+:where(body[data-model=editorial]) .compare-foot p{font-size:13px}
+:where(body[data-model=editorial]) .topic-tabs button{font-size:13px}
+:where(body[data-model=editorial]) .project-top{font-size:12px}
+:where(body[data-model=editorial]) .project-topic{font-size:12px}
+:where(body[data-model=editorial]) .project-author small{font-size:12px}
+:where(body[data-model=editorial]) .project-bottom{font-size:13px}
+:where(body[data-model=editorial]) .voter-control>span{font-size:12px}
+:where(body[data-model=editorial]) .vote-card-head{font-size:12px}
+:where(body[data-model=editorial]) .vote-card>p{font-size:13px}
+:where(body[data-model=editorial]) .vote-tally{font-size:12px}
+:where(body[data-model=editorial]) .your-vote{font-size:13px}
+:where(body[data-model=editorial]) .your-vote small{font-size:12px}
+:where(body[data-model=editorial]) .vote-card>.p-link{font-size:13px}
+:where(body[data-model=editorial]) .dossier-card p{font-size:13px}
+:where(body[data-model=editorial]) .dossier-foot{font-size:12px}
+:where(body[data-model=editorial]) .timeline-heading select{font-size:13px}
+:where(body[data-model=editorial]) .timeline-event time{font-size:12px}
+:where(body[data-model=editorial]) .timeline-event p{font-size:13px}
+:where(body[data-model=editorial]) .saved-projects{font-size:13px}
+:where(body[data-model=editorial]) .weekly-button{font-size:13px}
+:where(body[data-model=editorial]) .closing-questions button{font-size:13px}
+:where(body[data-model=editorial]) .trust-row>div>span{font-size:13px}
+:where(body[data-model=editorial]) .trust-row p{font-size:13px}
+:where(body[data-model=editorial]) .footer-brand>p{font-size:13px}
+:where(body[data-model=editorial]) .footer-links a,:where(body[data-model=editorial]) .footer-links button{font-size:13px}
+:where(body[data-model=editorial]) .footer-disclaimer{font-size:12px}
+:where(body[data-model=editorial]) .footer-disclaimer>button{font-size:13px}
+:where(body[data-model=editorial]) .assistant-launcher{font-size:13px}
+:where(body[data-model=editorial]) .detail-project-author p{font-size:13px}
+:where(body[data-model=editorial]) .project-detail-trail small{font-size:12px}
+:where(body[data-model=editorial]) .amendment-path small{font-size:12px}
+:where(body[data-model=editorial]) .brief-person small,:where(body[data-model=editorial]) .brief-person span{font-size:13px}
+[data-model=editorial] .project-topic{font-size:12px}
+:where(body[data-model=editorial]) .directory-heading>span{font-size:12px}
+:where(body[data-model=editorial]) .directory-person p{font-size:12px}
+:where(body[data-model=editorial]) .directory-stats small{font-size:12px}
+:where(body[data-model=editorial]) .directory-actions{font-size:12px}
+@media(max-width:700px){
+:where(body[data-model=editorial]) .model-links a{font-size:13px}
+:where(body[data-model=editorial]) .nav{font-size:13px}
+:where(body[data-model=editorial]) .demo-badge{font-size:12px}
+:where(body[data-model=editorial]) .outline-button{font-size:13px}
+:where(body[data-model=editorial]) .tabs button{font-size:13px}
+:where(body[data-model=editorial]) .metric-toggle button{font-size:13px}
+:where(body[data-model=editorial]) .select-label select{font-size:13px}
+:where(body[data-model=editorial]) .card-info .text-button{font-size:12px}
+:where(body[data-model=editorial]) .chart-legend button{font-size:12px}
+:where(body[data-model=editorial]) .footer{font-size:12px}
+:where(body[data-model=editorial]) .editorial-subtitle{font-size:12px}
+:where(body[data-model=editorial]) .editorial-card .card-caption{font-size:12px}
+:where(body[data-model=editorial]) .editorial-controls .metric-toggle button{font-size:12px}
+:where(body[data-model=editorial]) .editorial-controls .select-label select{font-size:12px}
+:where(body[data-model=editorial]) .bar-row .bar-name{font-size:12px}
+:where(body[data-model=editorial]) .bar-row .bar-value{font-size:13px}
+:where(body[data-model=editorial]) .evidence-pop{font-size:13px}
+[data-model=editorial] .nav{font-size:13px}
+}
+@media(max-width:430px){
+:where(body[data-model=editorial]) .search-submit{font-size:13px}
+:where(body[data-model=editorial]) .answer-row b{font-size:13px}
+:where(body[data-model=editorial]) .context{font-size:12px}
+:where(body[data-model=editorial]) .editorial-subtitle{font-size:12px}
+:where(body[data-model=editorial]) .editorial-left .search-form input::placeholder{font-size:12px}
+:where(body[data-model=editorial]) .editorial-card .card-caption{font-size:12px}
+:where(body[data-model=editorial]) .editorial-controls .metric-toggle button{font-size:12px}
+}
+@media(max-width:800px){
+:where(body[data-model=editorial]) .p-badge{font-size:12px}
+:where(body[data-model=editorial]) .donut-hole>span{font-size:12px}
+:where(body[data-model=editorial]) .donut-hole small{font-size:12px}
+:where(body[data-model=editorial]) .donut-legend button{font-size:12px}
+:where(body[data-model=editorial]) .supplier-list button{font-size:12px}
+:where(body[data-model=editorial]) .supplier-list b{font-size:12px}
+:where(body[data-model=editorial]) .map-topline{font-size:12px}
+:where(body[data-model=editorial]) .atlas-people>div>button:not(.follow-button){font-size:13px}
+:where(body[data-model=editorial]) .atlas-people small{font-size:12px}
+:where(body[data-model=editorial]) .atlas-detail .p-primary{font-size:13px}
+:where(body[data-model=editorial]) .comparison-center p{font-size:12px}
+:where(body[data-model=editorial]) .compare-category{font-size:12px}
+:where(body[data-model=editorial]) .vote-card-head{font-size:12px}
+:where(body[data-model=editorial]) .vote-tally{font-size:13px}
+:where(body[data-model=editorial]) .your-vote small{font-size:12px}
+:where(body[data-model=editorial]) .trust-row p{font-size:12px}
+:where(body[data-model=editorial]) .assistant-launcher{font-size:12px}
+}
+@media(max-width:560px){
+:where(body[data-model=editorial]) .section-dock{font-size:12px}
+:where(body[data-model=editorial]) .motion-toggle{font-size:12px}
+:where(body[data-model=editorial]) .p-kicker{font-size:12px}
+:where(body[data-model=editorial]) .p-overview-head>span{font-size:12px}
+:where(body[data-model=editorial]) .p-stat-label{font-size:12px}
+:where(body[data-model=editorial]) .p-stat-detail{font-size:12px}
+:where(body[data-model=editorial]) .donut-hole>span{font-size:13px}
+:where(body[data-model=editorial]) .donut-hole small{font-size:12px}
+:where(body[data-model=editorial]) .map-topline{font-size:12px}
+:where(body[data-model=editorial]) .atlas-people small{font-size:12px}
+:where(body[data-model=editorial]) .compare-controls>label{font-size:12px}
+:where(body[data-model=editorial]) .compare-controls select{font-size:12px}
+:where(body[data-model=editorial]) .p-metric button{font-size:12px}
+:where(body[data-model=editorial]) .compare-person p{font-size:12px}
+:where(body[data-model=editorial]) .compare-person .follow-button{font-size:12px}
+:where(body[data-model=editorial]) .comparison-center p{font-size:12px}
+:where(body[data-model=editorial]) .comparison-center button{font-size:12px}
+:where(body[data-model=editorial]) .compare-category{font-size:12px}
+:where(body[data-model=editorial]) .compare-category b{font-size:12px}
+:where(body[data-model=editorial]) .topic-tabs button{font-size:12px}
+:where(body[data-model=editorial]) .project-top{font-size:12px}
+:where(body[data-model=editorial]) .project-bottom{font-size:13px}
+:where(body[data-model=editorial]) .voter-control{font-size:13px}
+:where(body[data-model=editorial]) .voter-control select{font-size:13px}
+:where(body[data-model=editorial]) .vote-card-head{font-size:12px}
+:where(body[data-model=editorial]) .dossier-foot{font-size:12px}
+:where(body[data-model=editorial]) .timeline-event time{font-size:12px}
+:where(body[data-model=editorial]) .timeline-event p{font-size:12px}
+:where(body[data-model=editorial]) .weekly-button{font-size:12px}
+:where(body[data-model=editorial]) .closing-questions button{font-size:12px}
+:where(body[data-model=editorial]) .trust-row p{font-size:13px}
+:where(body[data-model=editorial]) .footer-brand p{font-size:12px}
+:where(body[data-model=editorial]) .footer-links a,:where(body[data-model=editorial]) .footer-links button{font-size:12px}
+:where(body[data-model=editorial]) .footer-disclaimer{font-size:12px}
+:where(body[data-model=editorial]) .assistant-launcher>span:not(.assistant-spark){font-size:12px}
+:where(body[data-model=editorial]) .directory-controls input,:where(body[data-model=editorial]) .directory-controls select{font-size:13px}
+:where(body[data-model=editorial]) .directory-person p{font-size:12px}
+:where(body[data-model=editorial]) .directory-stats small{font-size:12px}
+:where(body[data-model=editorial]) .directory-actions{font-size:13px}
+}
+
+/* Type system: Newsreader for headlines and figures, Public Sans for interface and reading. */
+body[data-model=editorial]{--serif:"Newsreader",Georgia,serif;--sans:"Public Sans",Arial,sans-serif;--chart2:#3f63e6;--chart3:#6688f2;--ease-out:cubic-bezier(.23,1,.32,1);font-family:var(--sans)}
+body[data-model=editorial] :is(input,select,button,textarea){font-family:inherit}
+body[data-model=editorial] :is(h1,h2,h3){text-wrap:balance}
+body[data-model=editorial] p{text-wrap:pretty}
+body[data-model=editorial] .editorial-title{font-size:clamp(60px,8.2vw,96px);letter-spacing:-.035em;font-weight:500;line-height:.92}
+body[data-model=editorial] .editorial-subtitle{font-size:13px;letter-spacing:.14em;max-width:320px;line-height:1.6;font-weight:600}
+body[data-model=editorial] .editorial-handwritten{font:600 31px/1 "Caveat","Segoe Print",cursive;max-width:200px}
+body[data-model=editorial] .editorial-feature .eyebrow{font-size:14px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--accent)}
+body[data-model=editorial] .editorial-feature .feature-value{letter-spacing:-.03em;font-weight:500}
+body[data-model=editorial] .editorial-feature p{font-size:19px;line-height:1.3;max-width:320px}
+body[data-model=editorial] .eyebrow{text-transform:none;letter-spacing:0;font-size:14px;font-weight:600}
+body[data-model=editorial] .p-kicker{text-transform:none;letter-spacing:0;font-size:15px;font-weight:600;color:var(--accent);margin-bottom:10px}
+body[data-model=editorial] .supplier-index{display:none}
+body[data-model=editorial] .card-caption,body[data-model=editorial] .ranking-context{font-size:13px}
+
+/* Ranking: numerals keep the order, now with readable contrast (3.5:1 for large type). */
+body[data-model=editorial] .editorial-card .rank-number{letter-spacing:-.03em}
+body[data-model=editorial] .editorial-card:not(:first-child) .rank-number{opacity:1;color:#5a7ef2}
+body[data-model=editorial] .editorial-card .value-button{font-weight:600;letter-spacing:-.01em}
+
+/* Controls: one aligned chevron, 44px targets, readable labels. */
+body[data-model=editorial] .editorial-controls .select-label select{font-size:15px;min-height:44px;padding:10px 30px 10px 0}
+body[data-model=editorial] .select-label:after{content:"";top:50%;right:10px;width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-70%) rotate(45deg)}
+body[data-model=editorial] .editorial-controls .metric-toggle button{font-size:14px;min-height:44px;padding:8px 16px}
+body[data-model=editorial] .section-dock{font-size:14px;gap:26px}
+body[data-model=editorial] .section-dock a:after{bottom:-17px}
+body[data-model=editorial] .motion-toggle{font-size:13px}
+
+/* Motion: short, strong ease-out; press feedback; hover lifts only where a pointer hovers. */
+body[data-model=editorial] :is(button,.p-primary,.outline-button){transition:transform 160ms var(--ease-out),background-color 160ms ease,color 160ms ease,border-color 160ms ease,box-shadow 200ms var(--ease-out)}
+body[data-model=editorial] :is(button,.p-primary,.outline-button):active{transform:scale(.97)}
+body[data-model=editorial] .section-dock a:after{transition:transform 220ms var(--ease-out)}
+@media (hover:none){
+body[data-model=editorial] :is(.p-primary,.assistant-launcher):hover{transform:none;box-shadow:none}
+body[data-model=editorial] .donut-panel:hover .spend-donut{transform:none}
+}
+
+@media(max-width:700px){
+body[data-model=editorial] .editorial-title{font-size:clamp(52px,15vw,74px)}
+body[data-model=editorial] .editorial-subtitle{font-size:12px;letter-spacing:.12em;max-width:230px}
+body[data-model=editorial] .editorial-handwritten{font-size:22px;max-width:130px}
+body[data-model=editorial] .editorial-feature p{font-size:17px}
+body[data-model=editorial] .section-dock{font-size:14px;gap:20px}
+body[data-model=editorial] .editorial-controls .metric-toggle button{font-size:13px;padding:8px 12px}
+}
+
+/* Phone: the podium becomes a ranked list so numerals never sit on a face. */
+@media(max-width:560px){
+body[data-model=editorial] .editorial-rank .cards{grid-template-columns:1fr;gap:0}
+body[data-model=editorial] .editorial-card{display:grid;grid-template-columns:132px minmax(0,1fr);gap:16px;align-items:center;border-right:0;border-bottom:1px solid var(--line);padding:14px 0}
+body[data-model=editorial] .editorial-card:last-child{border-bottom:0}
+body[data-model=editorial] .editorial-card .portrait-button{height:120px}
+body[data-model=editorial] .editorial-card .photo{margin-left:34%;width:66%}
+body[data-model=editorial] .editorial-card .rank-number{font-size:44px}
+body[data-model=editorial] .editorial-card .person-name{margin-top:0}
+/* Phone hero: a single column, so the portrait and the note never cover the headline or the figure. */
+body[data-model=editorial] .editorial-hero{display:flex;flex-direction:column;min-height:0;padding-bottom:4px}
+body[data-model=editorial] .editorial-left .search-wrap{width:100%}
+body[data-model=editorial] .editorial-handwritten{order:3;position:relative;top:auto;right:auto;align-self:flex-end;margin:18px 6px -54px 0;font-size:24px;max-width:150px}
+body[data-model=editorial] .hero-portrait{order:4;position:relative;width:100%;height:auto;aspect-ratio:4/3;right:auto;bottom:auto}
+body[data-model=editorial] .editorial-feature{order:5;padding:24px 0 28px}
+body[data-model=editorial] .editorial-feature .feature-value{font-size:52px;white-space:normal}
+body[data-model=editorial] .editorial-feature p{max-width:none}
+}
+
+/* Closing panel on the accent field: full-strength white text instead of translucent tints (was 3.0–4.2:1). */
+body[data-model=editorial] :is(#perguntar .p-kicker,.closing-top>p,.trust-row>div>span,.trust-row p,#perguntar>.p-link){opacity:1}
