@@ -191,7 +191,7 @@ body[data-model=editorial] .editorial-handwritten{font:600 31px/1 "Caveat","Sego
 body[data-model=editorial] .editorial-feature .eyebrow{font-size:14px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--accent)}
 body[data-model=editorial] .editorial-feature .feature-value{letter-spacing:-.03em;font-weight:500}
 body[data-model=editorial] .editorial-feature p{font-size:19px;line-height:1.3;max-width:320px}
-body[data-model=editorial] .eyebrow{text-transform:none;letter-spacing:0;font-size:14px;font-weight:600}
+body[data-model=editorial] :is(.eyebrow,.suggestions>p){text-transform:none;letter-spacing:0;font-size:14px;font-weight:600}
 body[data-model=editorial] .p-kicker{text-transform:none;letter-spacing:0;font-size:15px;font-weight:600;color:var(--accent);margin-bottom:10px}
 body[data-model=editorial] .supplier-index{display:none}
 body[data-model=editorial] .card-caption,body[data-model=editorial] .ranking-context{font-size:13px}
@@ -275,3 +275,39 @@ body[data-model=editorial] :is(.header-search,.project-save,.follow-button,.text
 /* Round 4: a dead-end answer now offers questions the sample can answer. */
 .answer-next{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px}
 .answer-next>span{font-size:13px;color:var(--muted)}
+
+/* Round 5: motion. Each move passed Emil's gate (frequency, purpose, budget, function).
+   Hero sequence: first view only (rare), the editorial signature. The portrait opens like a page, the note is "written". */
+body[data-model=editorial]{--ease-in-out:cubic-bezier(.77,0,.175,1);--ease-drawer:cubic-bezier(.32,.72,0,1)}
+@keyframes ed-rise{from{opacity:0;transform:translateY(18px)}}
+@keyframes ed-open{from{clip-path:inset(0 0 0 100%)}to{clip-path:inset(0)}}
+@keyframes ed-write{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 -10% 0 0)}}
+@keyframes ed-grow{from{transform:scaleX(0)}}
+body[data-model=editorial][data-motion=on] .editorial-title{animation:ed-rise 640ms var(--ease-out) backwards}
+body[data-model=editorial][data-motion=on] .editorial-title em{animation:ed-rise 640ms 90ms var(--ease-out) backwards}
+body[data-model=editorial][data-motion=on] .editorial-left{animation:ed-rise 560ms 200ms var(--ease-out) backwards}
+body[data-model=editorial][data-motion=on] .hero-portrait{animation:ed-open 1000ms 120ms var(--ease-in-out) backwards}
+body[data-model=editorial][data-motion=on] .editorial-handwritten{animation:ed-write 900ms 900ms cubic-bezier(.45,.05,.55,.95) backwards}
+body[data-model=editorial][data-motion=on] .editorial-feature{animation:ed-rise 560ms 320ms var(--ease-out) backwards}
+
+/* Comparativo: bars grow from the baseline as they enter, so the order is read as a length (explanation, occasional). */
+body[data-model=editorial] .bar-row .track i{transform-origin:left center}
+@supports (animation-timeline:view()){
+body[data-model=editorial][data-motion=on] .bar-row .track i{animation:ed-grow linear both;animation-timeline:view();animation-range:entry 20% cover 35%}
+}
+
+/* Detail drawer: slides from the edge it lives on and leaves the same way (spatial consistency, occasional). */
+body[data-model=editorial] .detail-dialog{transform:translateX(100%);transition:transform 380ms var(--ease-drawer),overlay 380ms allow-discrete,display 380ms allow-discrete}
+body[data-model=editorial] .detail-dialog[open]{transform:none}
+body[data-model=editorial] .detail-dialog::backdrop{opacity:0;transition:opacity 240ms ease,overlay 380ms allow-discrete,display 380ms allow-discrete}
+body[data-model=editorial] .detail-dialog[open]::backdrop{opacity:1}
+@starting-style{
+body[data-model=editorial] .detail-dialog[open]{transform:translateX(100%)}
+body[data-model=editorial] .detail-dialog[open]::backdrop{opacity:0}
+}
+@media(max-width:560px){
+body[data-model=editorial] .detail-dialog{transform:translateY(100%)}
+@starting-style{body[data-model=editorial] .detail-dialog[open]{transform:translateY(100%)}}
+}
+body[data-model=editorial][data-motion=off] .detail-dialog{transform:none}
+@media(prefers-reduced-motion:reduce){body[data-model=editorial] .detail-dialog{transform:none}}
