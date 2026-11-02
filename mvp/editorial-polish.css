@@ -248,3 +248,26 @@ body[data-model=editorial] .editorial-feature p{max-width:none}
 
 /* Closing panel on the accent field: full-strength white text instead of translucent tints (was 3.0–4.2:1). */
 body[data-model=editorial] :is(#perguntar .p-kicker,.closing-top>p,.trust-row>div>span,.trust-row p,#perguntar>.p-link){opacity:1}
+
+/* Round 2: shared scale is fixed in JS; here the editorial details below the fold. */
+body[data-model=editorial] .linked-totals>div{border-left:0;border-top:3px solid;padding:14px 0 0}
+body[data-model=editorial] .dossier-num{display:none}
+body[data-model=editorial] .project-topic{text-transform:none;letter-spacing:0;font-size:14px;font-weight:600}
+body[data-model=editorial] :is(.project-top>span,.vote-card-head>span:first-child){display:inline-block;text-transform:lowercase;letter-spacing:0}
+body[data-model=editorial] :is(.project-top>span,.vote-card-head>span:first-child)::first-letter{text-transform:uppercase}
+body[data-model=editorial] .trust-row>div>span{display:none}
+
+/* Round 3 (phone): the dossier grid reserved a column for the hidden number; collapse it. */
+@media(max-width:560px){
+body[data-model=editorial] .dossier-card:nth-child(n){display:flex;flex-direction:column;min-height:0}
+/* The floating assistant shrinks to its mark so it covers less of the reading column. */
+body[data-model=editorial] .assistant-launcher>span:not(.assistant-spark),body[data-model=editorial] .assistant-launcher>svg{display:none}
+body[data-model=editorial] .assistant-launcher{width:52px;height:52px;padding:0;justify-content:center}
+body[data-model=editorial] .compare-category{grid-template-columns:62px 1fr 76px 1fr 62px;gap:6px}
+body[data-model=editorial] .compare-category>span{white-space:nowrap}
+body[data-model=editorial] .linked-chart-body svg{min-width:620px}
+}
+
+/* Touch targets: at least 44px hit area without changing the drawn size. */
+body[data-model=editorial] :is(.header-search,.project-save,.follow-button,.text-button,.value-button,.swap-button){position:relative}
+body[data-model=editorial] :is(.header-search,.project-save,.follow-button,.text-button,.value-button,.swap-button)::after{content:"";position:absolute;inset:50% auto auto 50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
