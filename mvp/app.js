@@ -10,7 +10,7 @@
     category: categories.includes(initial.get('categoria')) ? initial.get('categoria') : 'Todas',
     metric: initial.get('metrica') === 'mensal' ? 'mensal' : 'total',
     tab: ['menos', 'projetos', 'votacoes'].includes(initial.get('aba')) ? initial.get('aba') : 'gastos',
-    query: initial.get('q') || '', answer: null, hiddenSeries: new Set(), popover: null
+    query: initial.get('q') || '', featured: 'ana', answer: null, hiddenSeries: new Set(), popover: null
   };
   if (model !== 'explorador' && state.tab === 'votacoes') state.tab = 'gastos';
   let currentEvidence = null, dialogTrigger = null, toastTimer;
@@ -51,7 +51,7 @@
   function photo(p, kind = 'portrait') {
     let source = 'assets/portraits-editorial.png', imageWidth = 1774, imageHeight = 887;
     let rect;
-    if (kind === 'hero') rect = [0, 65, 595, 822];
+    if (kind === 'hero') rect = { ana: [0, 65, 595, 822], bruno: [608, 65, 565, 822], carla: [1183, 65, 591, 822] }[p.id] || [0, 65, 595, 822];
     else if (model === 'investigacao') {
       source = 'assets/investigation.png';
       imageWidth = 1536; imageHeight = 1024;
@@ -166,13 +166,40 @@
     document.title = `Clareia · ${models[model]} · MVP`;
     let main;
     if (model === 'investigacao') main = `<section class="investigation-hero"><p class="eyebrow">Política, com evidências</p><h1>Pergunte. Compare. Confira.</h1><p class="subtitle">Investigue os números dos seus representantes.</p>${searchForm()}<div id="answer-slot" aria-live="polite">${answerHTML()}</div></section><div id="rank-slot">${rankingSection()}</div><div id="chart-slot">${chart()}</div>`;
-    else if (model === 'editorial') main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}</div><div class="hero-portrait">${photo(person('ana'), 'hero')}</div><p class="editorial-handwritten">Mais<br>transparência<br>para um país<br>mais justo.</p><div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section><div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
+    else if (model === 'editorial') main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}</div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured), 'hero')}</div><p class="editorial-handwritten">Mais<br>transparência<br>para um país<br>mais justo.</p><div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section><div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
     else main = `<section class="explorer-hero"><h1>Quem está no topo?<em>Você escolhe o recorte.</em></h1></section><div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div><div id="chart-slot">${chart()}</div>`;
     $('#app').innerHTML = `<div class="prototype-bar"><span class="prototype-label">CLAREIA / ESTUDOS DE INTERFACE</span><nav class="model-links" aria-label="Escolha o modelo">${Object.entries(models).map(([key, name], i) => `<a href="${modelURL(key)}" ${key === model ? 'aria-current="page"' : ''}>0${i + 1} · ${name}</a>`).join('')}</nav><span class="prototype-label">MVP INTERATIVO</span></div><div class="site">${header()}<main id="main">${main}</main><footer class="footer"><span>Pessoas, retratos e dados fictícios. Assistente demonstrativo, sem IA conectada.</span><button data-action="methodology">Fontes e metodologia ↗</button></footer></div>`;
   }
   function editorialFeature() {
-    const p = person('ana');
-    return `<p class="eyebrow">Destaque</p><button class="feature-value" data-action="evidence" data-id="ana" data-kind="gastos">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total de reembolsos'} de Ana Martins em ${state.year}.</p><button class="text-button" data-action="evidence" data-id="ana" data-kind="gastos">Como chegamos nisso? ↗</button>`;
+    const p = person(state.featured);
+    const choices = ['ana', 'bruno', 'carla'].map(id => person(id)).map(c => `<button type="button" data-action="feature" data-id="${c.id}" aria-pressed="${c.id === p.id}">${avatar(c)}<span>${c.name.split(' ')[0]}</span></button>`).join('');
+    return `<p class="eyebrow">Destaque</p><button class="feature-value" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total de reembolsos'} de ${p.name} em ${state.year}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? ↗</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destacar</span>${choices}</div>`;
+  }
+  // Swapping the featured person: portrait reopens, the figure counts from the old value to the new one.
+  function feature(id) {
+    if (id === state.featured) return;
+    const from = Number($('#editorial-feature .feature-value')?.dataset.amount) || 0;
+    state.featured = id;
+    $('#editorial-feature').innerHTML = editorialFeature();
+    const portrait = $('#hero-portrait');
+    portrait.innerHTML = photo(person(id), 'hero');
+    const moving = !matchMedia('(prefers-reduced-motion: reduce)').matches && document.body.dataset.motion !== 'off';
+    $('#editorial-feature [data-action="feature"][aria-pressed="true"]')?.focus({ preventScroll: true });
+    if (!moving) return;
+    portrait.animate([{ clipPath: 'inset(0 0 0 100%)' }, { clipPath: 'inset(0)' }], { duration: 560, easing: 'cubic-bezier(.77,0,.175,1)' });
+    const el = $('#editorial-feature .feature-value'), to = Number(el.dataset.amount), start = performance.now();
+    const tick = now => { const t = Math.min(1, (now - start) / 420), e = 1 - Math.pow(1 - t, 3); el.textContent = compact(Math.round(from + (to - from) * e)); if (t < 1 && el.isConnected) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+  // The tab indicator starts where the previous tab was, then travels to the new one.
+  let tabMark = null;
+  function markTab(animate = true) {
+    const tabs = $('.editorial-rank .tabs'), on = tabs?.querySelector('[aria-pressed="true"]');
+    if (!on) return;
+    const next = { x: on.offsetLeft, w: on.offsetWidth };
+    if (animate && tabMark) { tabs.style.setProperty('--tab-x', tabMark.x + 'px'); tabs.style.setProperty('--tab-w', tabMark.w + 'px'); tabs.getBoundingClientRect(); }
+    tabs.style.setProperty('--tab-x', next.x + 'px'); tabs.style.setProperty('--tab-w', next.w + 'px');
+    tabMark = next;
   }
   function refresh() {
     state.popover = null;
@@ -190,6 +217,7 @@
       const old = before.get(el.dataset.person), now = el.getBoundingClientRect();
       if (old) el.animate([{ transform: `translate(${old.left - now.left}px,${old.top - now.top}px)`, opacity: .65 }, { transform: 'none', opacity: 1 }], { duration: 400, easing: 'cubic-bezier(.2,.8,.2,1)' });
     });
+    markTab();
     syncURL();
     document.dispatchEvent(new CustomEvent('clareia:change'));
   }
@@ -315,6 +343,7 @@
     if (target.dataset.question) { ask(target.dataset.question); return; }
     const id = target.dataset.id, action = target.dataset.action;
     if (action === 'close') closeDialog();
+    else if (action === 'feature') feature(id);
     else if (action === 'evidence') evidence(id, { kind: target.dataset.kind });
     else if (action === 'answer-evidence' && state.answer?.ids?.length) evidence(state.answer.ids[0], { kind: state.answer.kind, compare: state.answer.type === 'compare' ? state.answer.ids[1] : null });
     else if (action === 'records') recordTable(person(id));
@@ -347,8 +376,10 @@
   $('#detail').addEventListener('close', () => { if (dialogTrigger?.isConnected) dialogTrigger.focus({ preventScroll: true }); });
   if (model === 'investigacao' && !state.query) state.answer = { type: 'compare', ids: ['ana', 'bruno'], kind: 'gastos' };
   layout();
+  markTab(false);
+  document.fonts?.ready.then(() => markTab(false));
   window.Clareia = { model, state, all, person, records, sum, money, compact, number, escape, photo, avatar, icon, ask, evidence, profile, recordTable, showDialog, closeDialog, methodology, toast, refresh, sourceBlock };
-  window.addEventListener('resize', () => { if ($('#chart-slot')) $('#chart-slot').innerHTML = chart(); });
+  window.addEventListener('resize', () => { if ($('#chart-slot')) $('#chart-slot').innerHTML = chart(); markTab(false); });
   if (state.query) {
     const restored = {};
     for (const [key, param] of Object.entries({ year: 'ano', uf: 'uf', category: 'categoria', metric: 'metrica', tab: 'aba' })) {

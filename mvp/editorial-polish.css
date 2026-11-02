@@ -314,3 +314,28 @@ body[data-model=editorial][data-motion=off] .detail-dialog{transform:none}
 
 /* Round 6: every section opens with a heading; the overview strip gets a real one. */
 body[data-model=editorial] .p-overview-title{margin:0;font:400 clamp(26px,3vw,34px)/1.1 var(--serif);letter-spacing:-.02em}
+
+/* Round 7. The live thing: choose who the headline is about. */
+body[data-model=editorial] .feature-switch{display:flex;align-items:center;gap:6px;margin-top:22px;flex-wrap:wrap}
+body[data-model=editorial] .feature-switch>span{font-size:13px;color:var(--muted);margin-right:4px}
+body[data-model=editorial] .feature-switch button{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:5px 14px 5px 5px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:14px;font-weight:600}
+body[data-model=editorial] .feature-switch button[aria-pressed=true]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+body[data-model=editorial] .feature-switch .avatar{width:32px;height:32px;border-radius:50%;overflow:hidden;display:block;flex:none}
+@media (hover:hover) and (pointer:fine){body[data-model=editorial] .feature-switch button:not([aria-pressed=true]):hover{border-color:var(--ink)}}
+
+/* The overview reads as a sentence; every figure still opens its records. */
+body[data-model=editorial] .p-overview-sentence{margin:28px 0 0;font:400 clamp(24px,2.6vw,34px)/1.4 var(--serif);letter-spacing:-.01em;max-width:30em;text-wrap:pretty}
+body[data-model=editorial] .p-overview-sentence .p-stat{display:inline;min-height:0;padding:0;margin:0;border:0;background:none;font:inherit;color:inherit;text-align:inherit;text-decoration:underline;text-decoration-color:var(--line);text-decoration-thickness:2px;text-underline-offset:6px;transition:text-decoration-color 160ms ease}
+body[data-model=editorial] .p-overview-sentence .p-stat strong{font:inherit;font-weight:500;color:var(--accent)}
+@media (hover:hover) and (pointer:fine){body[data-model=editorial] .p-overview-sentence .p-stat:hover{text-decoration-color:var(--accent)}}
+body[data-model=editorial] .p-overview-sentence .p-stat:active{transform:none}
+
+/* Ranking tabs: one indicator travels to the chosen tab (state indication, 220ms). */
+body[data-model=editorial] .editorial-rank .tabs{position:relative}
+body[data-model=editorial] .editorial-rank .tabs button[aria-pressed=true]{border-bottom-color:transparent}
+body[data-model=editorial] .editorial-rank .tabs::after{content:"";position:absolute;left:0;bottom:-1px;height:3px;width:var(--tab-w,0);transform:translateX(var(--tab-x,0));background:var(--accent);transition:transform 220ms var(--ease-out),width 220ms var(--ease-out)}
+body[data-model=editorial] .p-overview-sentence .p-stat{padding:0!important;border:0!important}
+body[data-model=editorial] .p-overview-sentence .p-stat strong{margin:0;font-size:inherit;letter-spacing:inherit;line-height:inherit;white-space:nowrap}
+/* A profile without a portrait reads as a monogram, not an empty box. */
+body[data-model=editorial] .editorial-card .initials{margin-left:22%;width:78%;font:400 76px/1 var(--serif);letter-spacing:-.03em;color:var(--accent);background:var(--soft)}
+@media(max-width:560px){body[data-model=editorial] .editorial-card .initials{margin-left:34%;width:66%;font-size:44px}}

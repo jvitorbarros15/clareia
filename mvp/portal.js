@@ -47,6 +47,11 @@
   function overview() {
     const people = scopePeople();
     const total = C.sum(people.flatMap(C.records));
+    if (editorial) {
+      const n=people.length, projects=people.reduce((s,p)=>s+p.projects,0), recs=people.flatMap(C.records).length;
+      const stat=(key,value,text,format='number')=>`<button class="p-stat" data-p-summary="${key}"><strong data-counter="${value}" data-format="${format}">${format==='money'?compact(value):number(value)}</strong> ${text}</button>`;
+      return `<div class="p-overview-head"><h2 class="p-overview-title">Panorama da amostra</h2><span>${scopeText()}</span></div><p class="p-overview-sentence">Neste recorte, ${stat('people',n,n===1?'deputado':'deputados')} ${n===1?'soma':'somam'} ${stat('expenses',total,'em reembolsos','money')}, distribuídos em ${stat('records',recs,'registros')}, e ${n===1?'apresentou':'apresentaram'} ${stat('projects',projects,'projetos de lei')}.</p>`;
+    }
     return `<div class="p-overview-head">${editorial?'<h2 class="p-overview-title">Panorama da amostra</h2>':label('01','Panorama da amostra')}<span>${scopeText()}</span></div><div class="p-stats">${[
       ['Pessoas no recorte',people.length,'perfis para conhecer','people'],
       ['Reembolsos da cota',total,'registros que você pode conferir','expenses'],
