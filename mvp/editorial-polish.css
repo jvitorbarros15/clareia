@@ -271,3 +271,7 @@ body[data-model=editorial] .linked-chart-body svg{min-width:620px}
 /* Touch targets: at least 44px hit area without changing the drawn size. */
 body[data-model=editorial] :is(.header-search,.project-save,.follow-button,.text-button,.value-button,.swap-button){position:relative}
 body[data-model=editorial] :is(.header-search,.project-save,.follow-button,.text-button,.value-button,.swap-button)::after{content:"";position:absolute;inset:50% auto auto 50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
+
+/* Round 4: a dead-end answer now offers questions the sample can answer. */
+.answer-next{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px}
+.answer-next>span{font-size:13px;color:var(--muted)}

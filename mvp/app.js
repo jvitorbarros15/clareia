@@ -151,7 +151,7 @@
   function answerHTML() {
     if (!state.answer) return '';
     const answer = state.answer;
-    if (answer.type === 'message') return `<section class="answer" aria-label="Resposta da investigação"><p class="eyebrow">Assistente demonstrativo • sem IA conectada</p><div class="answer-message"><h3>${escape(answer.title)}</h3><p>${escape(answer.message)}</p></div></section>`;
+    if (answer.type === 'message') return `<section class="answer" aria-label="Resposta da investigação"><p class="eyebrow">Assistente demonstrativo • sem IA conectada</p><div class="answer-message"><h3>${escape(answer.title)}</h3><p>${escape(answer.message)}</p><div class="answer-next"><span>Tente:</span>${['Quem mais gastou por mês?', 'Quem apresentou mais projetos?'].map(q => `<button type="button" class="outline-button" data-question="${escape(q)}">${escape(q)}</button>`).join('')}</div></div></section>`;
     const ppl = answer.ids.map(person).filter(Boolean), max = Math.max(1, ...ppl.map(p => value(p, answer.kind)));
     let summary = '';
     if (answer.type === 'compare') {
@@ -201,7 +201,7 @@
     let message;
     if (unsupported) message = ['Período fora da demonstração', 'Esta amostra contém apenas 2024 e 2025. Escolha um desses anos.'];
     else if (new Set(years || []).size > 1) message = ['Escolha um ano para esta comparação', 'Neste MVP, as comparações usam um único ano por vez: 2024 ou 2025.'];
-    else if (/votou|votaram|reforma|corrup|roub|honest|melhor|pior|patrimon|emenda|salario|president|senador/.test(q)) message = ['Não temos evidência para responder isso', 'O MVP consulta gastos e projetos fictícios. Não contém votos individuais, patrimônio, emendas ou avaliações morais.'];
+    else if (/votou|votaram|reforma|corrup|roub|honest|melhor|pior|patrimon|emenda|salario|president|senador/.test(q)) message = ['Não temos evidência para responder isso', 'O assistente consulta gastos e projetos fictícios. As votações da página são cenários ilustrativos, na seção Votações; patrimônio, emendas e avaliações morais não estão na amostra.'];
     if (!message) {
       if (years?.length) state.year = years[0];
       const matches = all().filter(p => p.name.split(' ').some(word => new RegExp(`\\b${norm(word)}\\b`).test(q)));
@@ -258,7 +258,7 @@
       resultCaption = percent === null ? 'O denominador é zero.' : percent === 0 ? 'valores iguais no recorte' : `${percent > 0 ? 'a mais' : 'a menos'} no período`;
     }
     const metricName = kind === 'projetos' ? 'Projetos apresentados' : kind === 'votacoes' ? 'Participações em votações' : 'Reembolsos da cota parlamentar';
-    showDialog('Como chegamos nisso?', `<p class="dialog-subtitle">A comparação, passo a passo</p>
+    showDialog('Como chegamos nisso?', `<p class="dialog-subtitle">${comparison ? 'A comparação, passo a passo' : 'O cálculo, passo a passo'}</p>
       <section class="evidence-step"><span class="step-number">1</span><div><h3>O que estamos comparando</h3><p>${metricName} • ${state.year}</p><p>${p.name}${comparison ? ` × ${comparison.name}` : ''}</p></div></section>
       <section class="evidence-step"><span class="step-number">2</span><div><h3>Quais registros entram</h3><p>${count ? 'Amostra demonstrativa de atividade parlamentar' : `${records(p).length} registros fictícios${comparison ? ` + ${records(comparison).length} de ${comparison.name}` : ''}`}. Janeiro a dezembro. ${!count && state.category !== 'Todas' ? `Categoria: ${state.category}.` : ''}</p><p>${p.name.split(' ')[0]}: ${p.months} meses em exercício${comparison ? `; ${comparison.name.split(' ')[0]}: ${comparison.months} meses` : ''}.</p></div></section>
       <section class="evidence-step"><span class="step-number">3</span><div><h3>Como calculamos</h3><p>${formula}</p><div class="calculation-result">${result}<small>${resultCaption}</small></div></div></section>
