@@ -16,12 +16,14 @@ Abra http://127.0.0.1:4173 e escolha o modelo no topo. Também é possível abri
 
 ## Documentação
 
-- [Direção da plataforma](DIRECAO-DA-PLATAFORMA.md)
-- [Design e UX](DESIGN-UI-UX.md)
-- [Mapas e gráficos: implementado e próximos passos](MAPAS-E-GRAFICOS.md)
-- [Plano de ingestão e qualidade dos dados oficiais](docs/PLANO-DADOS-REAIS.md)
-- [Matriz de validação dos dados reais — a implementar](docs/MATRIZ-DE-VALIDACAO.md)
-- [Proposta de stack futura](STACK-TECNICA.md)
+- [Índice dos planos para agentes](<for agents/README.md>)
+- [Plano de coleta e atualização contínua](<for agents/PLANO-COLETA-E-ATUALIZACAO.md>)
+- [Direção da plataforma](<for agents/DIRECAO-DA-PLATAFORMA.md>)
+- [Design e UX](<for agents/DESIGN-UI-UX.md>)
+- [Mapas e gráficos: implementado e próximos passos](<for agents/MAPAS-E-GRAFICOS.md>)
+- [Plano de ingestão e qualidade dos dados oficiais](<for agents/PLANO-DADOS-REAIS.md>)
+- [Matriz de validação dos dados reais — a implementar](<for agents/MATRIZ-DE-VALIDACAO.md>)
+- [Proposta de stack futura](<for agents/STACK-TECNICA.md>)
 - [MVP, funcionalidades e verificação](mvp/README.md)
 
 O MVP é HTML/CSS/JavaScript sem build. A proposta TypeScript/React/Next.js ainda não foi implementada. Favoritos ficam somente no navegador. Não há envio de notificações.

@@ -49,7 +49,7 @@ Confirmar parâmetros, filtros, campos e significado de ausência de resposta no
 
 ## 4. Arquitetura proposta
 
-Manter a direção TypeScript/PostgreSQL da [stack](../STACK-TECNICA.md). Esta branch não escolhe planos comerciais nem faz migração do MVP.
+Manter a direção TypeScript/PostgreSQL da [stack](STACK-TECNICA.md). Esta branch não escolhe planos comerciais nem faz migração do MVP.
 
 ```mermaid
 flowchart LR
