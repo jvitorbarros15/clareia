@@ -36,7 +36,7 @@ A ambição é reunir diferentes dimensões da vida pública: mandatos, gastos, 
 | Rankings como descobertas interativas | Alterar período, grupo e métrica para explorar como a classificação muda | Direção escolhida; regras das métricas a validar |
 | Tecnologia e hospedagem | Proposta de TypeScript, Next.js, PostgreSQL e serviços gerenciados | Recomendação registrada; escolha final em aberto |
 
-O trabalho já inclui um [MVP local das três interfaces escolhidas](mvp/index.html): Investigação verde, Explorador escuro e Editorial azul. Após a remoção dos protótipos anteriores, o usuário solicitou uma nova implementação baseada nas três imagens de referência. Busca demonstrativa, rankings, filtros e evidências funcionam com registros fictícios; ainda não existe integração de dados oficiais, IA conectada ou produto publicado. Consulte as [instruções e capturas verificadas](mvp/README.md).
+O trabalho já inclui um [MVP local das três interfaces escolhidas](../mvp/index.html): Investigação verde, Explorador escuro e Editorial azul. Após a remoção dos protótipos anteriores, o usuário solicitou uma nova implementação baseada nas três imagens de referência. Busca demonstrativa, rankings, filtros e evidências funcionam com registros fictícios; ainda não existe integração de dados oficiais, IA conectada ou produto publicado. Consulte as [instruções e capturas verificadas](../mvp/README.md).
 
 **Expansão de interface — 1º de novembro de 2026:** as três alternativas agora incluem a página completa: panorama, exploração de despesas por período/categoria/fornecedor, mapa esquemático das 27 UFs, diretório com filtros, comparador, projetos e tramitação, cenários de votação, dossiês de eleições/patrimônio/emendas, linha do tempo, favoritos locais e assistente demonstrativo. As composições têm movimento próprio, com controle de animações e respeito à preferência de movimento reduzido. A cobertura continua sendo uma amostra fictícia; expandir a interface não equivale a implementar as integrações previstas no roadmap.
 
@@ -168,7 +168,7 @@ A exploração seguinte está descrita em [Design de UI e UX](DESIGN-UI-UX.md), 
 
 **Direções aprovadas pelo usuário:** busca como assistente de investigação, botão “Como chegamos nisso?” em todo número relevante e rankings como descobertas interativas. A escolha de uma identidade visual permanece em aberto; os comportamentos abaixo orientam qualquer uma das alternativas.
 
-Escolhidas para dar personalidade ao portal e transformar consulta em descoberta. Esboço em [output/esboco-interacoes.svg](output/esboco-interacoes.svg) e MVP navegável em [mvp/index.html](mvp/index.html), ambos com dados fictícios.
+Escolhidas para dar personalidade ao portal e transformar consulta em descoberta. Esboço em [output/esboco-interacoes.svg](../output/esboco-interacoes.svg) e MVP navegável em [mvp/index.html](../mvp/index.html), ambos com dados fictícios.
 
 **1. A busca como assistente de investigação.** A barra deixa de ser só um campo de nome e passa a conduzir a pessoa por uma pequena investigação:
 
@@ -201,15 +201,15 @@ Imagens conceituais geradas durante a conversa, com pessoas e valores fictícios
 
 **Busca, rankings e evidências na mesma tela:** a pergunta gera uma comparação visual; o botão “Como chegamos nisso?” abre o painel com cálculo, categorias e acesso aos registros.
 
-![Conceito com busca investigativa, rankings e painel de evidências](output/conceito-investigacao-e-evidencias.png)
+![Conceito com busca investigativa, rankings e painel de evidências](../output/conceito-investigacao-e-evidencias.png)
 
 **Alternativas de composição:** Editorial enfatiza tipografia e retratos; Investigação organiza a página em torno da pergunta e da resposta; Explorador enfatiza rankings visuais em tema escuro.
 
-![Três alternativas: Editorial, Investigação e Explorador](output/conceitos-editorial-investigacao-explorador.png)
+![Três alternativas: Editorial, Investigação e Explorador](../output/conceitos-editorial-investigacao-explorador.png)
 
 **Atlas Cívico:** alternativa com entrada pelo mapa, rankings por estado e uma faixa de evidências abaixo dos resultados.
 
-![Atlas Cívico com mapa, rankings e detalhamento do valor](output/conceito-atlas-civico.png)
+![Atlas Cívico com mapa, rankings e detalhamento do valor](../output/conceito-atlas-civico.png)
 
 ### Comportamentos importantes
 
