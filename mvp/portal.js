@@ -47,7 +47,7 @@
   function overview() {
     const people = scopePeople();
     const total = C.sum(people.flatMap(C.records));
-    return `<div class="p-overview-head">${label('01','Panorama da amostra')}<span>${scopeText()}</span></div><div class="p-stats">${[
+    return `<div class="p-overview-head">${editorial?'<h2 class="p-overview-title">Panorama da amostra</h2>':label('01','Panorama da amostra')}<span>${scopeText()}</span></div><div class="p-stats">${[
       ['Pessoas no recorte',people.length,'perfis para conhecer','people'],
       ['Reembolsos da cota',total,'registros que você pode conferir','expenses'],
       ['Projetos apresentados',people.reduce((n,p)=>n+p.projects,0),'autoria principal · quantidade','projects'],

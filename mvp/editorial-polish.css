@@ -181,7 +181,7 @@
 }
 
 /* Type system: Newsreader for headlines and figures, Public Sans for interface and reading. */
-body[data-model=editorial]{--serif:"Newsreader",Georgia,serif;--sans:"Public Sans",Arial,sans-serif;--chart2:#3f63e6;--chart3:#6688f2;--ease-out:cubic-bezier(.23,1,.32,1);font-family:var(--sans)}
+body[data-model=editorial]{--serif:"Newsreader",Georgia,serif;--sans:"Public Sans",Arial,sans-serif;--chart2:#0f2f8f;--chart3:#6688f2;--ease-out:cubic-bezier(.23,1,.32,1);font-family:var(--sans)}
 body[data-model=editorial] :is(input,select,button,textarea){font-family:inherit}
 body[data-model=editorial] :is(h1,h2,h3){text-wrap:balance}
 body[data-model=editorial] p{text-wrap:pretty}
@@ -311,3 +311,6 @@ body[data-model=editorial] .detail-dialog{transform:translateY(100%)}
 }
 body[data-model=editorial][data-motion=off] .detail-dialog{transform:none}
 @media(prefers-reduced-motion:reduce){body[data-model=editorial] .detail-dialog{transform:none}}
+
+/* Round 6: every section opens with a heading; the overview strip gets a real one. */
+body[data-model=editorial] .p-overview-title{margin:0;font:400 clamp(26px,3vw,34px)/1.1 var(--serif);letter-spacing:-.02em}
