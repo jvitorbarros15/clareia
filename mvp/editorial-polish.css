@@ -430,3 +430,48 @@ body[data-model=editorial] .follow-button:not(.is-following){border-color:transp
 body[data-model=editorial] .follow-button{min-width:44px;min-height:44px;color:var(--muted)}
 @media (hover:hover) and (pointer:fine){.follow-button:not(.is-following):hover .heart{stroke:#d93a4a}}
 body[data-model=editorial] .follow-button.is-following:not(:has(.heart+*)){background:none;border-color:transparent}
+
+/* Round 10: invisible hit areas for chart points and range thumbs; tab row reaches 44px. */
+body[data-model=editorial] .chart-point{stroke:transparent;stroke-width:20px;pointer-events:visiblePainted}
+body[data-model=editorial] input[type=range]{height:44px;margin:0}
+body[data-model=editorial] .editorial-rank .tabs button{min-height:44px}
+body[data-model=editorial] .project-title{min-height:44px}
+body[data-model=editorial] :is(.month-markers span,.your-vote strong,.voter-control label,.weekly-button){font-size:13px}
+
+/* Search pill: field tall enough to hold a round 44px submit with even inset. */
+body[data-model=editorial] .search-form{min-height:56px;padding-left:20px}
+body[data-model=editorial] .search-form input{height:54px;font-size:16px}
+body[data-model=editorial] .search-form input::placeholder{font-size:15px}
+body[data-model=editorial] .search-submit{width:44px;height:44px;min-height:0;flex:none;border-radius:50%;margin-right:6px;transition:transform 160ms var(--ease-out),filter 160ms ease}
+body[data-model=editorial] .search-submit:active{transform:scale(.94)}
+
+/* Cartogram tiles: square, gapless; data tiles carry their value; a selected empty state is an outline, not a fill. */
+body[data-model=editorial] .uf-map{max-width:460px}
+body[data-model=editorial] .uf-tile path{fill:var(--surface);stroke:color-mix(in srgb,var(--ink) 14%,transparent);stroke-width:1}
+body[data-model=editorial] .uf-tile text{font-size:15px;font-weight:600;fill:var(--muted)}
+body[data-model=editorial] .uf-tile.has-data text{fill:var(--accent)}
+body[data-model=editorial] .uf-tile.has-data .uf-value{font:500 11px var(--sans);fill:var(--ink)}
+body[data-model=editorial] .uf-tile.strong text,body[data-model=editorial] .uf-tile.strong .uf-value{fill:var(--on-accent)}
+body[data-model=editorial] .uf-tile.selected path{stroke:var(--ink);stroke-width:3}
+body[data-model=editorial] .uf-tile.selected:not(.has-data) path{fill:var(--surface)}
+body[data-model=editorial] .uf-tile.selected:not(.has-data) text{fill:var(--ink)}
+body[data-model=editorial] .uf-tile.selected.has-data:not(.strong) text{fill:var(--ink)}
+body[data-model=editorial] .uf-tile path{transition:stroke-width 160ms ease,fill 160ms ease}
+@media (hover:hover) and (pointer:fine){body[data-model=editorial] .uf-tile:not(.selected):hover path{stroke:var(--accent);stroke-width:2}}
+body[data-model=editorial] .uf-tile:focus-visible path{stroke:var(--accent);stroke-width:3}
+body[data-model=editorial] .map-key i.filled{width:36px;border:0;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 25%,var(--bg)),var(--accent))}
+body[data-model=editorial] .uf-tile.has-data:not(.strong) text{fill:var(--ink)}
+@media (max-width:560px){body[data-model=editorial] .map-key{flex-direction:column;gap:6px}}
+
+/* Scope chip: names an active slice, sits bottom-left clear of the assistant launcher. */
+.scope-chip{position:fixed;left:16px;bottom:16px;z-index:30;display:flex;align-items:center;gap:12px;padding:6px 6px 6px 16px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:14px;box-shadow:0 6px 24px #0002;animation:ed-rise 220ms var(--ease-out) both}
+.scope-chip[hidden]{display:none}
+.scope-chip button{min-height:36px;padding:0 14px;border-radius:999px;background:var(--bg);color:var(--ink);font-weight:600;font-size:14px;position:relative}
+.scope-chip button::before{content:"";position:absolute;inset:-4px}
+@media (prefers-reduced-motion:reduce){.scope-chip{animation:none}}
+
+/* Caveats that change how a number reads are body text, not footnotes. */
+body[data-model=editorial] :is(.p-small,.ranking-context,.rank-note,.records-note,.fixture-note,.p-description){font-size:15px;line-height:1.6;color:color-mix(in srgb,var(--ink) 78%,var(--bg))}
+body[data-model=editorial] .comparison-center .vs{display:none}
+body[data-model=editorial] .p-badge{border:0;padding:0;background:none;border-radius:0;color:var(--muted)}
+body[data-model=editorial] .section-dock a::before{content:"";position:absolute;inset:-14px -6px}

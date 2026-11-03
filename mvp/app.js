@@ -173,7 +173,7 @@
   function editorialFeature() {
     const p = person(state.featured);
     const choices = ['ana', 'bruno', 'carla'].map(id => person(id)).map(c => `<button type="button" data-action="feature" data-id="${c.id}" aria-pressed="${c.id === p.id}">${avatar(c)}<span>${c.name.split(' ')[0]}</span></button>`).join('');
-    return `<p class="eyebrow">Destaque</p><button class="feature-value" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total de reembolsos'} de ${p.name} em ${state.year}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? ↗</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destacar</span>${choices}</div>`;
+    return `<p class="eyebrow">Destaque</p><button class="feature-value" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} ${state.category === 'Todas' ? 'de reembolsos' : 'em ' + state.category.toLowerCase()} de ${p.name} em ${state.year}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? ↗</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destacar</span>${choices}</div>`;
   }
   // Swapping the featured person: portrait reopens, the figure counts from the old value to the new one.
   function feature(id) {
@@ -193,6 +193,15 @@
   }
   // The tab indicator starts where the previous tab was, then travels to the new one.
   let tabMark = null;
+  // A search can narrow the whole page; while it does, a chip names the slice and offers the way back.
+  function scopeChip() {
+    if (model !== 'editorial') return;
+    let chip = $('#scope-chip');
+    if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); document.body.append(chip); }
+    const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas';
+    chip.hidden = !narrowed;
+    chip.innerHTML = narrowed ? `<span>Recorte: ${[state.uf === 'Brasil' ? 'Brasil' : state.uf, state.category === 'Todas' ? 'todas as categorias' : state.category].join(' · ')}</span><button type="button" data-action="reset">Limpar</button>` : '';
+  }
   function markTab(animate = true) {
     const tabs = $('.editorial-rank .tabs'), on = tabs?.querySelector('[aria-pressed="true"]');
     if (!on) return;
@@ -218,6 +227,7 @@
       if (old) el.animate([{ transform: `translate(${old.left - now.left}px,${old.top - now.top}px)`, opacity: .65 }, { transform: 'none', opacity: 1 }], { duration: 400, easing: 'cubic-bezier(.2,.8,.2,1)' });
     });
     markTab();
+    scopeChip();
     syncURL();
     document.dispatchEvent(new CustomEvent('clareia:change'));
   }
@@ -378,6 +388,7 @@
   if (model === 'investigacao' && !state.query) state.answer = { type: 'compare', ids: ['ana', 'bruno'], kind: 'gastos' };
   layout();
   markTab(false);
+  scopeChip();
   document.fonts?.ready.then(() => markTab(false));
   window.Clareia = { model, state, all, person, records, sum, money, compact, number, escape, photo, avatar, icon, ask, evidence, profile, recordTable, showDialog, closeDialog, methodology, toast, refresh, sourceBlock };
   window.addEventListener('resize', () => { if ($('#chart-slot')) $('#chart-slot').innerHTML = chart(); markTab(false); });
