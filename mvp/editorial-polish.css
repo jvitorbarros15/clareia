@@ -494,3 +494,9 @@ body[data-model=editorial] :is(#votacoes,#dimensoes,#acompanhar) .p-section-intr
 body[data-model=editorial] :is(#votacoes,#dimensoes,#acompanhar) .p-section-intro .p-kicker{display:none}
 body[data-model=editorial] #perguntar .trust-row{display:none}
 @media (max-width:560px){body[data-model=editorial] .feature-switch{flex-wrap:nowrap}body[data-model=editorial] .feature-switch>span{display:none}body[data-model=editorial] .feature-switch button{padding-right:10px;font-size:13px}}
+
+/* Round 15. Past the hero the assistant launcher folds to its mark, so it stops covering content. */
+body[data-model=editorial].past-hero .assistant-launcher>span:not(.assistant-spark),body[data-model=editorial].past-hero .assistant-launcher>svg{display:none}
+body[data-model=editorial].past-hero .assistant-launcher{width:52px;height:52px;padding:0;justify-content:center}
+/* A missing photo is a quiet monogram, not a loud block. */
+body[data-model=editorial] .editorial-card .initials{background:color-mix(in srgb,var(--ink) 5%,var(--bg));color:var(--muted);font-size:clamp(40px,5vw,64px)}

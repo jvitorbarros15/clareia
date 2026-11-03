@@ -115,7 +115,7 @@
     return top.map((p, i) => `<article class="rank-card ${model === 'investigacao' ? 'inv-card' : model === 'editorial' ? 'editorial-card' : 'explorer-card'}" data-person="${p.id}">
       <button class="portrait-button" data-action="profile" data-id="${p.id}" aria-label="Abrir perfil fictício de ${p.name}">${photo(p)}<span class="rank-number">${model === 'editorial' ? '0' : model === 'investigacao' ? '#' : ''}${i + 1}</span></button>
       <div class="card-info"><h3 class="person-name">${p.name}</h3><button class="value-button" data-action="evidence" data-id="${p.id}" aria-label="${p.name}: ${formatted(p)}. Como chegamos nisso?">${formatted(p)}</button>
-      ${model === 'investigacao' ? `<span class="track"><i style="width:${value(p) / max * 100}%"></i></span><button class="text-button" data-action="evidence" data-id="${p.id}">Ver composição ↗</button>` : `<p class="card-caption">${caption(p)}</p>`}</div></article>`).join('');
+      ${model === 'investigacao' ? `<span class="track"><i style="width:${value(p) / max * 100}%"></i></span><button class="text-button" data-action="evidence" data-id="${p.id}">Ver composição →</button>` : `<p class="card-caption">${caption(p)}</p>`}</div></article>`).join('');
   }
   function rankNote() {
     return state.tab === 'projetos' ? 'Projetos apresentados não equivalem a leis aprovadas.' : state.tab === 'votacoes' ? 'Contagem de participações. Não é uma nota de desempenho.' : state.tab === 'menos' ? 'Menores gastos: apenas perfis com ao menos 6 meses em exercício.' : 'Cota parlamentar é a verba mensal que reembolsa despesas do mandato, como passagens e divulgação. Gasto maior não significa irregularidade.';
@@ -177,7 +177,7 @@
   function editorialFeature() {
     const p = person(state.featured);
     const choices = ['ana', 'bruno', 'carla'].map(id => person(id)).map(c => `<button type="button" data-action="feature" data-id="${c.id}" aria-pressed="${c.id === p.id}">${avatar(c)}<span>${c.name.split(' ')[0]}</span></button>`).join('');
-    return `<p class="eyebrow">Destaque · perfil fictício</p><button class="feature-value" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} ${state.category === 'Todas' ? 'de reembolsos' : 'em ' + state.category.toLowerCase()} de ${p.name} em ${state.year}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? ↗</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destacar</span>${choices}</div>`;
+    return `<p class="eyebrow">Destaque · perfil fictício</p><button class="feature-value" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} ${state.category === 'Todas' ? 'de reembolsos' : 'em ' + state.category.toLowerCase()} de ${p.name} em ${state.year}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? →</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destacar</span>${choices}</div>`;
   }
   // Swapping the featured person: portrait reopens, the figure counts from the old value to the new one.
   function feature(id) {
