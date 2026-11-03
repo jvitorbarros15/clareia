@@ -15,11 +15,11 @@
     motion: !reduced.matches && read('clareia-motion', true) !== false
   };
   const UF = {
-    AC: ['Acre',0,2], RO:['Rondônia',1,2], AM:['Amazonas',1,1], RR:['Roraima',1,0], PA:['Pará',2,1], AP:['Amapá',2,0],
-    MT:['Mato Grosso',1,3], TO:['Tocantins',2,2], MA:['Maranhão',3,1], PI:['Piauí',3,2], CE:['Ceará',4,1], RN:['Rio Grande do Norte',5,1],
-    PB:['Paraíba',5,2], PE:['Pernambuco',4,2], AL:['Alagoas',4,3], SE:['Sergipe',4,4], BA:['Bahia',3,3], GO:['Goiás',2,3], DF:['Distrito Federal',2,4],
-    MS:['Mato Grosso do Sul',1,4], MG:['Minas Gerais',3,4], ES:['Espírito Santo',4,5], SP:['São Paulo',2,5], RJ:['Rio de Janeiro',3,5],
-    PR:['Paraná',1,5], SC:['Santa Catarina',1,6], RS:['Rio Grande do Sul',1,7]
+    AC: ['Acre',0,2], RO:['Rondônia',2,2], AM:['Amazonas',1,1], RR:['Roraima',2,0], PA:['Pará',3,1], AP:['Amapá',4,0],
+    MT:['Mato Grosso',3,3], TO:['Tocantins',4,2], MA:['Maranhão',5,1], PI:['Piauí',6,2], CE:['Ceará',7,1], RN:['Rio Grande do Norte',9,1],
+    PB:['Paraíba',10,2], PE:['Pernambuco',8,2], AL:['Alagoas',9,3], SE:['Sergipe',10,4], BA:['Bahia',7,3], GO:['Goiás',5,3], DF:['Distrito Federal',6,4],
+    MS:['Mato Grosso do Sul',4,4], MG:['Minas Gerais',8,4], ES:['Espírito Santo',9,5], SP:['São Paulo',5,5], RJ:['Rio de Janeiro',7,5],
+    PR:['Paraná',3,5], SC:['Santa Catarina',4,6], RS:['Rio Grande do Sul',3,7]
   };
   const projects = [
     { id:'01', title:'Dados públicos que qualquer pessoa consegue entender.', topic:'Transparência', author:'ana', stage:'Em análise', step:2, summary:'Propõe linguagem simples e formatos acessíveis na publicação de informações públicas.', date:'12 de março', trail:['Apresentado','Distribuído à comissão','Em análise','Votação','Conclusão'] },
@@ -70,13 +70,12 @@
       <div class="p-mini-bars">${months.map((m,i)=>{const value=C.sum(scopePeople().flatMap(C.records).filter(r=>r.month===i)), max=Math.max(1,...months.map((_,j)=>C.sum(scopePeople().flatMap(C.records).filter(r=>r.month===j))));return `<button data-p-month="${i+1}" class="${i<state.month?'included':''}" aria-label="Incluir até ${m}: ${money(value)} no mês"><span style="--height:${Math.max(2,value/max*100)}%"></span><small>${m[0]}</small></button>`;}).join('')}</div>
       <div class="category-path"><span>Categoria → fornecedor → registros</span>${groups.map(g=>`<button class="p-link" data-p-drill="${g.name}">Explorar ${g.name} ↗</button>`).join('')}</div><h3 class="supplier-heading">Fornecedores das despesas reembolsadas</h3><p class="p-small">Fornecedores fictícios nos registros selecionados.</p><div class="supplier-list">${groups.map((g,i)=>`<button data-p-category="${g.name}"><span class="supplier-index">0${i+1}</span><span>${['Gráfica Exemplo','Viagens Demonstração','Serviços Modelo'][i]}<small>${g.name}</small></span><b>${compact(g.value)}</b>${icon('external')}</button>`).join('')}</div><button class="p-link" data-p="spend-evidence">Como chegamos nisso? ${icon('external')}</button><p class="p-small">${scopeText()} · não inclui salários, gabinete ou emendas.</p></div></div>`;
   }
-  // Square tile cartogram: one tile per UF, neighbours kept roughly in place, no gaps.
+  // Packed hex grid: c counts half-tile steps so rows interlock; neighbours sit roughly where they are on the map.
   function tileMap() {
     const max=Math.max(1,...Object.keys(UF).map(mapValue).filter(v=>v!==null));
-    return `<svg class="uf-map" viewBox="0 0 416 556" role="group" aria-label="Mapa esquemático das 27 unidades federativas, não geográfico">${Object.entries(UF).map(([uf,[name,c,r]])=>{
-      const x=c*70,y=r*70, available=C.all().some(p=>p.uf===uf), value=mapValue(uf);
-      const label=available?(state.mapMetric==='projects'?number(value):compact(value)):'';
-      return `<g role="button" tabindex="0" data-p-uf="${uf}" aria-label="${name}${available?' — '+mapFormat(value):' — sem dados nesta amostra'}" aria-pressed="${state.mapUF===uf}" class="uf-tile ${available?'has-data':''} ${available&&value/max>.55?'strong':''} ${state.mapUF===uf?'selected':''}" transform="translate(${x+2} ${y+2})"><path style="${available?'fill:var(--accent);fill-opacity:'+(.2+.8*value/max):''}" d="M8 0H56Q64 0 64 8V56Q64 64 56 64H8Q0 64 0 56V8Q0 0 8 0Z"/><text x="32" y="${available?29:37}" text-anchor="middle">${uf}</text>${available?`<text class="uf-value" x="32" y="47" text-anchor="middle">${label}</text>`:''}<title>${name}${available?' · '+mapFormat(value):' · sem dados'}</title></g>`;
+    return `<svg class="uf-map" viewBox="0 0 330 360" role="group" aria-label="Mapa esquemático das 27 unidades federativas, não geográfico">${Object.entries(UF).map(([uf,[name,c,r]])=>{
+      const x=10+c*26,y=10+r*41, available=C.all().some(p=>p.uf===uf), value=mapValue(uf);
+      return `<g role="button" tabindex="0" data-p-uf="${uf}" aria-label="${name}${available?' — '+mapFormat(value):' — sem dados nesta amostra'}" aria-pressed="${state.mapUF===uf}" class="uf-tile ${available?'has-data':''} ${available&&value/max>.55?'strong':''} ${state.mapUF===uf?'selected':''}" transform="translate(${x} ${y})"><path style="${available?'fill:var(--accent);fill-opacity:'+(.2+.8*value/max):''}" d="M0 12 25 0 50 12 50 40 25 52 0 40Z"/><text x="25" y="31" text-anchor="middle">${uf}</text><title>${name}${available?' · '+mapFormat(value):' · sem dados'}</title></g>`;
     }).join('')}</svg>`;
   }
   function mapValue(uf) {
@@ -106,7 +105,7 @@
       ${ppl.length?`<div class="atlas-numbers"><div><strong>${ppl.length}</strong><span>perfis fictícios</span></div><div><strong>${mapFormat(mapValue(state.mapUF))}</strong><span>${state.mapMetric==='projects'?'projetos apresentados':state.mapMetric==='average'?'cota por representante':'cota total'} · ${C.state.year}</span></div></div><div class="atlas-people">${ppl.map(p=>`<div>${C.avatar(p)}<button data-action="profile" data-id="${p.id}"><b>${p.name}</b><small>Deputado(a) federal · ${p.uf}</small></button>${followButton(p.id)}</div>`).join('')}</div><button class="p-primary" data-p="apply-state">Explorar ${UF[state.mapUF][0]} ${icon('arrow')}</button>`:`<div class="map-empty">${icon('database')}<p>Indisponível não significa zero.</p><span>Experimente São Paulo, Minas Gerais ou Rio de Janeiro.</span></div><button class="p-primary" data-p-uf="SP">Explorar São Paulo ${icon('arrow')}</button>`}`;
   }
   function atlas() {
-    return `${intro('03','Atlas de representantes','O Brasil, mais perto.','Escolha um estado. Descubra as pessoas por trás dos números e leve o recorte para o restante da página.',badge('27 UFs · 3 com amostra'))}<div class="atlas-grid"><div class="map-canvas"><div class="map-topline"><span>BRASIL / UNIDADES FEDERATIVAS</span><button data-p="map-reset">Visão inicial ↺</button></div>${mapControls()}${tileMap()}<div class="map-key"><span><i class="filled"></i>Com amostra · mais escuro, maior valor</span><span><i></i>Sem dados</span></div><p class="p-small">Mapa esquemático por UF, não geográfico.</p><label class="map-select">Escolher estado<select id="map-select">${Object.entries(UF).sort((a,b)=>a[1][0].localeCompare(b[1][0],'pt-BR')).map(([uf,[name]])=>`<option value="${uf}" ${state.mapUF===uf?'selected':''}>${name}</option>`).join('')}</select></label></div><div class="atlas-detail" id="atlas-detail" aria-live="polite">${atlasDetail()}</div></div>`;
+    return `${intro('03','Atlas de representantes','O Brasil, mais perto.','Escolha um estado. Descubra as pessoas por trás dos números e leve o recorte para o restante da página.',badge('27 UFs · 3 com amostra'))}<div class="atlas-grid"><div class="map-canvas"><div class="map-topline"><span>BRASIL / UNIDADES FEDERATIVAS</span><button data-p="map-reset">Visão inicial ↺</button></div>${mapControls()}${tileMap()}<div class="map-key"><span><i class="filled"></i>Com amostra</span><span><i></i>Sem dados</span></div><p class="p-small">Mapa esquemático por UF, não geográfico.</p><label class="map-select">Escolher estado<select id="map-select">${Object.entries(UF).sort((a,b)=>a[1][0].localeCompare(b[1][0],'pt-BR')).map(([uf,[name]])=>`<option value="${uf}" ${state.mapUF===uf?'selected':''}>${name}</option>`).join('')}</select></label></div><div class="atlas-detail" id="atlas-detail" aria-live="polite">${atlasDetail()}</div></div>`;
   }
   function comparison() {
     const a=C.person(state.a),b=C.person(state.b), get=p=>C.sum(C.records(p))/(C.state.metric==='mensal'?p.months:1), av=get(a),bv=get(b),delta=bv?(av-bv)/bv*100:0;

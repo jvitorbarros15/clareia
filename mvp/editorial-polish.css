@@ -445,21 +445,10 @@ body[data-model=editorial] .search-form input::placeholder{font-size:15px}
 body[data-model=editorial] .search-submit{width:44px;height:44px;min-height:0;flex:none;border-radius:50%;margin-right:6px;transition:transform 160ms var(--ease-out),filter 160ms ease}
 body[data-model=editorial] .search-submit:active{transform:scale(.94)}
 
-/* Cartogram tiles: square, gapless; data tiles carry their value; a selected empty state is an outline, not a fill. */
-body[data-model=editorial] .uf-map{max-width:460px}
-body[data-model=editorial] .uf-tile path{fill:var(--surface);stroke:color-mix(in srgb,var(--ink) 14%,transparent);stroke-width:1}
-body[data-model=editorial] .uf-tile text{font-size:15px;font-weight:600;fill:var(--muted)}
-body[data-model=editorial] .uf-tile.has-data text{fill:var(--accent)}
-body[data-model=editorial] .uf-tile.has-data .uf-value{font:500 11px var(--sans);fill:var(--ink)}
-body[data-model=editorial] .uf-tile.strong text,body[data-model=editorial] .uf-tile.strong .uf-value{fill:var(--on-accent)}
-body[data-model=editorial] .uf-tile.selected path{stroke:var(--ink);stroke-width:3}
-body[data-model=editorial] .uf-tile.selected:not(.has-data) path{fill:var(--surface)}
+/* Hex tiles: a selected state without data is an outline, not a fill; labels keep contrast on every tint. */
+body[data-model=editorial] .uf-tile text{font-size:13px}
+body[data-model=editorial] .uf-tile.selected:not(.has-data) path{fill:var(--surface);stroke:var(--ink);stroke-width:3}
 body[data-model=editorial] .uf-tile.selected:not(.has-data) text{fill:var(--ink)}
-body[data-model=editorial] .uf-tile.selected.has-data:not(.strong) text{fill:var(--ink)}
-body[data-model=editorial] .uf-tile path{transition:stroke-width 160ms ease,fill 160ms ease}
-@media (hover:hover) and (pointer:fine){body[data-model=editorial] .uf-tile:not(.selected):hover path{stroke:var(--accent);stroke-width:2}}
-body[data-model=editorial] .uf-tile:focus-visible path{stroke:var(--accent);stroke-width:3}
-body[data-model=editorial] .map-key i.filled{width:36px;border:0;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 25%,var(--bg)),var(--accent))}
 body[data-model=editorial] .uf-tile.has-data:not(.strong) text{fill:var(--ink)}
 @media (max-width:560px){body[data-model=editorial] .map-key{flex-direction:column;gap:6px}}
 
