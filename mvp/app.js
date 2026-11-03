@@ -101,6 +101,10 @@
     return `<div class="tabs" role="group" aria-label="Indicador do ranking">${options.map(([key, label]) => `<button data-tab="${key}" aria-pressed="${state.tab === key || (model === 'explorador' && key === 'gastos' && state.tab === 'menos')}">${label}</button>`).join('')}</div>`;
   }
   function caption(p) {
+    const months = state.metric === 'mensal' && model === 'editorial' ? ` · ${p.months} ${p.months === 1 ? 'mês' : 'meses'} em exercício` : '';
+    return baseCaption(p) + months;
+  }
+  function baseCaption(p) {
     if (state.tab === 'projetos') return `Projetos apresentados em ${state.year}${state.metric === 'mensal' ? ' / mês' : ''}`;
     if (state.tab === 'votacoes') return `Participações nominais em ${state.year}${state.metric === 'mensal' ? ' / mês' : ''}`;
     return `${state.metric === 'mensal' ? 'Média mensal' : 'Cota parlamentar'} · ${state.year}`;
@@ -198,9 +202,9 @@
     if (model !== 'editorial') return;
     let chip = $('#scope-chip');
     if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); $('#answer-slot').before(chip); }
-    const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas';
+    const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric === 'mensal';
     chip.hidden = !narrowed;
-    chip.innerHTML = narrowed ? `<span>Recorte: ${[state.uf === 'Brasil' ? 'Brasil' : state.uf, state.category === 'Todas' ? 'todas as categorias' : state.category].join(' · ')}</span><button type="button" data-action="reset">Limpar</button>` : '';
+    chip.innerHTML = narrowed ? `<span>Filtrando: ${[state.uf === 'Brasil' ? 'Brasil' : state.uf, state.category === 'Todas' ? 'todas as categorias' : state.category, state.metric === 'mensal' ? 'por mês' : 'total'].join(' · ')}</span><button type="button" data-action="reset">Limpar</button>` : '';
   }
   function markTab(animate = true) {
     const tabs = $('.editorial-rank .tabs'), on = tabs?.querySelector('[aria-pressed="true"]');
@@ -372,7 +376,7 @@
     else if (action === 'close-pop') { $('#evidence-pop')?.remove(); state.popover = null; }
     else if (action === 'votes') { if ($('#votacoes')) $('#votacoes').scrollIntoView({behavior:'smooth'}); else showDialog('Votações', '<p>Votações reais ainda não estão integradas.</p>'); }
     else if (action === 'reverse') { state.tab = state.tab === 'menos' ? 'gastos' : 'menos'; refresh(); }
-    else if (action === 'reset') { state.uf = 'Brasil'; state.category = 'Todas'; if (model === 'editorial') { state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; } refresh(); if (model === 'editorial') { $('#editorial-feature .feature-value')?.focus({ preventScroll: true }); toast('Recorte limpo: Brasil, todas as categorias.'); } }
+    else if (action === 'reset') { state.uf = 'Brasil'; state.category = 'Todas'; if (model === 'editorial') { state.metric = 'total'; if (state.featured !== 'ana') { state.featured = 'ana'; $('#hero-portrait').innerHTML = photo(person('ana'), 'hero'); } } if (model === 'editorial') { state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; } refresh(); if (model === 'editorial') { $('#editorial-feature .feature-value')?.focus({ preventScroll: true }); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); } }
     else if (action === 'chart-table') { const table = $('#chart-table'); table.hidden = !table.hidden; target.setAttribute('aria-expanded', String(!table.hidden)); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });

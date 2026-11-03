@@ -489,3 +489,8 @@ body[data-model=editorial] :is(#votacoes,#dimensoes,#acompanhar) .p-section-intr
   body[data-model=editorial] :is(.project-grid,.vote-grid,.dossier-grid)::-webkit-scrollbar{display:none}
 }
 @media (max-width:760px){body[data-model=editorial] .topic-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px}body[data-model=editorial] .topic-tabs button{flex:none}}
+
+/* Round 14. Secondary sections open on the headline alone; the closer ends on questions, not a feature trio. */
+body[data-model=editorial] :is(#votacoes,#dimensoes,#acompanhar) .p-section-intro .p-kicker{display:none}
+body[data-model=editorial] #perguntar .trust-row{display:none}
+@media (max-width:560px){body[data-model=editorial] .feature-switch{flex-wrap:nowrap}body[data-model=editorial] .feature-switch>span{display:none}body[data-model=editorial] .feature-switch button{padding-right:10px;font-size:13px}}
