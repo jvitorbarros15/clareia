@@ -114,7 +114,7 @@
       ${model === 'investigacao' ? `<span class="track"><i style="width:${value(p) / max * 100}%"></i></span><button class="text-button" data-action="evidence" data-id="${p.id}">Ver composição ↗</button>` : `<p class="card-caption">${caption(p)}</p>`}</div></article>`).join('');
   }
   function rankNote() {
-    return state.tab === 'projetos' ? 'Projetos apresentados não equivalem a leis aprovadas.' : state.tab === 'votacoes' ? 'Contagem de participações. Não é uma nota de desempenho.' : state.tab === 'menos' ? 'Menores gastos: apenas perfis com ao menos 6 meses em exercício.' : 'Gasto maior não significa irregularidade.';
+    return state.tab === 'projetos' ? 'Projetos apresentados não equivalem a leis aprovadas.' : state.tab === 'votacoes' ? 'Contagem de participações. Não é uma nota de desempenho.' : state.tab === 'menos' ? 'Menores gastos: apenas perfis com ao menos 6 meses em exercício.' : 'Cota parlamentar é a verba mensal que reembolsa despesas do mandato, como passagens e divulgação. Gasto maior não significa irregularidade.';
   }
   function barSection() {
     const ranked = ranking(), max = Math.max(1, ...ranked.map(p => value(p)));
@@ -173,7 +173,7 @@
   function editorialFeature() {
     const p = person(state.featured);
     const choices = ['ana', 'bruno', 'carla'].map(id => person(id)).map(c => `<button type="button" data-action="feature" data-id="${c.id}" aria-pressed="${c.id === p.id}">${avatar(c)}<span>${c.name.split(' ')[0]}</span></button>`).join('');
-    return `<p class="eyebrow">Destaque</p><button class="feature-value" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} ${state.category === 'Todas' ? 'de reembolsos' : 'em ' + state.category.toLowerCase()} de ${p.name} em ${state.year}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? ↗</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destacar</span>${choices}</div>`;
+    return `<p class="eyebrow">Destaque · perfil fictício</p><button class="feature-value" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} ${state.category === 'Todas' ? 'de reembolsos' : 'em ' + state.category.toLowerCase()} de ${p.name} em ${state.year}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? ↗</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destacar</span>${choices}</div>`;
   }
   // Swapping the featured person: portrait reopens, the figure counts from the old value to the new one.
   function feature(id) {
@@ -197,7 +197,7 @@
   function scopeChip() {
     if (model !== 'editorial') return;
     let chip = $('#scope-chip');
-    if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); document.body.append(chip); }
+    if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); $('#answer-slot').before(chip); }
     const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas';
     chip.hidden = !narrowed;
     chip.innerHTML = narrowed ? `<span>Recorte: ${[state.uf === 'Brasil' ? 'Brasil' : state.uf, state.category === 'Todas' ? 'todas as categorias' : state.category].join(' · ')}</span><button type="button" data-action="reset">Limpar</button>` : '';
@@ -217,6 +217,9 @@
     const before = new Map([...document.querySelectorAll('.rank-card')].map(el => [el.dataset.person, el.getBoundingClientRect()]));
     $('#rank-slot').innerHTML = rankingSection();
     if ($('#chart-slot')) $('#chart-slot').innerHTML = chart();
+    // A narrowed state features the portrait-bearing person from that state, so the hero follows the scope.
+    const local = ['ana', 'bruno', 'carla'].find(id => person(id).uf === state.uf);
+    if (local && local !== state.featured && $('#hero-portrait')) { state.featured = local; $('#hero-portrait').innerHTML = photo(person(local), 'hero'); }
     if ($('#editorial-feature')) $('#editorial-feature').innerHTML = editorialFeature();
     if (state.answer?.type === 'rank') state.answer.ids = ranking().slice(0, 3).map(p => p.id);
     if (state.answer?.type === 'rank' && !state.answer.ids.length) state.answer = { type: 'message', title: 'Nenhum perfil neste recorte.', message: 'Altere o estado ou limpe os filtros para explorar a demonstração.' };
@@ -369,7 +372,7 @@
     else if (action === 'close-pop') { $('#evidence-pop')?.remove(); state.popover = null; }
     else if (action === 'votes') { if ($('#votacoes')) $('#votacoes').scrollIntoView({behavior:'smooth'}); else showDialog('Votações', '<p>Votações reais ainda não estão integradas.</p>'); }
     else if (action === 'reverse') { state.tab = state.tab === 'menos' ? 'gastos' : 'menos'; refresh(); }
-    else if (action === 'reset') { state.uf = 'Brasil'; state.category = 'Todas'; refresh(); }
+    else if (action === 'reset') { state.uf = 'Brasil'; state.category = 'Todas'; if (model === 'editorial') { state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; } refresh(); if (model === 'editorial') $('#query').focus({ preventScroll: true }); }
     else if (action === 'chart-table') { const table = $('#chart-table'); table.hidden = !table.hidden; target.setAttribute('aria-expanded', String(!table.hidden)); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });

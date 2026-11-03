@@ -464,3 +464,11 @@ body[data-model=editorial] :is(.p-small,.ranking-context,.rank-note,.records-not
 body[data-model=editorial] .comparison-center .vs{display:none}
 body[data-model=editorial] .p-badge{border:0;padding:0;background:none;border-radius:0;color:var(--muted)}
 body[data-model=editorial] .section-dock a::before{content:"";position:absolute;inset:-14px -6px}
+
+/* Round 12. Scope chip sits inline under the search, not over content. */
+body[data-model=editorial] .scope-chip{position:static;display:inline-flex;margin:16px 0 0;box-shadow:none;animation:none}
+body[data-model=editorial] .scope-chip[hidden]{display:none}
+body[data-model=editorial] .dossier-tag{align-self:flex-start;margin-bottom:12px;padding:4px 10px;border-radius:999px;background:var(--bg);font-size:13px;font-weight:600;color:var(--muted)}
+body[data-model=editorial] .line-label{font:600 14px var(--sans)}
+body[data-model=editorial] .header-search{position:relative}
+body[data-model=editorial] .header-search::before{content:"";position:absolute;inset:-12px}
