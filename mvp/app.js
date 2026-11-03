@@ -372,7 +372,7 @@
     else if (action === 'close-pop') { $('#evidence-pop')?.remove(); state.popover = null; }
     else if (action === 'votes') { if ($('#votacoes')) $('#votacoes').scrollIntoView({behavior:'smooth'}); else showDialog('Votações', '<p>Votações reais ainda não estão integradas.</p>'); }
     else if (action === 'reverse') { state.tab = state.tab === 'menos' ? 'gastos' : 'menos'; refresh(); }
-    else if (action === 'reset') { state.uf = 'Brasil'; state.category = 'Todas'; if (model === 'editorial') { state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; } refresh(); if (model === 'editorial') $('#query').focus({ preventScroll: true }); }
+    else if (action === 'reset') { state.uf = 'Brasil'; state.category = 'Todas'; if (model === 'editorial') { state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; } refresh(); if (model === 'editorial') { $('#editorial-feature .feature-value')?.focus({ preventScroll: true }); toast('Recorte limpo: Brasil, todas as categorias.'); } }
     else if (action === 'chart-table') { const table = $('#chart-table'); table.hidden = !table.hidden; target.setAttribute('aria-expanded', String(!table.hidden)); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });

@@ -62,6 +62,7 @@
   function spending() {
     const entries=scopeRecords(), total=C.sum(entries);
     const groups=window.ClareiaData.categories.map((name,i)=>({name,color:color[i],value:C.sum(entries.filter(r=>r.category===name))}));
+    if(editorial)groups.sort((a,b)=>b.value-a.value);
     let start=0;
     const stops=groups.map(g=>{const end=start+(total?g.value/total*100:0);const s=`${g.color} ${start}% ${end}%`;start=end;return s;}).join(',');
     return `${intro('02','Siga o dinheiro','Um total. Muitas histórias.','Arraste o período e veja de que é feita a conta. Cada categoria leva aos registros que a compõem.',badge('Cota parlamentar'))}
@@ -102,7 +103,7 @@
   function atlasDetail() {
     const ppl=C.all().filter(p=>p.uf===state.mapUF), total=C.sum(ppl.flatMap(C.records));
     return `<p class="p-kicker">${state.mapUF} / ${UF[state.mapUF][0]}</p><h3>${ppl.length?'Conheça quem está no seu recorte.':'Ainda não há dados nesta amostra.'}</h3><p class="p-small">A UF indica o estado de representação. Não é o local onde a despesa ocorreu.</p>
-      ${ppl.length?`<div class="atlas-numbers"><div><strong>${ppl.length}</strong><span>perfis fictícios</span></div><div><strong>${mapFormat(mapValue(state.mapUF))}</strong><span>${state.mapMetric==='projects'?'projetos apresentados':state.mapMetric==='average'?'cota por representante':'cota total'} · ${C.state.year}</span></div></div><div class="atlas-people">${ppl.map(p=>`<div>${C.avatar(p)}<button data-action="profile" data-id="${p.id}"><b>${p.name}</b><small>Deputado(a) federal · ${p.uf}</small></button>${followButton(p.id)}</div>`).join('')}</div><button class="p-primary" data-p="apply-state">Explorar ${UF[state.mapUF][0]} ${icon('arrow')}</button>`:`<div class="map-empty">${icon('database')}<p>Indisponível não significa zero.</p><span>Experimente São Paulo, Minas Gerais ou Rio de Janeiro.</span></div><button class="p-primary" data-p-uf="SP">Explorar São Paulo ${icon('arrow')}</button>`}`;
+      ${ppl.length?`<div class="atlas-numbers"><div><strong>${ppl.length}</strong><span>perfis fictícios</span></div><div><strong>${mapFormat(mapValue(state.mapUF))}</strong><span>${state.mapMetric==='projects'?'projetos apresentados':state.mapMetric==='average'?'cota por representante':'cota total'} · ${C.state.year}${editorial&&state.mapMetric!=='projects'?' · valor exato':''}</span></div></div><div class="atlas-people">${ppl.map(p=>`<div>${C.avatar(p)}<button data-action="profile" data-id="${p.id}"><b>${p.name}</b><small>Deputado(a) federal · ${p.uf}</small></button>${followButton(p.id)}</div>`).join('')}</div><button class="p-primary" data-p="apply-state">Explorar ${UF[state.mapUF][0]} ${icon('arrow')}</button>`:`<div class="map-empty">${icon('database')}<p>Indisponível não significa zero.</p><span>Experimente São Paulo, Minas Gerais ou Rio de Janeiro.</span></div><button class="p-primary" data-p-uf="SP">Explorar São Paulo ${icon('arrow')}</button>`}`;
   }
   function atlas() {
     return `${intro('03','Atlas de representantes','O Brasil, mais perto.','Escolha um estado. Descubra as pessoas por trás dos números e leve o recorte para o restante da página.',badge('27 UFs · 3 com amostra'))}<div class="atlas-grid"><div class="map-canvas"><div class="map-topline"><span>BRASIL / UNIDADES FEDERATIVAS</span><button data-p="map-reset">Visão inicial ↺</button></div>${mapControls()}${tileMap()}<div class="map-key"><span><i class="filled"></i>Com amostra</span><span><i></i>Sem dados</span></div><p class="p-small">Mapa esquemático por UF, não geográfico.</p><label class="map-select">Escolher estado<select id="map-select">${Object.entries(UF).sort((a,b)=>a[1][0].localeCompare(b[1][0],'pt-BR')).map(([uf,[name]])=>`<option value="${uf}" ${state.mapUF===uf?'selected':''}>${name}</option>`).join('')}</select></label></div><div class="atlas-detail" id="atlas-detail" aria-live="polite">${atlasDetail()}</div></div>`;
@@ -279,7 +280,7 @@
     const id=e.target.id,val=e.target.value;
     if(id==='map-metric'){state.mapMetric=val;renderPart('atlas',atlas);focusMatch('#map-metric');}
     if(id==='map-select'){state.mapUF=val;renderPart('atlas',atlas);focusMatch('#map-select');}
-    if(id==='compare-a'||id==='compare-b'){state[id==='compare-a'?'a':'b']=val;renderPart('comparacao',comparison);focusMatch('#'+id);}
+    if(id==='compare-a'||id==='compare-b'){state[id==='compare-a'?'a':'b']=val;renderPart('comparacao',comparison);focusMatch('#'+id);if(editorial&&id==='compare-a'){state.voter=val;state.timeline=val;renderPart('votacoes',voteSection);renderPart('acompanhar',following);watchMotion();focusMatch('#compare-a');}}
     if(id==='project-stage'){state.stage=val;renderPart('project-grid',projectCards);watchMotion();}
     if(id==='voter'){state.voter=val;renderPart('vote-grid',voteCards);watchMotion();}
     if(id==='timeline-person'){state.timeline=val;renderPart('acompanhar',following);watchMotion();focusMatch('#timeline-person');}
