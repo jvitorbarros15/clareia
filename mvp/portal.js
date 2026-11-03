@@ -42,7 +42,7 @@
   const label = (n, text) => editorial ? `<p class="p-kicker">${text}</p>` : `<p class="p-kicker"><span>${n}</span> ${text}</p>`;
   const intro = (n, eyebrow, title, description, extra = '') => `<div class="p-section-intro"><div>${label(n,eyebrow)}<h2>${title}</h2><p class="p-description">${description}</p></div>${extra}</div>`;
   const peopleOptions = selected => C.all().map(p=>`<option value="${p.id}" ${selected===p.id?'selected':''}>${p.name} · ${p.uf}</option>`).join('');
-  function followButton(id, full = false) { const on=state.favorites.has(id); return `<button class="follow-button ${on?'is-following':''}" data-p-follow="${id}" aria-pressed="${on}" aria-label="${on?'Deixar de acompanhar':'Acompanhar'} ${C.person(id).name}"><span aria-hidden="true">${on?'✓':'+'}</span>${full ? on?'Acompanhando':'Acompanhar':''}</button>`; }
+  function followButton(id, full = false) { const on=state.favorites.has(id); return `<button class="follow-button ${on?'is-following':''}" data-p-follow="${id}" aria-pressed="${on}" aria-label="${on?'Deixar de acompanhar':'Acompanhar'} ${C.person(id).name}"><svg class="heart" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg>${full ? on?'Acompanhando':'Acompanhar':''}</button>`; }
   function scopeText() { return `${C.state.uf==='Brasil'?'Brasil':UF[C.state.uf][0]} · ${C.state.year} · ${C.state.category==='Todas'?'todas as categorias':C.state.category}`; }
   function overview() {
     const people = scopePeople();
@@ -193,7 +193,7 @@
     $('#spend-range').setAttribute('aria-valuetext',`Janeiro a ${months[state.month-1]} de ${C.state.year}`);
   }
   function updateAll() { sections.forEach(([id,render])=>renderPart(id,render));watchMotion(); }
-  function updateSaved() { renderPart('acompanhar',following);$('#saved-count').textContent=state.favorites.size||'';document.querySelectorAll('[data-p-follow]').forEach(b=>{const on=state.favorites.has(b.dataset.pFollow);b.setAttribute('aria-pressed',on);b.classList.toggle('is-following',on);if(b.classList.contains('follow-button')){const full=b.textContent.trim().length>2;b.innerHTML=`<span aria-hidden="true">${on?'✓':'+'}</span>${full?on?'Acompanhando':'Acompanhar':''}`;b.setAttribute('aria-label',`${on?'Deixar de acompanhar':'Acompanhar'} ${C.person(b.dataset.pFollow).name}`);}});watchMotion(); }
+  function updateSaved() { renderPart('acompanhar',following);$('#saved-count').textContent=state.favorites.size||'';document.querySelectorAll('[data-p-follow]').forEach(b=>{const on=state.favorites.has(b.dataset.pFollow);b.setAttribute('aria-pressed',on);b.classList.toggle('is-following',on);if(b.classList.contains('follow-button')){const full=b.textContent.trim().length>2;b.innerHTML=`<svg class="heart" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg>${full?on?'Acompanhando':'Acompanhar':''}`;b.setAttribute('aria-label',`${on?'Deixar de acompanhar':'Acompanhar'} ${C.person(b.dataset.pFollow).name}`);}});watchMotion(); }
   function focusMatch(selector) { $(selector)?.focus({preventScroll:true}); }
   function expenseEvidence(category, supplier) {
     const items=scopeRecords().filter(r=>(!category||r.category===category)&&(!supplier||r.supplier===supplier)), total=C.sum(items);

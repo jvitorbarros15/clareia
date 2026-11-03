@@ -358,7 +358,7 @@ body[data-model=editorial] .directory-stats small{position:absolute;width:1px;he
 body[data-model=editorial] .directory-person h3{font-size:17px}
 body[data-model=editorial] .directory-person p{font-size:13px}
 body[data-model=editorial] .directory-actions{justify-content:flex-end;gap:20px;border:0;padding:0;font-size:14px;font-weight:600}
-body[data-model=editorial] .directory-person .follow-button{margin-left:auto;margin-right:8px}
+body[data-model=editorial] .directory-person .follow-button{margin-left:4px}
 body[data-model=editorial] .directory-actions button{min-height:44px}
 @media (hover:hover) and (pointer:fine){body[data-model=editorial] .directory-card:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}}
 @media (max-width:760px){
@@ -411,3 +411,22 @@ body[data-model=editorial] .saved-empty h3{font:400 28px/1.15 var(--serif);lette
   body[data-model=editorial] .linked-chart-body{position:relative}
   body[data-model=editorial] .linked-chart-body::before{content:"Deslize para ver o ano todo →";display:block;position:sticky;left:0;font-size:13px;color:var(--muted);margin-bottom:8px}
 }
+
+/* Round 9. Reading floor 13px for older readers (month buttons and chart labels stay 12px: they share fixed space). */
+body[data-model=editorial] :is(td,th,.p-description,.bar-name,.topic-tabs button,.project-top>span,.project-author span,.dossier-foot,.timeline-event time,.p-badge,.p-link,.closing-questions button,.footer-links :is(a,button),.map-key span,.compare-controls label,.p-metric button,.follow-button,.directory-heading>span,.records-note,.vote-tally span,.vote-card-head span,.compare-category :is(span,b),.saved-heading span,.saved-empty p,.closing-top p,.footer-brand p,.footer-disclaimer :is(p,span),.map-topline :is(span,button),.map-select,.range-heading output,.category-path span,.comparison-center :is(p,button),.voter-control span,.p-overview-head>span,.editorial-subtitle,.donut-hole small,.donut-legend small,.donut-legend strong,.donut-legend span){font-size:13px}
+
+/* Touch: every control reaches 44px, by size or by an invisible hit area. */
+body[data-model=editorial] :is(.p-link,.topic-tabs button,.p-metric button,.compare-total,.comparison-center button,.closing-questions button,.weekly-button,.model-links a){min-height:44px;display:inline-flex;align-items:center}
+body[data-model=editorial] :is(select,input:not([type=range]),.search-submit){min-height:44px}
+body[data-model=editorial] .bar-row{min-height:44px}
+body[data-model=editorial] :is(.project-bottom button,.donut-caption button,.map-topline button,.footer-links :is(a,button),.footer-disclaimer button,.motion-toggle,.logo){position:relative}
+body[data-model=editorial] :is(.project-bottom button,.donut-caption button,.map-topline button,.footer-links :is(a,button),.footer-disclaimer button,.motion-toggle,.logo)::before{content:"";position:absolute;inset:-12px}
+
+/* Follow is a heart: outline to follow, filled when following. */
+.follow-button .heart{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;transition:fill 160ms ease,transform 160ms cubic-bezier(.23,1,.32,1)}
+.follow-button.is-following .heart{fill:#d93a4a;stroke:#d93a4a}
+.follow-button.is-following:active .heart,.follow-button:active .heart{transform:scale(.85)}
+body[data-model=editorial] .follow-button:not(.is-following){border-color:transparent;background:none}
+body[data-model=editorial] .follow-button{min-width:44px;min-height:44px;color:var(--muted)}
+@media (hover:hover) and (pointer:fine){.follow-button:not(.is-following):hover .heart{stroke:#d93a4a}}
+body[data-model=editorial] .follow-button.is-following:not(:has(.heart+*)){background:none;border-color:transparent}
