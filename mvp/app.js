@@ -373,7 +373,8 @@
     if (event.target.id === 'query' && event.key === 'ArrowDown') { event.preventDefault(); $('#suggestions button')?.focus(); }
   });
   $('#detail').addEventListener('click', event => { if (event.target === $('#detail')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right) closeDialog(); } });
-  $('#detail').addEventListener('close', () => { if (dialogTrigger?.isConnected) dialogTrigger.focus({ preventScroll: true }); });
+  // 'close' fires a task later; only restore focus if nothing else has taken it since (Escape key path).
+  $('#detail').addEventListener('close', () => { const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
   if (model === 'investigacao' && !state.query) state.answer = { type: 'compare', ids: ['ana', 'bruno'], kind: 'gastos' };
   layout();
   markTab(false);

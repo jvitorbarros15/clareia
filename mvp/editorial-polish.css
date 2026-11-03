@@ -339,3 +339,75 @@ body[data-model=editorial] .p-overview-sentence .p-stat strong{margin:0;font-siz
 /* A profile without a portrait reads as a monogram, not an empty box. */
 body[data-model=editorial] .editorial-card .initials{margin-left:22%;width:78%;font:400 76px/1 var(--serif);letter-spacing:-.03em;color:var(--accent);background:var(--soft)}
 @media(max-width:560px){body[data-model=editorial] .editorial-card .initials{margin-left:34%;width:66%;font-size:44px}}
+
+/* Round 8: numbers are hidden in the closing trust row, so its cells are plain stacks (fixes heading/body overlap on phone). */
+body[data-model=editorial] .trust-row>div{display:block}
+body[data-model=editorial] .trust-row h3{margin:0 0 8px}
+body[data-model=editorial] .trust-row p{max-width:34ch}
+
+/* Directory reads as a table: one row per person, figures in aligned columns. */
+body[data-model=editorial] .directory-grid{display:block;border-top:2px solid var(--ink)}
+body[data-model=editorial] :is(.directory-head,.directory-card){display:grid;grid-template-columns:minmax(0,1fr) 150px 110px 230px;align-items:center;gap:0 32px}
+body[data-model=editorial] .directory-head{padding:12px 0;font-size:13px;color:var(--muted)}
+body[data-model=editorial] .directory-head>span:is(:nth-child(2),:nth-child(3)){text-align:right}
+body[data-model=editorial] .directory-card{padding:14px 0;border:0;border-top:1px solid var(--line);border-radius:0;background:none;transition:background-color 160ms ease}
+body[data-model=editorial] .directory-stats{display:contents}
+body[data-model=editorial] .directory-stats button{text-align:right;min-height:44px}
+body[data-model=editorial] .directory-stats b{font:400 26px/1 var(--serif);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+body[data-model=editorial] .directory-stats small{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body[data-model=editorial] .directory-person h3{font-size:17px}
+body[data-model=editorial] .directory-person p{font-size:13px}
+body[data-model=editorial] .directory-actions{justify-content:flex-end;gap:20px;border:0;padding:0;font-size:14px;font-weight:600}
+body[data-model=editorial] .directory-person .follow-button{margin-left:auto;margin-right:8px}
+body[data-model=editorial] .directory-actions button{min-height:44px}
+@media (hover:hover) and (pointer:fine){body[data-model=editorial] .directory-card:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}}
+@media (max-width:760px){
+  body[data-model=editorial] .directory-head{display:none}
+  body[data-model=editorial] .directory-card{grid-template-columns:1fr 1fr;gap:4px 16px;padding:18px 0}
+  body[data-model=editorial] :is(.directory-person,.directory-actions){grid-column:1/-1}
+  body[data-model=editorial] .directory-person{margin-bottom:12px}
+  body[data-model=editorial] .directory-stats button{text-align:left}
+  body[data-model=editorial] .directory-stats small{position:static;width:auto;height:auto;clip:auto;display:block;font-size:13px;margin-top:4px}
+  body[data-model=editorial] .directory-actions{justify-content:flex-start}
+}
+
+/* Fewer hairlines: one heavy rule opens each section; inside it, space and tone separate things. */
+body[data-model=editorial] .p-section-intro{border-top:2px solid var(--ink)}
+body[data-model=editorial] .project-grid{gap:48px 40px}
+body[data-model=editorial] .project-card{border:0;padding:0}
+body[data-model=editorial] .topic-tabs button:not([aria-pressed=true]){border-bottom-color:transparent}
+body[data-model=editorial] .vote-grid{gap:40px}
+body[data-model=editorial] .vote-card{border:0;padding:0}
+body[data-model=editorial] .dossier-grid{gap:12px}
+body[data-model=editorial] :is(.dossier-card,.dossier-card:nth-child(even)){border:0;padding:28px;min-height:0;background:color-mix(in srgb,var(--ink) 4%,var(--bg))}
+body[data-model=editorial] .dossier-card h3{margin-bottom:8px}
+body[data-model=editorial] .dossier-card{display:flex;flex-direction:column}
+body[data-model=editorial] .dossier-card>:last-child{margin-top:auto;padding-top:24px}
+
+/* Atlas: the map takes the wider column and reads as a choropleth; dark tiles get light labels. */
+body[data-model=editorial] .atlas-grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);border:0}
+body[data-model=editorial] .map-canvas{padding:32px}
+body[data-model=editorial] .uf-map{display:block;width:100%;max-width:640px;height:auto;margin:8px auto 0}
+body[data-model=editorial] .uf-tile text{font-size:14px}
+body[data-model=editorial] .uf-tile.strong text{fill:var(--on-accent)}
+body[data-model=editorial] .atlas-detail{padding:32px 0 32px 40px}
+@media (max-width:760px){
+  body[data-model=editorial] .atlas-grid{grid-template-columns:1fr}
+  body[data-model=editorial] .map-canvas{display:flex;flex-direction:column;padding:20px 16px;margin:0 -16px}
+  body[data-model=editorial] .map-canvas>.map-select{order:-1;margin:0 0 16px}
+  body[data-model=editorial] .atlas-detail{padding:28px 0 0}
+}
+body[data-model=editorial] .atlas-detail{align-self:start}
+
+/* Dimensões are gaps we state, not features: one compact row on desktop. */
+@media (min-width:1000px){body[data-model=editorial] .dossier-grid{grid-template-columns:repeat(4,minmax(0,1fr))}body[data-model=editorial] .dossier-card h3{font-size:22px}}
+
+/* Mobile pass on the closing sections. */
+body[data-model=editorial] .linked-totals strong{font:400 32px/1.1 var(--serif);letter-spacing:-.02em}
+body[data-model=editorial] .saved-panel{border:0;background:color-mix(in srgb,var(--ink) 4%,var(--bg))}
+body[data-model=editorial] .saved-empty h3{font:400 28px/1.15 var(--serif);letter-spacing:-.02em}
+@media (max-width:760px){
+  body[data-model=editorial] .section-dock{-webkit-mask-image:linear-gradient(90deg,#000 82%,transparent);mask-image:linear-gradient(90deg,#000 82%,transparent);padding-right:40px}
+  body[data-model=editorial] .linked-chart-body{position:relative}
+  body[data-model=editorial] .linked-chart-body::before{content:"Deslize para ver o ano todo →";display:block;position:sticky;left:0;font-size:13px;color:var(--muted);margin-bottom:8px}
+}
