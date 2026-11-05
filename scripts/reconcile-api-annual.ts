@@ -25,12 +25,12 @@ const brl=(c:bigint)=>(Number(c)/100).toLocaleString('pt-BR',{style:'currency',c
 const api=[];
 const apiPages=manifest.pages.filter((p:{pass:number;url:string})=>p.pass===1&&p.url.includes('/despesas'));
 for(const page of apiPages){
-  const text=await fs.readFile(path.join(directory,page.file),'utf8');if(sha(text)!==page.sha256)throw new Error('Página preservada alterada: '+page.file);
+  if(path.basename(page.file)!==page.file)throw new Error('Caminho inválido no manifesto');const text=await fs.readFile(path.join(directory,page.file),'utf8');if(sha(text)!==page.sha256)throw new Error('Página preservada alterada: '+page.file);
   const personId=Number(new URL(page.url).pathname.split('/')[4]);
   for(const [row,r] of (JSON.parse(text).dados as Record<string,unknown>[]).entries())api.push({personId,month:Number(r.mes),documentId:String(r.codDocumento),category:String(r.tipoDespesa),cents:decimalCents(String(r.valorLiquido)),supplier:String(r.nomeFornecedor),number:String(r.numDocumento),date:(r.dataDocumento as string)||null,lot:String(r.codLote),page:page.url,row});
 }
 const annualMeta=JSON.parse(await fs.readFile(path.join(directory,'annual-2.meta.json'),'utf8'));
-const archive=await fs.readFile(path.join(directory,annualMeta.file));
+if(path.basename(annualMeta.file)!==annualMeta.file)throw new Error('Caminho inválido no manifesto');const archive=await fs.readFile(path.join(directory,annualMeta.file));
 const [csvName,bytes]=Object.entries(unzipSync(archive)).find(([n])=>n.endsWith('.csv'))||[];if(!bytes)throw new Error('CSV ausente');
 if(sha(bytes)!==annualMeta.sha256)throw new Error('CSV preservado não confere com o hash registrado');
 const annual=[];let scanned=0;

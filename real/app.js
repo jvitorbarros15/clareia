@@ -22,7 +22,7 @@
       render();
       const status=await fetch('/api/status').then(r=>r.json());if(id!==requestId)return;
       const state=status.lastRun?.status;
-      $('#notice').innerHTML=`<span class="status-dot"></span> ${state==='failed'?'Última coleta falhou. Exibindo a versão anteriormente aprovada.':state==='collecting'?'Coleta ainda não concluída. Exibindo a versão aprovada.':'Dados oficiais · verificações automáticas concluídas'} <span class="checked">${status.lastRun?.finished_at?'Última execução: '+date(status.lastRun.finished_at)+' (Brasília)':''}</span>`;
+      $('#notice').innerHTML=`<span class="status-dot"></span> ${data.current===false?'Você está vendo uma versão anterior. <a href="/">Abrir a versão atual →</a> ':''}${state==='failed'?'Última coleta falhou. Exibindo a versão anteriormente aprovada.':state==='collecting'?'Coleta ainda não concluída. Exibindo a versão aprovada.':'Dados oficiais · verificações automáticas concluídas'} <span class="checked">${status.lastRun?.finished_at?'Última execução: '+date(status.lastRun.finished_at)+' (Brasília)':''}</span>`;
     }catch(error){if(id!==requestId)return;$('#notice').textContent=error.message;$('#content').innerHTML='<div class="empty"><h2>Este recorte não está disponível.</h2><p>Nenhum valor foi estimado. Confira a coleta ou volte ao recorte publicado.</p><a href="/">Abrir versão atual →</a></div>';$('#people').innerHTML='';$('#controls').innerHTML='';}
     finally{if(id===requestId)$('#content').setAttribute('aria-busy','false');}
   }

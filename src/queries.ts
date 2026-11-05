@@ -1,8 +1,8 @@
 import type { Snapshot,Expense } from './model.ts';
 export type Filters={personId:number;from:number;to:number;category:string|null;supplier:string|null};
 export function parseFilters(params:URLSearchParams,snapshot:Snapshot):Filters {
-  const personId=Number(params.get('person')||snapshot.scope.ids[0]);
-  const from=Number(params.get('from')||Math.min(...snapshot.scope.months)),to=Number(params.get('to')||Math.max(...snapshot.scope.months));
+  const int=(name:string,fallback:number)=>{const v=params.get(name);return !v?fallback:/^\d+$/.test(v)?Number(v):NaN;};
+  const personId=int('person',snapshot.scope.ids[0]),from=int('from',Math.min(...snapshot.scope.months)),to=int('to',Math.max(...snapshot.scope.months));
   if(!snapshot.scope.ids.includes(personId)||!Number.isInteger(from)||!Number.isInteger(to)||from>to||!snapshot.scope.months.includes(from)||!snapshot.scope.months.includes(to))throw new Error('Recorte fora da cobertura');
   const category=params.get('category')||null,supplier=params.get('supplier')||null;
   if(category&&!snapshot.records.some(r=>r.personId===personId&&r.category===category))throw new Error('Categoria fora da cobertura');
@@ -21,6 +21,6 @@ export function results(snapshot:Snapshot,filters:Filters){
     suppliers:[...new Set(filteredCategory.map(r=>r.supplierKey))].map(key=>{const rows=filteredCategory.filter(r=>r.supplierKey===key);return {key,name:rows[0].supplier,verified:rows[0].supplierVerified,cents:sum(rows),count:rows.length};}),records};
 }
 export function csv(rows:Expense[]):string {
-  const cell=(value:unknown)=>{let text=String(value??'');if(typeof value==='string'&&/^[=+@\-\t\r]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
+  const cell=(value:unknown)=>{let text=String(value??'');if(typeof value==='string'&&/^[\s=+@\-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
   return '\uFEFF'+[['id_ocorrencia','id_deputado','ano','mes','categoria','fornecedor','documento','valor_centavos','origem','sha256_origem','posicao_origem'],...rows.map(r=>[r.id,r.personId,r.year,r.month,r.category,r.supplier,r.documentId,r.cents,r.source.url,r.source.sha256,r.source.row])].map(row=>row.map(cell).join(';')).join('\r\n');
 }

@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {BASE,hash,canonical,snapshotId,envelopeSchema,normalize,stableDigest,officialUrl,METRIC} from './model.ts';
+import {BASE,hash,canonical,snapshotId,envelopeSchema,normalize,stableDigest,officialUrl,METRIC,readLimited} from './model.ts';
 import type {Scope,Person,Page,Snapshot} from './model.ts';
 import { z } from 'zod';
 
@@ -13,7 +13,7 @@ export async function request(url:string,fetcher:Fetcher=u=>fetch(u,{headers:{Ac
     try {const response=await fetcher(url);
       if(!response.ok){if(response.status!==429&&response.status<500)throw new FatalError('HTTP '+response.status);
         const retry=response.headers.get('retry-after');await wait(Math.min(30000,retry?(Number(retry)*1000||Date.parse(retry)-Date.now()):1000*2**attempt));throw new Error('HTTP '+response.status);}
-      const text=await response.text();if(text.length>12_000_000)throw new FatalError('Resposta excede limite');JSON.parse(text);return text;
+      const text=new TextDecoder().decode(await readLimited(response,12_000_000));JSON.parse(text);return text;
     }catch(e){if(e instanceof FatalError)throw e;last=e;if(attempt<3)await wait(500*2**attempt);}
   }throw new Error('Fonte indisponível após tentativas: '+String(last));
 }

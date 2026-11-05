@@ -21,6 +21,14 @@ export function snapshotId(snapshot:object):string{
   const {id,...body}=JSON.parse(JSON.stringify(snapshot));
   return hash(canonical({schema:SNAPSHOT_SCHEMA,body:withoutCaptureTimes(body)}));
 }
+// Some suppliers are individuals with a CPF inside the trade name; it never reaches a published record.
+export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
+export async function readLimited(response:Response,limit:number):Promise<Uint8Array> {
+  if(Number(response.headers.get('content-length'))>limit)throw new Error('Resposta excede limite');
+  const parts:Uint8Array[]=[];let size=0;
+  if(response.body)for await(const chunk of response.body as unknown as AsyncIterable<Uint8Array>){size+=chunk.length;if(size>limit)throw new Error('Resposta excede limite');parts.push(chunk);}
+  return Buffer.concat(parts);
+}
 export function cents(value: number | string): number {
   const text=String(value);
   if(!/^-?\d+(\.\d{1,2})?$/.test(text))throw new Error('Valor monetário inválido: precisão maior que centavos ou formato inesperado');
@@ -63,7 +71,7 @@ export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceR
   // Only validated CNPJ businesses are grouped across records. CPF/missing IDs remain separate.
   const verified=validCnpj(supplierId);
   const occurrence=hash(canonical({personId,raw}));
-  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:r.nomeFornecedor||'Fornecedor não informado',supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,receipt:r.urlDocumento?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
+  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:maskPersonalId(r.nomeFornecedor||'Fornecedor não informado'),supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,receipt:r.urlDocumento?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
 }
 export function validCnpj(id:string):boolean {
   if(!/^\d{14}$/.test(id)||/^(\d)\1+$/.test(id))return false;

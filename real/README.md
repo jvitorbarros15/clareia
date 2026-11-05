@@ -16,7 +16,7 @@ Abra **http://127.0.0.1:4174**. A base já foi coletada neste workspace; aqui ba
 
 O banco local é PostgreSQL via PGlite, persistido em `data/local/postgres`. Se `DATABASE_URL` estiver definido no ambiente, o adaptador usa um servidor PostgreSQL normal. `.env.example` documenta as opções; arquivos `.env` não são carregados automaticamente.
 
-O piloto local permite um processo por vez: **encerre o servidor antes de coletar novamente**. Após uma interrupção forçada, `npm run unlock` remove a trava apenas se o processo registrado já tiver terminado. Em Windows/OneDrive, o adaptador ajusta o atributo de diretórios exclusivamente dentro da árvore local do banco, para permitir a reabertura pelo filesystem do PGlite.
+O piloto local permite um processo por vez: **encerre o servidor antes de coletar novamente**. Após uma interrupção forçada, a próxima execução assume a trava se o dono já terminou; `npm run unlock` faz o mesmo manualmente e remove a trava apenas se o processo registrado já tiver terminado. Em Windows/OneDrive, o adaptador ajusta o atributo de diretórios exclusivamente dentro da árvore local do banco, para permitir a reabertura pelo filesystem do PGlite.
 
 ## Recorte e resultado
 
@@ -123,7 +123,7 @@ npm run verify:api-annual
 npm run verify:browser
 ```
 
-`verify:annual` é uma releitura do **mesmo** arquivo da versão (o hash do CSV precisa coincidir), por outro parser, contra os registros servidos pelo site. Verifica a cadeia de processamento; não compara com a API nem prova que a fonte esteja completa. O verificador percorreu 209.081 linhas, selecionou 194 e reconciliou **37 grupos de pessoa/mês/categoria**, além da multiplicidade de documentos/valores, sem divergências. Dois registros tinham campos documento/glosa vazios; isso foi mantido explícito. Restituições no recorte do arquivo somaram zero nesta captura.
+`verify:annual` é uma releitura do **mesmo** arquivo da versão (o hash do CSV precisa coincidir), por outro parser, contra os registros gravados no banco, com o servidor desligado. O resultado fica guardado por versão: o site só serve versões com conferência aprovada, e uma versão nova fica privada até lá, enquanto a anterior aprovada continua no ar. Verifica a cadeia de processamento; não compara com a API nem prova que a fonte esteja completa. O verificador percorreu 209.081 linhas, selecionou 194 e reconciliou **37 grupos de pessoa/mês/categoria**, além da multiplicidade de documentos/valores, sem divergências. Dois registros tinham campos documento/glosa vazios; isso foi mantido explícito. Restituições no recorte do arquivo somaram zero nesta captura.
 
 Os testes de backend cobrem precisão, valores negativos, campos ausentes, identidade, homônimos, duplicatas, paginação incompleta/repetida, tentativas, checkpoints adulterados, instabilidade, idempotência, rollback e revisões. Os testes de navegador cobrem pessoa → mês → categoria → fornecedor → registro, CSV, link com versão, filtros inválidos, bloqueio de arquivos brutos e layouts de 390/768/1360 px.
 

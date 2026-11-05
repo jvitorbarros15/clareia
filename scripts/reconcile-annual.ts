@@ -3,12 +3,14 @@ import {Readable} from 'node:stream';
 import {unzipSync} from 'fflate';
 import {parse} from 'csv-parse';
 import {createHash} from 'node:crypto';
+import {openDB,readSnapshot,recordAudit} from '../src/store.ts';
+import type {AuditReport} from '../src/store.ts';
+import {withLock} from '../src/lock.ts';
 
-const base=process.env.BASE_URL||'http://127.0.0.1:4174';
-const initialResponse=await fetch(base+'/api/spending');if(!initialResponse.ok)throw new Error('Inicie o servidor com uma versão publicada');
-const initial=await initialResponse.json();const snapshotId=initial.snapshotId;
-const records=[];
-for(const person of initial.people){const response=await fetch(`${base}/api/spending?snapshot=${snapshotId}&person=${person.id}`);if(!response.ok)throw new Error('Consulta da versão falhou');records.push(...(await response.json()).records);}
+// Reads the database directly: a version must be auditable before the site is allowed to serve it. Stop the server first.
+const withDB=<T>(task:(db:Awaited<ReturnType<typeof openDB>>)=>Promise<T>)=>withLock(async()=>{const db=await openDB();try{return await task(db);}finally{await db.close();}});
+const initial=await withDB(db=>readSnapshot(db));if(!initial)throw new Error('Nenhuma versão publicada para conferir');
+const snapshotId=initial.id,records=initial.records;
 const {year}=JSON.parse(await fs.readFile('config/pilot.json','utf8')) as {year:number};
 if(initial.scope.year!==year)throw new Error(`A versão publicada cobre ${initial.scope.year}, mas config/pilot.json indica ${year}`);
 const archive=await fs.readFile(`data/raw/annual/Ano-${year}.csv.zip`);
@@ -35,7 +37,7 @@ const differences=[];
 for(const key of new Set([...apiGroups.keys(),...bulkGroups.keys()])){const a=apiGroups.get(key),b=bulkGroups.get(key);if(a?.count!==b?.count||a?.cents!==b?.cents)differences.push({group:key,api:a?{count:a.count,cents:String(a.cents)}:null,annual:b?{count:b.count,cents:String(b.cents)}:null});}
 let mismatchedOccurrences=0;for(const key of new Set([...apiRows.keys(),...bulkRows.keys()]))if(apiRows.get(key)!==bulkRows.get(key))mismatchedOccurrences++;
 const source=JSON.parse(await fs.readFile('data/raw/annual/source.json','utf8'));
-const report={status:!differences.length&&!mismatchedOccurrences?'passed':'failed',snapshotId,checkedAt:new Date().toISOString(),source,archiveSha256:createHash('sha256').update(archive).digest('hex'),scanned,selected,csvSha256,servedCount:records.length,groupsCompared:apiGroups.size,mismatchedOccurrences,differences,annualRefundCents:String(refundCents),missingDocumentOrGlosa,note:'Releitura independente do mesmo arquivo anual usado na versão (hash conferido), por parser separado, contra os registros servidos pelo site. Não compara com a API da Câmara: ver npm run verify:api-annual. Contagem e valor líquido por pessoa/mês/categoria, e multiconjunto por pessoa/ano/mês/documento/categoria/valor líquido. Campos documento/glosa vazios no CSV permanecem desconhecidos. Restituições informadas separadamente, sem nova subtração. Não é auditoria da legitimidade da despesa.'};
+const report={status:!differences.length&&!mismatchedOccurrences?'passed':'failed',snapshotId,checkedAt:new Date().toISOString(),source,archiveSha256:createHash('sha256').update(archive).digest('hex'),scanned,selected,csvSha256,servedCount:records.length,groupsCompared:apiGroups.size,mismatchedOccurrences,differences,annualRefundCents:String(refundCents),missingDocumentOrGlosa,note:'Releitura independente do mesmo arquivo anual usado na versão (hash conferido), por parser separado, contra os registros gravados no banco. Não compara com a API da Câmara: ver npm run verify:api-annual. Contagem e valor líquido por pessoa/mês/categoria, e multiconjunto por pessoa/ano/mês/documento/categoria/valor líquido. Campos documento/glosa vazios no CSV permanecem desconhecidos. Restituições informadas separadamente, sem nova subtração. Não é auditoria da legitimidade da despesa.'};
 await fs.mkdir('output/qa',{recursive:true});await fs.writeFile('output/qa/real-source-audit.json',JSON.stringify(report,null,2));
-await fs.writeFile('data/local/reconciliation.json.tmp',JSON.stringify(report,null,2));await fs.rename('data/local/reconciliation.json.tmp','data/local/reconciliation.json');
+await withDB(db=>recordAudit(db,report as AuditReport));
 console.log(JSON.stringify(report,null,2));if(report.status!=='passed')process.exitCode=1;

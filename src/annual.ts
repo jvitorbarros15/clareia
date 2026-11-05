@@ -3,7 +3,7 @@ import path from 'node:path';
 import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
 import {unzipSync} from 'fflate';
-import {canonical,hash,cents,snapshotId,validCnpj,officialUrl,stableDigest} from './model.ts';
+import {canonical,hash,cents,snapshotId,validCnpj,officialUrl,stableDigest,maskPersonalId,readLimited} from './model.ts';
 import type {Snapshot,Scope,Expense,SourceRef} from './model.ts';
 
 export type AnnualRow=Record<string,string>;
@@ -15,7 +15,7 @@ export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef):Expens
   const net=money('vlrLiquido')!,face=money('vlrDocumento'),glosa=money('vlrGlosa');
   if(face!==null&&glosa!==null&&face-glosa!==net)throw new Error('Equação financeira anual diverge');
   const id=hash(canonical({personId,raw:r})),supplierId=(r.txtCNPJCPF||'').replace(/\D/g,'');const verified=validCnpj(supplierId);
-  return {id,personId,year,month,category:r.txtDescricao,supplier:r.txtFornecedor||'Fornecedor não informado',supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,receipt:r.urlDocumento?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
+  return {id,personId,year,month,category:r.txtDescricao,supplier:maskPersonalId(r.txtFornecedor||'Fornecedor não informado'),supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,receipt:r.urlDocumento?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
 }
 export async function parseAnnual(bytes:Uint8Array,scope:Scope):Promise<{rows:{raw:AnnualRow;row:number}[];scanned:number}> {
   const stream=Readable.from((function*(){for(let i=0;i<bytes.length;i+=65536)yield bytes.subarray(i,i+65536);})()).pipe(parse({columns:(headers:string[])=>{for(const field of ['ideCadastro','numAno','numMes','codLegislatura','txtDescricao','vlrLiquido','vlrDocumento','vlrGlosa','ideDocumento'])if(!headers.includes(field))throw new Error('Contrato CSV mudou: coluna ausente '+field);return headers;},delimiter:';',bom:true,skip_empty_lines:true}));
@@ -25,14 +25,14 @@ export async function parseAnnual(bytes:Uint8Array,scope:Scope):Promise<{rows:{r
   return {rows,scanned};
 }
 async function download(url:string):Promise<Uint8Array>{
-  let last:unknown;for(let i=0;i<3;i++)try{const r=await fetch(url,{signal:AbortSignal.timeout(60000),redirect:'error'});if(!r.ok)throw new Error('HTTP '+r.status);const data=new Uint8Array(await r.arrayBuffer());if(data.length>100_000_000)throw new Error('Arquivo acima do limite do piloto');return data;}catch(e){last=e;if(i<2)await new Promise(r=>setTimeout(r,1000*(i+1)));}throw last;
+  let last:unknown;for(let i=0;i<3;i++)try{const r=await fetch(url,{signal:AbortSignal.timeout(60000),redirect:'error'});if(!r.ok)throw new Error('HTTP '+r.status);return await readLimited(r,100_000_000);}catch(e){last=e;if(i<2)await new Promise(r=>setTimeout(r,1000*(i+1)));}throw last;
 }
 export async function annualSnapshot(api:Snapshot,directory:string):Promise<Snapshot>{
   const scope=api.scope,url=`https://www.camara.leg.br/cotas/Ano-${scope.year}.csv.zip`;
   const passes=[];
   for(const pass of [1,2]){
     const archive=await download(url),archiveHash=hash(archive);
-    const files=unzipSync(archive,{filter:file=>file.name===`Ano-${scope.year}.csv`});const bytes=files[`Ano-${scope.year}.csv`];if(!bytes||bytes.length>200_000_000)throw new Error('CSV ausente ou acima do limite');
+    const name=`Ano-${scope.year}.csv`,files=unzipSync(archive,{filter:file=>{if(file.name!==name)return false;if(file.originalSize>200_000_000)throw new Error('CSV acima do limite');return true;}});const bytes=files[name];if(!bytes)throw new Error('CSV ausente');
     const fetchedAt=new Date().toISOString(),sha256=hash(bytes),file=`annual-${pass}.csv.zip`;
     await fs.writeFile(path.join(directory,file),archive);
     const meta={url,file,fetchedAt,sha256,archiveHash,pass};await fs.writeFile(path.join(directory,`annual-${pass}.meta.json`),JSON.stringify(meta,null,2));

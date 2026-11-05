@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 const base='https://dadosabertos.camara.leg.br/api/v2';
 await fs.mkdir('data/raw/probe',{recursive:true});
 for (const [name,url] of [['contract',base+'/api-docs'],['people',base+'/deputados?idLegislatura=57&itens=3&ordem=ASC&ordenarPor=id']]) {
-  const r=await fetch(url,{signal:AbortSignal.timeout(45000)});if(!r.ok)throw new Error(String(r.status));
+  const r=await fetch(url,{signal:AbortSignal.timeout(45000),redirect:'error'});if(!r.ok)throw new Error(String(r.status));
   const text=await r.text();await fs.writeFile(`data/raw/probe/${name}.json`,text);
   const j=JSON.parse(text);
   if(name==='people')console.log(j.dados.map(p=>({id:p.id,nome:p.nome,uf:p.siglaUf})));
