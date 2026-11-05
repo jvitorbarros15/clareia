@@ -10,6 +10,9 @@ Thumbs.db
 .vercel/
 data/raw/
 data/private/
+data/local/
+data/runs/
+data/pilot.lock
 output/qa/
 playwright-report/
 test-results/

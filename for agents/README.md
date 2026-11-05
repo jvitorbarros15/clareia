@@ -1,6 +1,6 @@
 # Clareia — contexto e planos para agentes
 
-Documentação de produto e implementação. Os planos não significam que integrações já foram construídas: o MVP continua usando dados fictícios.
+Documentação de produto e implementação. O MVP de três estilos continua fictício. Um [piloto real separado](../real/README.md) foi implementado em 03/11/2026: leia seu resultado e limites antes de ampliar as integrações.
 
 ## Ordem de leitura
 
