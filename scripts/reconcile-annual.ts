@@ -10,7 +10,8 @@ import {withLock} from '../src/lock.ts';
 // Reads the database directly: a version must be auditable before the site is allowed to serve it. Stop the server first.
 const withDB=<T>(task:(db:Awaited<ReturnType<typeof openDB>>)=>Promise<T>)=>withLock(async()=>{const db=await openDB();try{return await task(db);}finally{await db.close();}});
 const initial=await withDB(db=>readSnapshot(db));if(!initial)throw new Error('Nenhuma versão publicada para conferir');
-const snapshotId=initial.id,records=initial.records;
+// API-only records have no CSV row to compare; `npm run verify:api-annual` covers them against the preserved pages.
+const snapshotId=initial.id,records=initial.records.filter(r=>r.origin!=='api'),apiOnly=initial.records.length-records.length;
 const {year}=JSON.parse(await fs.readFile('config/pilot.json','utf8')) as {year:number};
 if(initial.scope.year!==year)throw new Error(`A versão publicada cobre ${initial.scope.year}, mas config/pilot.json indica ${year}`);
 const archive=await fs.readFile(`data/raw/annual/Ano-${year}.csv.zip`);
@@ -37,7 +38,7 @@ const differences=[];
 for(const key of new Set([...apiGroups.keys(),...bulkGroups.keys()])){const a=apiGroups.get(key),b=bulkGroups.get(key);if(a?.count!==b?.count||a?.cents!==b?.cents)differences.push({group:key,api:a?{count:a.count,cents:String(a.cents)}:null,annual:b?{count:b.count,cents:String(b.cents)}:null});}
 let mismatchedOccurrences=0;for(const key of new Set([...apiRows.keys(),...bulkRows.keys()]))if(apiRows.get(key)!==bulkRows.get(key))mismatchedOccurrences++;
 const source=JSON.parse(await fs.readFile('data/raw/annual/source.json','utf8'));
-const report={status:!differences.length&&!mismatchedOccurrences?'passed':'failed',snapshotId,checkedAt:new Date().toISOString(),source,archiveSha256:createHash('sha256').update(archive).digest('hex'),scanned,selected,csvSha256,servedCount:records.length,groupsCompared:apiGroups.size,mismatchedOccurrences,differences,annualRefundCents:String(refundCents),missingDocumentOrGlosa,note:'Releitura independente do mesmo arquivo anual usado na versão (hash conferido), por parser separado, contra os registros gravados no banco. Não compara com a API da Câmara: ver npm run verify:api-annual. Contagem e valor líquido por pessoa/mês/categoria, e multiconjunto por pessoa/ano/mês/documento/categoria/valor líquido. Campos documento/glosa vazios no CSV permanecem desconhecidos. Restituições informadas separadamente, sem nova subtração. Não é auditoria da legitimidade da despesa.'};
+const report={status:!differences.length&&!mismatchedOccurrences&&apiOnly===(initial.validation.apiComparison?.extraInApi||0)?'passed':'failed',apiOnly,snapshotId,checkedAt:new Date().toISOString(),source,archiveSha256:createHash('sha256').update(archive).digest('hex'),scanned,selected,csvSha256,servedCount:records.length,groupsCompared:apiGroups.size,mismatchedOccurrences,differences,annualRefundCents:String(refundCents),missingDocumentOrGlosa,note:'Releitura independente do mesmo arquivo anual usado na versão (hash conferido), por parser separado, contra os registros gravados no banco. Não compara com a API da Câmara: ver npm run verify:api-annual. Contagem e valor líquido por pessoa/mês/categoria, e multiconjunto por pessoa/ano/mês/documento/categoria/valor líquido. Campos documento/glosa vazios no CSV permanecem desconhecidos. Restituições informadas separadamente, sem nova subtração. Não é auditoria da legitimidade da despesa.'};
 await fs.mkdir('output/qa',{recursive:true});await fs.writeFile('output/qa/real-source-audit.json',JSON.stringify(report,null,2));
 await withDB(db=>recordAudit(db,report as AuditReport));
 console.log(JSON.stringify(report,null,2));if(report.status!=='passed')process.exitCode=1;

@@ -37,7 +37,7 @@ export async function publish(db:DB,snapshot:Snapshot):Promise<void> {
     for(const r of snapshot.records)await db.query('INSERT INTO expenses VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING',[snapshot.id,r.id,r.personId,r.year,r.month,r.category,r.supplierKey,r.cents]);
     const check=await db.query<{count:string;total:string}>('SELECT count(*)::text AS count, coalesce(sum(amount_cents),0)::text AS total FROM expenses WHERE snapshot_id=$1',[snapshot.id]);
     if(Number(check.rows[0].count)!==snapshot.records.length||check.rows[0].total!==snapshot.validation.independentTotalCents)throw new Error('Reconciliação SQL independente falhou');
-    if(snapshot.validation.sourceKind==='annual-csv'&&snapshot.validation.apiComparison?.missingInApi){
+    if(snapshot.validation.apiComparison?.missingInApi){
       await db.query(`INSERT INTO withheld_snapshots SELECT id,$1 FROM snapshots WHERE body->>'metric'='camara.ceap.valor-liquido-api.v1' ON CONFLICT DO NOTHING`,['Recorte incompleto da API, identificado ao conferir o arquivo anual.']);
     }
     await db.query('INSERT INTO active_snapshot VALUES(1,$1) ON CONFLICT(singleton) DO UPDATE SET snapshot_id=excluded.snapshot_id',[snapshot.id]);

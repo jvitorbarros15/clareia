@@ -11,7 +11,7 @@ import {decimalCents,pairOccurrences} from '../src/reconcile.ts';
 const runs=path.resolve('data/runs');
 async function latestPublished(){
   const found=[];
-  for(const id of await fs.readdir(runs)){const m=JSON.parse(await fs.readFile(path.join(runs,id,'manifest.json'),'utf8').catch(()=>'{}'));if(m.status==='published'&&m.validation?.sourceKind==='annual-csv')found.push(m);}
+  for(const id of await fs.readdir(runs)){const m=JSON.parse(await fs.readFile(path.join(runs,id,'manifest.json'),'utf8').catch(()=>'{}'));if(m.status==='published'&&m.validation?.sourceKind?.startsWith('annual'))found.push(m);}
   found.sort((a,b)=>Date.parse(b.finishedAt)-Date.parse(a.finishedAt));if(!found[0])throw new Error('Nenhuma execução publicada com arquivo anual');return found[0].runId as string;
 }
 const runId=process.argv[2]||await latestPublished();

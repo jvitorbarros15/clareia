@@ -50,9 +50,9 @@ export const envelopeSchema=z.object({dados:z.array(z.unknown()),links:z.array(z
 export type Scope={year:number;months:number[];ids:number[];legislature:number};
 export type Person={id:number;name:string;photo:string|null;sourceUrl:string;profileFetchedAt:string};
 export type SourceRef={url:string;sha256:string;row:number;fetchedAt:string};
-export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey:string;supplierVerified:boolean;documentId:string;documentNumber:string;date:string|null;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef};
+export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey:string;supplierVerified:boolean;documentId:string;documentNumber:string;date:string|null;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api'};
 export type Page={url:string;sha256:string;file:string;fetchedAt:string;pass:number;count:number|null};
-export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number};sourceKind?:string}};
+export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[]}};
 
 export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|null {
   try {const u=new URL(input);if(u.protocol!=='https:'&&u.protocol!=='http:')return null;

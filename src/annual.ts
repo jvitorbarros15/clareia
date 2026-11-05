@@ -4,7 +4,30 @@ import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
 import {unzipSync} from 'fflate';
 import {canonical,hash,cents,snapshotId,validCnpj,officialUrl,stableDigest,maskPersonalId,readLimited} from './model.ts';
+import {pairOccurrences} from './reconcile.ts';
 import type {Snapshot,Scope,Expense,SourceRef} from './model.ts';
+
+// Which record types may exist in one source only. Rule and rationale: real/README.md.
+const ANNUAL_ONLY=new Set(['TELEFONIA','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA']),API_ONLY=new Set(['PASSAGEM AÉREA - SIGEPA']);
+const occurrence=(r:Expense)=>({personId:r.personId,month:r.month,documentId:r.documentId,category:r.category,cents:BigInt(r.cents),number:r.documentNumber,date:r.date?.slice(0,10)||null,lot:'',record:r});
+export function unionRecords(annual:Expense[],api:Expense[]) {
+  const pairing=pairOccurrences(annual.map(occurrence),api.map(occurrence));
+  if(pairing.fieldMismatches.length)throw new Error(`${pairing.fieldMismatches.length} pares divergem em número ou data; publicação retida`);
+  const blocked=(rows:{category:string}[],allowed:Set<string>)=>[...new Set(rows.map(r=>r.category))].filter(c=>!allowed.has(c));
+  const unknownAnnual=blocked(pairing.onlyAnnual,ANNUAL_ONLY),unknownApi=blocked(pairing.onlyApi,API_ONLY);
+  if(unknownApi.length)throw new Error(`A API contém ocorrências não reconciliadas no arquivo anual (${unknownApi.join(', ')}); publicação retida`);
+  if(unknownAnnual.length)throw new Error(`O arquivo anual contém tipos sem par na API e sem revisão (${unknownAnnual.join(', ')}); publicação retida`);
+  if(!pairing.balanced)throw new Error('União das fontes não fecha em centavos; publicação retida');
+  const records:Expense[]=[...pairing.matched.map(m=>({...m.annual.record,origin:'both' as const})),...pairing.onlyAnnual.map(o=>({...o.record,origin:'annual' as const})),...pairing.onlyApi.map(o=>({...o.record,origin:'api' as const}))];
+  const sum=(origin:Expense['origin'])=>records.filter(r=>r.origin===origin).reduce((n,r)=>n+r.cents,0);
+  return {records,paired:pairing.matched.length,onlyAnnual:pairing.onlyAnnual.length,onlyApi:pairing.onlyApi.length,onlyApiCents:pairing.onlyApiCents,originCents:{both:sum('both'),annual:sum('annual'),api:sum('api')}};
+}
+// Records a previous version published that no source carries anymore, counted per occurrence.
+export function removedRecords(previous:Snapshot,current:Expense[]):Expense[] {
+  const key=(r:Expense)=>canonical([r.personId,r.year,r.month,r.documentId,r.category,r.cents]),left=new Map<string,number>();
+  for(const r of current)left.set(key(r),(left.get(key(r))||0)+1);
+  return previous.records.filter(r=>{const n=left.get(key(r))||0;if(n)left.set(key(r),n-1);return !n;});
+}
 
 export type AnnualRow=Record<string,string>;
 export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef):Expense {
@@ -27,7 +50,7 @@ export async function parseAnnual(bytes:Uint8Array,scope:Scope):Promise<{rows:{r
 async function download(url:string):Promise<Uint8Array>{
   let last:unknown;for(let i=0;i<3;i++)try{const r=await fetch(url,{signal:AbortSignal.timeout(60000),redirect:'error'});if(!r.ok)throw new Error('HTTP '+r.status);return await readLimited(r,100_000_000);}catch(e){last=e;if(i<2)await new Promise(r=>setTimeout(r,1000*(i+1)));}throw last;
 }
-export async function annualSnapshot(api:Snapshot,directory:string):Promise<Snapshot>{
+export async function annualSnapshot(api:Snapshot,directory:string,previous:Snapshot|null=null,acceptRemoved=false):Promise<Snapshot>{
   const scope=api.scope,url=`https://www.camara.leg.br/cotas/Ano-${scope.year}.csv.zip`;
   const passes=[];
   for(const pass of [1,2]){
@@ -45,12 +68,12 @@ export async function annualSnapshot(api:Snapshot,directory:string):Promise<Snap
   // Separate decimal accumulator from the raw CSV, before normalization.
   let independent=0n;for(const {raw}of selected.rows){const s=raw.vlrLiquido.trim().replace(',','.'),[whole,fraction='']=s.replace('-','').split('.');independent+=(BigInt(whole)*100n+BigInt(fraction.padEnd(2,'0')))*(s.startsWith('-')?-1n:1n);}
   const total=records.reduce((n,r)=>n+r.cents,0);if(!Number.isSafeInteger(total)||BigInt(total)!==independent)throw new Error('Conferência independente anual diverge');
-  const key=(r:Expense)=>canonical([r.personId,r.year,r.month,r.documentId,r.category,r.cents]);
-  const counts=(rows:Expense[])=>{const map=new Map<string,number>();for(const r of rows)map.set(key(r),(map.get(key(r))||0)+1);return map;};
-  const annualCounts=counts(records),apiCounts=counts(api.records);let missingInApi=0,extraInApi=0;
-  for(const k of new Set([...annualCounts.keys(),...apiCounts.keys()])){const diff=(annualCounts.get(k)||0)-(apiCounts.get(k)||0);if(diff>0)missingInApi+=diff;else extraInApi-=diff;}
-  if(extraInApi)throw new Error('A API contém ocorrências não reconciliadas no arquivo anual; publicação retida');
-  const metric='camara.ceap.valor-liquido-arquivo-anual.v1';
-  const body={...api,metric,records,collectedAt:selected.meta.fetchedAt,publishedAt:new Date().toISOString(),pages:[...api.pages,...passes.map(p=>({...p.meta,count:p.scanned}))],validation:{sourceKind:'annual-csv',stablePasses:2,recordCount:records.length,totalCents:total,independentTotalCents:String(independent),duplicatePolicy:'Documento não é chave. Ocorrências do CSV preservadas; conteúdo idêntico ambíguo retém publicação.',apiComparison:{apiRecords:api.records.length,annualRecords:records.length,missingInApi,extraInApi,netDifferenceCents:total-api.validation.totalCents},limitations:[`Fonte dos valores: arquivo anual CEAP. A API omitiu ${missingInApi} ocorrências deste recorte; não foi usada para completar ou substituir valores do CSV.`,'Amostra técnica de três deputados, janeiro–fevereiro de 2025; sem ranking nacional.','Campos financeiros vazios no arquivo permanecem desconhecidos, sem conversão automática para zero.','Valores negativos são preservados. A soma usa vlrLiquido, sem nova subtração de restituições.','Nome/retrato são os da consulta atual; não há atribuição histórica de partido/UF nem média por exercício.','Fornecedores sem CNPJ com dígitos válidos não são agrupados por identidade.','Conferência de integridade e aritmética não é auditoria da legitimidade das despesas.']}};
+  const union=unionRecords(records,api.records),missingInApi=union.onlyAnnual,extraInApi=union.onlyApi;
+  const unionTotal=union.records.reduce((n,r)=>n+r.cents,0),independentUnion=independent+union.onlyApiCents;
+  if(!Number.isSafeInteger(unionTotal)||BigInt(unionTotal)!==independentUnion)throw new Error('Conferência independente da união diverge');
+  const removed=previous?removedRecords(previous,union.records):[];
+  if(removed.length&&!acceptRemoved)throw new Error(`${removed.length} ocorrências da versão publicada não aparecem em nenhuma fonte atual (${[...new Set(removed.map(r=>r.category))].join(', ')}); publicação retida. Revise e use --accept-removed para publicar sem elas`);
+  const metric='camara.ceap.valor-liquido-uniao-fontes.v1',captured=selected.meta.fetchedAt.slice(0,10);
+  const body={...api,metric,records:union.records,collectedAt:selected.meta.fetchedAt,publishedAt:new Date().toISOString(),pages:[...api.pages,...passes.map(p=>({...p.meta,count:p.scanned}))],validation:{sourceKind:'annual-api-union',stablePasses:2,recordCount:union.records.length,totalCents:unionTotal,independentTotalCents:String(independentUnion),duplicatePolicy:'Documento não é chave. Ocorrências do CSV preservadas; conteúdo idêntico ambíguo retém publicação.',apiComparison:{apiRecords:api.records.length,annualRecords:records.length,missingInApi,extraInApi,paired:union.paired,originCents:union.originCents,netDifferenceCents:total-api.validation.totalCents},removedFromPrevious:removed.map(r=>({personId:r.personId,month:r.month,category:r.category,cents:r.cents})),limitations:[`Fonte dos valores: união do arquivo anual CEAP com a API. ${union.paired} ocorrências estão nas duas fontes e usam os valores do arquivo; ${missingInApi} estão só no arquivo; ${extraInApi} estão só na API, ausentes do arquivo capturado em ${captured}.`,...(removed.length?[`${removed.length} ocorrências da versão anterior não aparecem em nenhuma fonte desta captura e foram retiradas após revisão.`]:[]),'Amostra técnica de três deputados, janeiro–fevereiro de 2025; sem ranking nacional.','Campos financeiros vazios no arquivo permanecem desconhecidos, sem conversão automática para zero.','Valores negativos são preservados. A soma usa vlrLiquido, sem nova subtração de restituições.','Nome/retrato são os da consulta atual; não há atribuição histórica de partido/UF nem média por exercício.','Fornecedores sem CNPJ com dígitos válidos não são agrupados por identidade.','Conferência de integridade e aritmética não é auditoria da legitimidade das despesas.']}};
   return {...body,id:snapshotId(body)};
 }

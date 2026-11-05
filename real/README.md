@@ -50,7 +50,7 @@ Total: −R$ 1.935,65, igual à diferença entre as somas. No arquivo de 2025 in
 
 A coleta de 05/11/2026 (execução `13cc2ab4`) foi retida pela proteção de `src/annual.ts`. O arquivo `Ano-2025` caiu de cerca de 209 mil para 170 mil linhas (sha `012b0b…` para `9341f9…`). No recorte, passou de 194 para 134 registros: saíram 58 passagens SIGEPA e 2 ajustes de auxílio-moradia, e nenhum entrou. A API continuou com 179 registros, então 58 ocorrências ficaram só na API.
 
-A versão publicada segue sendo a da execução `9d9bdb37`. A causa da redução não é conhecida: não trate o arquivo novo como correção da Câmara nem como falha sem confirmar. Antes de publicar de novo, recapture o arquivo e confira se a redução continua.
+Uma segunda captura no mesmo dia trouxe o mesmo hash, e o servidor da Câmara indica regeneração em 05/11/2026 às 06:19 (GMT), também no arquivo de 2024. A redução é estável, mas a causa não é conhecida: não a trate como correção nem como falha sem confirmar com a Câmara. A versão publicada segue sendo a da execução `9d9bdb37`.
 
 ### O arquivo anual não é um superconjunto da API
 
@@ -58,13 +58,13 @@ Consulta da API em 04/11/2026 para o ano inteiro de 2025 dos mesmos três IDs: a
 
 ### Regra de união API + arquivo anual (obrigatória antes de passar de fevereiro)
 
-Ainda não implementada: no recorte atual não existe ocorrência só na API, e implementá-la muda o tipo do registro, a exportação e a interface. Até lá o código recusa publicar um recorte com ocorrência extra na API.
+Implementada em `unionRecords` (`src/annual.ts`). Uma ocorrência que estava publicada e sumiu das duas fontes retém a publicação: revise e rode `npm run collect -- --accept-removed` para publicar sem ela, com a retirada registrada na versão.
 
 1. **Chave de pareamento.** `(ID Câmara, ano, mês de competência, ideDocumento/codDocumento como texto, txtDescricao/tipoDespesa, valor líquido em centavos)`, a mesma de `src/reconcile.ts`. Pareamento 1:1 por multiplicidade: cada ocorrência de uma fonte consome no máximo uma da outra. Sem tolerância de valor, sem janela de datas e sem casar por nome de fornecedor.
 2. **Par conferido.** Número do documento, data de emissão e lote também precisam coincidir. Se a chave casar e esses campos divergirem, o par é retido para revisão e a publicação daquela pessoa/mês não acontece.
 3. **Quem vence no par.** O arquivo anual fornece todos os valores e campos descritivos (`vlrLiquido`, `vlrDocumento`, `vlrGlosa`, fornecedor, datas). A API fica como referência cruzada (`codDocumento`, URL da página).
 4. **Só no arquivo anual.** Entram, com fonte = arquivo anual. Tipos conhecidos: TELEFONIA (RAMAL, CELULAR FUNCIONAL, LINHA DIRETA; `ideDocumento` = 0) e ajustes de COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA, inclusive negativos. Um tipo fora dessa lista retém a publicação até ser revisado e adicionado.
-5. **Só na API.** Entram apenas PASSAGEM AÉREA - SIGEPA com `codDocumento` em formato UUID, com fonte = API e `valorLiquido` da API. Qualquer outro tipo só na API continua bloqueando a publicação.
+5. **Só na API.** Entram apenas PASSAGEM AÉREA - SIGEPA, com qualquer formato de `codDocumento` (os de janeiro–fevereiro são numéricos), com fonte = API e `valorLiquido` da API. Qualquer outro tipo só na API continua bloqueando a publicação.
 6. **Promoção.** Se uma captura anual posterior trouxer uma ocorrência que estava só na API, ela passa a par e o valor do arquivo anual vence. Isso gera uma nova versão (novo identificador por conteúdo).
 7. **Conferência.** Total da união = total anual + só API = total API + só anual. As duas igualdades precisam fechar em centavos, com o acumulador independente e a soma SQL, antes de publicar.
 8. **Apresentação.** Cada registro traz a origem: "arquivo anual e API", "só no arquivo anual" ou "só na API (ausente do arquivo anual capturado em <data>)". A origem aparece na tabela, no diálogo do registro e numa coluna da exportação CSV. O resumo mostra quanto do total vem de cada origem. Filtros e gráficos não escondem registros de uma só fonte.

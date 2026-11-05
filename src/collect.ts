@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { collect,RunCache } from './collector.ts';
-import { openDB,publish } from './store.ts';
+import { openDB,publish,readSnapshot } from './store.ts';
 import { withLock } from './lock.ts';
 import type { Scope } from './model.ts';
 import {annualSnapshot} from './annual.ts';
@@ -24,7 +24,7 @@ try{
   await db.query('INSERT INTO runs(id,status,started_at) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET status=excluded.status, started_at=excluded.started_at, finished_at=NULL, error=NULL',[runId,'collecting',start]);
   console.log(`Coleta ${runId}: ${scope.ids.length} pessoas / ${scope.year} / meses ${scope.months.join(', ')}. Originais: data/runs/${runId}`);
   const api=await collect(scope,cache);
-  const snapshot=await annualSnapshot(api,directory);
+  const snapshot=await annualSnapshot(api,directory,await readSnapshot(db),process.argv.includes('--accept-removed'));
   await publish(db,snapshot);
   await db.query('UPDATE runs SET status=$2,finished_at=now(),snapshot_id=$3 WHERE id=$1',[runId,'published',snapshot.id]);
   await fs.writeFile(manifestPath,JSON.stringify({runId,scope,status:'published',startedAt:start,finishedAt:new Date().toISOString(),snapshotId:snapshot.id,pages:snapshot.pages,validation:snapshot.validation},null,2));
