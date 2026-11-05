@@ -500,3 +500,112 @@ body[data-model=editorial].past-hero .assistant-launcher>span:not(.assistant-spa
 body[data-model=editorial].past-hero .assistant-launcher{width:52px;height:52px;padding:0;justify-content:center}
 /* A missing photo is a quiet monogram, not a loud block. */
 body[data-model=editorial] .editorial-card .initials{background:color-mix(in srgb,var(--ink) 5%,var(--bg));color:var(--muted);font-size:clamp(40px,5vw,64px)}
+
+/* Round 16 restructure. Comparison continues the directory instead of opening a new chapter. */
+body[data-model=editorial] #comparacao{padding-top:40px}
+body[data-model=editorial] #comparacao .p-section-intro{border-top:0;padding-top:0}
+body[data-model=editorial] #comparacao .p-section-intro .p-kicker{display:none}
+body[data-model=editorial] #comparacao .p-section-intro h2{font-size:clamp(26px,2.6vw,34px)}
+/* Ranks 4+ continue the podium as a quiet list. */
+body[data-model=editorial] .bar-section h2{font:600 15px var(--sans);letter-spacing:0;color:var(--muted)}
+body[data-model=editorial] .bar-rank{font:400 22px/1 var(--serif);color:var(--muted);width:32px;flex:none}
+/* Closing band: what we don't cover yet and what you follow sit together, on one tone, before the footer. */
+body[data-model=editorial] :is(#dimensoes,#acompanhar){background:color-mix(in srgb,var(--ink) 3%,var(--bg));margin:0 calc(50% - 50vw);padding-left:calc(50vw - 50%);padding-right:calc(50vw - 50%)}
+body[data-model=editorial] #dimensoes{margin-top:80px;padding-top:56px}
+body[data-model=editorial] #acompanhar{padding-top:24px;padding-bottom:64px}
+body[data-model=editorial] :is(#dimensoes,#acompanhar) .p-section-intro{border-top:0;padding-top:0}
+body[data-model=editorial] :is(#dimensoes,#acompanhar) .p-section-intro h2{font-size:clamp(26px,2.6vw,34px)}
+body[data-model=editorial] #dimensoes .dossier-card{background:var(--bg)}
+body[data-model=editorial] .bar-section .bar-row{display:grid;grid-template-columns:36px 40px minmax(0,1fr) minmax(0,2fr) 120px;align-items:center;gap:16px;padding:6px 0;border:0;border-top:1px solid var(--line)}
+body[data-model=editorial] .bar-section .bar-row .avatar{width:40px;height:40px;border-radius:50%;overflow:hidden}
+body[data-model=editorial] .bar-section .bar-name{font-size:16px;font-weight:600}
+body[data-model=editorial] .bar-section .bar-value{font:400 22px/1 var(--serif);text-align:right}
+@media (max-width:560px){body[data-model=editorial] .bar-section .bar-row{grid-template-columns:28px 36px minmax(0,1fr) auto}body[data-model=editorial] .bar-section .track{display:none}}
+body[data-model=editorial] .bar-section .bar-row .avatar{display:block!important;grid-column:2}
+body[data-model=editorial] .bar-section .bar-name{grid-column:3;white-space:nowrap}
+body[data-model=editorial] .bar-section .track{grid-column:4;display:block;height:8px}
+body[data-model=editorial] .bar-section .bar-value{grid-column:5;font-weight:400!important}
+@media (max-width:560px){body[data-model=editorial] .bar-section .bar-value{grid-column:4}}
+@media (max-width:560px){body[data-model=editorial] .bar-section .track{display:none}}
+
+/* Round 17. The demonstration band now starts at Votações: votes, uncovered dimensions and following share one tone. */
+body[data-model=editorial] #votacoes{background:color-mix(in srgb,var(--ink) 3%,var(--bg));margin:80px calc(50% - 50vw) 0;padding:56px calc(50vw - 50%) 24px}
+body[data-model=editorial] #votacoes .p-section-intro{border-top:0;padding-top:0}
+body[data-model=editorial] #dimensoes{margin-top:0;padding-top:40px}
+body[data-model=editorial] #votacoes .vote-card{background:var(--bg);padding:24px}
+@media (min-width:1000px){
+  body[data-model=editorial] .vote-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+  body[data-model=editorial] .vote-card{display:flex;flex-direction:column;gap:14px}
+  body[data-model=editorial] .vote-card h3{font-size:24px}
+  body[data-model=editorial] .dossier-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+/* The launcher always says what it does; it stays a compact pill instead of an unlabeled mark. */
+body[data-model=editorial] .assistant-launcher,body[data-model=editorial].past-hero .assistant-launcher{width:auto;height:48px;padding:0 18px 0 14px;gap:8px}
+body[data-model=editorial] .assistant-launcher>span:not(.assistant-spark),body[data-model=editorial].past-hero .assistant-launcher>span:not(.assistant-spark){display:inline!important;font-size:14px}
+body[data-model=editorial] .assistant-launcher>svg,body[data-model=editorial].past-hero .assistant-launcher>svg{display:none}
+
+/* Round 18 floors: remaining 12px labels to 13px, last sub-44px controls, room for the launcher at page end. */
+body[data-model=editorial] :is(.supplier-list button>span,.supplier-list button small,.supplier-list button>b,.atlas-people button small,.compare-person p,.project-author span small,.your-vote span small,.linked-totals small,.timeline-event p){font-size:13px}
+body[data-model=editorial] :is(.atlas-people>div>button,.linked-chart-body details>summary){min-height:44px}
+body[data-model=editorial] .chart-hit{cursor:pointer}
+body[data-model=editorial]{padding-bottom:80px}
+
+/* Round 19. Phone hero answers first: the figure and its sentence come before the portrait. */
+@media (max-width:560px){
+  body[data-model=editorial] .editorial-feature{order:3;padding:20px 0 8px}
+  body[data-model=editorial] .editorial-handwritten{order:4}
+  body[data-model=editorial] .hero-portrait{order:5;aspect-ratio:3/2}
+  body[data-model=editorial]:not(.past-hero) .assistant-launcher{opacity:0;pointer-events:none;transform:translateY(8px)}
+  body[data-model=editorial] .assistant-launcher{transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
+}
+body[data-model=editorial] .tenure-note{margin:6px 0 0;font-size:13px;color:#8a4b00}
+body[data-model=editorial] .is-out{font:500 14px var(--sans)!important;color:var(--muted)}
+/* Missing portrait: a modest monogram that doesn't outgrow the photos or collide with the rank numeral. */
+body[data-model=editorial] .editorial-card .initials{margin-left:auto;width:58%;aspect-ratio:1;font-size:clamp(32px,3.6vw,48px);border-radius:50%;align-self:flex-end}
+@media (max-width:760px){body[data-model=editorial] .topic-tabs{-webkit-mask-image:linear-gradient(90deg,#000 80%,transparent);mask-image:linear-gradient(90deg,#000 80%,transparent);padding-right:48px}}
+body[data-model=editorial] .editorial-card .initials{width:min(58%,160px);height:auto;aspect-ratio:1}
+
+/* Round 20. Categories get their own hues; blue and navy stay reserved for people. */
+body[data-model=editorial]{--cat1:#1d7a6e;--cat2:#a8741a;--cat3:#5d6470}
+/* The proof dialog speaks the page's language: serif figures and title. */
+body[data-model=editorial] #detail-title{font:400 clamp(26px,3vw,34px)/1.1 var(--serif);letter-spacing:-.02em}
+body[data-model=editorial] .calculation-result strong,body[data-model=editorial] .calculation-result b{font:400 clamp(32px,4vw,44px)/1.05 var(--serif);letter-spacing:-.02em}
+body[data-model=editorial] .detail-dialog h3{font-family:var(--sans);font-weight:600}
+/* Phone dock links reach 44px. */
+body[data-model=editorial] .section-dock a{display:inline-flex;align-items:center;min-height:44px}
+body[data-model=editorial] .section-dock{padding-top:2px;padding-bottom:2px}
+body[data-model=editorial] .calculation-result{font:400 clamp(34px,4vw,46px)/1.05 var(--serif);letter-spacing:-.02em}body[data-model=editorial] .calculation-result small{font-family:var(--sans)}
+
+/* Small editorial experiment: two search prompts and one contextual next step. */
+body[data-model=editorial] .editorial-search-examples{display:flex;flex-wrap:wrap;align-items:center;column-gap:14px;row-gap:0;width:90%;margin-top:8px;font:400 12px/1.4 var(--sans);color:var(--muted)}
+body[data-model=editorial] .editorial-search-examples>span{font-size:11px}
+body[data-model=editorial] .editorial-search-examples button{min-height:44px;padding:4px 0;border:0;border-radius:0;background:none;color:var(--muted);font:inherit;text-align:left;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:4px}
+body[data-model=editorial] .editorial-search-examples button:hover{color:var(--accent);text-decoration-color:currentColor}
+body[data-model=editorial] .editorial-follow-up{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 16px;margin:18px 0 0;padding:10px 0 0;border-top:1px solid var(--line)}
+body[data-model=editorial] .editorial-follow-up>span{font:400 12px/1.5 var(--sans);color:var(--muted)}
+body[data-model=editorial] .editorial-follow-up :is(button,a){display:inline-flex;align-items:center;min-height:44px;padding:4px 0;border:0;background:none;color:var(--accent);font:400 16px/1.4 var(--serif);text-align:left;text-decoration:none}
+body[data-model=editorial] .editorial-follow-up :is(button,a):hover{text-decoration:underline;text-underline-offset:4px}
+body[data-model=editorial] :is(.editorial-search-examples button,.editorial-follow-up button,.editorial-follow-up a):focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+@media(max-width:560px){body[data-model=editorial] .editorial-search-examples{width:100%;column-gap:12px}body[data-model=editorial] .editorial-follow-up{display:block}body[data-model=editorial] .editorial-follow-up>span{display:block}}
+
+/* Context and connected category highlights; preserve the editorial composition. */
+body[data-model=editorial] .editorial-person-context{font:400 12px/1.5 var(--sans);color:var(--muted);margin:0 0 8px}
+body[data-model=editorial] .editorial-person-context span{font-size:11px}
+body[data-model=editorial] :is(.editorial-proof,.text-button[data-action=evidence],[data-p=spend-evidence],[data-p=map-evidence],[data-p=compare-evidence]){display:inline-flex;align-items:center;min-height:44px;padding:4px 0;border:0;background:none;font:500 13px/1.5 var(--sans);color:var(--accent);text-align:left;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--accent) 25%,transparent);text-underline-offset:4px}
+body[data-model=editorial] .editorial-feature .text-button[data-action=evidence]{font-size:16px;font-family:var(--serif)}
+body[data-model=editorial] .donut-caption{flex-wrap:wrap;gap:4px 16px}
+body[data-model=editorial] .donut-legend [aria-pressed=true]{box-shadow:inset 3px 0 var(--cat);padding-left:12px;background:color-mix(in srgb,var(--cat) 7%,var(--bg))}
+body[data-model=editorial] .donut-legend button:disabled{cursor:not-allowed}
+body[data-model=editorial] .category-muted{opacity:.55}
+body[data-model=editorial] .supplier-list [data-highlighted=true]{box-shadow:inset 3px 0 var(--accent);padding-left:12px;background:var(--soft)}
+body[data-model=editorial] .p-mini-bars button>span{position:relative;overflow:hidden}
+body[data-model=editorial] .category-bar-part{position:absolute;inset:auto 0 0;display:block;width:100%;transition:height 240ms ease}
+body[data-model=editorial] .category-focus{margin:18px 0;padding:12px 0;border-bottom:1px solid var(--line)}
+body[data-model=editorial] .category-focus p{font-size:14px;line-height:1.6;margin:0 0 6px}
+body[data-model=editorial] .category-focus .p-small{font-size:13px;color:var(--muted)}
+body[data-model=editorial] .category-clear{font:400 12px var(--sans);color:var(--muted);text-decoration:underline;min-height:44px;margin-left:16px}
+body[data-model=editorial] :is(.editorial-proof,[data-p-highlight]):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){body[data-model=editorial] .category-bar-part{transition:none}}
+body[data-model=editorial][data-motion=off] .category-bar-part{transition:none}
+
+body[data-model=editorial] .p-mini-bars button:not(.included) .category-bar-part{opacity:.18}
