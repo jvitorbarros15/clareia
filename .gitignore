@@ -17,3 +17,7 @@ output/qa/
 playwright-report/
 test-results/
 
+
+# Planning docs stay local
+for agents/PLANO-*.md
+docs/superpowers/plans/
