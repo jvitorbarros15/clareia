@@ -30,9 +30,11 @@ test('annual CSV preserves negative adjustments and missing fields without inven
   assert.equal(housing.documentCents,174700);assert.equal(housing.disallowedCents,null);assert.equal(housing.cents,-174700);
 });
 test('annual parser filters by official ID and competence rather than display name',async()=>{
-  const data='ideCadastro;numAno;numMes;txNomeParlamentar;codLegislatura;txtDescricao;vlrLiquido;vlrDocumento;vlrGlosa;ideDocumento\n1;2025;1;Same name;57;TEST;1;1;0;1\n999;2025;1;Same name;57;TEST;1;1;0;1\n1;2024;1;Same name;57;TEST;1;1;0;1\n';
+  const header='ideCadastro;numAno;numMes;txNomeParlamentar;codLegislatura;txtDescricao;vlrLiquido;vlrDocumento;vlrGlosa;ideDocumento;txtFornecedor;txtCNPJCPF;urlDocumento;txtNumero;datEmissao;numLote',tail=';57;TEST;1;1;0;1;F;;;N;2025-01-02;1\n';
+  const data=header+'\n1;2025;1;Same name'+tail+'999;2025;1;Same name'+tail+'1;2024;1;Same name'+tail;
   const parsed=await parseAnnual(new TextEncoder().encode(data),scope);assert.equal(parsed.rows.length,1);assert.equal(parsed.scanned,3);
   await assert.rejects(parseAnnual(new TextEncoder().encode('ideCadastro;numAno\n1;2025\n'),scope),/coluna ausente/);
+  await assert.rejects(parseAnnual(new TextEncoder().encode(header.replace('txtFornecedor','txtNomeFornecedor')+'\n'),scope),/coluna ausente txtFornecedor/);
 });
 test('schema, financial equation and scope failures block records',()=>{
   assert.equal(normalize(expense(),1,scope,source).cents,10021);

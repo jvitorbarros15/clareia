@@ -20,7 +20,7 @@ export function results(snapshot:Snapshot,filters:Filters){
     categories:[...new Set(all.map(r=>r.category))].sort().map(category=>({category,cents:sum(all.filter(r=>r.category===category))})),
     suppliers:[...new Set(filteredCategory.map(r=>r.supplierKey))].map(key=>{const rows=filteredCategory.filter(r=>r.supplierKey===key);return {key,name:rows[0].supplier,verified:rows[0].supplierVerified,cents:sum(rows),count:rows.length};}),records};
 }
-const originLabel=(r:Expense)=>({both:'arquivo anual e API',annual:'só no arquivo anual',api:'só na API'} as const)[r.origin||'annual'];
+const originLabel=(r:Expense)=>r.origin?({both:'arquivo anual e API',annual:'só no arquivo anual',api:'só na API'} as const)[r.origin]:'';
 export function csv(rows:Expense[]):string {
   const cell=(value:unknown)=>{let text=String(value??'');if(typeof value==='string'&&/^[\s=+@\-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
   return '\uFEFF'+[['id_ocorrencia','id_deputado','ano','mes','categoria','fornecedor','documento','valor_centavos','origem','sha256_origem','posicao_origem','fonte_do_registro'],...rows.map(r=>[r.id,r.personId,r.year,r.month,r.category,r.supplier,r.documentId,r.cents,r.source.url,r.source.sha256,r.source.row,originLabel(r)])].map(row=>row.map(cell).join(';')).join('\r\n');
