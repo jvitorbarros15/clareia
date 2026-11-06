@@ -57,4 +57,4 @@ const report={
 await fs.mkdir('output/qa',{recursive:true});await fs.writeFile('output/qa/api-annual-reconciliation.json',JSON.stringify(report,null,2));
 console.log(JSON.stringify({...report,onlyAnnual:undefined,onlyApi:undefined},null,2));
 for(const r of result.onlyAnnual)console.log([r.personId,r.month,r.category,r.supplier,'doc '+(r.documentId||'(vazio)'),'nº '+(r.number||'(vazio)'),'vlrDocumento '+(r.vlrDocumento||'(vazio)'),'vlrGlosa '+(r.vlrGlosa||'(vazio)'),brl(r.cents)].join(' | '));
-if(result.onlyApi.length||result.fieldMismatches.length||!result.balanced)process.exitCode=1;
+if(result.onlyApi.length!==(manifest.validation?.apiComparison?.extraInApi||0)||result.fieldMismatches.length||!result.balanced)process.exitCode=1;

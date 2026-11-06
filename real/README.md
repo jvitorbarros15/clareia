@@ -114,16 +114,20 @@ npm run typecheck
 npm test
 ```
 
+Com o servidor desligado:
+
+```sh
+npm run verify:annual
+npm run verify:api-annual
+```
+
 Com o servidor ativo:
 
 ```sh
-node scripts/download-annual.mjs
-npm run verify:annual
-npm run verify:api-annual
 npm run verify:browser
 ```
 
-`verify:annual` é uma releitura do **mesmo** arquivo da versão (o hash do CSV precisa coincidir), por outro parser, contra os registros gravados no banco, com o servidor desligado. O resultado fica guardado por versão: o site só serve versões com conferência aprovada, e uma versão nova fica privada até lá, enquanto a anterior aprovada continua no ar. Verifica a cadeia de processamento; não compara com a API nem prova que a fonte esteja completa. O verificador percorreu 209.081 linhas, selecionou 194 e reconciliou **37 grupos de pessoa/mês/categoria**, além da multiplicidade de documentos/valores, sem divergências. Dois registros tinham campos documento/glosa vazios; isso foi mantido explícito. Restituições no recorte do arquivo somaram zero nesta captura.
+`verify:annual` é uma releitura do **mesmo** arquivo da versão, a cópia guardada em `data/runs/<execução>/` (o hash do CSV precisa coincidir), por outro parser. Registros só da API são procurados, com o valor, nas páginas preservadas da mesma execução. A releitura compara com os registros gravados no banco, com o servidor desligado. O resultado fica guardado por versão: o site só serve versões com conferência aprovada, e uma versão nova fica privada até lá, enquanto a anterior aprovada continua no ar. Verifica a cadeia de processamento; não compara com a API nem prova que a fonte esteja completa. O verificador percorreu 209.081 linhas, selecionou 194 e reconciliou **37 grupos de pessoa/mês/categoria**, além da multiplicidade de documentos/valores, sem divergências. Dois registros tinham campos documento/glosa vazios; isso foi mantido explícito. Restituições no recorte do arquivo somaram zero nesta captura.
 
 Os testes de backend cobrem precisão, valores negativos, campos ausentes, identidade, homônimos, duplicatas, paginação incompleta/repetida, tentativas, checkpoints adulterados, instabilidade, idempotência, rollback e revisões. Os testes de navegador cobrem pessoa → mês → categoria → fornecedor → registro, CSV, link com versão, filtros inválidos, bloqueio de arquivos brutos e layouts de 390/768/1360 px.
 
@@ -137,7 +141,7 @@ Relatórios e screenshots ficam em `output/qa/`, ignorado pelo Git. Se a reconci
 - `/api/export`: mesmos registros do recorte, em CSV, com IDs e proveniência.
 - `/api/status`: estado da última execução e versão ativa.
 - Retratos oficiais preservados em `real/portraits/`; origem e data em `sources.json`. `npm run cache:portraits` atualiza as imagens com o servidor ativo.
-- [Arquivo anual oficial](https://www.camara.leg.br/cotas/Ano-2025.csv.zip) (o ano vem de `config/pilot.json` em `download-annual.mjs` e `verify:annual`)
+- [Arquivo anual oficial](https://www.camara.leg.br/cotas/Ano-2025.csv.zip) (o ano vem de `config/pilot.json`)
 - [Significado dos campos CEAP](https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html)
 - [Contrato da API](https://dadosabertos.camara.leg.br/api/v2/api-docs)
 
