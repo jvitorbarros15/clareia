@@ -8,7 +8,6 @@ Documentação de produto e implementação. O MVP de três estilos continua fic
 2. [Design e UX](DESIGN-UI-UX.md)
 3. [Mapas e gráficos](MAPAS-E-GRAFICOS.md)
 4. [Stack técnica proposta](STACK-TECNICA.md)
-7. [Matriz de validação a implementar](MATRIZ-DE-VALIDACAO.md)
 
 Para executar e testar a interface, consultar o [README principal](../README.md) e o [README do MVP](../mvp/README.md). A origem das imagens permanece junto aos [assets](../mvp/assets/README.md).
 

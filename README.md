@@ -32,7 +32,6 @@ Abra http://127.0.0.1:4173 e escolha o modelo no topo. Também é possível abri
 - [Direção da plataforma](<for agents/DIRECAO-DA-PLATAFORMA.md>)
 - [Design e UX](<for agents/DESIGN-UI-UX.md>)
 - [Mapas e gráficos: implementado e próximos passos](<for agents/MAPAS-E-GRAFICOS.md>)
-- [Matriz de validação dos dados reais — a implementar](<for agents/MATRIZ-DE-VALIDACAO.md>)
 - [Proposta de stack futura](<for agents/STACK-TECNICA.md>)
 - [MVP, funcionalidades e verificação](mvp/README.md)
 

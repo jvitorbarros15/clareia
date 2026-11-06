@@ -20,4 +20,5 @@ test-results/
 
 # Planning docs stay local
 for agents/PLANO-*.md
+for agents/MATRIZ-DE-VALIDACAO.md
 docs/superpowers/plans/
