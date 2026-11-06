@@ -163,7 +163,7 @@ Todos os nomes, retratos e valores são fictícios. Os retratos foram gerados co
 
 As propostas concentram-se na abertura, rankings, gráficos e busca. O mapa geográfico e a página completa de perfil ainda precisam ser detalhados. Não há integração de dados ou RAG implementada.
 
-Arquivos dos retratos preservados: [original PNG](output/retratos-ficticios.png) e [cópia JPEG](output/retratos-ficticios.jpg).
+Arquivos dos retratos preservados: [original PNG](../output/retratos-ficticios.png) e [cópia JPEG](../output/retratos-ficticios.jpg).
 
 ### Prompt dos retratos
 

@@ -2,7 +2,19 @@
 
 Portal de investigação cidadã sobre política brasileira. Protótipo em português com três direções visuais: **Investigação**, **Explorador** e **Editorial**.
 
-**Os perfis, valores, projetos e votos do MVP são fictícios.** A busca usa regras locais; não há IA, API oficial ou banco de produção conectado. Não usar os exemplos como informação sobre pessoas reais.
+**O MVP visual em `mvp/` usa dados fictícios.** A busca demonstrativa usa regras locais, sem IA conectada. Não usar esses exemplos como informação sobre pessoas reais.
+
+Há também um **[piloto com dados oficiais](real/README.md)** em `real/`, separado do MVP: TypeScript, PostgreSQL local, três deputados e dois meses de lançamentos CEAP. A fonte principal é o arquivo anual da Câmara, com discrepâncias da API documentadas.
+
+## Piloto real
+
+```sh
+npm ci
+npm run collect
+npm run dev
+```
+
+Abra http://127.0.0.1:4174. No workspace em que a coleta já foi feita, basta `npm run dev`. Encerre o servidor antes de uma nova coleta. Consulte [instruções, testes e limites](real/README.md).
 
 ## Executar
 
@@ -16,13 +28,14 @@ Abra http://127.0.0.1:4173 e escolha o modelo no topo. Também é possível abri
 
 ## Documentação
 
-- [Direção da plataforma](DIRECAO-DA-PLATAFORMA.md)
-- [Design e UX](DESIGN-UI-UX.md)
-- [Mapas e gráficos: implementado e próximos passos](MAPAS-E-GRAFICOS.md)
-- [Proposta de stack futura](STACK-TECNICA.md)
+- [Índice dos planos para agentes](<for agents/README.md>)
+- [Direção da plataforma](<for agents/DIRECAO-DA-PLATAFORMA.md>)
+- [Design e UX](<for agents/DESIGN-UI-UX.md>)
+- [Mapas e gráficos: implementado e próximos passos](<for agents/MAPAS-E-GRAFICOS.md>)
+- [Proposta de stack futura](<for agents/STACK-TECNICA.md>)
 - [MVP, funcionalidades e verificação](mvp/README.md)
 
-O MVP é HTML/CSS/JavaScript sem build. A proposta TypeScript/React/Next.js ainda não foi implementada. Favoritos ficam somente no navegador. Não há envio de notificações.
+O MVP é HTML/CSS/JavaScript sem build. A coleta e o backend reais usam TypeScript; a migração visual para React/Next.js continua proposta. Favoritos do MVP ficam somente no navegador. Não há envio de notificações nem agendamento de produção instalado.
 
 ## Verificar
 
