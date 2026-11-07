@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {build} from 'esbuild';
-import {canonical,hash} from './model.ts';
+import {canonical,hash,snapshotId} from './model.ts';
 import {activePublication,publicationAudit,readRecords} from './publications.ts';
-import type {Domain} from './publications.ts';
+import type {Domain,Publication} from './publications.ts';
 import type {DB} from './store.ts';
 import {csv} from './view.ts';
 
@@ -19,9 +19,19 @@ async function listFiles(dir:string):Promise<string[]>{
   const entries=await fs.readdir(dir,{withFileTypes:true});
   return (await Promise.all(entries.map(e=>e.isDirectory()?listFiles(path.join(dir,e.name)):[path.join(dir,e.name)]))).flat();
 }
+// The audit read the records' JSON; the site splits them by column. Both must still be the audited content.
+async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
+  const {domain:_domain,...body}=active,all=await readRecords(db,active.id);
+  if(snapshotId({...body,records:all})!==active.id)throw new Error('Registros no banco diferem da versão aprovada');
+  const drift=await db.query<{n:string}>(`SELECT count(*)::text AS n FROM expenses_v2 WHERE publication_id=$1 AND (amount_cents<>(record->>'cents')::bigint OR person_id<>(record->>'personId')::integer OR year<>(record->>'year')::integer OR month<>(record->>'month')::integer OR occurrence_id<>record->>'id')`,[active.id]);
+  if(drift.rows[0].n!=='0')throw new Error('Colunas de expenses_v2 divergem dos registros aprovados');
+  const outside=all.filter(r=>!active.scope.ids.includes(r.personId)).length;
+  if(outside)throw new Error(`${outside} registros fora do recorte da versão`);
+}
 export async function buildSite(db:DB,outDir:string,portraitsDir:string):Promise<{publicationId:string;files:number}>{
   const active=await activePublication(db,'despesas');
   if(!active)throw new Error('Nenhuma versão aprovada para publicar');
+  await assertServedIsAudited(db,active);
   const domains:Record<string,{version:string;coverage:unknown;collectedAt:string;publishedAt:string}>={};
   for(const domain of DOMAINS){
     const p=await activePublication(db,domain);

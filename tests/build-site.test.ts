@@ -64,6 +64,17 @@ test('fails above 15000 files or with a file above 10 MiB',()=>{
   assert.throws(()=>checkLimits(1,10*1024*1024+1),/MiB/);
   checkLimits(14999,10*1024*1024);
 });
+test('a record changed after the audit stops the build, whether in the JSON or in a column',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0),record(300,2,1)]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  await db.query(`UPDATE expenses_v2 SET amount_cents=amount_cents+1 WHERE position=0`);
+  await assert.rejects(buildSite(db,dist,portraits),/Colunas de expenses_v2 divergem/);
+  await db.query(`UPDATE expenses_v2 SET amount_cents=amount_cents-1, person_id=2 WHERE position=0`);
+  await assert.rejects(buildSite(db,dist,portraits),/Colunas de expenses_v2 divergem/);
+  await db.query(`UPDATE expenses_v2 SET person_id=1, record=jsonb_set(record,'{cents}','101') WHERE position=0`);
+  await assert.rejects(buildSite(db,dist,portraits),/diferem da versão aprovada/);
+  await assert.rejects(fs.access(dist));
+}));
 test('without an approved publication nothing is generated',()=>setup(async(db,dist,portraits)=>{
   const a=version([record(100,1,0)]);
   await publishDomain(db,'despesas',a);
