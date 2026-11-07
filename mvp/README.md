@@ -1,6 +1,6 @@
 # Clareia — três interfaces interativas
 
-MVP local das três referências escolhidas: **Investigação verde**, **Explorador escuro** e **Editorial azul**. As interfaces podem ser abertas pelos links abaixo; a faixa de prototipo foi removida do topo. Investigação reaproveita os retratos do esboço; Editorial e Explorador usam retratos limpos gerados a partir da referência, para evitar resíduos de botões e números nas fotografias.
+MVP local das três referências escolhidas: **Investigação verde**, **Explorador escuro** e **Editorial azul**. As interfaces podem ser abertas pelos links abaixo; a faixa de protótipo foi removida do topo. Investigação reaproveita os retratos do esboço; Editorial e Explorador usam retratos limpos gerados a partir da referência, para evitar resíduos de botões e números nas fotografias.
 
 As três alternativas agora têm páginas completas, com o mesmo logotipo aprovado: **clareia + raios dourados**. A escolha da composição continua em aberto.
 

@@ -47,7 +47,8 @@ const checked = label => { report.checks.push(label); console.log('PASS ' + labe
       await open(model);
       assert.equal(await first(), 'ana');
       assert.equal(await page.locator('.rank-card').count(), 3);
-      assert.equal(await page.locator('.model-links [aria-current=page]').innerText(), { investigacao: '01 · Investigação', explorador: '02 · Explorador', editorial: '03 · Editorial' }[model]);
+      assert.equal(await page.locator('body').getAttribute('data-model'), model);
+      assert.equal(await page.locator('.prototype-bar').count(), 0);
       await screenshot(model + '-desktop');
       for (const width of [360, 390, 768]) {
         await page.setViewportSize({ width, height: 844 });
