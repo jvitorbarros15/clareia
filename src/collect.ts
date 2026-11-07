@@ -9,11 +9,15 @@ import type { Scope } from './model.ts';
 import {annualSnapshot,annualUrl,HeldPublication} from './annual.ts';
 import {changedSources,fingerprint,recordSource} from './sources.ts';
 import type {Fingerprint} from './sources.ts';
+import {storeFromEnv} from './object-store.ts';
+import {archiveRun,runKey,vaultKey} from './vault.ts';
 
 const resumeIndex=process.argv.indexOf('--resume');
 const onlyIfChanged=process.argv.includes('--if-changed');
 const output=async(changed:boolean)=>{if(process.env.GITHUB_OUTPUT)await fs.appendFile(process.env.GITHUB_OUTPUT,`changed=${changed}\n`);};
-const objectKey=(sha256:string)=>`originals/camara-ceap/${sha256}`;
+// The first thing to fail in a misconfigured job must be the key, before anything is collected.
+const store=storeFromEnv(),key=store?vaultKey():null;
+const archive=async(directory:string,runId:string)=>{if(store&&key)await archiveRun(store,directory,runId,key);};
 const runId=resumeIndex>=0?process.argv[resumeIndex+1]:randomUUID();
 if(!runId||!/^[a-zA-Z0-9-]{1,80}$/.test(runId))throw new Error('Identificador de execução inválido');
 await withLock(async()=>{
@@ -41,14 +45,15 @@ try{
   await publishDomain(db,'despesas',snapshot);
   const annualHref=annual.url,sha256=snapshot.pages.findLast(p=>p.url===annualHref)?.sha256;
   if(!sha256)throw new Error('Versão sem registro do arquivo anual');
-  await recordSource(db,annual,sha256,objectKey(sha256));
+  await archive(directory,runId);
+  await recordSource(db,annual,sha256,runKey(runId,'annual-2.csv.zip'));
   await db.query('UPDATE publication_runs SET status=$2,finished_at=now(),publication_id=$3 WHERE id=$1',[runId,'published',snapshot.id]);
   await fs.writeFile(manifestPath,JSON.stringify({runId,scope,status:'published',startedAt:start,finishedAt:new Date().toISOString(),snapshotId:snapshot.id,pages:snapshot.pages,validation:snapshot.validation},null,2));
   console.log(JSON.stringify({status:'published',snapshotId:snapshot.id,records:snapshot.records.length,totalCents:snapshot.validation.totalCents,pages:snapshot.pages.length},null,2));
 }catch(error){
   const message=error instanceof Error?error.message:String(error);
   if(db)await db.query('UPDATE publication_runs SET status=$2,finished_at=now(),error=$3 WHERE id=$1',[runId,'failed',message]);
-  if(error instanceof HeldPublication&&db&&annual){const {sha256}=JSON.parse(await fs.readFile(path.join(directory,'annual-2.meta.json'),'utf8'));await recordSource(db,annual,sha256,objectKey(sha256));}
+  if(error instanceof HeldPublication&&db&&annual){const {sha256}=JSON.parse(await fs.readFile(path.join(directory,'annual-2.meta.json'),'utf8'));await archive(directory,runId);await recordSource(db,annual,sha256,runKey(runId,'annual-2.csv.zip'));}
   await fs.mkdir(directory,{recursive:true});await fs.writeFile(path.join(directory,'failure.json'),JSON.stringify({runId,error:message,failedAt:new Date().toISOString(),pages:cache.pages},null,2));
   const manifestPath=path.join(directory,'manifest.json');
   const previous=JSON.parse(await fs.readFile(manifestPath,'utf8').catch(()=>'{}'));
