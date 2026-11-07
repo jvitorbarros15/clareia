@@ -31,7 +31,7 @@ export async function openDB(memory=false):Promise<DB> {
     `CREATE TABLE IF NOT EXISTS active_publication (domain text PRIMARY KEY, publication_id text NOT NULL REFERENCES publications(id))`,
     `CREATE TABLE IF NOT EXISTS withheld_publications (publication_id text PRIMARY KEY REFERENCES publications(id), reason text NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS publication_audits (publication_id text PRIMARY KEY REFERENCES publications(id), status text NOT NULL CHECK(status IN ('passed','failed')), checked_at timestamptz NOT NULL, report jsonb NOT NULL)`,
-    `CREATE TABLE IF NOT EXISTS source_files (url text NOT NULL, sha256 text NOT NULL, etag text, last_modified text, size bigint, fetched_at timestamptz NOT NULL DEFAULT now(), object_key text, PRIMARY KEY(url,sha256))`,
+    `CREATE TABLE IF NOT EXISTS source_files (seq bigserial NOT NULL, url text NOT NULL, sha256 text NOT NULL, etag text, last_modified text, size bigint, fetched_at timestamptz NOT NULL DEFAULT now(), object_key text, PRIMARY KEY(url,sha256))`,
     `CREATE TABLE IF NOT EXISTS publication_runs (id text PRIMARY KEY, status text NOT NULL, started_at timestamptz NOT NULL, finished_at timestamptz, publication_id text, error text)`
   ])await db.query(sql);
   return db;
