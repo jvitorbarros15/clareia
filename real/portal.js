@@ -15,7 +15,7 @@
     highlightCategory: null, month: COVER, mapUF: 'SP', mapMetric: 'total', from: 1, to: COVER, a: C.byTotal()[0].id, b: C.byTotal()[1].id, topic: 'Todos', stage: 'Todos', projectQuery: '', voter: C.byTotal()[0].id, timeline: C.byTotal()[0].id, rosterQuery: '', rosterUF:'Todos', rosterParty:'Todos',
     favorites: new Set((Array.isArray(read('clareia-favorites', [])) ? read('clareia-favorites', []) : []).filter(id => C.person(id))),
     projects: new Set((Array.isArray(read('clareia-projects', [])) ? read('clareia-projects', []) : []).filter(id => ['01', '02', '03', '04'].includes(id))),
-    motion: !reduced.matches && read('clareia-motion', true) !== false
+    motion: !reduced.matches
   };
   const UF = {
     AC: ['Acre',2,2], RO:['Rondônia',4,2], AM:['Amazonas',3,1], RR:['Roraima',4,0], PA:['Pará',5,1], AP:['Amapá',6,0],
@@ -32,7 +32,6 @@
   const editorial = C.model === 'editorial';
   // Every one of these opens a panel on this page, so the editorial uses a plain arrow, not the external-link mark.
   const ext = () => icon(editorial ? 'arrow' : 'external');
-  const motionText = () => editorial ? `Animações ${state.motion?'ligadas':'desligadas'}` : `${state.motion?'◉':'○'} Movimento`;
   const label = (n, text) => editorial ? `<p class="p-kicker">${text}</p>` : `<p class="p-kicker"><span>${n}</span> ${text}</p>`;
   const directTitle = {'Um total. Muitas histórias.':'Gastos por categoria','O Brasil, mais perto.':'Representantes por estado','Lado a lado. Sem atalhos.':'Comparar dois representantes','Ideias em movimento.':'Projetos de lei','Como decidiram?':'Votações','Um mandato tem muitas dimensões.':'O que ainda não cobrimos','Acompanhe o que muda.':'Acompanhar'};
   const intro = (n, eyebrow, title, description, extra = '') => `<div class="p-section-intro"><div>${label(n,eyebrow)}<h2>${editorial&&directTitle[title]||title}</h2><p class="p-description">${description}</p></div>${extra}</div>`;
@@ -160,7 +159,7 @@
   const sections = [['panorama',overview],['despesas',spending],['atlas',atlas],['pessoas',directory],['comparacao',comparison],['projetos',projectSection],['votacoes',voteSection],['dimensoes',moreSection],['acompanhar',following],['perguntar',closing]];
   function mount() {
     const main=$('#main');
-    main.insertAdjacentHTML('afterbegin',`<div class="page-progress" aria-hidden="true"><i></i></div><nav class="section-dock" aria-label="Seções da página"><a href="#rankings">Rankings</a><a href="#despesas">${editorial?'Gastos':'Despesas'}</a><a href="#atlas">Mapa</a>${editorial?'':'<a href="#comparacao">Comparar</a>'}<a href="#projetos">Projetos</a><a href="#votacoes">Votações</a><a href="#acompanhar">Acompanhar <span id="saved-count">${state.favorites.size||''}</span></a><button class="motion-toggle" data-p="motion" aria-pressed="${state.motion}" aria-label="Ativar ou desativar animações">${motionText()}</button></nav>`);
+    main.insertAdjacentHTML('afterbegin',`<div class="page-progress" aria-hidden="true"><i></i></div><nav class="section-dock" aria-label="Seções da página"><a href="#rankings">Rankings</a><a href="#despesas">${editorial?'Gastos':'Despesas'}</a><a href="#atlas">Mapa</a>${editorial?'':'<a href="#comparacao">Comparar</a>'}<a href="#projetos">Projetos</a><a href="#votacoes">Votações</a><a href="#acompanhar">Acompanhar <span id="saved-count">${state.favorites.size||''}</span></a></nav>`);
     main.insertAdjacentHTML('beforeend',`<div class="full-portal">${sections.map(([id,render])=>`<section class="p-section" id="${id}">${render()}</section>`).join('')}</div>`);
     $('.footer').innerHTML=`<div class="footer-brand"><span class="logo">clareia<svg class="brand-rays" viewBox="0 0 25 30" aria-hidden="true"><path d="M5 8 8 3M10 13l8-3M11 19l9 2M6 23l4 5"/></svg></span><p>Entenda. Confira. Acompanhe.</p></div><div class="footer-links"><a href="#despesas">Gastos por categoria</a><a href="#comparacao">Comparar</a><button data-action="methodology">Fontes e metodologia</button><button data-p="coverage">Cobertura da amostra</button><button data-p="reset-saved">Apagar favoritos locais</button></div><div class="footer-disclaimer"><span>Versão ${C.span()}</span><p>Dados oficiais da Câmara dos Deputados, ${C.span()}. Amostra técnica, não representa toda a Câmara. Busca por regras locais, sem IA conectada.</p><button data-p="top">Voltar ao topo ↑</button></div>`;
     document.body.insertAdjacentHTML('beforeend',`<button class="assistant-launcher" data-p="assistant" aria-label="${editorial?'Fazer uma pergunta na busca':'Abrir assistente de investigação'}"><span class="assistant-spark" aria-hidden="true">✳</span><span>${editorial?'Fazer uma pergunta':'Pergunte ao Clareia'}</span>${icon('arrow')}</button>`);
@@ -242,8 +241,7 @@
     if(b.dataset.pAsk){runAsk(b.dataset.pAsk);return;}
     if(b.dataset.pEvent){const kind=b.dataset.pEvent,id=b.dataset.value;if(kind==='vote')voteDetail(id);else if(kind==='project')projectDetail(id);else if(kind==='records')C.recordTable(C.person(id));else C.profile(id);return;}
     switch(b.dataset.p){
-      case 'motion': state.motion=!state.motion && !reduced.matches;document.body.dataset.motion=state.motion?'on':'off';document.documentElement.style.scrollBehavior=state.motion?'smooth':'auto';save('clareia-motion',state.motion);b.setAttribute('aria-pressed',state.motion);b.textContent=motionText();watchMotion();break;
-      case 'all-suppliers':state.allSuppliers=!state.allSuppliers;updateSpending();focusMatch('[data-p="all-suppliers"]');break;
+            case 'all-suppliers':state.allSuppliers=!state.allSuppliers;updateSpending();focusMatch('[data-p="all-suppliers"]');break;
       case 'clear-highlight':state.highlightCategory=null;updateSpending();focusMatch('.donut-legend button:not(:disabled)');break;
       case 'spend-evidence':expenseEvidence();break;
       case 'map-evidence':C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.state.year} · jan–dez · ${state.mapMetric==='projects'?'autoria principal':C.state.category}</p><p>UF de representação, não destino da despesa. Média por representante = soma dos reembolsos dividida pelo número de perfis da UF; não ajusta tempo em exercício.</p><table class="data-table"><thead><tr><th>UF</th><th>Perfis</th><th>Valor</th></tr></thead></table><p class="fixture-note">A UF de representação ainda não foi coletada; todas as UFs aparecem como indisponíveis. Indisponível não significa zero.</p>`);break;
@@ -283,6 +281,6 @@
   addEventListener('scroll',()=>{if(!ticking){requestAnimationFrame(()=>{const max=document.documentElement.scrollHeight-innerHeight;$('.page-progress i').style.width=`${max?scrollY/max*100:0}%`;spySections();document.body.classList.toggle('past-hero',scrollY>innerHeight*.9);ticking=false;});ticking=true;}},{passive:true});
   document.addEventListener('pointermove',e=>{if(C.model!=='explorador'||!state.motion||e.pointerType==='touch')return;const card=e.target.closest('.dossier-card,.project-card');if(!card)return;const r=card.getBoundingClientRect();card.style.setProperty('--tilt-x',`${-(e.clientY-r.top-r.height/2)/r.height*3}deg`);card.style.setProperty('--tilt-y',`${(e.clientX-r.left-r.width/2)/r.width*3}deg`);});
   document.addEventListener('pointerout',e=>{const card=e.target.closest('.dossier-card,.project-card');if(card&&!card.contains(e.relatedTarget)){card.style.setProperty('--tilt-x','0deg');card.style.setProperty('--tilt-y','0deg');}});
-  reduced.addEventListener('change',e=>{if(e.matches){state.motion=false;document.body.dataset.motion='off';$('.motion-toggle').setAttribute('aria-pressed','false');$('.motion-toggle').textContent=motionText();watchMotion();}});
+  reduced.addEventListener('change',e=>{if(e.matches){state.motion=false;document.body.dataset.motion='off';watchMotion();}});
   mount();
 })();
