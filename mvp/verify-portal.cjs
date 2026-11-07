@@ -59,6 +59,14 @@ function pass(text){report.checks.push(text);console.log('PASS '+text);}
     const first=await page.evaluate(id=>window.Clareia.person(id).name.split(' ')[0],id);
     assert.match(await page.locator('#detail-title').innerText(),new RegExp('Registros de '+first),`${model} chart point ${i} opens ${first}`);await close();
    }
+   const boxes=await points.evaluateAll(ps=>ps.map(p=>{const r=p.getBoundingClientRect();return {id:p.dataset.id,x:r.x+r.width/2,y:r.y+r.height/2};}));
+   for(const b of boxes)for(const [dx,dy] of [[13,0],[-13,0],[0,13],[0,-13]]){
+    const x=b.x+dx,y=b.y+dy,near=[...boxes].sort((m,n)=>Math.hypot(m.x-x,m.y-y)-Math.hypot(n.x-x,n.y-y))[0];
+    if(Math.abs(Math.hypot(near.x-x,near.y-y)-13)<1&&near.id!==b.id)continue;
+    await page.mouse.click(x,y);assert.equal(await page.locator('#detail').evaluate(d=>d.open),true,`${model} click near point opens a dialog`);
+    const first=await page.evaluate(id=>window.Clareia.person(id).name.split(' ')[0],near.id);
+    assert.match(await page.locator('#detail-title').innerText(),new RegExp('Registros de '+first),`${model} click near point opens nearest person ${first}`);await close();
+   }
    await page.locator('#pessoas [data-p-add-compare=carla]').click();assert.equal(await page.locator('#compare-a').inputValue(),'carla');
    await page.locator('#compare-b').selectOption('ana');
    await page.locator('[data-p=compare-evidence]').click();assert.match(await page.locator('#detail').innerText(),model==='investigacao'?/37,5%/:/50%/);await close();
