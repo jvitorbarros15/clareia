@@ -703,8 +703,8 @@ body[data-model=editorial] .donut-legend .all-category i{display:inline-block}
 
 /* Search: the field lifts and lights its edge on hover; the arrow slides toward the answer. */
 body[data-model=editorial] .search-form{transition:border-color 220ms var(--ease-out),box-shadow 260ms var(--ease-out),transform 260ms var(--ease-out)}
-body[data-model=editorial] .search-form:hover{border-color:var(--accent);box-shadow:0 10px 30px -12px color-mix(in srgb,var(--accent) 45%,transparent),0 0 0 4px color-mix(in srgb,var(--accent) 10%,transparent);transform:translateY(-2px)}
-body[data-model=editorial] .search-form:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%,transparent)}
+body[data-model=editorial] .search-form:hover{border-color:var(--accent);box-shadow:0 12px 28px -14px rgba(15,23,42,.28);transform:translateY(-2px)}
+body[data-model=editorial] .search-form:focus-within{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:3px}
 body[data-model=editorial] .search-submit .icon{transition:transform 260ms var(--ease-out)}
 body[data-model=editorial] .search-form:hover .search-submit .icon,body[data-model=editorial] .search-form:focus-within .search-submit .icon{transform:translateX(3px)}
 body[data-model=editorial] .search-form:hover .search-submit{filter:brightness(1.12)}
