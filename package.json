@@ -15,6 +15,7 @@
     "unlock": "tsx scripts/unlock.ts",
     "migrate:snapshot": "tsx scripts/migrate-snapshot.ts",
     "db:state": "tsx scripts/db-state.ts",
+    "scan:cpf": "tsx scripts/scan-cpf.ts",
     "demo": "node mvp/server.mjs"
   },
   "engines": {

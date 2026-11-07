@@ -37,6 +37,15 @@ test('annual parser filters by official ID and competence rather than display na
   await assert.rejects(parseAnnual(new TextEncoder().encode('ideCadastro;numAno\n1;2025\n'),scope),/coluna ausente/);
   await assert.rejects(parseAnnual(new TextEncoder().encode(header.replace('txtFornecedor','txtNomeFornecedor')+'\n'),scope),/coluna ausente txtFornecedor/);
 });
+test('an individual supplier reaches a record without name, CPF or receipt link',()=>{
+  const fromApi=normalize({...expense(),cnpjCpfFornecedor:'11144477735',nomeFornecedor:'Maria da Silva',urlDocumento:'https://www.camara.leg.br/cota-parlamentar/nota-fiscal-eletronica?ideDocumentoFiscal=1'},1,scope,source);
+  const annualRow={ideCadastro:'1',numAno:'2025',numMes:'1',codLegislatura:'57',txtDescricao:'ALUGUEL',vlrLiquido:'10.00',vlrDocumento:'10.00',vlrGlosa:'0',txtCNPJCPF:'111.444.777-35',ideDocumento:'1',txtFornecedor:'Maria da Silva',urlDocumento:'https://www.camara.leg.br/nota',txtNumero:'1',datEmissao:'2025-01-01',numLote:'1'};
+  const fromAnnual=normalizeAnnual(annualRow,scope,source);
+  for(const record of [fromApi,fromAnnual]){
+    assert.equal(record.supplier,'Fornecedor pessoa física');assert.equal(record.receipt,null);assert.equal(record.supplierVerified,false);
+    assert.equal(/Maria|11144477735|111\.444/.test(JSON.stringify(record)),false);
+  }
+});
 test('schema, financial equation and scope failures block records',()=>{
   assert.equal(normalize(expense(),1,scope,source).cents,10021);
   assert.throws(()=>normalize({...expense(),valorGlosa:1},1,scope,source));

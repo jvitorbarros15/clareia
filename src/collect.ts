@@ -10,6 +10,7 @@ import {annualSnapshot,annualUrl,HeldPublication} from './annual.ts';
 import {changedSources,fingerprint,recordSource} from './sources.ts';
 import type {Fingerprint} from './sources.ts';
 import {storeFromEnv} from './object-store.ts';
+import {knownCpfs} from './cpf-scan.ts';
 import {archiveRun,runKey,vaultKey} from './vault.ts';
 
 const resumeIndex=process.argv.indexOf('--resume');
@@ -17,7 +18,11 @@ const onlyIfChanged=process.argv.includes('--if-changed');
 const output=async(changed:boolean)=>{if(process.env.GITHUB_OUTPUT)await fs.appendFile(process.env.GITHUB_OUTPUT,`changed=${changed}\n`);};
 // The first thing to fail in a misconfigured job must be the key, before anything is collected.
 const store=storeFromEnv(),key=store?vaultKey():null;
-const archive=async(directory:string,runId:string)=>{if(store&&key)await archiveRun(store,directory,runId,key);};
+const archive=async(directory:string,runId:string)=>{
+  if(store&&key)await archiveRun(store,directory,runId,key);
+  if(process.env.CPF_HASHES_FILE)await fs.writeFile(process.env.CPF_HASHES_FILE,[...await knownCpfs(directory)].join('
+'));
+};
 const runId=resumeIndex>=0?process.argv[resumeIndex+1]:randomUUID();
 if(!runId||!/^[a-zA-Z0-9-]{1,80}$/.test(runId))throw new Error('Identificador de execução inválido');
 await withLock(async()=>{
