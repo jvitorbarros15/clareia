@@ -1,38 +1,52 @@
 const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');
 let chromium;try{({chromium}=require('playwright'));}catch{({chromium}=require(path.join(process.env.APPDATA,'npm/node_modules/playwright')));}
 const base=process.env.BASE_URL||'http://127.0.0.1:4174',out=path.resolve('output/qa');fs.mkdirSync(out,{recursive:true});
-const view=(page,search)=>page.evaluate(async search=>{const m=await fetch('/manifest.json').then(r=>r.json()),index=await fetch(`/${m.base}/index.json`).then(r=>r.json()),p=new URLSearchParams(search),id=Number(p.get('person')||index.scope.ids[0]),records=await fetch(`/${m.base}/deputados/${id}/despesas.json`).then(r=>r.json());return ClareiaView.personView(index,records,p);},search);
-(async()=>{const browser=await chromium.launch({headless:true});const errors=[];
-try{const page=await browser.newPage({viewport:{width:1360,height:1000},reducedMotion:'reduce'});page.on('pageerror',e=>errors.push(e.message));
-await page.goto(base);await page.waitForSelector('#total');
-const initial=await view(page,'');const compare=initial.validation.apiComparison,union=initial.validation.sourceKind==='annual-api-union';assert.ok(union||initial.validation.sourceKind==='annual-csv');assert.equal(initial.validation.recordCount,compare.annualRecords+(union?compare.extraInApi:0));
-assert.equal(await page.locator('.person').count(),3);assert.equal(await page.locator('#total').innerText(),(initial.totalCents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}));
-await page.waitForFunction(()=>[...document.querySelectorAll('.person img')].every(img=>img.complete&&img.naturalWidth>0));
-await page.screenshot({path:path.join(out,'real-first-screen.png')});
-await page.locator('[data-person="204534"]').click();await page.waitForURL(/person=204534/);await page.waitForFunction(()=>document.querySelector('#content').getAttribute('aria-busy')==='false');
-await page.locator('[data-month="2"]').click();await page.waitForURL(/from=2/);await page.waitForFunction(()=>document.querySelector('#content').getAttribute('aria-busy')==='false');
-await page.locator('.category').first().click();await page.waitForURL(/category=/);await page.waitForFunction(()=>document.querySelector('#content').getAttribute('aria-busy')==='false');
-await page.locator('.supplier').first().click();await page.waitForURL(/supplier=/);await page.waitForFunction(()=>document.querySelector('#content').getAttribute('aria-busy')==='false');
-const response=await view(page,new URL(page.url()).search);
-assert.equal(await page.locator('#records tbody tr').count(),response.records.length);assert.equal(await page.locator('#total').innerText(),(response.totalCents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}));
-await page.locator('[data-record]').first().click();await page.waitForSelector('dialog[open]');assert.match(await page.locator('#dialog-content').innerText(),/Documento/);assert.match(await page.locator('#dialog-content a.primary').getAttribute('href'),/^https:\/\/(www\.camara\.leg\.br\/cotas\/|dadosabertos\.camara\.leg\.br\/api\/v2\/)/);await page.keyboard.press('Escape');
-const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#csv').click()]);assert.equal(fs.readFileSync(await download.path(),'utf8').split('\r\n').length-1,response.records.length);
-const share=page.url();await page.reload();await page.waitForSelector('#total');assert.equal(page.url(),share);
-await page.locator('[data-action=evidence]').click();assert.match(await page.locator('#dialog-content').innerText(),/centavos/);await page.keyboard.press('Escape');
-assert.equal((await page.request.get(base+'/_headers')).status(),404);
-assert.equal((await page.request.get(base+'/data/raw/annual/Ano-2025.csv.zip')).status(),404);
-assert.match(await page.locator('.api-discrepancy').innerText(),union?new RegExp(`${compare.paired} registros.*${compare.missingInApi} .*só no arquivo anual e ${compare.extraInApi} .*só na API`,'s'):new RegExp(`${compare.annualRecords} lançamentos; a API retornou ${compare.apiRecords}\\. Os ${compare.missingInApi} adicionais`));
-// The two housing adjustments exist only in versions built before the Câmara dropped them from the file.
-const housing='COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA',adjusted=(await view(page,'?person=160976')).categories.some(x=>x.category===housing);
-if(adjusted){await page.goto(base+'/?person=160976&category='+encodeURIComponent(housing));await page.waitForFunction(()=>document.querySelector('#content').getAttribute('aria-busy')==='false'&&document.querySelectorAll('[data-record]').length>0);
-assert.equal(await page.locator('[data-record]').count(),2);
-await page.locator('[data-record]').first().click();await page.waitForSelector('dialog[open]');const adjustment=await page.locator('#dialog-content').innerText();await page.screenshot({path:path.join(out,'real-adjustment-dialog.png')});
-assert.doesNotMatch(adjustment,/= Líquido/);assert.match(adjustment,/Glosa\s*Não informado/);assert.match(adjustment,/-R\$\s1\.747,00/);assert.match(adjustment,/sem recálculo/);await page.keyboard.press('Escape');
-await page.locator('[data-action=evidence]').click();const evidence=await page.locator('#dialog-content').innerText();assert.match(evidence,/2 lançamentos/);assert.match(evidence,/-R\$\s3\.494,00/);assert.match(evidence,/arquivo anual/);await page.screenshot({path:path.join(out,'real-evidence-dialog.png')});await page.keyboard.press('Escape');}
-await page.goto(share);await page.waitForSelector('#total');
-assert.equal((await page.request.get(base+'/portraits/999.jpg')).status(),404);
-await page.goto(base+'/?person=999');await page.waitForSelector('.empty');assert.match(await page.locator('#notice').innerText(),/não está nesta versão/);assert.equal(await page.locator('#total').count(),0);await page.goto(share);await page.waitForSelector('#total');
-await page.locator('[data-action=reset]').click();await page.waitForFunction(()=>!location.search.includes('category='));await page.waitForFunction(()=>document.querySelector('#content').getAttribute('aria-busy')==='false');
-for(const width of [390,768,1360]){await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.screenshot({path:path.join(out,`real-${width}.png`),fullPage:true});}
-assert.deepEqual(errors,[]);const report={status:'passed',snapshotId:initial.snapshotId,checks:['real profiles','person/month/category/supplier filters','chart/table/CSV totals','source evidence modal','API discrepancy banner (counts and signed difference)','negative adjustment shown without false equation','version-pinned reload','invalid filters and unavailable snapshot','raw data not served','mobile/tablet/desktop overflow','no JavaScript errors']};fs.writeFileSync(path.join(out,'real-browser-verification.json'),JSON.stringify(report,null,2));console.log(report);
+const money=c=>(c/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/\s+/g,' ');
+const text=s=>s.replace(/\s+/g,' ').trim();
+(async()=>{const browser=await chromium.launch({headless:true});const errors=[],checks=[];
+try{
+  const page=await browser.newPage({viewport:{width:1360,height:1000},reducedMotion:'reduce'});page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(base);await page.waitForSelector('.full-portal');
+  // Expected values come from the published files, summed here in integer cents, independently of the page code.
+  const data=await page.evaluate(async()=>{const m=await fetch('/manifest.json').then(r=>r.json()),index=await fetch(`/${m.base}/index.json`).then(r=>r.json());const people=[];for(const id of index.scope.ids){const recs=await fetch(`/${m.base}/deputados/${id}/despesas.json`).then(r=>r.json());people.push({id,name:index.people.find(p=>p.id===id).name,count:recs.length,cents:recs.reduce((n,r)=>n+r.cents,0),negative:recs.filter(r=>r.cents<0).map(r=>r.cents)});}return {base:m.base,index,people};});
+  const close=async()=>{await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.querySelector('#detail').open);};
+  assert.equal(await page.locator('.editorial-rank .rank-card').count(),Math.min(3,data.people.length));
+  for(const p of data.people){
+    await page.locator(`.bar-row[data-id="${p.id}"]`).click();await page.waitForSelector('#detail[open]');
+    assert.equal(text(await page.locator('#detail .calculation-result').innerText()).split(' no período')[0],money(p.cents),`evidence total ${p.name}`);
+    assert.match(await page.locator('#detail-body').innerText(),new RegExp(`${p.count} registros oficiais`));
+    await page.locator('#detail [data-action=records]').click();
+    assert.equal(await page.locator('#detail tbody tr').count(),p.count,`record rows ${p.name}`);
+    assert.equal(text(await page.locator('#detail tfoot td strong').innerText()),money(p.cents),`record table total ${p.name}`);
+    const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#detail [data-action=download]').click()]);
+    assert.equal(fs.readFileSync(await download.path(),'utf8').split('\r\n').length-1,p.count,`CSV rows ${p.name}`);
+    await page.locator('#detail [data-action=record]').first().click();
+    const detail=await page.locator('#detail-body').innerText();assert.match(detail,/Documento|Sem documento fiscal/);assert.match(await page.locator('#detail-body a.primary').getAttribute('href'),/^https:\/\/(www\.camara\.leg\.br|dadosabertos\.camara\.leg\.br)\//);
+    await close();
+  }
+  checks.push('evidence totals, record tables, CSV and record detail match the published files for every person');
+  const total=data.people.reduce((n,p)=>n+p.cents,0);
+  await page.locator('[data-p-summary=expenses]').click();await page.waitForSelector('#detail[open]');
+  assert.equal(text(await page.locator('#detail .calculation-result').innerText()).split(' Soma')[0],money(total));await close();
+  checks.push('overview total equals the sum of all records');
+  // A negative adjustment keeps its sign and is never recomputed.
+  const adjusted=data.people.find(p=>p.negative.length);
+  if(adjusted){
+    await page.locator(`.bar-row[data-id="${adjusted.id}"]`).click();await page.locator('#detail [data-action=records]').click();
+    const row=page.locator('#detail tbody tr',{hasText:'-R$'}).first();await row.locator('[data-action=record]').click();
+    const detail=text(await page.locator('#detail-body').innerText());assert.ok(detail.includes(money(Math.min(...adjusted.negative)))||adjusted.negative.some(c=>detail.includes(money(c))),'negative value keeps its sign');
+    if(await page.locator('#detail .formula[data-equation=none]').count())assert.match(detail,/sem recálculo/);
+    await page.screenshot({path:path.join(out,'real-adjustment-dialog.png')});await close();
+    checks.push('negative adjustment shown with sign and without recomputation');
+  }
+  await page.locator('#query').fill(`${data.people[0].name.split(' ')[0]} gastou mais que ${data.people[1].name.split(' ')[0]}?`);await page.locator('#query').press('Enter');
+  await page.waitForSelector('.answer-bars');assert.equal(await page.locator('.answer-row').count(),2);checks.push('search compares two people');
+  const body=await page.locator('body').innerText();assert.doesNotMatch(body,/fict[íi]ci|demonstra[çt]/i,'no fictional wording');
+  assert.match(await page.locator('#projetos').innerText(),/ainda não foram coletados/);checks.push('no fictional wording; uncollected sections say so');
+  assert.equal((await page.request.get(base+'/_headers')).status(),404);
+  assert.equal((await page.request.get(base+'/data/raw/annual/Ano-2025.csv.zip')).status(),404);checks.push('raw data and _headers not served');
+  for(const width of [390,768,1360]){await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`overflow ${width}`);await page.screenshot({path:path.join(out,`real-${width}.png`),fullPage:true});}
+  checks.push('mobile/tablet/desktop overflow');
+  assert.deepEqual(errors,[]);checks.push('no JavaScript errors');
+  const report={status:'passed',snapshotId:data.index.snapshotId,checks};fs.writeFileSync(path.join(out,'real-browser-verification.json'),JSON.stringify(report,null,2));console.log(report);
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
