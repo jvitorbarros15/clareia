@@ -40,7 +40,7 @@ const base=process.env.BASE_URL||'http://127.0.0.1:4173';
       assert.equal(await page.locator('#detail tbody tr').count(),3);
       await page.keyboard.press('Escape');
       await page.locator('[data-p-drill="Passagens"]').click();
-      await page.locator('[data-p-supplier]').click();
+      await page.locator('#detail [data-p-supplier]').click();
       assert.equal(await page.locator('#detail tbody tr').count(),15);
       assert.match(await page.locator('#detail').innerText(),/Passagens/);
       await page.keyboard.press('Escape');
