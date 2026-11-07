@@ -52,6 +52,9 @@ jobs:
         env:
           CPF_HASHES_FILE: ${{ runner.temp }}/cpf-hashes
         run: npm run collect -- --if-changed
+      - name: Break audit (test only)
+        if: steps.collect.outputs.changed == 'true' && vars.BREAK_AUDIT_TEST == 'true'
+        run: psql "$DATABASE_URL" -c "UPDATE expenses_v2 SET amount_cents=amount_cents+1 WHERE position=0 AND publication_id=(SELECT id FROM publications WHERE domain='despesas' ORDER BY seq DESC LIMIT 1)"
       - name: Audit new version
         if: steps.collect.outputs.changed == 'true' && vars.PUBLISH_ENABLED == 'true'
         run: npm run verify:annual
