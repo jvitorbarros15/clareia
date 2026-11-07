@@ -1,6 +1,6 @@
 # Piloto real — arquivo CEAP da Câmara
 
-Implementado em 3 de novembro de 2026 na branch `feat/camara-data-pilot`. Interface em português; coletor e backend em TypeScript. O MVP visual em `mvp/` continua separado e fictício.
+Implementado em 3 de novembro de 2026. Interface em português; coletor e backend em TypeScript.
 
 ## Executar
 
@@ -9,10 +9,11 @@ Node.js 22 ou superior:
 ```sh
 npm ci
 npm run collect
+npm run build:site
 npm run dev
 ```
 
-Abra **http://127.0.0.1:4174**. A base já foi coletada neste workspace; aqui basta `npm run dev`.
+Abra **http://127.0.0.1:4174**. `build:site` gera `dist/` a partir da versão auditada ativa; `npm run dev` só serve `dist/`.
 
 O banco local é PostgreSQL via PGlite, persistido em `data/local/postgres`. Se `DATABASE_URL` estiver definido no ambiente, o adaptador usa um servidor PostgreSQL normal. `.env.example` documenta as opções; arquivos `.env` não são carregados automaticamente.
 
@@ -149,4 +150,4 @@ Relatórios e screenshots ficam em `output/qa/`, ignorado pelo Git. Se a reconci
 
 Este é um piloto local, sem hospedagem, agendamento diário instalado, alertas externos, IA, ranking nacional ou cálculo por tempo em exercício. O adaptador para PostgreSQL externo está escrito, mas só o engine PostgreSQL local foi executado nesta entrega.
 
-Próximo passo: mover a coleta para um worker e banco persistente hospedados; instalar agenda diária com monitoramento e novas tentativas; ampliar o laboratório de casos reais; validar exercício e política temporal; depois expandir a população e os períodos. O MVP de três estilos não foi migrado para React/Next.js nesta etapa.
+A coleta agendada, o banco cifrado no R2 e o site estático estão descritos no [README principal](../README.md). Próximo passo: ampliar o laboratório de casos reais; validar exercício e política temporal; depois expandir a população e os períodos e levar o desenho editorial (tag `mvp-final`) aos dados reais.
