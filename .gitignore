@@ -8,6 +8,7 @@ Thumbs.db
 .codex/
 .agents/
 .vercel/
+dist/
 data/raw/
 data/private/
 data/local/

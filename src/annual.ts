@@ -3,8 +3,9 @@ import path from 'node:path';
 import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
 import {unzipSync} from 'fflate';
-import {canonical,hash,cents,snapshotId,validCnpj,officialUrl,stableDigest,maskPersonalId,readLimited} from './model.ts';
+import {canonical,hash,cents,snapshotId,validCnpj,officialUrl,stableDigest,publicSupplier,readLimited,RETRY_WAITS,retryWait,sourceError} from './model.ts';
 import {pairOccurrences} from './reconcile.ts';
+import {assertArchive} from './sources.ts';
 import type {Snapshot,Scope,Expense,SourceRef} from './model.ts';
 
 // Which record types may exist in one source only. Rule and rationale: real/README.md.
@@ -39,8 +40,8 @@ export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef):Expens
   const money=(field:string)=>r[field]?.trim()?cents(r[field].trim().replace(',','.')):null;
   const net=money('vlrLiquido')!,face=money('vlrDocumento'),glosa=money('vlrGlosa');
   if(face!==null&&glosa!==null&&face-glosa!==net)throw new Error('Equação financeira anual diverge');
-  const id=hash(canonical({personId,raw:r})),supplierId=(r.txtCNPJCPF||'').replace(/\D/g,'');const verified=validCnpj(supplierId);
-  return {id,personId,year,month,category:r.txtDescricao,supplier:maskPersonalId(r.txtFornecedor||'Fornecedor não informado'),supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,lot:r.numLote||'',receipt:r.urlDocumento?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
+  const id=hash(canonical({personId,raw:r})),supplierId=(r.txtCNPJCPF||'').replace(/\D/g,'');const verified=validCnpj(supplierId),supplier=publicSupplier(r.txtFornecedor||'',supplierId);
+  return {id,personId,year,month,category:r.txtDescricao,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,lot:r.numLote||'',receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
 }
 export async function parseAnnual(bytes:Uint8Array,scope:Scope):Promise<{rows:{raw:AnnualRow;row:number}[];scanned:number}> {
   const stream=Readable.from((function*(){for(let i=0;i<bytes.length;i+=65536)yield bytes.subarray(i,i+65536);})()).pipe(parse({columns:(headers:string[])=>{for(const field of ['ideCadastro','numAno','numMes','codLegislatura','txtDescricao','vlrLiquido','vlrDocumento','vlrGlosa','ideDocumento','txtFornecedor','txtCNPJCPF','urlDocumento','txtNumero','datEmissao','numLote'])if(!headers.includes(field))throw new Error('Contrato CSV mudou: coluna ausente '+field);return headers;},delimiter:';',bom:true,skip_empty_lines:true}));
@@ -50,13 +51,16 @@ export async function parseAnnual(bytes:Uint8Array,scope:Scope):Promise<{rows:{r
   return {rows,scanned};
 }
 async function download(url:string):Promise<Uint8Array>{
-  let last:unknown;for(let i=0;i<3;i++)try{const r=await fetch(url,{signal:AbortSignal.timeout(60000),redirect:'error'});if(!r.ok)throw new Error('HTTP '+r.status);return await readLimited(r,100_000_000);}catch(e){last=e;if(i<2)await new Promise(r=>setTimeout(r,1000*(i+1)));}throw last;
+  let last:unknown;for(let i=0;i<=RETRY_WAITS.length;i++)try{const r=await fetch(url,{signal:AbortSignal.timeout(60000),redirect:'error'});if(!r.ok)throw new Error('HTTP '+r.status);return await readLimited(r,100_000_000);}catch(e){last=e;if(i<RETRY_WAITS.length)await new Promise(r=>setTimeout(r,retryWait(i)));}throw sourceError(url,last);
 }
+export const annualUrl=(year:number)=>`https://www.camara.leg.br/cotas/Ano-${year}.csv.zip`;
+// A deliberate hold, not a failure of the run: the same source would hold again, so it must not be collected again until it changes.
+export class HeldPublication extends Error {}
 export async function annualSnapshot(api:Snapshot,directory:string,previous:Snapshot|null=null,acceptRemoved=false):Promise<Snapshot>{
-  const scope=api.scope,url=`https://www.camara.leg.br/cotas/Ano-${scope.year}.csv.zip`;
+  const scope=api.scope,url=annualUrl(scope.year);
   const passes=[];
   for(const pass of [1,2]){
-    const archive=await download(url),archiveHash=hash(archive);
+    const archive=await download(url),archiveHash=hash(archive);assertArchive(archive,22);
     const name=`Ano-${scope.year}.csv`,files=unzipSync(archive,{filter:file=>{if(file.name!==name)return false;if(file.originalSize>200_000_000)throw new Error('CSV acima do limite');return true;}});const bytes=files[name];if(!bytes)throw new Error('CSV ausente');
     const fetchedAt=new Date().toISOString(),sha256=hash(bytes),file=`annual-${pass}.csv.zip`;
     await fs.writeFile(path.join(directory,file),archive);
@@ -74,7 +78,7 @@ export async function annualSnapshot(api:Snapshot,directory:string,previous:Snap
   const unionTotal=union.records.reduce((n,r)=>n+r.cents,0),independentUnion=independent+union.onlyApiCents;
   if(!Number.isSafeInteger(unionTotal)||BigInt(unionTotal)!==independentUnion)throw new Error('Conferência independente da união diverge');
   const removed=previous?removedRecords(previous,union.records,scope):[];
-  if(removed.length&&!acceptRemoved)throw new Error(`${removed.length} ocorrências da versão publicada não aparecem em nenhuma fonte atual (${[...new Set(removed.map(r=>r.category))].join(', ')}); publicação retida. Revise e use --accept-removed para publicar sem elas`);
+  if(removed.length&&!acceptRemoved)throw new HeldPublication(`${removed.length} ocorrências da versão publicada não aparecem em nenhuma fonte atual (${[...new Set(removed.map(r=>r.category))].join(', ')}); publicação retida. Revise e use --accept-removed para publicar sem elas`);
   const metric='camara.ceap.valor-liquido-uniao-fontes.v1';
   // The zip hash stays out of the version: the Câmara repacks the same CSV into different zip bytes. The CSV hash identifies the content.
   const annualPages=passes.map(({meta:{url,file,fetchedAt,sha256,pass},scanned})=>({url,file,fetchedAt,sha256,pass,count:scanned}));

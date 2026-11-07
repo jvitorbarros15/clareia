@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {BASE,hash,canonical,snapshotId,envelopeSchema,normalize,stableDigest,officialUrl,METRIC,readLimited} from './model.ts';
+import {BASE,hash,canonical,snapshotId,envelopeSchema,normalize,stableDigest,officialUrl,METRIC,readLimited,RETRY_WAITS,retryWait,sourceError} from './model.ts';
 import type {Scope,Person,Page,Snapshot} from './model.ts';
 import { z } from 'zod';
 
@@ -9,13 +9,13 @@ const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 export async function request(url:string,fetcher:Fetcher=u=>fetch(u,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(30000),redirect:'error'}),wait=delay):Promise<string> {
   if(!officialUrl(url,'api'))throw new Error('Origem de API não permitida');
   let last:unknown;
-  for(let attempt=0;attempt<4;attempt++){
+  for(let attempt=0;attempt<=RETRY_WAITS.length;attempt++){
     try {const response=await fetcher(url);
-      if(!response.ok){if(response.status!==429&&response.status<500)throw new FatalError('HTTP '+response.status);
-        const retry=response.headers.get('retry-after');await wait(Math.min(30000,retry?(Number(retry)*1000||Date.parse(retry)-Date.now()):1000*2**attempt));throw new Error('HTTP '+response.status);}
+      if(!response.ok){if(response.status!==429&&response.status<500)throw new FatalError(`${url}: HTTP ${response.status}`);
+        const retry=response.headers.get('retry-after');if(retry)await wait(Math.min(30000,Number(retry)*1000||Date.parse(retry)-Date.now()));throw new Error('HTTP '+response.status);}
       const text=new TextDecoder().decode(await readLimited(response,12_000_000));JSON.parse(text);return text;
-    }catch(e){if(e instanceof FatalError)throw e;last=e;if(attempt<3)await wait(500*2**attempt);}
-  }throw new Error('Fonte indisponível após tentativas: '+String(last));
+    }catch(e){if(e instanceof FatalError)throw e;last=e;if(attempt<RETRY_WAITS.length)await wait(retryWait(attempt));}
+  }throw sourceError(url,last);
 }
 class FatalError extends Error {}
 type Stored={data:unknown;page:Page};

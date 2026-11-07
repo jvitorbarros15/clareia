@@ -137,9 +137,9 @@ Relatórios e screenshots ficam em `output/qa/`, ignorado pelo Git. Se a reconci
 
 ## Interface e fontes
 
-- `/api/spending`: recorte tipado, registros e totais da versão selecionada.
-- `/api/export`: mesmos registros do recorte, em CSV, com IDs e proveniência.
-- `/api/status`: estado da última execução e versão ativa.
+- `manifest.json`: publicação atual, com versão, cobertura e data de cada domínio.
+- `data/<publicacao>/index.json`: recorte, pessoas, conferências e deputados sem dados.
+- `data/<publicacao>/deputados/<id>/despesas.json` e `.csv`: registros de cada deputado, com IDs e proveniência.
 - Retratos oficiais preservados em `real/portraits/`; origem e data em `sources.json`. `npm run cache:portraits` atualiza as imagens com o servidor ativo.
 - [Arquivo anual oficial](https://www.camara.leg.br/cotas/Ano-2025.csv.zip) (o ano vem de `config/pilot.json`)
 - [Significado dos campos CEAP](https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html)

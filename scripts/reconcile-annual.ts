@@ -4,13 +4,15 @@ import {Readable} from 'node:stream';
 import {unzipSync} from 'fflate';
 import {parse} from 'csv-parse';
 import {createHash} from 'node:crypto';
-import {openDB,readSnapshot,recordAudit} from '../src/store.ts';
-import type {AuditReport} from '../src/store.ts';
+import {openDB} from '../src/store.ts';
+import {latestPublication,readPublication,recordDomainAudit} from '../src/publications.ts';
 import {withLock} from '../src/lock.ts';
 
 // Reads the database directly: a version must be auditable before the site is allowed to serve it. Stop the server first.
 const withDB=<T>(task:(db:Awaited<ReturnType<typeof openDB>>)=>Promise<T>)=>withLock(async()=>{const db=await openDB();try{return await task(db);}finally{await db.close();}});
-const {initial,runId}=await withDB(async db=>{const initial=await readSnapshot(db);if(!initial)throw new Error('Nenhuma versão publicada para conferir');const run=await db.query<{id:string}>(`SELECT id FROM runs WHERE snapshot_id=$1 AND status='published' ORDER BY finished_at DESC LIMIT 1`,[initial.id]);if(!run.rows[0])throw new Error('Nenhuma execução publicada produziu esta versão');return {initial,runId:run.rows[0].id};});
+// CI passes the version its own collection produced; without it, the newest version is audited.
+const wanted=process.argv.indexOf('--publication');
+const {initial,runId}=await withDB(async db=>{const id=wanted>=0?process.argv[wanted+1]:(await latestPublication(db,'despesas'))?.id,initial=id&&await readPublication(db,id);if(!initial)throw new Error('Nenhuma versão publicada para conferir');const run=await db.query<{id:string}>(`SELECT id FROM publication_runs WHERE publication_id=$1 AND status='published' ORDER BY finished_at DESC LIMIT 1`,[initial.id]);if(!run.rows[0])throw new Error('Nenhuma execução publicada produziu esta versão');return {initial,runId:run.rows[0].id};});
 const snapshotId=initial.id,records=initial.records.filter(r=>r.origin!=='api'),apiOnly=initial.records.length-records.length;
 // The run's own copy: the file on the Câmara site changes, and the audit is about what this version was built from.
 const directory=path.join('data/runs',runId),source=JSON.parse(await fs.readFile(path.join(directory,'annual-2.meta.json'),'utf8'));
@@ -47,5 +49,5 @@ for(const page of manifest.pages.filter((p:{pass:number;url:string})=>p.pass===1
 let apiOnlyUnconfirmed=0;for(const r of initial.records.filter(r=>r.origin==='api')){const key=JSON.stringify([r.personId,r.year,r.month,r.documentId,r.category,String(r.cents)]),n=pageRows.get(key)||0;if(n)pageRows.set(key,n-1);else apiOnlyUnconfirmed++;}
 const report={status:!differences.length&&!mismatchedOccurrences&&!apiOnlyUnconfirmed&&apiOnly===(initial.validation.apiComparison?.extraInApi||0)?'passed':'failed',apiOnly,apiOnlyUnconfirmed,runId,snapshotId,checkedAt:new Date().toISOString(),source,archiveSha256:createHash('sha256').update(archive).digest('hex'),scanned,selected,csvSha256,servedCount:records.length,groupsCompared:apiGroups.size,mismatchedOccurrences,differences,annualRefundCents:String(refundCents),missingDocumentOrGlosa,note:'Releitura independente do mesmo arquivo anual usado na versão (hash conferido), por parser separado, contra os registros gravados no banco. Registros só da API são conferidos nas páginas preservadas da mesma execução. A comparação completa com a API fica em npm run verify:api-annual. Contagem e valor líquido por pessoa/mês/categoria, e multiconjunto por pessoa/ano/mês/documento/categoria/valor líquido. Campos documento/glosa vazios no CSV permanecem desconhecidos. Restituições informadas separadamente, sem nova subtração. Não é auditoria da legitimidade da despesa.'};
 await fs.mkdir('output/qa',{recursive:true});await fs.writeFile('output/qa/real-source-audit.json',JSON.stringify(report,null,2));
-await withDB(db=>recordAudit(db,report as AuditReport));
+await withDB(db=>recordDomainAudit(db,snapshotId,report.status as 'passed'|'failed',report));
 console.log(JSON.stringify(report,null,2));if(report.status!=='passed')process.exitCode=1;

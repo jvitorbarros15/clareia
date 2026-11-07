@@ -6,8 +6,9 @@ import path from 'node:path';
 import {cents,normalize,stableDigest,BASE,officialUrl,snapshotId} from '../src/model.ts';
 import {lock,withLock,LOCK_FILE} from '../src/lock.ts';
 import {collect,RunCache,paginate,request} from '../src/collector.ts';
-import {openDB,publish,readSnapshot} from '../src/store.ts';
-import {results,parseFilters,csv} from '../src/queries.ts';
+import {openDB} from '../src/store.ts';
+import {latestPublication,publishDomain,readPublication} from '../src/publications.ts';
+import {results,parseFilters,csv} from '../src/view.ts';
 import type {Scope} from '../src/model.ts';
 import {normalizeAnnual,parseAnnual} from '../src/annual.ts';
 
@@ -36,6 +37,15 @@ test('annual parser filters by official ID and competence rather than display na
   await assert.rejects(parseAnnual(new TextEncoder().encode('ideCadastro;numAno\n1;2025\n'),scope),/coluna ausente/);
   await assert.rejects(parseAnnual(new TextEncoder().encode(header.replace('txtFornecedor','txtNomeFornecedor')+'\n'),scope),/coluna ausente txtFornecedor/);
 });
+test('an individual supplier reaches a record without name, CPF or receipt link',()=>{
+  const fromApi=normalize({...expense(),cnpjCpfFornecedor:'11144477735',nomeFornecedor:'Maria da Silva',urlDocumento:'https://www.camara.leg.br/cota-parlamentar/nota-fiscal-eletronica?ideDocumentoFiscal=1'},1,scope,source);
+  const annualRow={ideCadastro:'1',numAno:'2025',numMes:'1',codLegislatura:'57',txtDescricao:'ALUGUEL',vlrLiquido:'10.00',vlrDocumento:'10.00',vlrGlosa:'0',txtCNPJCPF:'111.444.777-35',ideDocumento:'1',txtFornecedor:'Maria da Silva',urlDocumento:'https://www.camara.leg.br/nota',txtNumero:'1',datEmissao:'2025-01-01',numLote:'1'};
+  const fromAnnual=normalizeAnnual(annualRow,scope,source);
+  for(const record of [fromApi,fromAnnual]){
+    assert.equal(record.supplier,'Fornecedor pessoa física');assert.equal(record.receipt,null);assert.equal(record.supplierVerified,false);
+    assert.equal(/Maria|11144477735|111\.444/.test(JSON.stringify(record)),false);
+  }
+});
 test('schema, financial equation and scope failures block records',()=>{
   assert.equal(normalize(expense(),1,scope,source).cents,10021);
   assert.throws(()=>normalize({...expense(),valorGlosa:1},1,scope,source));
@@ -60,6 +70,12 @@ test('missing IDs and CPF do not merge suppliers by name; source URLs stay offic
 test('transient source error is retried; ordinary 404 stops immediately',async()=>{
   let calls=0;await request(BASE+'/deputados/1',async()=>++calls===1?new Response('',{status:503}):new Response('{}'),async()=>{});assert.equal(calls,2);
   calls=0;await assert.rejects(request(BASE+'/deputados/1',async()=>{calls++;return new Response('',{status:404});},async()=>{}));assert.equal(calls,1);
+});
+test('network failure names the source and the underlying cause after every retry',async()=>{
+  let calls=0;const waits:number[]=[];
+  const failing=async()=>{calls++;throw new TypeError('fetch failed',{cause:Object.assign(new Error('reset'),{code:'ECONNRESET'})});};
+  await assert.rejects(request(BASE+'/deputados/1',failing,async ms=>{waits.push(ms);}),e=>e instanceof Error&&e.message===`${BASE}/deputados/1: fetch failed (ECONNRESET)`);
+  assert.equal(calls,5);assert.ok(waits.every(ms=>ms>=1500)&&waits.at(-1)!>=22500);
 });
 test('pagination follows every page and retains separate events',async()=>temp(async dir=>{
   const first=BASE+'/deputados/1/despesas?ano=2025&itens=1&pagina=1',second=first.replace('pagina=1','pagina=2');
@@ -86,30 +102,30 @@ test('collector validates two captures; an unstable or empty source is withheld'
 test('PostgreSQL publication is idempotent; bad update rolls back; revisions retain old version',async()=>temp(async dir=>{
   const db=await openDB(true);
   try{
-    const a=await collect(scope,new RunCache(dir,fakeFetch));await publish(db,a);await publish(db,a);
-    assert.equal((await db.query<{count:number}>('SELECT count(*)::integer AS count FROM expenses')).rows[0].count,6);
+    const a=await collect(scope,new RunCache(dir,fakeFetch));await publishDomain(db,'despesas',a);await publishDomain(db,'despesas',a);
+    assert.equal((await db.query<{count:number}>('SELECT count(*)::integer AS count FROM expenses_v2')).rows[0].count,6);
     const bad=structuredClone(a);bad.records[0].cents++;bad.id=snapshotId(bad);
-    await assert.rejects(publish(db,bad),/Reconciliação/);assert.equal((await readSnapshot(db))?.id,a.id);assert.equal(await readSnapshot(db,bad.id),null);
+    await assert.rejects(publishDomain(db,'despesas',bad),/Reconciliação/);assert.equal((await latestPublication(db,'despesas'))?.id,a.id);assert.equal(await readPublication(db,bad.id),null);
     const revision=structuredClone(a);revision.records[0].cents+=100;revision.validation.totalCents+=100;revision.validation.independentTotalCents=String(BigInt(revision.validation.independentTotalCents)+100n);revision.id=snapshotId(revision);
-    await publish(db,revision);assert.equal((await readSnapshot(db))?.id,revision.id);assert.equal((await readSnapshot(db,a.id))?.records[0].cents,10021);
+    await publishDomain(db,'despesas',revision);assert.equal((await latestPublication(db,'despesas'))?.id,revision.id);assert.equal((await readPublication(db,a.id))?.records[0].cents,10021);
   }finally{await db.close();}
 }));
 test('re-import of the same content is a no-op; a changed body with the same total is never silently dropped',async()=>temp(async dir=>{
   const db=await openDB(true);
   try{
-    const a=await collect(scope,new RunCache(dir,fakeFetch));await publish(db,a);
-    const count=async()=>(await db.query<{count:number}>('SELECT count(*)::integer AS count FROM snapshots')).rows[0].count;
+    const a=await collect(scope,new RunCache(dir,fakeFetch));await publishDomain(db,'despesas',a);
+    const count=async()=>(await db.query<{count:number}>('SELECT count(*)::integer AS count FROM publications')).rows[0].count;
     const recaptured=structuredClone(a);recaptured.publishedAt=recaptured.collectedAt='2030-01-01T00:00:00Z';for(const p of recaptured.pages)p.fetchedAt='2030-01-01T00:00:00Z';for(const r of recaptured.records)r.source.fetchedAt='2030-01-01T00:00:00Z';
-    assert.equal(snapshotId(recaptured),a.id);await publish(db,recaptured);assert.equal(await count(),1);
-    assert.equal((await readSnapshot(db))?.publishedAt,a.publishedAt);
+    assert.equal(snapshotId(recaptured),a.id);await publishDomain(db,'despesas',recaptured);assert.equal(await count(),1);
+    assert.equal((await latestPublication(db,'despesas'))?.publishedAt,a.publishedAt);
     const reworded=structuredClone(a);reworded.validation.limitations=[...a.validation.limitations,'Nova ressalva.'];
     assert.equal(reworded.validation.totalCents,a.validation.totalCents);
-    await assert.rejects(publish(db,reworded),/não corresponde ao conteúdo/);
-    reworded.id=snapshotId(reworded);assert.notEqual(reworded.id,a.id);await publish(db,reworded);
-    assert.equal(await count(),2);assert.deepEqual((await readSnapshot(db))?.validation.limitations,reworded.validation.limitations);
-    const tampered=structuredClone(a);tampered.validation.duplicatePolicy='Texto alterado no banco';
-    await db.query('UPDATE snapshots SET body=$2::jsonb WHERE id=$1',[a.id,JSON.stringify(tampered)]);
-    await assert.rejects(publish(db,a),/mesmo identificador e conteúdo diferente/);
+    await assert.rejects(publishDomain(db,'despesas',reworded),/não corresponde ao conteúdo/);
+    reworded.id=snapshotId(reworded);assert.notEqual(reworded.id,a.id);await publishDomain(db,'despesas',reworded);
+    assert.equal(await count(),2);assert.deepEqual((await latestPublication(db,'despesas'))?.validation.limitations,reworded.validation.limitations);
+    const {records:_records,...tampered}=structuredClone(a);tampered.validation.duplicatePolicy='Texto alterado no banco';
+    await db.query('UPDATE publications SET body=$2::jsonb WHERE id=$1',[a.id,JSON.stringify(tampered)]);
+    await assert.rejects(publishDomain(db,'despesas',a),/mesmo identificador e conteúdo diferente/);
   }finally{await db.close();}
 }));
 test('lock path is absolute under the project root and is released even when the task or close fails',async()=>temp(async dir=>{

@@ -23,6 +23,20 @@ export function snapshotId(snapshot:object):string{
 }
 // Some suppliers are individuals with a CPF inside the trade name; it never reaches a published record.
 export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
+// An individual paid by the quota is not a public figure: the name stays out until a legal opinion says otherwise.
+export function publicSupplier(name:string,rawId:string):{name:string;key:'cnpj'|'person'|'unknown'}{
+  const id=rawId.replace(/\D/g,'');
+  if(id.length===11)return {name:'Fornecedor pessoa física',key:'person'};
+  return {name:maskPersonalId(name||'Fornecedor não informado'),key:validCnpj(id)?'cnpj':'unknown'};
+}
+// The Câmara API drops connections for tens of seconds at a time; a run is long, so retries wait long.
+export const RETRY_WAITS=[2000,5000,15000,30000];
+export const retryWait=(attempt:number)=>Math.round(RETRY_WAITS[attempt]*(0.75+Math.random()/2));
+export function sourceError(url:string,error:unknown):Error{
+  const e=error as {message?:string;cause?:{code?:string;message?:string}}|undefined;
+  const cause=e?.cause?.code||e?.cause?.message;
+  return new Error(`${url}: ${e?.message??String(error)}${cause?` (${cause})`:''}`,{cause:error});
+}
 export async function readLimited(response:Response,limit:number):Promise<Uint8Array> {
   if(Number(response.headers.get('content-length'))>limit)throw new Error('Resposta excede limite');
   const parts:Uint8Array[]=[];let size=0;
@@ -69,9 +83,9 @@ export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceR
   if(face-glosa!==net)throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
   const supplierId=(r.cnpjCpfFornecedor||'').replace(/\D/g,'');
   // Only validated CNPJ businesses are grouped across records. CPF/missing IDs remain separate.
-  const verified=validCnpj(supplierId);
+  const verified=validCnpj(supplierId),supplier=publicSupplier(r.nomeFornecedor,supplierId);
   const occurrence=hash(canonical({personId,raw}));
-  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:maskPersonalId(r.nomeFornecedor||'Fornecedor não informado'),supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:String(r.codLote),receipt:r.urlDocumento?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
+  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
 }
 export function validCnpj(id:string):boolean {
   if(!/^\d{14}$/.test(id)||/^(\d)\1+$/.test(id))return false;

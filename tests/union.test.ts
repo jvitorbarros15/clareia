@@ -4,8 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {strToU8,zipSync} from 'fflate';
-import {unionRecords,removedRecords,annualSnapshot} from '../src/annual.ts';
-import {csv} from '../src/queries.ts';
+import {unionRecords,removedRecords,annualSnapshot,HeldPublication} from '../src/annual.ts';
+import {csv} from '../src/view.ts';
 import type {Expense,Scope,Snapshot} from '../src/model.ts';
 
 let n=0;
@@ -60,4 +60,13 @@ test('re-collecting the same content on another day from a repacked zip keeps th
   level=0;t.mock.timers.setTime(Date.parse('2026-11-06T12:00:00Z'));
   const second=await annualSnapshot(api,directory);
   assert.notEqual(first.collectedAt,second.collectedAt);assert.equal(first.id,second.id);
+});
+test('a record that vanished from every source raises a deliberate hold',async t=>{
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-annual-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));
+  const bytes=strToU8('ideCadastro;numAno;numMes;codLegislatura;txtDescricao;vlrLiquido;vlrDocumento;vlrGlosa;ideDocumento;txtFornecedor;txtCNPJCPF;urlDocumento;txtNumero;datEmissao;numLote\n1;2025;1;57;TELEFONIA;10.00;10.00;0;0;F;;;;2025-01-01;1\n');
+  t.mock.method(globalThis,'fetch',async()=>new Response(zipSync({'Ano-2025.csv':bytes}) as BodyInit));
+  const api={id:'api',metric:'m',scope,people:[],records:[],collectedAt:'t',publishedAt:'t',pages:[],validation:{stablePasses:2,recordCount:0,totalCents:0,independentTotalCents:'0',duplicatePolicy:'',limitations:[]}} as Snapshot;
+  const first=await annualSnapshot(api,directory);
+  const previous={...first,records:[...first.records,{...first.records[0],id:'gone',documentId:'9',cents:555}]};
+  await assert.rejects(annualSnapshot(api,directory,previous),HeldPublication);
 });

@@ -8,30 +8,45 @@
   const noDocument=r=>String(r.documentId)==='0';
   const docLabel=r=>noDocument(r)?'Sem documento fiscal (código 0 na fonte)':`Documento ${esc(r.documentId)}`;
   const months=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  const params=new URLSearchParams(location.search);let data,requestId=0,trigger;
+  const params=new URLSearchParams(location.search);params.delete('snapshot');let data,index,base,requestId=0,trigger;const files=new Map();
   const date=s=>new Date(s).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'});
   function toast(text){$('#toast').textContent=text;setTimeout(()=>$('#toast').textContent='',3500);}
   function show(title,body){trigger=document.activeElement;$('#dialog-content').innerHTML=`<h2 id="dialog-title">${esc(title)}</h2>${body}`;$('#detail').showModal();}
   $('#close').addEventListener('click',()=>$('#detail').close());$('#detail').addEventListener('close',()=>trigger?.focus());
   function set(values){for(const [key,value]of Object.entries(values)){if(value===null)params.delete(key);else params.set(key,String(value));}load();}
+  const json=async url=>{const r=await fetch(url);if(!r.ok)throw Error('Versão indisponível. Nenhum valor foi estimado.');return r.json();};
+  async function personRecords(id){
+    if(!files.has(id)){const r=await fetch(`${base}/deputados/${id}/despesas.json`);if(r.status===404)files.set(id,null);else if(r.ok)files.set(id,await r.json());else throw Error('Versão indisponível. Nenhum valor foi estimado.');}
+    return files.get(id);
+  }
+  const filtered=()=>['from','to','category','supplier'].some(k=>params.has(k));
   async function load(){
     const id=++requestId;$('#content').setAttribute('aria-busy','true');$('#notice').textContent='Conferindo o recorte…';
     try{
-      const response=await fetch('/api/spending?'+params);const result=await response.json();if(id!==requestId)return;if(!response.ok)throw Error(result.error);
-      data=result;params.set('snapshot',data.snapshotId);params.set('person',String(data.person.id));history.replaceState(null,'','/?'+params);
+      if(!index){const manifest=await json('/manifest.json');base='/'+manifest.base;index=await json(base+'/index.json');}
+      const person=Number(params.get('person')||index.scope.ids[0]);
+      if(!index.scope.ids.includes(person))throw Error('Este deputado não está nesta versão.');
+      const records=await personRecords(person);if(id!==requestId)return;
+      const result=ClareiaView.personView(index,records,params);
+      if(!result)throw Error('Dados indisponíveis para este deputado nesta versão.');
+      data={...result,externalReconciliation:index.audit};params.set('person',String(data.person.id));history.replaceState(null,'','/?'+params);
       render();
-      const status=await fetch('/api/status').then(r=>r.json());if(id!==requestId)return;
-      const state=status.lastRun?.status;
-      $('#notice').innerHTML=`<span class="status-dot"></span> ${data.current===false?'Você está vendo uma versão anterior. <a href="/">Abrir a versão atual →</a> ':''}${state==='failed'?'Última coleta falhou. Exibindo a versão anteriormente aprovada.':state==='collecting'?'Coleta ainda não concluída. Exibindo a versão aprovada.':'Dados oficiais · verificações automáticas concluídas'} <span class="checked">${status.lastRun?.finished_at?'Última execução: '+date(status.lastRun.finished_at)+' (Brasília)':''}</span>`;
+      $('#notice').innerHTML=`<span class="status-dot"></span> Dados oficiais · verificações automáticas concluídas <span class="checked">Versão de ${esc(date(data.publishedAt))}</span>`;
     }catch(error){if(id!==requestId)return;$('#notice').textContent=error.message;$('#content').innerHTML='<div class="empty"><h2>Este recorte não está disponível.</h2><p>Nenhum valor foi estimado. Confira a coleta ou volte ao recorte publicado.</p><a href="/">Abrir versão atual →</a></div>';$('#people').innerHTML='';$('#controls').innerHTML='';}
     finally{if(id===requestId)$('#content').setAttribute('aria-busy','false');}
   }
   const originLabel=r=>r.origin==='api'?`Só na API (ausente do arquivo anual capturado em ${date(data.collectedAt)})`:r.origin==='annual'?'Só no arquivo anual':'Arquivo anual e API';
+  let csvUrl;
+  function csvHref(){
+    if(csvUrl)URL.revokeObjectURL(csvUrl);csvUrl=null;
+    if(!filtered())return `${base}/deputados/${data.person.id}/despesas.csv`;
+    csvUrl=URL.createObjectURL(new Blob([ClareiaView.csv(data.records)],{type:'text/csv;charset=utf-8'}));return csvUrl;
+  }
   function render(){
     const d=data,f=d.filters;
-    $('#people').innerHTML=`<div class="section-label"><span>01 / ESCOLHA UM REPRESENTANTE</span><small>Seleção técnica por ID · não é ranking</small></div><div class="people-grid">${d.people.map(p=>`<button class="person ${p.id===d.person.id?'selected':''}" data-person="${p.id}" aria-pressed="${p.id===d.person.id}">${p.photo?`<img src="/portraits/${p.id}.jpg" alt="" loading="lazy">`:'<span class="avatar">'+esc(p.name[0])+'</span>'}<span><b>${esc(p.name)}</b><small>Deputado(a) · ID Câmara ${p.id}</small></span><span class="person-arrow">↗</span></button>`).join('')}</div>`;
+    $('#people').innerHTML=`<div class="section-label"><span>01 / ESCOLHA UM REPRESENTANTE</span><small>Seleção técnica por ID · não é ranking</small></div><div class="people-grid">${d.people.map(p=>`<button class="person ${p.id===d.person.id?'selected':''}" data-person="${p.id}" aria-pressed="${p.id===d.person.id}">${p.photo?`<img src="${base}/portraits/${p.id}.jpg" alt="" loading="lazy">`:'<span class="avatar">'+esc(p.name[0])+'</span>'}<span><b>${esc(p.name)}</b><small>Deputado(a) · ID Câmara ${p.id}</small></span><span class="person-arrow">↗</span></button>`).join('')}</div>`;
     const options=value=>d.scope.months.map(m=>`<option value="${m}" ${m===value?'selected':''}>${months[m]}</option>`).join('');
-    $('#controls').innerHTML=`<div class="filters"><label>De<select id="from">${options(f.from)}</select></label><label>Até<select id="to">${options(f.to)}</select></label><span class="year">${d.scope.year}</span><button data-action="reset">Limpar recorte ↺</button><div class="actions"><a id="csv" href="/api/export?${esc(params.toString())}">Baixar CSV ↓</a><button data-action="share">Compartilhar ↗</button></div></div>`;
+    $('#controls').innerHTML=`<div class="filters"><label>De<select id="from">${options(f.from)}</select></label><label>Até<select id="to">${options(f.to)}</select></label><span class="year">${d.scope.year}</span><button data-action="reset">Limpar recorte ↺</button><div class="actions"><a id="csv" href="${esc(csvHref())}" download="clareia-${esc(d.snapshotId.slice(0,12))}.csv">Baixar CSV ↓</a><button data-action="share">Compartilhar ↗</button></div></div>`;
     const maxMonth=Math.max(1,...d.months.map(m=>Math.abs(m.cents))),maxCategory=Math.max(1,...d.categories.map(c=>Math.abs(c.cents)));
     $('#content').innerHTML=`<div class="summary"><div><p class="eyebrow">COTA PARLAMENTAR · VALOR LÍQUIDO ${d.validation.sourceKind==='annual-api-union'?'NAS FONTES DA CÂMARA':'NO ARQUIVO CEAP'}</p><h2 id="total">${money(d.totalCents)}</h2><p>${esc(d.person.name)} · ${months[f.from]}${f.from!==f.to?' a '+months[f.to]:''} de ${d.scope.year}</p><div class="chips"><span>${d.recordCount} lançamentos</span><span>${f.category?esc(f.category):'Todas as categorias'}</span>${f.supplier?'<span>Fornecedor selecionado</span>':''}</div><button class="primary" data-action="evidence">Como chegamos nisso? <span>↗</span></button></div><div class="monthly"><div class="section-label"><span>AO LONGO DOS MESES</span><small>Valores absolutos</small></div><div class="month-bars">${d.months.map(m=>`<button data-month="${m.month}" aria-label="${months[m.month]}: ${money(m.cents)}; explorar mês"><b>${short(m.cents)}</b><div class="bar-space"><i style="height:${Math.max(1,Math.abs(m.cents)/maxMonth*100)}%" class="${m.cents<0?'negative':''}"></i></div><span>${months[m.month]}</span></button>`).join('')}</div><p>Clique no mês para abrir seu recorte. Valores negativos representam créditos/ajustes na origem.</p></div></div>
       <div class="exploration"><section class="categories"><div class="section-label"><span>02 / DE QUE É FEITA A CONTA?</span></div><h2>Comece pela categoria.</h2><p>Valores para a pessoa e o período escolhidos.</p><button class="all-category ${!f.category?'active':''}" data-category="">Todas as categorias <span>↗</span></button>${d.categories.map(c=>`<button class="category ${c.category===f.category?'active':''}" data-category="${esc(c.category)}" aria-pressed="${c.category===f.category}"><span>${esc(c.category.toLocaleLowerCase('pt-BR'))}</span><b>${money(c.cents)}</b><i style="--width:${Math.abs(c.cents)/maxCategory*100}%"></i></button>`).join('')}</section>
@@ -54,8 +69,8 @@
     switch(b.dataset.action){
       case'reset':set({from:null,to:null,category:null,supplier:null});break;
       case'clear-supplier':set({supplier:null});break;
-      case'share':try{await navigator.clipboard.writeText(location.href);toast('Link copiado com filtros e versão dos dados.');}catch{show('Copie esta investigação',`<input aria-label="Link desta investigação" readonly value="${esc(location.href)}">`);}break;
-      case'evidence':{const union=data.validation.sourceKind==='annual-api-union';show('Como chegamos nisso?',`<p class="dialog-sub">${esc(data.person.name)} · ${months[data.filters.from]} a ${months[data.filters.to]} / ${data.scope.year}</p><div class="evidence-total">${money(data.totalCents)}</div><p>Soma de <b>${data.recordCount} lançamentos</b> ${union?'do arquivo anual e da API da Câmara':'do arquivo anual'}, após os filtros de pessoa, competência, categoria e fornecedor. Cada valor foi convertido em centavos antes da soma.</p><ol><li>Identidade ligada ao ID oficial da Câmara ${data.person.id}.</li><li>${union?'Duas capturas de cada fonte comparadas':'Duas capturas do arquivo anual comparadas'}, com todas as linhas selecionadas pelo ID e competência.</li><li>Documento − glosa conferido onde ambos são informados; total líquido reconciliado com cálculo independente e SQL.</li></ol><p><b>Limite:</b> verificações automáticas não são auditoria do gasto. ${union?'Nenhuma das duas fontes está completa sozinha; cada registro indica a sua.':'O arquivo anual contém registros que a API não retornou neste recorte.'} Revisão humana ampla ainda pende.</p><a href="/api/export?${esc(params.toString())}">Baixar os registros deste cálculo ↓</a><p class="small">Versão ${data.snapshotId.slice(0,12)} · ${esc(data.metric)}</p>`);break;}
+      case'share':try{await navigator.clipboard.writeText(location.href);toast('Link copiado com os filtros.');}catch{show('Copie esta investigação',`<input aria-label="Link desta investigação" readonly value="${esc(location.href)}">`);}break;
+      case'evidence':{const union=data.validation.sourceKind==='annual-api-union';show('Como chegamos nisso?',`<p class="dialog-sub">${esc(data.person.name)} · ${months[data.filters.from]} a ${months[data.filters.to]} / ${data.scope.year}</p><div class="evidence-total">${money(data.totalCents)}</div><p>Soma de <b>${data.recordCount} lançamentos</b> ${union?'do arquivo anual e da API da Câmara':'do arquivo anual'}, após os filtros de pessoa, competência, categoria e fornecedor. Cada valor foi convertido em centavos antes da soma.</p><ol><li>Identidade ligada ao ID oficial da Câmara ${data.person.id}.</li><li>${union?'Duas capturas de cada fonte comparadas':'Duas capturas do arquivo anual comparadas'}, com todas as linhas selecionadas pelo ID e competência.</li><li>Documento − glosa conferido onde ambos são informados; total líquido reconciliado com cálculo independente e SQL.</li></ol><p><b>Limite:</b> verificações automáticas não são auditoria do gasto. ${union?'Nenhuma das duas fontes está completa sozinha; cada registro indica a sua.':'O arquivo anual contém registros que a API não retornou neste recorte.'} Revisão humana ampla ainda pende.</p><a href="${esc($('#csv').getAttribute('href'))}" download="clareia-${esc(data.snapshotId.slice(0,12))}.csv">Baixar os registros deste cálculo ↓</a><p class="small">Versão ${data.snapshotId.slice(0,12)} · ${esc(data.metric)}</p>`);break;}
     }
   });
   load();
