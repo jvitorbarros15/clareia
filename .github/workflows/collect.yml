@@ -1,0 +1,66 @@
+name: Collect
+on:
+  schedule:
+    - cron: '0 9,16,0 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: collect
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: clareia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:clareia@localhost:5432/postgres
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      CLAREIA_VAULT_KEY: ${{ secrets.CLAREIA_VAULT_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Postgres 17 client
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Restore database
+        id: restore
+        run: npm run db:state -- restore
+      - name: Collect if a source changed
+        id: collect
+        env:
+          CPF_HASHES_FILE: ${{ runner.temp }}/cpf-hashes
+        run: npm run collect -- --if-changed
+      - name: Audit new version
+        if: steps.collect.outputs.changed == 'true' && vars.PUBLISH_ENABLED == 'true'
+        run: npm run verify:annual
+      - name: Build site
+        if: steps.collect.outputs.changed == 'true'
+        run: npm run build:site
+      - name: Scan for CPF
+        if: steps.collect.outputs.changed == 'true'
+        run: |
+          pg_dump --format=plain --file="$RUNNER_TEMP/dump.sql" "$DATABASE_URL"
+          npm run scan:cpf -- dist "$RUNNER_TEMP/dump.sql" --known "$RUNNER_TEMP/cpf-hashes"
+      - name: Save database
+        if: always() && steps.restore.outcome == 'success' && steps.collect.outputs.changed == 'true'
+        run: npm run db:state -- save
