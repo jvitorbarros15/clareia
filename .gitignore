@@ -10,7 +10,15 @@ Thumbs.db
 .vercel/
 data/raw/
 data/private/
+data/local/
+data/runs/
+data/pilot.lock
 output/qa/
 playwright-report/
 test-results/
 
+
+# Planning docs stay local
+for agents/PLANO-*.md
+for agents/MATRIZ-DE-VALIDACAO.md
+docs/superpowers/plans/
