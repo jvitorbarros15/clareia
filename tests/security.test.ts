@@ -6,7 +6,8 @@ import path from 'node:path';
 import net from 'node:net';
 import {spawn} from 'node:child_process';
 import type {AddressInfo} from 'node:net';
-import {openDB,publish,recordAudit,servedSnapshot} from '../src/store.ts';
+import {openDB} from '../src/store.ts';
+import {publishDomain,recordDomainAudit,servedPublication} from '../src/publications.ts';
 import type {DB} from '../src/store.ts';
 import {createApp} from '../src/app.ts';
 import {lock} from '../src/lock.ts';
@@ -37,14 +38,14 @@ test('a malformed request target gets 400 and the server keeps answering',async(
 test('only versions with a passing audit are served; an unaudited or failed one is never reachable, even by id',async()=>{
   const db=await openDB(true),a=version(100),b=version(200);
   try{
-    await publish(db,a);assert.equal(await servedSnapshot(db),null);assert.equal(await servedSnapshot(db,a.id),null);
-    await recordAudit(db,audit(a,'passed'));assert.equal((await servedSnapshot(db))?.snapshot.id,a.id);
-    await publish(db,b);
-    const stillA=await servedSnapshot(db);assert.equal(stillA?.snapshot.id,a.id);assert.equal(stillA?.current,true);assert.equal(await servedSnapshot(db,b.id),null);
-    await recordAudit(db,audit(b,'failed'));assert.equal(await servedSnapshot(db,b.id),null);assert.equal((await servedSnapshot(db))?.snapshot.id,a.id);
-    await recordAudit(db,audit(b,'passed','2025-03-03T00:00:00Z'));assert.equal((await servedSnapshot(db))?.snapshot.id,b.id);
-    const pinned=await servedSnapshot(db,a.id);assert.equal(pinned?.snapshot.id,a.id);assert.equal(pinned?.current,false);
-    await recordAudit(db,audit(a,'failed','2025-03-04T00:00:00Z'));assert.equal(await servedSnapshot(db,a.id),null);
+    await publishDomain(db,'despesas',a);assert.equal(await servedPublication(db,'despesas'),null);assert.equal(await servedPublication(db,'despesas',a.id),null);
+    await recordDomainAudit(db,a.id,'passed',audit(a,'passed'));assert.equal((await servedPublication(db,'despesas'))?.snapshot.id,a.id);
+    await publishDomain(db,'despesas',b);
+    const stillA=await servedPublication(db,'despesas');assert.equal(stillA?.snapshot.id,a.id);assert.equal(stillA?.current,true);assert.equal(await servedPublication(db,'despesas',b.id),null);
+    await recordDomainAudit(db,b.id,'failed',audit(b,'failed'));assert.equal(await servedPublication(db,'despesas',b.id),null);assert.equal((await servedPublication(db,'despesas'))?.snapshot.id,a.id);
+    await recordDomainAudit(db,b.id,'passed',audit(b,'passed','2025-03-03T00:00:00Z'));assert.equal((await servedPublication(db,'despesas'))?.snapshot.id,b.id);
+    const pinned=await servedPublication(db,'despesas',a.id);assert.equal(pinned?.snapshot.id,a.id);assert.equal(pinned?.current,false);
+    await recordDomainAudit(db,a.id,'failed',audit(a,'failed','2025-03-04T00:00:00Z'));assert.equal(await servedPublication(db,'despesas',a.id),null);
     await serving(db,async base=>{
       assert.equal((await fetch(`${base}/api/spending?snapshot=${a.id}`)).status,503);assert.equal((await fetch(`${base}/api/export?snapshot=${a.id}`)).status,503);
       const body=await (await fetch(base+'/api/spending')).json();assert.equal(body.snapshotId,b.id);assert.equal(body.current,true);assert.equal(body.externalReconciliation.status,'passed');

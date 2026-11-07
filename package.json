@@ -13,6 +13,7 @@
     "verify:api-annual": "tsx scripts/reconcile-api-annual.ts",
     "cache:portraits": "tsx scripts/cache-portraits.ts",
     "unlock": "tsx scripts/unlock.ts",
+    "migrate:snapshot": "tsx scripts/migrate-snapshot.ts",
     "demo": "node mvp/server.mjs"
   },
   "engines": {
