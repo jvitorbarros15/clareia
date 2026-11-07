@@ -62,5 +62,5 @@ test('fingerprint reads validators from a HEAD response',async()=>{
   assert.equal(method,'HEAD');
 });
 test('fingerprint fails when the source does not answer',async()=>{
-  await assert.rejects(fingerprint(url,async()=>new Response(null,{status:503}),0),/503/);
+  await assert.rejects(fingerprint(url,async()=>new Response(null,{status:503}),0),e=>e instanceof Error&&e.message===`${url}: Fonte respondeu 503`);
 });

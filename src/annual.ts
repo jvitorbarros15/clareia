@@ -3,7 +3,7 @@ import path from 'node:path';
 import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
 import {unzipSync} from 'fflate';
-import {canonical,hash,cents,snapshotId,validCnpj,officialUrl,stableDigest,publicSupplier,readLimited} from './model.ts';
+import {canonical,hash,cents,snapshotId,validCnpj,officialUrl,stableDigest,publicSupplier,readLimited,RETRY_WAITS,retryWait,sourceError} from './model.ts';
 import {pairOccurrences} from './reconcile.ts';
 import {assertArchive} from './sources.ts';
 import type {Snapshot,Scope,Expense,SourceRef} from './model.ts';
@@ -51,7 +51,7 @@ export async function parseAnnual(bytes:Uint8Array,scope:Scope):Promise<{rows:{r
   return {rows,scanned};
 }
 async function download(url:string):Promise<Uint8Array>{
-  let last:unknown;for(let i=0;i<3;i++)try{const r=await fetch(url,{signal:AbortSignal.timeout(60000),redirect:'error'});if(!r.ok)throw new Error('HTTP '+r.status);return await readLimited(r,100_000_000);}catch(e){last=e;if(i<2)await new Promise(r=>setTimeout(r,1000*(i+1)));}throw last;
+  let last:unknown;for(let i=0;i<=RETRY_WAITS.length;i++)try{const r=await fetch(url,{signal:AbortSignal.timeout(60000),redirect:'error'});if(!r.ok)throw new Error('HTTP '+r.status);return await readLimited(r,100_000_000);}catch(e){last=e;if(i<RETRY_WAITS.length)await new Promise(r=>setTimeout(r,retryWait(i)));}throw sourceError(url,last);
 }
 export const annualUrl=(year:number)=>`https://www.camara.leg.br/cotas/Ano-${year}.csv.zip`;
 // A deliberate hold, not a failure of the run: the same source would hold again, so it must not be collected again until it changes.

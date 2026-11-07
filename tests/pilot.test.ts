@@ -71,6 +71,12 @@ test('transient source error is retried; ordinary 404 stops immediately',async()
   let calls=0;await request(BASE+'/deputados/1',async()=>++calls===1?new Response('',{status:503}):new Response('{}'),async()=>{});assert.equal(calls,2);
   calls=0;await assert.rejects(request(BASE+'/deputados/1',async()=>{calls++;return new Response('',{status:404});},async()=>{}));assert.equal(calls,1);
 });
+test('network failure names the source and the underlying cause after every retry',async()=>{
+  let calls=0;const waits:number[]=[];
+  const failing=async()=>{calls++;throw new TypeError('fetch failed',{cause:Object.assign(new Error('reset'),{code:'ECONNRESET'})});};
+  await assert.rejects(request(BASE+'/deputados/1',failing,async ms=>{waits.push(ms);}),e=>e instanceof Error&&e.message===`${BASE}/deputados/1: fetch failed (ECONNRESET)`);
+  assert.equal(calls,5);assert.ok(waits.every(ms=>ms>=1500)&&waits.at(-1)!>=22500);
+});
 test('pagination follows every page and retains separate events',async()=>temp(async dir=>{
   const first=BASE+'/deputados/1/despesas?ano=2025&itens=1&pagina=1',second=first.replace('pagina=1','pagina=2');
   const cache=new RunCache(dir,async url=>new Response(JSON.stringify({dados:[expense(url===first?1:2)],links:[{rel:'last',href:second},...(url===first?[{rel:'next',href:second}]:[])]})));

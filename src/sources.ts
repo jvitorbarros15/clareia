@@ -1,22 +1,23 @@
 import {unzipSync} from 'fflate';
 import type {DB} from './store.ts';
+import {RETRY_WAITS,retryWait,sourceError} from './model.ts';
 
 export type Fingerprint={url:string;etag:string|null;lastModified:string|null;size:number|null};
 type Fetcher=(url:string,init?:RequestInit)=>Promise<Response>;
 type Row={etag:string|null;last_modified:string|null;size:string|null;sha256:string};
 const ZIP_SIGNATURE=[0x50,0x4b,0x03,0x04];
 
-export async function fingerprint(url:string,fetcher:Fetcher=fetch,retries=3):Promise<Fingerprint>{
+export async function fingerprint(url:string,fetcher:Fetcher=fetch,retries=RETRY_WAITS.length):Promise<Fingerprint>{
   let failure:unknown;
   for(let attempt=0;attempt<=retries;attempt++){
     try{
       const r=await fetcher(url,{method:'HEAD',headers:{'User-Agent':'clareia-collector'},signal:AbortSignal.timeout(45000)});
-      if(!r.ok)throw new Error(`Fonte respondeu ${r.status}: ${url}`);
+      if(!r.ok)throw new Error(`Fonte respondeu ${r.status}`);
       const size=Number(r.headers.get('content-length'));
       return {url,etag:r.headers.get('etag'),lastModified:r.headers.get('last-modified'),size:size>0?size:null};
-    }catch(error){failure=error;if(attempt<retries)await new Promise(done=>setTimeout(done,2000*(attempt+1)));}
+    }catch(error){failure=error;if(attempt<retries)await new Promise(done=>setTimeout(done,retryWait(attempt)));}
   }
-  throw failure;
+  throw sourceError(url,failure);
 }
 const latest=async(db:DB,url:string)=>(await db.query<Row>('SELECT etag,last_modified,size::text AS size,sha256 FROM source_files WHERE url=$1 ORDER BY fetched_at DESC, seq DESC LIMIT 1',[url])).rows[0];
 

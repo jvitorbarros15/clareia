@@ -29,6 +29,14 @@ export function publicSupplier(name:string,rawId:string):{name:string;key:'cnpj'
   if(id.length===11)return {name:'Fornecedor pessoa física',key:'person'};
   return {name:maskPersonalId(name||'Fornecedor não informado'),key:validCnpj(id)?'cnpj':'unknown'};
 }
+// The Câmara API drops connections for tens of seconds at a time; a run is long, so retries wait long.
+export const RETRY_WAITS=[2000,5000,15000,30000];
+export const retryWait=(attempt:number)=>Math.round(RETRY_WAITS[attempt]*(0.75+Math.random()/2));
+export function sourceError(url:string,error:unknown):Error{
+  const e=error as {message?:string;cause?:{code?:string;message?:string}}|undefined;
+  const cause=e?.cause?.code||e?.cause?.message;
+  return new Error(`${url}: ${e?.message??String(error)}${cause?` (${cause})`:''}`,{cause:error});
+}
 export async function readLimited(response:Response,limit:number):Promise<Uint8Array> {
   if(Number(response.headers.get('content-length'))>limit)throw new Error('Resposta excede limite');
   const parts:Uint8Array[]=[];let size=0;
