@@ -18,8 +18,6 @@ output/qa/
 playwright-report/
 test-results/
 
-
 # Planning docs stay local
-for agents/PLANO-*.md
-for agents/MATRIZ-DE-VALIDACAO.md
+for agents/
 docs/superpowers/plans/
