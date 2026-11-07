@@ -70,11 +70,6 @@ export async function readPublication(db:DB,id:string):Promise<Snapshot|null>{
   const r=await db.query<Row>(`SELECT domain,body FROM publications WHERE id=$1 AND ${VISIBLE}`,[id]);
   return r.rows[0]?{...r.rows[0].body,records:await readRecords(db,id)}:null;
 }
-// The site only sees audited versions. A new one stays private until audited, and the previous approved one keeps serving.
-export async function servedPublication(db:DB,domain:Domain,id?:string):Promise<{snapshot:Snapshot;audit:unknown;current:boolean}|null>{
-  const current=(await activePublication(db,domain))?.id,chosen=id??current;
-  if(!chosen)return null;
-  const a=await db.query<{report:unknown}>(`SELECT a.report FROM publication_audits a JOIN publications p ON p.id=a.publication_id WHERE a.publication_id=$1 AND a.status='passed' AND p.domain=$2`,[chosen,domain]);
-  const snapshot=a.rows[0]?await readPublication(db,chosen):null;
-  return snapshot?{snapshot,audit:a.rows[0].report,current:chosen===current}:null;
+export async function publicationAudit(db:DB,id:string):Promise<unknown>{
+  return (await db.query<{report:unknown}>('SELECT report FROM publication_audits WHERE publication_id=$1',[id])).rows[0]?.report??null;
 }

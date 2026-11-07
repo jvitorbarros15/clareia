@@ -20,8 +20,7 @@ const output=async(changed:boolean)=>{if(process.env.GITHUB_OUTPUT)await fs.appe
 const store=storeFromEnv(),key=store?vaultKey():null;
 const archive=async(directory:string,runId:string)=>{
   if(store&&key)await archiveRun(store,directory,runId,key);
-  if(process.env.CPF_HASHES_FILE)await fs.writeFile(process.env.CPF_HASHES_FILE,[...await knownCpfs(directory)].join('
-'));
+  if(process.env.CPF_HASHES_FILE)await fs.writeFile(process.env.CPF_HASHES_FILE,[...await knownCpfs(directory)].join(String.fromCharCode(10)));
 };
 const runId=resumeIndex>=0?process.argv[resumeIndex+1]:randomUUID();
 if(!runId||!/^[a-zA-Z0-9-]{1,80}$/.test(runId))throw new Error('Identificador de execução inválido');

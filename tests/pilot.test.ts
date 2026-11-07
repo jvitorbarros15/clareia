@@ -8,7 +8,7 @@ import {lock,withLock,LOCK_FILE} from '../src/lock.ts';
 import {collect,RunCache,paginate,request} from '../src/collector.ts';
 import {openDB} from '../src/store.ts';
 import {latestPublication,publishDomain,readPublication} from '../src/publications.ts';
-import {results,parseFilters,csv} from '../src/queries.ts';
+import {results,parseFilters,csv} from '../src/view.ts';
 import type {Scope} from '../src/model.ts';
 import {normalizeAnnual,parseAnnual} from '../src/annual.ts';
 

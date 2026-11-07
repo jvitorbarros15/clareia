@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
+    "build:site": "tsx scripts/build-site.ts",
     "collect": "tsx src/collect.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

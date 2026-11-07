@@ -6,13 +6,10 @@ import path from 'node:path';
 import net from 'node:net';
 import {spawn} from 'node:child_process';
 import type {AddressInfo} from 'node:net';
-import {openDB} from '../src/store.ts';
-import {publishDomain,recordDomainAudit,servedPublication} from '../src/publications.ts';
-import type {DB} from '../src/store.ts';
 import {createApp} from '../src/app.ts';
 import {lock} from '../src/lock.ts';
 import {maskPersonalId,readLimited,snapshotId} from '../src/model.ts';
-import {csv,parseFilters} from '../src/queries.ts';
+import {csv,parseFilters} from '../src/view.ts';
 import type {Snapshot,Expense} from '../src/model.ts';
 
 function version(cents:number):Snapshot{
@@ -20,37 +17,21 @@ function version(cents:number):Snapshot{
   const body={metric:'camara.ceap.valor-liquido-arquivo-anual.v1',scope:{year:2025,months:[1,2],ids:[1],legislature:57},people:[{id:1,name:'Pessoa'}],records:[record],collectedAt:'2025-03-01T00:00:00Z',publishedAt:'2025-03-01T00:00:00Z',pages:[],validation:{sourceKind:'annual-csv',stablePasses:2,recordCount:1,totalCents:cents,independentTotalCents:String(cents),duplicatePolicy:'x',limitations:[]}} as unknown as Snapshot;
   return {...body,id:snapshotId(body)};
 }
-const audit=(snapshot:Snapshot,status:'passed'|'failed',checkedAt='2025-03-02T00:00:00Z')=>({snapshotId:snapshot.id,status,checkedAt});
-async function serving<T>(db:DB,fn:(base:string,port:number)=>Promise<T>){
-  const server=createApp(db,0);await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const port=(server.address() as AddressInfo).port;
+async function serving<T>(root:string,fn:(base:string,port:number)=>Promise<T>){
+  const server=createApp(root,0);await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const port=(server.address() as AddressInfo).port;
   try{return await fn(`http://127.0.0.1:${port}`,port);}finally{await new Promise(r=>server.close(r));}
 }
 const rawGet=(port:number,target:string)=>new Promise<string>((resolve,reject)=>{const s=net.connect(port,'127.0.0.1',()=>s.write(`GET ${target} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n`));let out='';s.on('data',d=>out+=d);s.on('end',()=>resolve(out));s.on('error',reject);});
 
-test('a malformed request target gets 400 and the server keeps answering',async()=>{
-  const db=await openDB(true);
-  try{await serving(db,async(base,port)=>{
-    assert.match(await rawGet(port,'//'),/^HTTP\/1\.1 400/);
-    assert.equal((await fetch(base+'/api/status')).status,200);
-    assert.equal((await fetch(base+'/portraits/999.jpg')).status,404);
-  });}finally{await db.close();}
-});
-test('only versions with a passing audit are served; an unaudited or failed one is never reachable, even by id',async()=>{
-  const db=await openDB(true),a=version(100),b=version(200);
-  try{
-    await publishDomain(db,'despesas',a);assert.equal(await servedPublication(db,'despesas'),null);assert.equal(await servedPublication(db,'despesas',a.id),null);
-    await recordDomainAudit(db,a.id,'passed',audit(a,'passed'));assert.equal((await servedPublication(db,'despesas'))?.snapshot.id,a.id);
-    await publishDomain(db,'despesas',b);
-    const stillA=await servedPublication(db,'despesas');assert.equal(stillA?.snapshot.id,a.id);assert.equal(stillA?.current,true);assert.equal(await servedPublication(db,'despesas',b.id),null);
-    await recordDomainAudit(db,b.id,'failed',audit(b,'failed'));assert.equal(await servedPublication(db,'despesas',b.id),null);assert.equal((await servedPublication(db,'despesas'))?.snapshot.id,a.id);
-    await recordDomainAudit(db,b.id,'passed',audit(b,'passed','2025-03-03T00:00:00Z'));assert.equal((await servedPublication(db,'despesas'))?.snapshot.id,b.id);
-    const pinned=await servedPublication(db,'despesas',a.id);assert.equal(pinned?.snapshot.id,a.id);assert.equal(pinned?.current,false);
-    await recordDomainAudit(db,a.id,'failed',audit(a,'failed','2025-03-04T00:00:00Z'));assert.equal(await servedPublication(db,'despesas',a.id),null);
-    await serving(db,async base=>{
-      assert.equal((await fetch(`${base}/api/spending?snapshot=${a.id}`)).status,503);assert.equal((await fetch(`${base}/api/export?snapshot=${a.id}`)).status,503);
-      const body=await (await fetch(base+'/api/spending')).json();assert.equal(body.snapshotId,b.id);assert.equal(body.current,true);assert.equal(body.externalReconciliation.status,'passed');
-    });
-  }finally{await db.close();}
+test('the static server answers bad requests, stays inside its folder and hides _headers',async()=>{
+  const parent=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-static-')),root=path.join(parent,'dist');
+  await fs.mkdir(root);await fs.writeFile(path.join(root,'index.html'),'ok');await fs.writeFile(path.join(root,'_headers'),'/*\n  X-Test: 1\n');await fs.writeFile(path.join(parent,'secret.txt'),'x');
+  try{await serving(root,async(base,port)=>{
+    assert.match(await rawGet(port,'//'),/^HTTP\/1\.1 (400|404)/);
+    const home=await fetch(base+'/');assert.equal(home.status,200);assert.equal(home.headers.get('x-test'),'1');
+    assert.match(await rawGet(port,'/../secret.txt'),/^HTTP\/1\.1 404/);assert.match(await rawGet(port,'/%2e%2e/secret.txt'),/^HTTP\/1\.1 404/);
+    assert.equal((await fetch(base+'/_headers')).status,404);assert.equal((await fetch(base+'/index.html',{method:'POST'})).status,405);
+  });}finally{await fs.rm(parent,{recursive:true,force:true});}
 });
 test('a lock owned by a dead process is taken over; a live owner keeps it',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-lock-')),file=path.join(dir,'pilot.lock');

@@ -25,3 +25,10 @@ export function csv(rows:Expense[]):string {
   const cell=(value:unknown)=>{let text=String(value??'');if(typeof value==='string'&&/^[\s=+@\-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
   return '\uFEFF'+[['id_ocorrencia','id_deputado','ano','mes','categoria','fornecedor','documento','valor_centavos','origem','sha256_origem','posicao_origem','fonte_do_registro'],...rows.map(r=>[r.id,r.personId,r.year,r.month,r.category,r.supplier,r.documentId,r.cents,r.source.url,r.source.sha256,r.source.row,originLabel(r)])].map(row=>row.map(cell).join(';')).join('\r\n');
 }
+export type PublicIndex=Omit<Snapshot,'records'|'id'|'pages'>&{snapshotId:string;withoutData:number[];audit:unknown};
+// A deputy with no published file is unavailable, which is different from having spent nothing.
+export function personView(index:PublicIndex,records:Expense[]|null,params:URLSearchParams){
+  if(!records)return null;
+  const snapshot={...index,id:index.snapshotId,pages:[],records};
+  return results(snapshot,parseFilters(params,snapshot));
+}

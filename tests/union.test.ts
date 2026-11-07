@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {strToU8,zipSync} from 'fflate';
 import {unionRecords,removedRecords,annualSnapshot,HeldPublication} from '../src/annual.ts';
-import {csv} from '../src/queries.ts';
+import {csv} from '../src/view.ts';
 import type {Expense,Scope,Snapshot} from '../src/model.ts';
 
 let n=0;
