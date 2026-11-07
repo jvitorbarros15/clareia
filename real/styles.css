@@ -711,3 +711,12 @@ body[data-model=editorial] .search-form:hover .search-submit{filter:brightness(1
 @media (prefers-reduced-motion:reduce){body[data-model=editorial] .search-form,body[data-model=editorial] .search-submit .icon{transition:none}body[data-model=editorial] .search-form:hover{transform:none}body[data-model=editorial] .search-form:hover .search-submit .icon{transform:none}}
 
 body[data-model=editorial] #despesas [data-p="all-suppliers"]{display:flex;width:fit-content;margin:18px 0 22px;font-weight:600}
+
+/* Section dock: hovering a link darkens it and draws a lighter underline from the left; the current section keeps the full one. */
+body[data-model=editorial] .section-dock a{transition:color 180ms var(--ease-out)}
+body[data-model=editorial] .section-dock a:after{transform-origin:left center}
+body[data-model=editorial] .section-dock a:hover,body[data-model=editorial] .section-dock a:focus-visible{color:var(--ink)}
+body[data-model=editorial] .section-dock a:not(.current):hover:after,body[data-model=editorial] .section-dock a:not(.current):focus-visible:after{transform:scaleX(1);background:color-mix(in srgb,var(--accent) 40%,var(--bg))}
+body[data-model=editorial] .motion-toggle{transition:color 180ms var(--ease-out)}
+body[data-model=editorial] .motion-toggle:hover{color:var(--ink)}
+@media (prefers-reduced-motion:reduce){body[data-model=editorial] .section-dock a,body[data-model=editorial] .section-dock a:after{transition:none}}
