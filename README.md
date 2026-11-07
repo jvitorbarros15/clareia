@@ -33,9 +33,6 @@ Abra http://127.0.0.1:4173/?modelo=editorial. Os outros modelos continuam acess�
 - [Design e UX](<for agents/DESIGN-UI-UX.md>)
 - [Mapas e gráficos: implementado e próximos passos](<for agents/MAPAS-E-GRAFICOS.md>)
 - [Proposta de stack futura](<for agents/STACK-TECNICA.md>)
-- [Plano de coleta e atualização contínua](<for agents/PLANO-COLETA-E-ATUALIZACAO.md>)
-- [Plano de ingestão e qualidade dos dados oficiais](<for agents/PLANO-DADOS-REAIS.md>)
-- [Matriz de validação dos dados reais — a implementar](<for agents/MATRIZ-DE-VALIDACAO.md>)
 - [MVP, funcionalidades e verificação](mvp/README.md)
 
 O MVP é HTML/CSS/JavaScript sem build. A coleta e o backend reais usam TypeScript; a migração visual para React/Next.js continua proposta. Favoritos do MVP ficam somente no navegador. Não há envio de notificações nem agendamento de produção instalado.
