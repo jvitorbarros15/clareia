@@ -27,18 +27,13 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:clareia@localhost:5432/postgres
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET: ${{ secrets.R2_BUCKET }}
-      CLAREIA_VAULT_KEY: ${{ secrets.CLAREIA_VAULT_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Install Postgres 17 client
         run: |
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
@@ -46,23 +41,48 @@ jobs:
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
       - name: Restore database
         id: restore
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          CLAREIA_VAULT_KEY: ${{ secrets.CLAREIA_VAULT_KEY }}
         run: npm run db:state -- restore
       - name: Collect if a source changed
         id: collect
         env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          CLAREIA_VAULT_KEY: ${{ secrets.CLAREIA_VAULT_KEY }}
           CPF_HASHES_FILE: ${{ runner.temp }}/cpf-hashes
         run: npm run collect -- --if-changed
       - name: Audit new version
         if: steps.collect.outputs.changed == 'true' && vars.PUBLISH_ENABLED == 'true'
-        run: npm run verify:annual
+        env:
+          PUBLICATION: ${{ steps.collect.outputs.publication }}
+        run: npm run verify:annual -- --publication "$PUBLICATION"
       - name: Build site
+        id: build
         if: steps.collect.outputs.changed == 'true'
         run: npm run build:site
       - name: Scan for CPF
+        id: scan
         if: steps.collect.outputs.changed == 'true'
         run: |
           pg_dump --format=plain --file="$RUNNER_TEMP/dump.sql" "$DATABASE_URL"
           npm run scan:cpf -- dist "$RUNNER_TEMP/dump.sql" --known "$RUNNER_TEMP/cpf-hashes"
+      # A failed audit or collection is saved on purpose, so it is not retried 3x a day.
+      # A failed build or CPF scan is not: the next run starts from the previous copy and fails again, loudly.
       - name: Save database
-        if: always() && steps.restore.outcome == 'success' && steps.collect.outputs.changed == 'true'
+        if: >-
+          !cancelled() && steps.restore.outcome == 'success' && steps.collect.outputs.changed == 'true'
+          && steps.build.outcome != 'failure' && steps.scan.outcome != 'failure'
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          CLAREIA_VAULT_KEY: ${{ secrets.CLAREIA_VAULT_KEY }}
         run: npm run db:state -- save
