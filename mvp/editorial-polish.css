@@ -4,7 +4,6 @@
 @font-face{font-family:"Caveat";src:url(assets/fonts/caveat-latin.woff2) format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
 
 /* Text floor: every rule below 12px raised for the editorial model. :where() keeps the original specificity, so file order decides. */
-:where(body[data-model=editorial]) .prototype-bar{font-size:13px}
 :where(body[data-model=editorial]) .demo-badge{font-size:13px}
 :where(body[data-model=editorial]) .suggestions p{font-size:12px}
 :where(body[data-model=editorial]) .eyebrow{font-size:13px}
@@ -249,7 +248,7 @@ body[data-model=editorial] .editorial-feature p{max-width:none}
 /* Closing panel on the accent field: full-strength white text instead of translucent tints (was 3.0–4.2:1). */
 body[data-model=editorial] :is(#perguntar .p-kicker,.closing-top>p,.trust-row>div>span,.trust-row p,#perguntar>.p-link){opacity:1}
 
-/* Round 2: shared scale is fixed in JS; here the editorial details below the fold. */
+/* shared scale is fixed in JS; here the editorial details below the fold. */
 body[data-model=editorial] .linked-totals>div{border-left:0;border-top:3px solid;padding:14px 0 0}
 body[data-model=editorial] .dossier-num{display:none}
 body[data-model=editorial] .project-topic{text-transform:none;letter-spacing:0;font-size:14px;font-weight:600}
@@ -257,12 +256,10 @@ body[data-model=editorial] :is(.project-top>span,.vote-card-head>span:first-chil
 body[data-model=editorial] :is(.project-top>span,.vote-card-head>span:first-child)::first-letter{text-transform:uppercase}
 body[data-model=editorial] .trust-row>div>span{display:none}
 
-/* Round 3 (phone): the dossier grid reserved a column for the hidden number; collapse it. */
+/* the dossier grid reserved a column for the hidden number; collapse it. */
 @media(max-width:560px){
 body[data-model=editorial] .dossier-card:nth-child(n){display:flex;flex-direction:column;min-height:0}
-/* The floating assistant shrinks to its mark so it covers less of the reading column. */
-body[data-model=editorial] .assistant-launcher>span:not(.assistant-spark),body[data-model=editorial] .assistant-launcher>svg{display:none}
-body[data-model=editorial] .assistant-launcher{width:52px;height:52px;padding:0;justify-content:center}
+body[data-model=editorial] .assistant-launcher{justify-content:center}
 body[data-model=editorial] .compare-category{grid-template-columns:62px 1fr 76px 1fr 62px;gap:6px}
 body[data-model=editorial] .compare-category>span{white-space:nowrap}
 body[data-model=editorial] .linked-chart-body svg{min-width:620px}
@@ -272,11 +269,11 @@ body[data-model=editorial] .linked-chart-body svg{min-width:620px}
 body[data-model=editorial] :is(.header-search,.project-save,.follow-button,.text-button,.value-button,.swap-button){position:relative}
 body[data-model=editorial] :is(.header-search,.project-save,.follow-button,.text-button,.value-button,.swap-button)::after{content:"";position:absolute;inset:50% auto auto 50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
 
-/* Round 4: a dead-end answer now offers questions the sample can answer. */
+/* a dead-end answer now offers questions the sample can answer. */
 .answer-next{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px}
 .answer-next>span{font-size:13px;color:var(--muted)}
 
-/* Round 5: motion. Each move passed Emil's gate (frequency, purpose, budget, function).
+/* motion.
    Hero sequence: first view only (rare), the editorial signature. The portrait opens like a page, the note is "written". */
 body[data-model=editorial]{--ease-in-out:cubic-bezier(.77,0,.175,1);--ease-drawer:cubic-bezier(.32,.72,0,1)}
 @keyframes ed-rise{from{opacity:0;transform:translateY(18px)}}
@@ -312,10 +309,10 @@ body[data-model=editorial] .detail-dialog{transform:translateY(100%)}
 body[data-model=editorial][data-motion=off] .detail-dialog{transform:none}
 @media(prefers-reduced-motion:reduce){body[data-model=editorial] .detail-dialog{transform:none}}
 
-/* Round 6: every section opens with a heading; the overview strip gets a real one. */
+/* every section opens with a heading; the overview strip gets a real one. */
 body[data-model=editorial] .p-overview-title{margin:0;font:400 clamp(26px,3vw,34px)/1.1 var(--serif);letter-spacing:-.02em}
 
-/* Round 7. The live thing: choose who the headline is about. */
+/* The live thing: choose who the headline is about. */
 body[data-model=editorial] .feature-switch{display:flex;align-items:center;gap:6px;margin-top:22px;flex-wrap:wrap}
 body[data-model=editorial] .feature-switch>span{font-size:13px;color:var(--muted);margin-right:4px}
 body[data-model=editorial] .feature-switch button{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:5px 14px 5px 5px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:14px;font-weight:600}
@@ -337,10 +334,9 @@ body[data-model=editorial] .editorial-rank .tabs::after{content:"";position:abso
 body[data-model=editorial] .p-overview-sentence .p-stat{padding:0!important;border:0!important}
 body[data-model=editorial] .p-overview-sentence .p-stat strong{margin:0;font-size:inherit;letter-spacing:inherit;line-height:inherit;white-space:nowrap}
 /* A profile without a portrait reads as a monogram, not an empty box. */
-body[data-model=editorial] .editorial-card .initials{margin-left:22%;width:78%;font:400 76px/1 var(--serif);letter-spacing:-.03em;color:var(--accent);background:var(--soft)}
-@media(max-width:560px){body[data-model=editorial] .editorial-card .initials{margin-left:34%;width:66%;font-size:44px}}
+body[data-model=editorial] .editorial-card .initials{margin-left:auto;width:min(58%,160px);height:auto;aspect-ratio:1;align-self:flex-end;border-radius:50%;font:400 clamp(32px,3.6vw,48px)/1 var(--serif);letter-spacing:-.03em;color:var(--muted);background:color-mix(in srgb,var(--ink) 5%,var(--bg))}
 
-/* Round 8: numbers are hidden in the closing trust row, so its cells are plain stacks (fixes heading/body overlap on phone). */
+/* numbers are hidden in the closing trust row, so its cells are plain stacks (fixes heading/body overlap on phone). */
 body[data-model=editorial] .trust-row>div{display:block}
 body[data-model=editorial] .trust-row h3{margin:0 0 8px}
 body[data-model=editorial] .trust-row p{max-width:34ch}
@@ -388,7 +384,6 @@ body[data-model=editorial] .dossier-card>:last-child{margin-top:auto;padding-top
 body[data-model=editorial] .atlas-grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);border:0}
 body[data-model=editorial] .map-canvas{padding:32px}
 body[data-model=editorial] .uf-map{display:block;width:100%;max-width:640px;height:auto;margin:8px auto 0}
-body[data-model=editorial] .uf-tile text{font-size:14px}
 body[data-model=editorial] .uf-tile.strong text{fill:var(--on-accent)}
 body[data-model=editorial] .atlas-detail{padding:32px 0 32px 40px}
 @media (max-width:760px){
@@ -412,7 +407,7 @@ body[data-model=editorial] .saved-empty h3{font:400 28px/1.15 var(--serif);lette
   body[data-model=editorial] .linked-chart-body::before{content:"Deslize para ver o ano todo →";display:block;position:sticky;left:0;font-size:13px;color:var(--muted);margin-bottom:8px}
 }
 
-/* Round 9. Reading floor 13px for older readers (month buttons and chart labels stay 12px: they share fixed space). */
+/* Reading floor 13px for older readers (month buttons and chart labels stay 12px: they share fixed space). */
 body[data-model=editorial] :is(td,th,.p-description,.bar-name,.topic-tabs button,.project-top>span,.project-author span,.dossier-foot,.timeline-event time,.p-badge,.p-link,.closing-questions button,.footer-links :is(a,button),.map-key span,.compare-controls label,.p-metric button,.follow-button,.directory-heading>span,.records-note,.vote-tally span,.vote-card-head span,.compare-category :is(span,b),.saved-heading span,.saved-empty p,.closing-top p,.footer-brand p,.footer-disclaimer :is(p,span),.map-topline :is(span,button),.map-select,.range-heading output,.category-path span,.comparison-center :is(p,button),.voter-control span,.p-overview-head>span,.editorial-subtitle,.donut-hole small,.donut-legend small,.donut-legend strong,.donut-legend span){font-size:13px}
 
 /* Touch: every control reaches 44px, by size or by an invisible hit area. */
@@ -431,7 +426,7 @@ body[data-model=editorial] .follow-button{min-width:44px;min-height:44px;color:v
 @media (hover:hover) and (pointer:fine){.follow-button:not(.is-following):hover .heart{stroke:#d93a4a}}
 body[data-model=editorial] .follow-button.is-following:not(:has(.heart+*)){background:none;border-color:transparent}
 
-/* Round 10: invisible hit areas for chart points and range thumbs; tab row reaches 44px. */
+/* invisible hit areas for chart points and range thumbs; tab row reaches 44px. */
 body[data-model=editorial] .chart-point{stroke:transparent;stroke-width:20px;pointer-events:visiblePainted}
 body[data-model=editorial] input[type=range]{height:44px;margin:0}
 body[data-model=editorial] .editorial-rank .tabs button{min-height:44px}
@@ -465,7 +460,7 @@ body[data-model=editorial] .comparison-center .vs{display:none}
 body[data-model=editorial] .p-badge{border:0;padding:0;background:none;border-radius:0;color:var(--muted)}
 body[data-model=editorial] .section-dock a::before{content:"";position:absolute;inset:-14px -6px}
 
-/* Round 12. Scope chip sits inline under the search, not over content. */
+/* Scope chip sits inline under the search, not over content. */
 body[data-model=editorial] .scope-chip{position:static;display:inline-flex;margin:16px 0 0;box-shadow:none;animation:none}
 body[data-model=editorial] .scope-chip[hidden]{display:none}
 body[data-model=editorial] .dossier-tag{align-self:flex-start;margin-bottom:12px;padding:4px 10px;border-radius:999px;background:var(--bg);font-size:13px;font-weight:600;color:var(--muted)}
@@ -473,7 +468,7 @@ body[data-model=editorial] .line-label{font:600 14px var(--sans)}
 body[data-model=editorial] .header-search{position:relative}
 body[data-model=editorial] .header-search::before{content:"";position:absolute;inset:-12px}
 
-/* Round 13. One proof-link voice everywhere: sans, accent, underlined, arrow. */
+/* One proof-link voice everywhere: sans, accent, underlined, arrow. */
 body[data-model=editorial] :is(.text-button,.p-link,.comparison-center button,[data-action=answer-evidence]){font:600 15px/1.3 var(--sans);color:var(--accent);background:none;border:0;padding:0;border-radius:0;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:5px;min-height:44px;display:inline-flex;align-items:center;gap:6px;box-shadow:none}
 @media (hover:hover) and (pointer:fine){body[data-model=editorial] :is(.text-button,.p-link,.comparison-center button,[data-action=answer-evidence]):hover{text-decoration-thickness:2px;filter:none;background:none}}
 /* Outras gets its own lightness (warm sand), so three categories never read as two. */
@@ -490,18 +485,15 @@ body[data-model=editorial] :is(#votacoes,#dimensoes,#acompanhar) .p-section-intr
 }
 @media (max-width:760px){body[data-model=editorial] .topic-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px}body[data-model=editorial] .topic-tabs button{flex:none}}
 
-/* Round 14. Secondary sections open on the headline alone; the closer ends on questions, not a feature trio. */
+/* Secondary sections open on the headline alone; the closer ends on questions, not a feature trio. */
 body[data-model=editorial] :is(#votacoes,#dimensoes,#acompanhar) .p-section-intro .p-kicker{display:none}
 body[data-model=editorial] #perguntar .trust-row{display:none}
 @media (max-width:560px){body[data-model=editorial] .feature-switch{flex-wrap:nowrap}body[data-model=editorial] .feature-switch>span{display:none}body[data-model=editorial] .feature-switch button{padding-right:10px;font-size:13px}}
 
-/* Round 15. Past the hero the assistant launcher folds to its mark, so it stops covering content. */
-body[data-model=editorial].past-hero .assistant-launcher>span:not(.assistant-spark),body[data-model=editorial].past-hero .assistant-launcher>svg{display:none}
-body[data-model=editorial].past-hero .assistant-launcher{width:52px;height:52px;padding:0;justify-content:center}
-/* A missing photo is a quiet monogram, not a loud block. */
-body[data-model=editorial] .editorial-card .initials{background:color-mix(in srgb,var(--ink) 5%,var(--bg));color:var(--muted);font-size:clamp(40px,5vw,64px)}
+/* Past the hero the assistant launcher folds to its mark, so it stops covering content. */
+body[data-model=editorial].past-hero .assistant-launcher{justify-content:center}
 
-/* Round 16 restructure. Comparison continues the directory instead of opening a new chapter. */
+/* Comparison continues the directory instead of opening a new chapter. */
 body[data-model=editorial] #comparacao{padding-top:40px}
 body[data-model=editorial] #comparacao .p-section-intro{border-top:0;padding-top:0}
 body[data-model=editorial] #comparacao .p-section-intro .p-kicker{display:none}
@@ -520,7 +512,7 @@ body[data-model=editorial] .bar-section .bar-row{display:grid;grid-template-colu
 body[data-model=editorial] .bar-section .bar-row .avatar{width:40px;height:40px;border-radius:50%;overflow:hidden}
 body[data-model=editorial] .bar-section .bar-name{font-size:16px;font-weight:600}
 body[data-model=editorial] .bar-section .bar-value{font:400 22px/1 var(--serif);text-align:right}
-@media (max-width:560px){body[data-model=editorial] .bar-section .bar-row{grid-template-columns:28px 36px minmax(0,1fr) auto}body[data-model=editorial] .bar-section .track{display:none}}
+@media (max-width:560px){body[data-model=editorial] .bar-section .bar-row{grid-template-columns:28px 36px minmax(0,1fr) auto}}
 body[data-model=editorial] .bar-section .bar-row .avatar{display:block!important;grid-column:2}
 body[data-model=editorial] .bar-section .bar-name{grid-column:3;white-space:nowrap}
 body[data-model=editorial] .bar-section .track{grid-column:4;display:block;height:8px}
@@ -528,7 +520,7 @@ body[data-model=editorial] .bar-section .bar-value{grid-column:5;font-weight:400
 @media (max-width:560px){body[data-model=editorial] .bar-section .bar-value{grid-column:4}}
 @media (max-width:560px){body[data-model=editorial] .bar-section .track{display:none}}
 
-/* Round 17. The demonstration band now starts at Votações: votes, uncovered dimensions and following share one tone. */
+/* The demonstration band now starts at Votações: votes, uncovered dimensions and following share one tone. */
 body[data-model=editorial] #votacoes{background:color-mix(in srgb,var(--ink) 3%,var(--bg));margin:80px calc(50% - 50vw) 0;padding:56px calc(50vw - 50%) 24px}
 body[data-model=editorial] #votacoes .p-section-intro{border-top:0;padding-top:0}
 body[data-model=editorial] #dimensoes{margin-top:0;padding-top:40px}
@@ -544,28 +536,27 @@ body[data-model=editorial] .assistant-launcher,body[data-model=editorial].past-h
 body[data-model=editorial] .assistant-launcher>span:not(.assistant-spark),body[data-model=editorial].past-hero .assistant-launcher>span:not(.assistant-spark){display:inline!important;font-size:14px}
 body[data-model=editorial] .assistant-launcher>svg,body[data-model=editorial].past-hero .assistant-launcher>svg{display:none}
 
-/* Round 18 floors: remaining 12px labels to 13px, last sub-44px controls, room for the launcher at page end. */
+/* remaining 12px labels to 13px, last sub-44px controls, room for the launcher at page end. */
 body[data-model=editorial] :is(.supplier-list button>span,.supplier-list button small,.supplier-list button>b,.atlas-people button small,.compare-person p,.project-author span small,.your-vote span small,.linked-totals small,.timeline-event p){font-size:13px}
 body[data-model=editorial] :is(.atlas-people>div>button,.linked-chart-body details>summary){min-height:44px}
 body[data-model=editorial] .chart-hit{cursor:pointer}
 body[data-model=editorial]{padding-bottom:80px}
+/* Full-bleed bands use 100vw, which includes a classic scrollbar; clip (not hidden) keeps sticky elements working. */
+body[data-model=editorial]{overflow-x:clip}
 
-/* Round 19. Phone hero answers first: the figure and its sentence come before the portrait. */
+/* Phone hero answers first: the figure and its sentence come before the portrait. */
 @media (max-width:560px){
   body[data-model=editorial] .editorial-feature{order:3;padding:20px 0 8px}
   body[data-model=editorial] .editorial-handwritten{order:4}
   body[data-model=editorial] .hero-portrait{order:5;aspect-ratio:3/2}
-  body[data-model=editorial]:not(.past-hero) .assistant-launcher{opacity:0;pointer-events:none;transform:translateY(8px)}
-  body[data-model=editorial] .assistant-launcher{transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
+  body[data-model=editorial]:not(.past-hero) .assistant-launcher{opacity:0;visibility:hidden;pointer-events:none;transform:translateY(8px);transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out),visibility 0s linear 200ms}
+  body[data-model=editorial] .assistant-launcher{transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out),visibility 0s}
 }
 body[data-model=editorial] .tenure-note{margin:6px 0 0;font-size:13px;color:#8a4b00}
 body[data-model=editorial] .is-out{font:500 14px var(--sans)!important;color:var(--muted)}
-/* Missing portrait: a modest monogram that doesn't outgrow the photos or collide with the rank numeral. */
-body[data-model=editorial] .editorial-card .initials{margin-left:auto;width:58%;aspect-ratio:1;font-size:clamp(32px,3.6vw,48px);border-radius:50%;align-self:flex-end}
 @media (max-width:760px){body[data-model=editorial] .topic-tabs{-webkit-mask-image:linear-gradient(90deg,#000 80%,transparent);mask-image:linear-gradient(90deg,#000 80%,transparent);padding-right:48px}}
-body[data-model=editorial] .editorial-card .initials{width:min(58%,160px);height:auto;aspect-ratio:1}
 
-/* Round 20. Categories get their own hues; blue and navy stay reserved for people. */
+/* Categories get their own hues; blue and navy stay reserved for people. */
 body[data-model=editorial]{--cat1:#1d7a6e;--cat2:#a8741a;--cat3:#5d6470}
 /* The proof dialog speaks the page's language: serif figures and title. */
 body[data-model=editorial] #detail-title{font:400 clamp(26px,3vw,34px)/1.1 var(--serif);letter-spacing:-.02em}
