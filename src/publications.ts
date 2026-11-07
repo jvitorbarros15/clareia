@@ -34,6 +34,8 @@ export async function publishDomain(db:DB,domain:Domain,snapshot:Snapshot):Promi
     else{
       const stored=await db.query<Row>('SELECT domain,body FROM publications WHERE id=$1',[snapshot.id]);
       if(snapshotId({...stored.rows[0].body,records:await readRecords(db,snapshot.id)})!==snapshot.id)throw new Error('Versão já publicada com o mesmo identificador e conteúdo diferente; publicação recusada');
+      // The source can go back to older content: seeing it again makes it the newest observation.
+      await db.query(`UPDATE publications SET seq=nextval(pg_get_serial_sequence('publications','seq')) WHERE id=$1`,[snapshot.id]);
     }
     const check=await db.query<{count:string;total:string}>('SELECT count(*)::text AS count, coalesce(sum(amount_cents),0)::text AS total FROM expenses_v2 WHERE publication_id=$1',[snapshot.id]);
     if(Number(check.rows[0].count)!==records.length||check.rows[0].total!==snapshot.validation.independentTotalCents)throw new Error('Reconciliação SQL independente falhou');

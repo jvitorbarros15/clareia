@@ -33,6 +33,15 @@ test('a passing audit makes the newest publication active, and re-auditing an ol
   await recordDomainAudit(db,a.id,'passed',{checkedAt:'2030-01-01T00:00:00Z'});
   assert.equal((await activePublication(db,'despesas'))?.id,b.id);
 }));
+test('when the source goes back to older content, that content becomes the newest and wins its next audit',()=>withDB(async db=>{
+  const a=version([record(100)]),b=version([record(200)]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',passed);
+  await publishDomain(db,'despesas',b);await recordDomainAudit(db,b.id,'passed',passed);
+  await publishDomain(db,'despesas',a);
+  assert.equal((await latestPublication(db,'despesas'))?.id,a.id);
+  await recordDomainAudit(db,a.id,'passed',passed);
+  assert.equal((await activePublication(db,'despesas'))?.id,a.id);
+}));
 test('a failed votacoes publication does not change despesas',()=>withDB(async db=>{
   const a=version([record(100)]),v=version([record(300)]);
   await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',passed);

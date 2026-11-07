@@ -10,7 +10,9 @@ import {withLock} from '../src/lock.ts';
 
 // Reads the database directly: a version must be auditable before the site is allowed to serve it. Stop the server first.
 const withDB=<T>(task:(db:Awaited<ReturnType<typeof openDB>>)=>Promise<T>)=>withLock(async()=>{const db=await openDB();try{return await task(db);}finally{await db.close();}});
-const {initial,runId}=await withDB(async db=>{const latest=await latestPublication(db,'despesas'),initial=latest&&await readPublication(db,latest.id);if(!initial)throw new Error('Nenhuma versão publicada para conferir');const run=await db.query<{id:string}>(`SELECT id FROM publication_runs WHERE publication_id=$1 AND status='published' ORDER BY finished_at DESC LIMIT 1`,[initial.id]);if(!run.rows[0])throw new Error('Nenhuma execução publicada produziu esta versão');return {initial,runId:run.rows[0].id};});
+// CI passes the version its own collection produced; without it, the newest version is audited.
+const wanted=process.argv.indexOf('--publication');
+const {initial,runId}=await withDB(async db=>{const id=wanted>=0?process.argv[wanted+1]:(await latestPublication(db,'despesas'))?.id,initial=id&&await readPublication(db,id);if(!initial)throw new Error('Nenhuma versão publicada para conferir');const run=await db.query<{id:string}>(`SELECT id FROM publication_runs WHERE publication_id=$1 AND status='published' ORDER BY finished_at DESC LIMIT 1`,[initial.id]);if(!run.rows[0])throw new Error('Nenhuma execução publicada produziu esta versão');return {initial,runId:run.rows[0].id};});
 const snapshotId=initial.id,records=initial.records.filter(r=>r.origin!=='api'),apiOnly=initial.records.length-records.length;
 // The run's own copy: the file on the Câmara site changes, and the audit is about what this version was built from.
 const directory=path.join('data/runs',runId),source=JSON.parse(await fs.readFile(path.join(directory,'annual-2.meta.json'),'utf8'));

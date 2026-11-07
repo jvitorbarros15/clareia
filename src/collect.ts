@@ -15,7 +15,7 @@ import {archiveRun,runKey,vaultKey} from './vault.ts';
 
 const resumeIndex=process.argv.indexOf('--resume');
 const onlyIfChanged=process.argv.includes('--if-changed');
-const output=async(changed:boolean)=>{if(process.env.GITHUB_OUTPUT)await fs.appendFile(process.env.GITHUB_OUTPUT,`changed=${changed}\n`);};
+const output=async(name:string,value:string|boolean)=>{if(process.env.GITHUB_OUTPUT)await fs.appendFile(process.env.GITHUB_OUTPUT,`${name}=${value}\n`);};
 // The first thing to fail in a misconfigured job must be the key, before anything is collected.
 const store=storeFromEnv(),key=store?vaultKey():null;
 const archive=async(directory:string,runId:string)=>{
@@ -33,7 +33,7 @@ try{
   annual=await fingerprint(annualUrl(scope.year));
   if(onlyIfChanged){
     const changed=(await changedSources(db,[annual])).length>0;
-    await output(changed);
+    await output('changed',changed);
     if(!changed){console.log('Nenhuma fonte mudou.');return;}
   }
   await fs.mkdir(directory,{recursive:true});
@@ -52,6 +52,7 @@ try{
   await archive(directory,runId);
   await recordSource(db,annual,sha256,runKey(runId,'annual-2.csv.zip'));
   await db.query('UPDATE publication_runs SET status=$2,finished_at=now(),publication_id=$3 WHERE id=$1',[runId,'published',snapshot.id]);
+  await output('publication',snapshot.id);
   await fs.writeFile(manifestPath,JSON.stringify({runId,scope,status:'published',startedAt:start,finishedAt:new Date().toISOString(),snapshotId:snapshot.id,pages:snapshot.pages,validation:snapshot.validation},null,2));
   console.log(JSON.stringify({status:'published',snapshotId:snapshot.id,records:snapshot.records.length,totalCents:snapshot.validation.totalCents,pages:snapshot.pages.length},null,2));
 }catch(error){
