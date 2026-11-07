@@ -3,6 +3,8 @@ on:
   schedule:
     - cron: '0 9,16,0 * * *'
   workflow_dispatch:
+  push:
+    branches: [infra/static-publication]
 permissions:
   contents: read
 concurrency:
