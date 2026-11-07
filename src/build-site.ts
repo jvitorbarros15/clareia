@@ -53,7 +53,9 @@ export async function buildSite(db:DB,outDir:string,portraitsDir:string):Promise
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
   await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,audit:await publicationAudit(db,active.id)}));
   await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base,domains}));
-  for(const file of ['index.html','app.js','styles.css','_headers'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
+  for(const file of ['index.html','data.js','app.js','portal.js','styles.css','_headers'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
+  await fs.mkdir(path.join(outDir,'fonts'));
+  for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
   checkLimits(files.length,Math.max(...sizes));
