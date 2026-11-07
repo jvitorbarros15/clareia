@@ -1,50 +1,37 @@
 # Clareia
 
-Portal de investigação cidadã sobre política brasileira. Protótipo em português com três direções visuais: **Investigação**, **Explorador** e **Editorial**.
+Portal de transparência sobre deputados federais, com dados oficiais conferidos: despesas da cota parlamentar (CEAP) hoje; votações, projetos, eleições e emendas nas próximas etapas.
 
-**O MVP visual em `mvp/` usa dados fictícios.** A busca demonstrativa usa regras locais, sem IA conectada. Não usar esses exemplos como informação sobre pessoas reais.
+Todo número publicado passa por uma releitura independente do arquivo oficial antes de entrar no site. Fornecedores pessoa física aparecem só como "Fornecedor pessoa física", e o site e o banco são varridos em busca de CPF antes de cada gravação.
 
-Há também um **[piloto com dados oficiais](real/README.md)** em `real/`, separado do MVP: TypeScript, PostgreSQL local, três deputados e dois meses de lançamentos CEAP. A fonte principal é o arquivo anual da Câmara, com discrepâncias da API documentadas.
+## Como funciona
 
-## Piloto real
+- **Coleta agendada** (`.github/workflows/collect.yml`): GitHub Actions, 3 vezes por dia. Restaura o banco de uma cópia cifrada no Cloudflare R2, coleta só se a fonte mudou, audita (quando `PUBLISH_ENABLED` está ligado), gera o site e salva o banco de novo.
+- **Versões por domínio** (`src/publications.ts`): cada coleta vira uma versão; só uma versão com auditoria aprovada fica ativa.
+- **Site estático** (`src/build-site.ts`, `real/`): gerado a partir da versão ativa, sem servidor nem banco online.
+
+## Executar localmente
+
+Node.js 22 ou superior:
 
 ```sh
 npm ci
 npm run collect
+npm run build:site
 npm run dev
 ```
 
-Abra http://127.0.0.1:4174. No workspace em que a coleta já foi feita, basta `npm run dev`. Encerre o servidor antes de uma nova coleta. Consulte [instruções, testes e limites](real/README.md).
-
-## Executar
-
-Com Node.js instalado, na raiz do repositório:
-
-```sh
-node mvp/server.mjs
-```
-
-Abra http://127.0.0.1:4173/?modelo=editorial. Os outros modelos continuam acessíveis pelos links no README do MVP.
-
-## Documentação
-
-- [Índice dos planos para agentes](<for agents/README.md>)
-- [Direção da plataforma](<for agents/DIRECAO-DA-PLATAFORMA.md>)
-- [Design e UX](<for agents/DESIGN-UI-UX.md>)
-- [Mapas e gráficos: implementado e próximos passos](<for agents/MAPAS-E-GRAFICOS.md>)
-- [Proposta de stack futura](<for agents/STACK-TECNICA.md>)
-- [MVP, funcionalidades e verificação](mvp/README.md)
-
-O MVP é HTML/CSS/JavaScript sem build. A coleta e o backend reais usam TypeScript; a migração visual para React/Next.js continua proposta. Favoritos do MVP ficam somente no navegador. Não há envio de notificações nem agendamento de produção instalado.
+Abra http://127.0.0.1:4174. Detalhes, recorte atual, conferências e limites: [real/README.md](real/README.md).
 
 ## Verificar
 
-Com o servidor ativo, Playwright e seu Chromium instalados:
-
 ```sh
-node mvp/verify.cjs
-node mvp/verify-portal.cjs
-node mvp/verify-discovery.cjs
+npm run typecheck
+npm test
+npm run verify:annual
+npm run verify:browser
 ```
 
-Os relatórios e screenshots são gerados em `output/qa/` e não são versionados. As referências visuais e a origem das imagens estão em `mvp/assets/README.md`.
+`verify:browser` precisa do servidor ativo e do Playwright com Chromium. Relatórios ficam em `output/qa/`, fora do Git.
+
+O protótipo visual com dados fictícios foi retirado; o último estado dele está na tag `mvp-final`.
