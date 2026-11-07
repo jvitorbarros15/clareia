@@ -30,8 +30,16 @@ function pass(text){report.checks.push(text);console.log('PASS '+text);}
    const month=Number(await page.locator('#spend-range').inputValue());assert(month>1&&month<10);
    assert.equal(await page.evaluate(()=>window.originalRange===document.querySelector('#spend-range')),true);
    const expected=await page.evaluate(m=>window.Clareia.all().flatMap(p=>p.records).filter(r=>r.month<m&&r.category==='Divulgação').reduce((n,r)=>n+r.amount,0),month);
-   await page.locator('.donut-legend [data-p-category="Divulgação"]').click();
-   assert.match(await page.locator('#detail .calculation-result').innerText(),new RegExp(expected.toLocaleString('pt-BR').replaceAll('.','\\.')));
+   const expectedText=new RegExp(expected.toLocaleString('pt-BR').replaceAll('.','\\.'));
+   if(model==='editorial'){
+    const shown=await page.locator('#despesas .supplier-list button').evaluateAll(bs=>bs.map(b=>[b.dataset.category,b.dataset.pSupplier,b.querySelector('b').textContent]));
+    const actual=await page.evaluate(m=>{const rows=window.Clareia.all().flatMap(p=>p.records).filter(r=>r.month<m),seen=new Map();for(const r of rows){const k=r.category+'|'+r.supplier;seen.set(k,(seen.get(k)||0)+r.amount);}return [...seen].map(([k,v])=>[...k.split('|'),window.Clareia.compact(v)]);},month);
+    assert.deepEqual([...shown].sort(),[...actual].sort(),'supplier list is one row per category and supplier');
+    await page.locator('.category-path [data-p-drill="Divulgação"]').click();
+    assert.match(await page.locator('#detail .calculation-result').innerText(),expectedText);
+    await page.locator('#detail [data-p-supplier]').first().click();
+   }else await page.locator('.donut-legend [data-p-category="Divulgação"]').click();
+   assert.match(await page.locator('#detail .calculation-result').innerText(),expectedText);
    assert.equal(await page.locator('#detail tbody tr').count(),Math.min(month,12)*3+Math.min(month,3)+Math.min(month,6));
    await close();
    await page.locator('[data-p-uf=BA]').focus();await page.keyboard.press('Enter');
@@ -44,6 +52,21 @@ function pass(text){report.checks.push(text);console.log('PASS '+text);}
    await page.locator('#roster-query').fill('Carla');assert.match(await page.locator('.directory-card h3').innerText(),/Carla/);
    await page.locator('#roster-uf').selectOption('SP');assert.equal(await page.locator('.directory-card').count(),0);
    await page.locator('[data-p=clear-directory]').click();assert.equal(await page.locator('.directory-card').count(),5);
+   const points=page.locator('#comparacao .chart-point');
+   for(let i=0;i<await points.count();i++){
+    const p=points.nth(i);await p.scrollIntoViewIfNeeded();const box=await p.boundingBox(),id=await p.getAttribute('data-id');
+    await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
+    const first=await page.evaluate(id=>window.Clareia.person(id).name.split(' ')[0],id);
+    assert.match(await page.locator('#detail-title').innerText(),new RegExp('Registros de '+first),`${model} chart point ${i} opens ${first}`);await close();
+   }
+   const boxes=await points.evaluateAll(ps=>ps.map(p=>{const r=p.getBoundingClientRect();return {id:p.dataset.id,x:r.x+r.width/2,y:r.y+r.height/2};}));
+   for(const b of boxes)for(const [dx,dy] of [[13,0],[-13,0],[0,13],[0,-13]]){
+    const x=b.x+dx,y=b.y+dy,near=[...boxes].sort((m,n)=>Math.hypot(m.x-x,m.y-y)-Math.hypot(n.x-x,n.y-y))[0];
+    if(Math.abs(Math.hypot(near.x-x,near.y-y)-13)<1&&near.id!==b.id)continue;
+    await page.mouse.click(x,y);assert.equal(await page.locator('#detail').evaluate(d=>d.open),true,`${model} click near point opens a dialog`);
+    const first=await page.evaluate(id=>window.Clareia.person(id).name.split(' ')[0],near.id);
+    assert.match(await page.locator('#detail-title').innerText(),new RegExp('Registros de '+first),`${model} click near point opens nearest person ${first}`);await close();
+   }
    await page.locator('#pessoas [data-p-add-compare=carla]').click();assert.equal(await page.locator('#compare-a').inputValue(),'carla');
    await page.locator('#compare-b').selectOption('ana');
    await page.locator('[data-p=compare-evidence]').click();assert.match(await page.locator('#detail').innerText(),model==='investigacao'?/37,5%/:/50%/);await close();
@@ -57,10 +80,10 @@ function pass(text){report.checks.push(text);console.log('PASS '+text);}
    await page.locator('[data-p=clear-projects]').click();await page.locator('#project-stage').selectOption('Aprovado na Câmara');assert.equal(await page.locator('.project-card').count(),1);
    await page.locator('#voter').selectOption('diego');assert.deepEqual(await page.locator('.your-vote strong').allTextContents(),['Não','Ausente','Sim']);
    await page.locator('[data-p-vote=v2]').click();assert.equal(await page.locator('.vote-rollcall>div').count(),5);assert.match(await page.locator('#detail').innerText(),/Ausência e abstenção/);await close();
-   for(const [key,expected] of [['trajectory',/84.320/],['assets',/580 mil/],['amendments',/450 mil/],['suppliers',/registros fictícios/]]){await page.locator(`[data-p-dossier=${key}]`).click();assert.match(await page.locator('#detail').innerText(),expected);await close();}
+   for(const [key,expected] of [['trajectory',/84.320/],['assets',/580 mil/],['amendments',/450 mil/],['suppliers',/registros fictícios/]].filter(([key])=>model!=='editorial'||key!=='suppliers')){await page.locator(`[data-p-dossier=${key}]`).click();assert.match(await page.locator('#detail').innerText(),expected);await close();}
    await page.locator('#timeline-person').selectOption('carla');assert.match(await page.locator('.timeline-event').last().innerText(),/RJ/);
    await page.locator('[data-p=brief]').click();assert.match(await page.locator('#detail').innerText(),/Ana Martins/);await close();
-   await page.locator('[data-p=assistant]').click();await page.locator('#assistant-query').fill('Compare Ana e Bruno em 2025');await page.locator('#assistant-form button').click();assert.match(await page.locator('.answer-summary').innerText(),/33,3%/);
+   await page.locator('[data-p=assistant]').click();if(model==='editorial'){assert.equal(await page.evaluate(()=>document.activeElement.id),'query');await page.locator('#query').fill('Compare Ana e Bruno em 2025');await page.locator('#query').press('Enter');}else{await page.locator('#assistant-query').fill('Compare Ana e Bruno em 2025');await page.locator('#assistant-form button').click();}assert.match(await page.locator('.answer-summary').innerText(),/33,3%/);
    await page.locator('[data-p=coverage]').click();assert.match(await page.locator('#detail').innerText(),/24 delas não têm dados/);await close();
    await page.locator('[data-p=reset-saved]').click();assert.equal(await page.locator('#saved-count').innerText(),'');assert.equal(await page.locator('.saved-projects>b').innerText(),'0');
    for(const width of [360,390,768,1280]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${model} overflow ${width}`);}

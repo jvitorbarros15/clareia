@@ -47,7 +47,8 @@ const checked = label => { report.checks.push(label); console.log('PASS ' + labe
       await open(model);
       assert.equal(await first(), 'ana');
       assert.equal(await page.locator('.rank-card').count(), 3);
-      assert.equal(await page.locator('.model-links [aria-current=page]').innerText(), { investigacao: '01 · Investigação', explorador: '02 · Explorador', editorial: '03 · Editorial' }[model]);
+      assert.equal(await page.locator('body').getAttribute('data-model'), model);
+      assert.equal(await page.locator('.prototype-bar').count(), 0);
       await screenshot(model + '-desktop');
       for (const width of [360, 390, 768]) {
         await page.setViewportSize({ width, height: 844 });
@@ -55,10 +56,10 @@ const checked = label => { report.checks.push(label); console.log('PASS ' + labe
         if (width === 390) await screenshot(model + '-mobile');
       }
       await page.setViewportSize({ width: 1280, height: 1000 });
-      await page.locator('[data-metric=mensal]').click();
+      await page.locator('.metric-toggle [data-metric=mensal]').click();
       assert.equal(await first(), 'diego');
       assert.match(await page.locator('.rank-card').first().innerText(), /30 mil/);
-      await page.locator('[data-metric=total]').click();
+      await page.locator('.metric-toggle [data-metric=total]').click();
       await page.locator('[data-tab=projetos]').click();
       assert.equal(await first(), 'carla');
       assert.match(await page.locator('.rank-card').first().innerText(), /32/);
@@ -103,11 +104,11 @@ const checked = label => { report.checks.push(label); console.log('PASS ' + labe
       assert.match(await page.locator('.answer-summary').innerText(), /Bruno Costa lidera/);
       assert.match(await page.locator('.answer-row').first().innerText(), /90 mil/);
       await page.locator('[data-filter=year]').selectOption('2024');
-      await page.locator('[data-metric=mensal]').click();
+      await page.locator('.metric-toggle [data-metric=mensal]').click();
       const shared = page.url();
       await page.goto(shared);
       assert.equal(await page.locator('[data-filter=year]').inputValue(), '2024');
-      assert.equal(await page.locator('[data-metric=mensal]').getAttribute('aria-pressed'), 'true');
+      assert.equal(await page.locator('.metric-toggle [data-metric=mensal]').getAttribute('aria-pressed'), 'true');
       assert.match(await page.locator('.answer').innerText(), /2024/);
 
       for (const [query, expected] of [

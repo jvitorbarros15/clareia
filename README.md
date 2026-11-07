@@ -24,7 +24,7 @@ Com Node.js instalado, na raiz do repositório:
 node mvp/server.mjs
 ```
 
-Abra http://127.0.0.1:4173 e escolha o modelo no topo. Também é possível abrir `mvp/index.html` diretamente; o servidor oferece comportamento mais consistente para links e armazenamento local.
+Abra http://127.0.0.1:4173/?modelo=editorial. Os outros modelos continuam acessíveis pelos links no README do MVP.
 
 ## Documentação
 
