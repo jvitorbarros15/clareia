@@ -85,3 +85,8 @@ test('a refund or different face row cannot switch the document ceiling off',()=
   const r=review([...pair(1,'100'),...pair(2,'100'),...refund]);
   assert.equal(r.holds.length,1);assert.equal(r.holds[0].reason,'over-document-limit');assert.equal(r.blockedKeys.size,6);
 });
+
+test('rows of one document ID with different faces are separate budgets and are not held together',()=>{
+  const other=pair(2,'50').map(i=>i.kind==='annual'?{...i,raw:{...i.raw,vlrDocumento:'50'}}:{...i,raw:{...i.raw,valorDocumento:50}});
+  const r=review([...pair(1,'100'),...other]);assert.equal(r.holds.length,0);assert.equal(r.blockedKeys.size,0);
+});
