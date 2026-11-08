@@ -515,6 +515,58 @@ check('low-res portrait', async () => {
   }
 });
 
+check('logo is vector', async () => {
+  const page = await at(1440);
+  const logos = await page.evaluate(() => ['.site-header .logo', '.footer .logo'].map(sel => {
+    const logo = document.querySelector(sel);
+    const all = [logo, ...logo.querySelectorAll('*')];
+    return {
+      sel,
+      inlineSvg: !!logo.querySelector('svg[aria-label="Clareia"]'),
+      textNodes: logo.querySelectorAll('text').length + (logo.textContent.trim() ? 1 : 0),
+      arial: all.filter(el => /arial/i.test(getComputedStyle(el).fontFamily)).map(el => el.tagName),
+    };
+  }));
+  for (const l of logos) {
+    assert.ok(l.inlineSvg, `${l.sel}: inline svg with aria-label="Clareia"`);
+    assert.equal(l.textNodes, 0, `${l.sel}: wordmark is outlines, not text`);
+    assert.deepEqual(l.arial, [], `${l.sel}: no element computes Arial`);
+  }
+  await page.close();
+});
+
+check('map starts neutral', async () => {
+  for (const width of [1440, 390]) {
+    const page = await at(width);
+    const data = await published(page);
+    const state = await page.evaluate(async () => {
+      const manifest = await fetch('/manifest.json').then(r => r.json());
+      const index = await fetch(`/${manifest.base}/index.json`).then(r => r.json());
+      return {
+        uf: Object.fromEntries(index.people.map(p => [p.id, p.uf])),
+        selected: document.querySelectorAll('.uf-tile.selected, .uf-tile[aria-pressed=true]').length,
+        detail: document.querySelector('#atlas-detail').innerText.replace(/\s+/g, ' '),
+        tiles: [...document.querySelectorAll('.uf-tile.has-data')].map(t => ({ uf: t.dataset.pUf, lines: [...t.querySelectorAll('text')].map(x => x.textContent.trim()) })),
+      };
+    });
+    assert.equal(state.selected, 0, `no tile selected on load at ${width}`);
+    assert.match(state.detail, /Escolha um estado/, `prompt at ${width}`);
+    const byUf = {};
+    for (const p of data.people) byUf[state.uf[p.id]] = (byUf[state.uf[p.id]] || 0) + p.records.reduce((n, r) => n + r.cents, 0);
+    assert.ok(state.tiles.length > 0, 'tiles with data exist');
+    for (const t of state.tiles) {
+      const expected = clean(brlCompact(byUf[t.uf])).replace(/^R\$ /, '');
+      assert.deepEqual(t.lines, [t.uf, expected], `${t.uf} tile shows its compact value at ${width}`);
+    }
+    await page.locator('[data-p-uf=SP]').click();
+    assert.equal(await page.locator('.uf-tile.selected').count(), 1, 'clicking a tile selects it');
+    await page.locator('[data-p=map-reset]').click();
+    assert.equal(await page.locator('.uf-tile.selected').count(), 0, 'reset returns to neutral');
+    assert.match(await text(page.locator('#atlas-detail')), /Escolha um estado/);
+    await page.close();
+  }
+});
+
 check('launcher at 390', async () => {
   const page = await at(390);
   const shown = () => page.evaluate(() => { const l = document.querySelector('.assistant-launcher'), s = getComputedStyle(l); return s.visibility !== 'hidden' && parseFloat(s.opacity) > 0.05; });
@@ -554,6 +606,57 @@ check('hero value affordance', async () => {
   assert.equal(await page.evaluate(() => document.activeElement.id), 'total');
   await page.waitForTimeout(250);
   assert.match(await underline(), /underline/, 'underline on focus');
+  await page.close();
+});
+
+check('closing band', async () => {
+  const page = await at(1440);
+  const band = await page.evaluate(() => {
+    const el = document.querySelector('#perguntar');
+    const b = el.getBoundingClientRect();
+    const rects = [...el.querySelectorAll('h2, p, button, h3, a')].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
+    return { text: el.innerText, left: b.left, right: b.right, rects: rects.map(r => ({ left: r.left, right: r.right })) };
+  });
+  assert.doesNotMatch(band.text, /\bAPI\b/, 'no "API" in the closing copy');
+  const mid = (band.left + band.right) / 2, half = (band.right - band.left) / 2;
+  const rightHalf = band.rects.filter(r => r.left >= mid - 1);
+  assert.ok(rightHalf.length > 0, 'right half has content');
+  assert.ok(Math.max(...rightHalf.map(r => r.right)) >= band.right - 0.12 * half, 'right half content reaches the band edge');
+  assert.ok(Math.min(...band.rects.map(r => r.left)) < mid, 'left half has content');
+  await page.close();
+});
+
+check('mobile comparison', async () => {
+  const page = await at(390);
+  const m = await page.evaluate(() => {
+    const board = document.querySelector('.comparison-board');
+    const people = [...board.querySelectorAll('.compare-person')].map(e => e.getBoundingClientRect());
+    const lines = el => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return new Set([...range.getClientRects()].map(r => Math.round(r.top / 4))).size;
+    };
+    const lineCount = el => {
+      const cs = getComputedStyle(el);
+      const lh = cs.lineHeight === 'normal' ? parseFloat(cs.fontSize) * 1.25 : parseFloat(cs.lineHeight);
+      return Math.round(el.getBoundingClientRect().height / lh);
+    };
+    const section = document.querySelector('#comparacao').getBoundingClientRect();
+    const cats = [...document.querySelectorAll('.compare-category')];
+    const overflow = cats.flatMap(c => [...c.children].filter(k => k.getBoundingClientRect().right > section.right + 0.5).map(k => k.textContent.trim()));
+    return {
+      stacked: people[1].top >= people[0].bottom - 1,
+      totals: [...board.querySelectorAll('.compare-total')].map(e => ({ text: e.innerText.replace(/\s+/g, ' '), lines: lines(e) })),
+      labels: cats.map(c => ({ text: c.querySelector('b').innerText, lines: lineCount(c.querySelector('b')) })),
+      overflow,
+      scroll: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  assert.ok(m.stacked, 'the two people stack');
+  for (const t of m.totals) assert.equal(t.lines, 1, `arrow stays on the value line: ${t.text}`);
+  for (const l of m.labels) assert.ok(l.lines <= 2, `category label ≤ 2 lines: ${l.text} (${l.lines})`);
+  assert.deepEqual(m.overflow, [], 'category values stay inside the section');
+  assert.ok(m.scroll <= 0, 'no horizontal scroll');
   await page.close();
 });
 
