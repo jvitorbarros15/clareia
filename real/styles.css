@@ -776,3 +776,11 @@ circle.donut-segment:focus-visible{stroke-width:19px;stroke:var(--accent)}
 .donut-adjustment{font:400 12px/1.6 var(--sans);color:var(--muted);text-align:center;margin:0 0 16px;padding:0 8px}
 body[data-model=editorial] .donut-legend button.is-preview{opacity:1;background:color-mix(in srgb,var(--cat) 8%,var(--bg))}
 @media(prefers-reduced-motion:reduce){.donut-segment{transition:none}.donut-segment[aria-pressed=true],.donut-segment.is-preview{transform:none}}
+
+/* A small saved-count token, separate from the navigation label. */
+body[data-model=editorial] .section-dock .follow-nav{gap:9px}
+.follow-count{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:34px;height:23px;padding:0 8px;border-radius:999px;background:linear-gradient(135deg,#edf2ff,#dce6ff);color:#2450c7;border:1px solid #c9d8ff;box-shadow:2px 2px 0 #164bff0a;font:600 11px/1 var(--sans);font-variant-numeric:tabular-nums;transition:background 180ms ease,color 180ms ease,box-shadow 180ms ease}
+.follow-count svg{flex:none;width:11px;height:11px}
+.follow-count:has(#saved-count:empty){display:none}
+.follow-nav:hover .follow-count,.follow-nav:focus-visible .follow-count{background:var(--accent);border-color:var(--accent);color:var(--on-accent);box-shadow:0 3px 9px #164bff24}
+@media(prefers-reduced-motion:reduce){.follow-count{transition:none}}

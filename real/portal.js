@@ -195,7 +195,7 @@
   const sections = [['panorama',overview],['despesas',spending],['atlas',atlas],['pessoas',directory],['comparacao',comparison],['projetos',projectSection],['votacoes',voteSection],['dimensoes',moreSection],['acompanhar',following],['perguntar',closing]];
   function mount() {
     const main=$('#main');
-    main.insertAdjacentHTML('afterbegin',`<div class="page-progress" aria-hidden="true"><i></i></div><nav class="section-dock" aria-label="Seções da página"><a href="#rankings">Rankings</a><a href="#despesas">${editorial?'Gastos':'Despesas'}</a><a href="#atlas">Mapa</a>${editorial?'':'<a href="#comparacao">Comparar</a>'}<a href="#projetos">Projetos</a><a href="#votacoes">Votações</a><a href="#acompanhar">Acompanhar <span id="saved-count">${state.favorites.size||''}</span></a></nav>`);
+    main.insertAdjacentHTML('afterbegin',`<div class="page-progress" aria-hidden="true"><i></i></div><nav class="section-dock" aria-label="Seções da página"><a href="#rankings">Rankings</a><a href="#despesas">${editorial?'Gastos':'Despesas'}</a><a href="#atlas">Mapa</a>${editorial?'':'<a href="#comparacao">Comparar</a>'}<a href="#projetos">Projetos</a><a href="#votacoes">Votações</a><a href="#acompanhar" class="follow-nav">Acompanhar <span class="follow-count" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg><span id="saved-count">${state.favorites.size||''}</span></span></a></nav>`);
     main.insertAdjacentHTML('beforeend',`<div class="full-portal">${sections.map(([id,render])=>`<section class="p-section" id="${id}">${render()}</section>`).join('')}</div>`);
     $('.footer').innerHTML=`<div class="footer-brand"><span class="logo">clareia<svg class="brand-rays" viewBox="0 0 25 30" aria-hidden="true"><path d="M5 8 8 3M10 13l8-3M11 19l9 2M6 23l4 5"/></svg></span><p>Entenda. Confira. Acompanhe.</p></div><div class="footer-links"><a href="#despesas">Gastos por categoria</a><a href="#comparacao">Comparar</a><button data-action="methodology">Fontes e metodologia</button><button data-p="coverage">Cobertura da amostra</button><button data-p="reset-saved">Apagar favoritos locais</button></div><div class="footer-disclaimer"><span>Versão ${C.span()}</span><p>Dados oficiais da Câmara dos Deputados, ${C.span()}. Amostra técnica, não representa toda a Câmara. Busca por regras locais, sem IA conectada.</p><button data-p="top">Voltar ao topo ↑</button></div>`;
     document.body.insertAdjacentHTML('beforeend',`<button class="assistant-launcher" data-p="assistant" aria-label="${editorial?'Fazer uma pergunta na busca':'Abrir assistente de investigação'}"><span class="assistant-spark" aria-hidden="true">✳</span><span>${editorial?'Fazer uma pergunta':'Pergunte ao Clareia'}</span>${icon('arrow')}</button>`);
@@ -228,7 +228,18 @@
     $('#spend-range').setAttribute('aria-valuetext',`Janeiro a ${months[state.month-1]} de ${C.state.year}`);
   }
   function updateAll() { sections.forEach(([id,render])=>renderPart(id,render));watchMotion(); }
-  function updateSaved() { renderPart('acompanhar',following);$('#saved-count').textContent=state.favorites.size||'';document.querySelectorAll('[data-p-follow]').forEach(b=>{const on=state.favorites.has(b.dataset.pFollow);b.setAttribute('aria-pressed',on);b.classList.toggle('is-following',on);if(b.classList.contains('follow-button')){const full=b.textContent.trim().length>2;b.innerHTML=`<svg class="heart" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg>${full?on?'Acompanhando':'Acompanhar':''}`;b.setAttribute('aria-label',`${on?'Deixar de acompanhar':'Acompanhar'} ${C.person(b.dataset.pFollow).name}`);}});watchMotion(); }
+  function updateFollowCount() {
+    const count = $('#saved-count'), n = state.favorites.size;
+    const changed = count.textContent !== String(n || '');
+    count.textContent = n || '';
+    const link = count.closest('a');
+    link.setAttribute('aria-label', n ? `Acompanhar: ${n} representante${n === 1 ? '' : 's'} acompanhado${n === 1 ? '' : 's'}` : 'Acompanhar representantes');
+    if (changed && n && state.motion && !reduced.matches) count.parentElement.animate(
+      [{ transform: 'scale(.85)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' }],
+      { duration: 260, easing: 'ease-out' }
+    );
+  }
+  function updateSaved() { renderPart('acompanhar',following);updateFollowCount();document.querySelectorAll('[data-p-follow]').forEach(b=>{const on=state.favorites.has(b.dataset.pFollow);b.setAttribute('aria-pressed',on);b.classList.toggle('is-following',on);if(b.classList.contains('follow-button')){const full=b.textContent.trim().length>2;b.innerHTML=`<svg class="heart" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg>${full?on?'Acompanhando':'Acompanhar':''}`;b.setAttribute('aria-label',`${on?'Deixar de acompanhar':'Acompanhar'} ${C.person(b.dataset.pFollow).name}`);}});watchMotion(); }
   function focusMatch(selector) { $(selector)?.focus({preventScroll:true}); }
   function expenseEvidence(category, supplier) {
     const items=scopeRecords().filter(r=>(!category||r.category===category)&&(!supplier||r.supplier===supplier)), total=C.sum(items);
@@ -292,7 +303,7 @@
       case 'assistant':if(editorial){$('#query').scrollIntoView({block:'center',behavior:state.motion?'smooth':'instant'});$('#query').focus({preventScroll:true});}else assistant();break;
       case 'top':window.scrollTo({top:0,behavior:state.motion?'smooth':'instant'});break;
       case 'coverage':C.showDialog('Cobertura desta versão',`<div class="text-content"><h3>Uma amostra pequena, declarada.</h3><p>${C.all().length} deputados, ${C.span()}, despesas da cota parlamentar com dados oficiais da Câmara. Amostra técnica, sem ranking nacional.</p><p>UF, partido, projetos, votações, eleições, patrimônio e emendas ainda não foram coletados; as seções aparecem com o aviso “ainda não coletado”.</p><p>A busca usa regras locais, sem IA conectada. Favoritos ficam só neste navegador.</p></div>`);break;
-      case 'reset-saved':state.favorites.clear();state.projects.clear();save('clareia-favorites',[]);save('clareia-projects',[]);updateAll();$('#saved-count').textContent='';C.toast('Favoritos locais apagados.');break;
+      case 'reset-saved':state.favorites.clear();state.projects.clear();save('clareia-favorites',[]);save('clareia-projects',[]);updateAll();updateFollowCount();C.toast('Favoritos locais apagados.');break;
     }
   });
   document.addEventListener('input',e=>{
@@ -348,4 +359,5 @@
     }
   });
   mount();
+  updateFollowCount();
 })();
