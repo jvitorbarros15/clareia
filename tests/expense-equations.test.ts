@@ -79,3 +79,9 @@ test('installments on an unusable document number have no ceiling to confirm and
 test('one complete occurrence of a document is not held by the ceiling',()=>{
   const r=review(pair(1,'100'));assert.equal(r.holds.length,0);assert.equal(r.blockedKeys.size,0);
 });
+
+test('a refund or different face row cannot switch the document ceiling off',()=>{
+  const refund=pair(3,'-20').map(i=>i.kind==='annual'?{...i,raw:{...i.raw,vlrDocumento:'-20'}}:{...i,raw:{...i.raw,valorDocumento:-20}});
+  const r=review([...pair(1,'100'),...pair(2,'100'),...refund]);
+  assert.equal(r.holds.length,1);assert.equal(r.holds[0].reason,'over-document-limit');assert.equal(r.blockedKeys.size,6);
+});

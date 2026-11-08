@@ -86,13 +86,16 @@ export async function auditPeopleDiscovery(report:DiscoveryReport,read:(source:C
   }
   const candidates=sorted(new Set([...sets.period,...sets.legislature,...sets.combined,...financial.keys()])).map(id=>({id,inPeriodList:sets.period.has(id),inLegislatureList:sets.legislature.has(id),inCombinedList:sets.combined.has(id),annualYears:sorted(financial.get(id)||[]),classification:sets.period.has(id)?'historical-list':financial.has(id)?'financial-only':sets.legislature.has(id)?'legislature-only':'combined-list-only'}));
   if(canonical(candidates)!==canonical(report.candidates))failures.push('candidate-universe');
+  const expectedSamples=[...new Set([...report.scope.sampleIds,...candidates.filter(c=>c.classification==='financial-only'||c.classification==='combined-list-only').map(c=>c.id)])].sort((a,b)=>a-b);
+  if(canonical(report.samples.map(s=>s.id).sort((a,b)=>a-b))!==canonical(expectedSamples))failures.push('sample-universe');
   for(const sample of report.samples){
     const original=histories.get(sample.id);
     if(!original){failures.push('sample-history-missing-'+sample.id);continue;}
     const fields=['id','idLegislatura','dataHora','situacao','condicaoEleitoral','siglaPartido','siglaUf','descricaoStatus'],projected=original.map(e=>Object.fromEntries(fields.map(k=>[k,e[k]])));
     if(canonical(projected)!==canonical(sample.events))failures.push('sample-events-'+sample.id);
-    const later=original.some(e=>Number(e.idLegislatura)>report.scope.legislature&&typeof e.dataHora==='string'&&e.dataHora.slice(0,10)<=report.scope.end);
-    if(later!==sample.issues.includes('later-legislature-event-before-scope-cutoff'))failures.push('sample-issues-'+sample.id);
+    const stamps=original.map(e=>e.dataHora).filter((d):d is string=>typeof d==='string'),realDay=(d:string)=>{const t=new Date(d.slice(0,10)+'T00:00:00Z');return !Number.isNaN(t.getTime())&&t.toISOString().slice(0,10)===d.slice(0,10);};
+    const expectedIssues=[...(!original.length?['empty-history']:[]),...(stamps.some((d,i)=>i>0&&d<stamps[i-1])?['source-not-chronological']:[]),...(original.some(e=>typeof e.dataHora!=='string'||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?$/.test(e.dataHora)||!realDay(e.dataHora))?['invalid-or-missing-history-date']:[]),...(original.some(e=>Number(e.idLegislatura)>report.scope.legislature&&typeof e.dataHora==='string'&&e.dataHora.slice(0,10)<=report.scope.end)?['later-legislature-event-before-scope-cutoff']:[])].sort();
+    if(canonical(expectedIssues)!==canonical([...sample.issues].sort()))failures.push('sample-issues-'+sample.id);
   }
   if(findCpfs(JSON.stringify(report),privateIds))failures.push('private-identifier-in-report');
   return {schema:'clareia.people-discovery-audit.v1',status:failures.length?'failed':'passed',checkedAt:new Date().toISOString(),reportSha256:hash(canonical(report)),candidates:candidates.length,failures,note:'Conferência independente dos conjuntos e índices de identidade nas capturas preservadas. Não aprova exercício, atribuição temporal, valores financeiros ou publicação pública.'};

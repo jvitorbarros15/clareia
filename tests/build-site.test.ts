@@ -159,3 +159,12 @@ test('a summary that disagrees with the approved total or leaves the scope is re
   assert.throws(()=>buildSiteSummary(summaryInput([record(100,1,0)],101)),/total aprovado/);
   assert.throws(()=>buildSiteSummary(summaryInput([{...record(100,1,0),month:2}],100)),/recorte/);
 });
+
+test('tampered active coverage stops the build before the previous output is deleted',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const known=coverageVersion('PL');await storePeopleCoverage(db,known);await recordDomainAudit(db,known.id,'passed',report);
+  await buildSite(db,dist,portraits);const before=await tree(dist);
+  await db.query(`UPDATE people_coverage_v1 SET record=jsonb_set(record,'{party}','"XX"') WHERE publication_id=$1`,[known.id]);
+  await assert.rejects(buildSite(db,dist,portraits),/difere da versão aprovada/);
+  assert.deepEqual(await tree(dist),before);
+}));

@@ -146,3 +146,10 @@ test('a blank party event does not erase a real transition across it',async t=>{
   const statuses=compareLegacy(legacy,h,temporal).people[0].partyChanges.map(c=>c.status);
   assert.ok(!statuses.includes('legacy-only-change'));assert.ok(!statuses.includes('v2-only-change'));
 });
+
+test('events conflicting at the same moment end the known party, unlike an all-blank event',async t=>{
+  const base=await setup(t),h=structuredClone(base.h);
+  for(const p of h.people)p.events=[p.events[0],{...p.events[0],dataHora:'2025-06-01T09:00:00',siglaPartido:'PSD'},{...p.events[0],dataHora:'2025-06-01T09:00:00',siglaPartido:'PL'},p.events[1]];
+  const temporal=deriveTemporalHistory(h),legacy=structuredClone(base.legacy);legacy.historySha256=hash(canonical(h));
+  assert.ok(!compareLegacy(legacy,h,temporal).people[0].partyChanges.some(c=>c.status==='same-day-time-differs'&&c.day==='2025-11-13'));
+});

@@ -40,7 +40,7 @@ export function reviewExpenseEquations(scope:Scope,inputs:EquationInput[]){
     const withinBudget=knownBudget&&groupNet<=BigInt(face!)-BigInt(glosa!);
     const members=inputGroups.get(group)!;
     // The ceiling is a property of the document, so it does not depend on parcela.
-    const overDocument=(['annual','api'] as const).some(kind=>{const rows=bucket[kind],first=rows[0];return new Set(rows.map(p=>p.signature)).size>1&&first.face!==null&&first.glosa!==null&&rows.every(p=>p.face===first.face&&p.glosa===first.glosa&&p.net>=0)&&rows.reduce((sum,p)=>sum+BigInt(p.net),0n)>BigInt(first.face)-BigInt(first.glosa);});
+    const overDocument=(['annual','api'] as const).some(kind=>{const rows=bucket[kind],first=rows[0];if(new Set(rows.map(p=>p.signature)).size<2||rows.some(p=>p.face===null||p.glosa===null))return false;const ceiling=rows.reduce((max,p)=>{const room=BigInt(p.face!)-BigInt(p.glosa!);return room>max?room:max;},BigInt(first.face!)-BigInt(first.glosa!));return rows.reduce((sum,p)=>sum+BigInt(p.net),0n)>ceiling;});
     if(overDocument||members.some(hasInstallment)&&!withinBudget){
       for(const input of members)blockedKeys.add(equationKey(input));
       const sample=members[0];holds.push({personId:sample.personId,year:scope.year,documentKey:hash(group),months:[...new Set(members.map(i=>Number(i.kind==='annual'?i.raw.numMes:i.raw.mes)))].sort((a,b)=>a-b),annualKeys:members.filter(i=>i.kind==='annual').map(equationKey).sort(),apiKeys:members.filter(i=>i.kind==='api').map(equationKey).sort(),reason:knownBudget||overDocument?'over-document-limit':'document-group-unconfirmed'});continue;

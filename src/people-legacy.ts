@@ -94,7 +94,7 @@ export function compareLegacy(legacy:LegacyReport,history:HistoryReport,temporal
         else if(first>=start&&first<end||last&&last>=start&&last<end){periodRows.push(row);boundary=true;if(!['Titular','Suplente'].includes(period.situacaoExercicio))uncertain=true;}
       }
       const state=!data||uncertain?'unknown':interior?'reported-exercise':boundary?'boundary-only':'no-listed-period';
-      return {year:m.year,month:m.month,v2Exercise:m.exercise,legacy:state,periodRows,openEnd,comparison:state==='unknown'?'unavailable':interior&&m.exercise==='unknown'?'corroborating-unknown':interior&&m.exercise==='outside'||state==='no-listed-period'&&m.exercise==='full'?'potential-conflict':'no-automatic-resolution'};
+      return {year:m.year,month:m.month,v2Exercise:m.exercise,legacy:state,periodRows,openEnd,comparison:state==='unknown'?'unavailable':interior&&m.exercise==='unknown'?'corroborating-unknown':interior&&m.exercise==='outside'||state==='no-listed-period'&&(m.exercise==='full'||m.exercise==='partial')?'potential-conflict':'no-automatic-resolution'};
     });
     const partyComparisonStatus:'compared'|'unavailable'=data&&person.collectionStatus==='stable'&&!person.events.some(e=>e.disposition==='invalid-date'||e.disposition==='outside-legislature')?'compared':'unavailable';
     const partyChanges:CrosscheckParty[]=[],events=partyComparisonStatus==='compared'?person.events.filter(e=>e.disposition==='usable').sort((a,b)=>a.time!.localeCompare(b.time!)||a.row-b.row):[],changes:{row:number;time:string;precision:string;before:string;after:string}[]=[];
@@ -103,7 +103,7 @@ export function compareLegacy(legacy:LegacyReport,history:HistoryReport,temporal
     for(const time of [...new Set(events.map(e=>e.time!))]){
       const group=events.filter(e=>e.time===time),parties=[...new Set(group.map(e=>e.original.siglaPartido?.trim()||null))];
       const party=parties.length===1?parties[0]:null;
-      if(previous&&party&&previous!==party&&time.slice(0,10)>=legacy.scope.start&&time.slice(0,10)<=legacy.scope.end)changes.push({row:group[0].row,time,precision:group.some(e=>e.precision==='minute')?'minute':'second',before:previous,after:party});if(party)previous=party;
+      if(previous&&party&&previous!==party&&time.slice(0,10)>=legacy.scope.start&&time.slice(0,10)<=legacy.scope.end)changes.push({row:group[0].row,time,precision:group.some(e=>e.precision==='minute')?'minute':'second',before:previous,after:party});if(party)previous=party;else if(parties.length>1)previous=null;
     }
     const matched=new Set<number>();
     if(data&&partyComparisonStatus==='compared')for(const [row,a] of data.affiliations.entries()){

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {auditPeopleCoverage,buildPeopleCoverage,storePeopleCoverage} from '../src/people-publication.ts';
 import {canonical,hash} from '../src/model.ts';
-import {recordDomainAudit} from '../src/publications.ts';
+import {activePublication,recordDomainAudit} from '../src/publications.ts';
 import {openDB} from '../src/store.ts';
 
 const args=process.argv.slice(2),value=(name:string)=>{const i=args.indexOf(name);return i<0?'':args[i+1]??'';};
@@ -24,5 +24,5 @@ try{
   const audit=await auditPeopleCoverage(db,coverage.id,temporal,crosscheck);
   if(audit.status!=='passed'){console.error(JSON.stringify({id:coverage.id,failures:audit.failures.length}));process.exitCode=1;}
   else if(approve)await recordDomainAudit(db,coverage.id,'passed',{checkedAt:audit.checkedAt});
-  console.log(JSON.stringify({...report,stored:true,audit:audit.status,active:approve&&audit.status==='passed'},null,2));
+  console.log(JSON.stringify({...report,stored:true,audit:audit.status,active:(await activePublication(db,'pessoas'))?.id===coverage.id},null,2));
 }finally{await db.close();}
