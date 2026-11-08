@@ -102,7 +102,9 @@ export async function auditTemporalHistory(history:HistoryReport,temporal:Tempor
       return {row,original,...stamp,disposition};
     });
     if(canonical(normalized)!==canonical(result.events))failures.push({id:person.id,code:'temporal-event-provenance'});
-    const usable=normalized.filter(e=>e.disposition==='usable'),blocked=state!=='stable'||normalized.some(e=>e.disposition==='invalid-date'||e.disposition==='outside-legislature');
+    const usable=normalized.filter(e=>e.disposition==='usable'),foreignEvent=normalized.some(e=>e.disposition==='other-legislature'&&e.time!==null&&e.time>=windowStart&&e.time<windowEnd),blocked=foreignEvent||state!=='stable'||normalized.some(e=>e.disposition==='invalid-date'||e.disposition==='outside-legislature');
+    const expectedIssues=[...new Set([...person.issues,...(normalized.some(e=>e.disposition==='outside-legislature')?['selected-legislature-date-mismatch']:[]),...(foreignEvent?['other-legislature-event-in-window']:[])])].sort();
+    if(canonical(expectedIssues)!==canonical(result.issues))failures.push({id:person.id,code:'person-issues'});
     const stateAt=(time:string):State=>{
       if(blocked)return vacant();
       const previous=usable.filter(e=>e.time!<=time).sort((a,b)=>b.time!.localeCompare(a.time!))[0]?.time;
@@ -114,6 +116,10 @@ export async function auditTemporalHistory(history:HistoryReport,temporal:Tempor
     const expectedIntervals=boundaries.slice(0,-1).map((start,i)=>({start,end:boundaries[i+1],...stateAt(start)}));
     const actualIntervals=result.intervals.map(i=>({start:i.start,end:i.end,...Object.fromEntries(['exercise','party','uf'].map(k=>{const d=i[k as 'exercise'|'party'|'uf'];return [k,{status:d.status,value:d.value,rows:d.rows}];}))}));
     if(canonical(expectedIntervals)!==canonical(actualIntervals))failures.push({id:person.id,code:'interval-state-or-evidence'});
+    for(const interval of result.intervals){
+      const vacantBecause=blocked?'history-not-eligible-for-derivation':usable.some(e=>e.time!<=interval.start)?null:'no-prior-history-event';
+      if([interval.exercise,interval.party,interval.uf].some(d=>vacantBecause?canonical(d.reasons)!==canonical([vacantBecause]):d.status==='known'?d.reasons.length>0:d.reasons.length===0))failures.push({id:person.id,code:'interval-unknown-reason'});
+    }
     const expectedMonths=[];
     let cursor=new Date(history.scope.start.slice(0,7)+'-01T00:00:00Z');
     while(cursor.toISOString().slice(0,10)<=history.scope.end){

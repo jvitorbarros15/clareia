@@ -51,6 +51,7 @@ try{
     if(path.basename(source.file)!==source.file)throw new Error('Caminho de original inválido');
     return open(await fs.readFile(path.join(capture.directory,source.file)),key);
   });
+  if(audit.failures.includes('private-identifier-in-report'))throw new Error('Identificador privado no relatório');
   const versions=path.join(directory,'reports');await fs.mkdir(versions,{recursive:true});
   const oldReport=await fs.readFile(path.join(directory,'discovery.json'),'utf8').catch(()=>null);
   if(oldReport){const previous=JSON.parse(oldReport);await fs.writeFile(path.join(versions,hash(canonical(previous))+'.json'),oldReport);}

@@ -66,7 +66,10 @@ export function deriveTemporalPerson(person:HistoryPerson,report:Pick<HistoryRep
   });
   const issues=[...person.issues];
   if(events.some(e=>e.disposition==='outside-legislature'))issues.push('selected-legislature-date-mismatch');
-  const blocked=person.status!=='stable'||events.some(e=>e.disposition==='invalid-date'||e.disposition==='outside-legislature');
+  // An event dated in the window but filed under another legislature can carry a real change.
+  const foreignInWindow=events.some(e=>e.disposition==='other-legislature'&&e.time!==null&&e.time>=start&&e.time<end);
+  if(foreignInWindow)issues.push('other-legislature-event-in-window');
+  const blocked=foreignInWindow||person.status!=='stable'||events.some(e=>e.disposition==='invalid-date'||e.disposition==='outside-legislature');
   const references=new Set(report.references.states.map(s=>fold(s.nome)));
   const usable=events.filter(e=>e.disposition==='usable').sort((a,b)=>a.time!.localeCompare(b.time!)||a.row-b.row),groups=new Map<string,NormalizedEvent[]>();
   for(const e of usable)groups.set(e.time!,[...(groups.get(e.time!)||[]),e]);

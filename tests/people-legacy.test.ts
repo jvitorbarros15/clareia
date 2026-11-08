@@ -129,3 +129,20 @@ test('offline CLI resumes pinned inputs without network and refuses another hist
   const report=JSON.parse(await fs.readFile(path.join(legacyRoot,'legacy.json'),'utf8'));assert.deepEqual(report.people.map((p:any)=>p.status),['stable','stable']);
   await fs.writeFile(path.join(legacyRoot,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('EEXIST'));assert.equal(await fs.readFile(path.join(legacyRoot,'running.lock'),'utf8'),'keep');
 });
+
+test('a period of one or two days has no interior day and stays boundary-only',async t=>{
+  const r=await setup(t,id=>xml(id,period('15/03/2025','16/03/2025')));assert.equal(r.cross.people[0].months[2].legacy,'boundary-only');
+  assert.equal((await auditLegacy(r.legacy,r.cross,r.h,r.temporal,r.d,r.read)).status,'passed');
+});
+test('API full exercise with no listed XML period is a conflict, not agreement',async t=>{
+  const r=await setup(t,id=>xml(id,period('01/02/2023','31/12/2023')));const july=r.cross.people[0].months[6];
+  assert.equal(july.legacy,'no-listed-period');assert.equal(july.v2Exercise,'full');assert.equal(july.comparison,'potential-conflict');
+  assert.equal((await auditLegacy(r.legacy,r.cross,r.h,r.temporal,r.d,r.read)).status,'passed');
+});
+test('a blank party event does not erase a real transition across it',async t=>{
+  const base=await setup(t),h=structuredClone(base.h);
+  for(const p of h.people)p.events=[p.events[0],{...p.events[0],dataHora:'2025-06-01T09:00:00',siglaPartido:null},p.events[1]];
+  const temporal=deriveTemporalHistory(h),legacy=structuredClone(base.legacy);legacy.historySha256=hash(canonical(h));
+  const statuses=compareLegacy(legacy,h,temporal).people[0].partyChanges.map(c=>c.status);
+  assert.ok(!statuses.includes('legacy-only-change'));assert.ok(!statuses.includes('v2-only-change'));
+});

@@ -17,12 +17,15 @@ export async function auditPeopleDiscovery(report:DiscoveryReport,read:(source:C
   const privateIds=new Set<string>();
   const rememberCpf=(value:unknown)=>{if(typeof value!=='string')return;const digits=value.replace(/\D/g,'');if(digits.length===11)privateIds.add(hash(digits));};
   let contract=false;
+  const histories=new Map<number,Record<string,unknown>[]>();
   for(const source of report.sources){
     if(sourceUrls.has(source.url))throw new Error('Fonte duplicada no relatório');sourceUrls.add(source.url);
     const bytes=await read(source);
     if(hash(bytes)!==source.sha256||bytes.length!==source.bytes)throw new Error('Original da auditoria não corresponde à captura');
     const url=new URL(source.url);
-    if(source.url===BASE+'/api-docs'){contract=true;continue;}
+    if(source.url===BASE+'/api-docs'){const paths=JSON.parse(new TextDecoder().decode(bytes)).paths??{};contract=['/deputados','/deputados/{id}','/deputados/{id}/historico'].every(p=>paths[p]?.get);continue;}
+    const historyPath=url.origin==='https://dadosabertos.camara.leg.br'?/^\/api\/v2\/deputados\/(\d+)\/historico$/.exec(url.pathname):null;
+    if(historyPath){histories.set(Number(historyPath[1]),JSON.parse(new TextDecoder().decode(bytes)).dados??[]);continue;}
     if(url.origin==='https://dadosabertos.camara.leg.br'&&/^\/api\/v2\/deputados\/\d+$/.test(url.pathname)){
       const profile=JSON.parse(new TextDecoder().decode(bytes));rememberCpf(profile.dados?.cpf);
     }
@@ -83,6 +86,14 @@ export async function auditPeopleDiscovery(report:DiscoveryReport,read:(source:C
   }
   const candidates=sorted(new Set([...sets.period,...sets.legislature,...sets.combined,...financial.keys()])).map(id=>({id,inPeriodList:sets.period.has(id),inLegislatureList:sets.legislature.has(id),inCombinedList:sets.combined.has(id),annualYears:sorted(financial.get(id)||[]),classification:sets.period.has(id)?'historical-list':financial.has(id)?'financial-only':sets.legislature.has(id)?'legislature-only':'combined-list-only'}));
   if(canonical(candidates)!==canonical(report.candidates))failures.push('candidate-universe');
+  for(const sample of report.samples){
+    const original=histories.get(sample.id);
+    if(!original){failures.push('sample-history-missing-'+sample.id);continue;}
+    const fields=['id','idLegislatura','dataHora','situacao','condicaoEleitoral','siglaPartido','siglaUf','descricaoStatus'],projected=original.map(e=>Object.fromEntries(fields.map(k=>[k,e[k]])));
+    if(canonical(projected)!==canonical(sample.events))failures.push('sample-events-'+sample.id);
+    const later=original.some(e=>Number(e.idLegislatura)>report.scope.legislature&&typeof e.dataHora==='string'&&e.dataHora.slice(0,10)<=report.scope.end);
+    if(later!==sample.issues.includes('later-legislature-event-before-scope-cutoff'))failures.push('sample-issues-'+sample.id);
+  }
   if(findCpfs(JSON.stringify(report),privateIds))failures.push('private-identifier-in-report');
   return {schema:'clareia.people-discovery-audit.v1',status:failures.length?'failed':'passed',checkedAt:new Date().toISOString(),reportSha256:hash(canonical(report)),candidates:candidates.length,failures,note:'Conferência independente dos conjuntos e índices de identidade nas capturas preservadas. Não aprova exercício, atribuição temporal, valores financeiros ou publicação pública.'};
 }

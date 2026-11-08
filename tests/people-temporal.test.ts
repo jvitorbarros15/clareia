@@ -65,3 +65,13 @@ test('derivation remains staged and carries the exact input history version',()=
   const history={...context,schema:'clareia.people-history.v1',discoverySha256:'discovery',createdAt:'now',ruleVersion:'camara.history-reported-change.v1',status:'review-required',dateMeaning:'reported-change-not-independently-confirmed',people:[person([event()])],sources:[],coverage:{expected:1,stable:1,changed:0,failed:0}} as HistoryReport;
   const report=deriveTemporalHistory(history);assert.equal(report.publicAttributionEnabled,false);assert.equal(report.status,'review-required');assert.equal(report.historySha256.length,64);
 });
+
+test('an event filed under another legislature inside the window stops the person from inheriting earlier states',()=>{
+  const result=deriveTemporalPerson(person([event(),event({idLegislatura:58,dataHora:'2025-06-10T09:00',siglaPartido:'PSD',situacao:'Licença'})]),context);
+  assert.ok(result.issues.includes('other-legislature-event-in-window'));
+  const july=result.months.find(m=>m.month===7)!;assert.equal(july.exercise,'unknown');assert.equal(july.party.value,null);
+});
+test('an event from another legislature dated outside the window does not block the person',()=>{
+  const result=deriveTemporalPerson(person([event(),event({idLegislatura:56,dataHora:'2022-06-10T09:00',siglaPartido:'PSD'})]),context);
+  assert.ok(!result.issues.includes('other-legislature-event-in-window'));assert.equal(result.months.find(m=>m.month===7)!.party.value,'PL');
+});

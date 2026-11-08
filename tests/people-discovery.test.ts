@@ -118,6 +118,8 @@ test('end-to-end discovery and independent audit catch changed universe and fina
   const rows=structuredClone(report);rows.annuals[0].people[0].rows++;assert.equal((await auditPeopleDiscovery(rows,read)).status,'failed');
   const coverage=structuredClone(report);coverage.annuals=[];assert.equal((await auditPeopleDiscovery(coverage,read)).status,'failed');
   const multiplicity=structuredClone(report);multiplicity.listRows.period.rows++;assert.equal((await auditPeopleDiscovery(multiplicity,read)).status,'failed');
+  const sampleEvents=structuredClone(report);sampleEvents.samples[0].events[0].siglaPartido='XX';assert.ok((await auditPeopleDiscovery(sampleEvents,read)).failures.includes('sample-events-1'));
+  const sampleIssues=structuredClone(report);sampleIssues.samples[0].issues.push('later-legislature-event-before-scope-cutoff');assert.ok((await auditPeopleDiscovery(sampleIssues,read)).failures.includes('sample-issues-1'));
   const leak=structuredClone(report);leak.limitations.push('12345678901');assert.ok((await auditPeopleDiscovery(leak,read)).failures.includes('private-identifier-in-report'));
   const missing=structuredClone(report);missing.sources=missing.sources.filter(s=>s.url!==period.href);missing.sets.period=[];missing.listRows.period={rows:0,repeatedIds:[]};assert.ok((await auditPeopleDiscovery(missing,read)).failures.includes('list-pagination-period'));
 });
