@@ -20,7 +20,7 @@ const report={id:coverage.id,rows:coverage.rows.length,people:new Set(coverage.r
 if(dryRun){console.log(JSON.stringify({...report,stored:false},null,2));process.exit(0);}
 const db=await openDB();
 try{
-  await storePeopleCoverage(db,coverage);
+  await storePeopleCoverage(db,coverage,approve);
   const audit=await auditPeopleCoverage(db,coverage.id,temporal,crosscheck);
   if(audit.status!=='passed'){console.error(JSON.stringify({id:coverage.id,failures:audit.failures.length}));process.exitCode=1;}
   else if(approve)await recordDomainAudit(db,coverage.id,'passed',{checkedAt:audit.checkedAt});

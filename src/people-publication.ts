@@ -3,7 +3,7 @@ import type {DB} from './store.ts';
 import type {TemporalReport} from './people-temporal.ts';
 import type {CrosscheckReport} from './people-legacy.ts';
 
-export type CoverageRow={personId:number;year:number;month:number;exercise:string;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean};
+export type CoverageRow={personId:number;year:number;month:number;exercise:string;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean;partialScope:boolean};
 export type PeopleCoverage={schema:'clareia.people-coverage.v1';id:string;metric:'camara.people.monthly-coverage.v1';scope:TemporalReport['scope'];temporalSha256:string;crosscheckSha256:string;collectedAt:string;publishedAt:string;rows:CoverageRow[]};
 
 const REVIEW_CHANGES=new Set(['legacy-only-change','v2-only-change']);
@@ -24,7 +24,7 @@ export function buildPeopleCoverage(temporal:TemporalReport,crosscheck:Crosschec
       const key=`${m.year}-${String(m.month).padStart(2,'0')}`,compared=check.months.find(x=>x.year===m.year&&x.month===m.month);
       if(!compared)throw new Error('Competência sem cruzamento de fontes');
       const uncrossed=m.exercise!=='outside'&&(compared.comparison==='unavailable'||check.partyComparisonStatus==='unavailable'),exerciseReview=compared.comparison==='potential-conflict'||uncrossed,partyReview=exerciseReview||firstDispute!==null&&key>=firstDispute;
-      return {personId:person.id,year:m.year,month:m.month,exercise:m.exercise,partyStatus:partyReview?'review':m.party.status,party:partyReview||m.party.status!=='single'?null:m.party.value,partyValues:m.party.status==='changed'&&!partyReview?m.party.values:[],ufStatus:exerciseReview?'review':m.uf.status,uf:exerciseReview||m.uf.status!=='single'?null:m.uf.value,review:partyReview};
+      return {personId:person.id,year:m.year,month:m.month,exercise:m.exercise,partyStatus:partyReview?'review':m.party.status,party:partyReview||m.party.status!=='single'?null:m.party.value,partyValues:m.party.status==='changed'&&!partyReview?m.party.values:[],ufStatus:exerciseReview?'review':m.uf.status,uf:exerciseReview||m.uf.status!=='single'?null:m.uf.value,review:partyReview,partialScope:m.partialScope};
     });
   });
   const body={schema:'clareia.people-coverage.v1' as const,metric:'camara.people.monthly-coverage.v1' as const,scope:temporal.scope,temporalSha256,crosscheckSha256:hash(canonical(crosscheck)),collectedAt:temporal.createdAt,rows};
@@ -42,7 +42,7 @@ export async function assertCoverageMatchesVersion(db:DB,id:string):Promise<Cove
   return rows;
 }
 // Stored for review only: the site moves only after recordDomainAudit marks this id as passed.
-export async function storePeopleCoverage(db:DB,coverage:PeopleCoverage):Promise<void>{
+export async function storePeopleCoverage(db:DB,coverage:PeopleCoverage,reobserve=false):Promise<void>{
   const {id,publishedAt,rows,...rest}=coverage;
   if(id!==contentId({...rest,rows}))throw new Error('Identificador da cobertura não corresponde ao conteúdo');
   await db.query('BEGIN');
@@ -52,8 +52,8 @@ export async function storePeopleCoverage(db:DB,coverage:PeopleCoverage):Promise
       SELECT $1,$2::integer+ord::integer-1,(r->>'personId')::integer,(r->>'year')::integer,(r->>'month')::integer,r FROM jsonb_array_elements($3::jsonb) WITH ORDINALITY AS rows(r,ord)`,[id,start,JSON.stringify(rows.slice(start,start+5000))]);
     else{
       if(canonical(await readPeopleCoverage(db,id))!==canonical(rows))throw new Error('Versão já gravada com conteúdo diferente');
-      // The source can return to older content: seeing it again makes it the newest observation.
-      await db.query(`UPDATE publications SET seq=nextval(pg_get_serial_sequence('publications','seq')) WHERE id=$1`,[id]);
+      // The source can return to older content, but only an approval may make it the newest version again.
+      if(reobserve)await db.query(`UPDATE publications SET seq=nextval(pg_get_serial_sequence('publications','seq')) WHERE id=$1`,[id]);
     }
     const check=await db.query<{n:string}>('SELECT count(*)::text AS n FROM people_coverage_v1 WHERE publication_id=$1',[id]);
     if(Number(check.rows[0].n)!==rows.length)throw new Error('Reconciliação SQL da cobertura falhou');
@@ -79,7 +79,7 @@ export async function auditPeopleCoverage(db:DB,id:string,temporal:TemporalRepor
     if(seen.has(key)||!source){failures.push('unknown-or-repeated-'+key);continue;}seen.add(key);
     const conflict=crosscheck.people.find(p=>p.id===row.personId)?.months.find(m=>m.year===row.year&&m.month===row.month)?.comparison==='potential-conflict';
     const exerciseHold=conflict||source.exercise!=='outside'&&(exerciseFlag.has(key)||crossUnavailable.has(row.personId)),partyHold=exerciseHold||(partyFrom.has(row.personId)&&stamp(row.year,row.month)>=partyFrom.get(row.personId)!);
-    if(row.review!==partyHold||row.exercise!==source.exercise)failures.push('state-'+key);
+    if(row.review!==partyHold||row.exercise!==source.exercise||row.partialScope!==source.partialScope)failures.push('state-'+key);
     const expectedParty=partyHold?{s:'review',v:null}:{s:source.party.status,v:source.party.status==='single'?source.party.value:null},expectedUf=exerciseHold?{s:'review',v:null}:{s:source.uf.status,v:source.uf.status==='single'?source.uf.value:null};
     const expectedValues=!partyHold&&source.party.status==='changed'?source.party.values:[];
     if(row.partyStatus!==expectedParty.s||row.party!==expectedParty.v||row.ufStatus!==expectedUf.s||row.uf!==expectedUf.v||canonical(row.partyValues)!==canonical(expectedValues))failures.push('attribution-'+key);

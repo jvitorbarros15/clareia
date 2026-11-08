@@ -1,7 +1,7 @@
 import type {Expense,Person,Scope} from './model.ts';
 import type {CoverageRow} from './people-publication.ts';
 
-export type MonthSummary={month:number;cents:number;records:number;exercise:string|null;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean};
+export type MonthSummary={month:number;cents:number;records:number;exercise:string|null;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean;partialScope:boolean};
 export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];categories:{category:string;cents:number;records:number}[]};
 export type SiteSummary={schema:'clareia.site-summary.v1';publicationId:string;coverageId:string|null;scope:Scope;totalCents:number;records:number;people:PersonSummary[]};
 
@@ -20,7 +20,7 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
     const own=byPerson.get(id)??[],categories=[...new Set(own.map(r=>r.category))].sort().map(category=>{const rows=own.filter(r=>r.category===category);return {category,cents:sum(rows),records:rows.length};});
     const months=[...scope.months].sort((a,b)=>a-b).map<MonthSummary>(month=>{
       const rows=own.filter(r=>r.month===month),row=attribution.get(id+':'+scope.year+':'+month);
-      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,review:row?.review??false};
+      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,review:row?.review??false,partialScope:row?.partialScope??false};
     });
     return {id,name:person.name,photo:person.photo,cents:sum(own),records:own.length,months,categories};
   });

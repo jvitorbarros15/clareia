@@ -129,7 +129,7 @@ test('_headers marks data as immutable and manifest as revalidated',()=>setup(as
 }));
 
 const coverageVersion=(party:string|null,review=false):PeopleCoverage=>{
-  const body={schema:'clareia.people-coverage.v1' as const,metric:'camara.people.monthly-coverage.v1' as const,scope:{legislature:57,start:'2025-01-01',end:'2025-01-31',sampleIds:[1]},temporalSha256:hash('t'),crosscheckSha256:hash('c'),collectedAt:'2026-11-08T12:00:00Z',rows:[1,2].map(personId=>({personId,year:2025,month:1,exercise:'full',partyStatus:review?'review':'single',party,partyValues:[],ufStatus:review?'review':'single',uf:party&&'SP',review}))};
+  const body={schema:'clareia.people-coverage.v1' as const,metric:'camara.people.monthly-coverage.v1' as const,scope:{legislature:57,start:'2025-01-01',end:'2025-01-31',sampleIds:[1]},temporalSha256:hash('t'),crosscheckSha256:hash('c'),collectedAt:'2026-11-08T12:00:00Z',rows:[1,2].map(personId=>({personId,year:2025,month:1,exercise:'full',partyStatus:review?'review':'single',party,partyValues:[],ufStatus:review?'review':'single',uf:party&&'SP',review,partialScope:false}))};
   return {...body,id:hash(canonical(body)),publishedAt:'2026-11-08T13:00:00Z'};
 };
 const summaryInput=(records:Expense[],expectedTotalCents:number)=>{const v=version(records);return {publicationId:v.id,scope:v.scope,people:v.people,records,expectedTotalCents,coverageId:null,coverage:[]};};

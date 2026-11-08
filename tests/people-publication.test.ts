@@ -65,14 +65,15 @@ test('a tampered coverage id is refused',async()=>{
   try{const t=temporal(),coverage=buildPeopleCoverage(t,crosscheck(t),passed(t),published);await assert.rejects(storePeopleCoverage(db,{...coverage,id:hash('x')}));}finally{await db.close();}
 });
 
-test('coverage seen again becomes the newest observation',async()=>{
+test('coverage seen again becomes the newest version only when approved',async()=>{
   const db=await openDB(true);
   try{
     const a=temporal(),ca=crosscheck(a),one=buildPeopleCoverage(a,ca,passed(a),published),b=temporal();b.people[0].months[0].party=dimension('PSD');
     const two=buildPeopleCoverage(b,crosscheck(b),passed(b),published);
     for(const v of [one,two]){await storePeopleCoverage(db,v);await recordDomainAudit(db,v.id,'passed',{checkedAt:published});}
     assert.equal((await activePublication(db,'pessoas'))?.id,two.id);
-    await storePeopleCoverage(db,one);await recordDomainAudit(db,one.id,'passed',{checkedAt:published});
+    await storePeopleCoverage(db,one);await recordDomainAudit(db,two.id,'passed',{checkedAt:published});assert.equal((await activePublication(db,'pessoas'))?.id,two.id,'storing again without approval changes nothing');
+    await storePeopleCoverage(db,one,true);await recordDomainAudit(db,one.id,'passed',{checkedAt:published});
     assert.equal((await activePublication(db,'pessoas'))?.id,one.id);
   }finally{await db.close();}
 });

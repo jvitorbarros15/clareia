@@ -90,3 +90,10 @@ test('rows of one document ID with different faces are separate budgets and are 
   const other=pair(2,'50').map(i=>i.kind==='annual'?{...i,raw:{...i.raw,vlrDocumento:'50'}}:{...i,raw:{...i.raw,valorDocumento:50}});
   const r=review([...pair(1,'100'),...other]);assert.equal(r.holds.length,0);assert.equal(r.blockedKeys.size,0);
 });
+
+test('a blank face row or a different glosa does not switch the ceiling off for the rest of the document',()=>{
+  const blank=pair(3,'10').map(i=>i.kind==='annual'?{...i,raw:{...i.raw,vlrDocumento:''}}:{...i,raw:{...i.raw,valorDocumento:null}});
+  assert.equal(review([...pair(1,'100'),...pair(2,'100'),...blank]).holds[0]?.reason,'over-document-limit');
+  const glosa=pair(2,'90').map(i=>i.kind==='annual'?{...i,raw:{...i.raw,vlrGlosa:'10'}}:{...i,raw:{...i.raw,valorGlosa:10}});
+  assert.equal(review([...pair(1,'100'),...glosa]).holds[0]?.reason,'over-document-limit');
+});
