@@ -236,7 +236,7 @@
     document.querySelectorAll('.p-reveal:not(.is-visible)').forEach(el=>observer.observe(el));
   }
   // The count-up is visual only: each button carries the final value in aria-label.
-  function animateCounter(el) { const target=el.querySelector('[data-counter]');if(!target)return;const value=+target.dataset.counter,start=performance.now();function frame(now){if(!target.isConnected)return;const t=Math.min(1,(now-start)/700),n=Math.round(value*(1-Math.pow(1-t,3)));target.textContent=target.dataset.format==='money'?compact(n):number(n);if(t<1&&state.motion)requestAnimationFrame(frame);else target.textContent=target.dataset.format==='money'?compact(value):number(value);}requestAnimationFrame(frame); }
+  function animateCounter(el) { const target=el.querySelector('[data-counter]');if(!target)return;const value=+target.dataset.counter,start=performance.now();target.textContent=target.dataset.format==='money'?compact(value):number(value);target.style.display='inline-block';target.style.minWidth=target.getBoundingClientRect().width+'px';function frame(now){if(!target.isConnected)return;const t=Math.min(1,(now-start)/700),n=Math.round(value*(1-Math.pow(1-t,3)));target.textContent=target.dataset.format==='money'?compact(n):number(n);if(t<1&&state.motion)requestAnimationFrame(frame);else{target.textContent=target.dataset.format==='money'?compact(value):number(value);target.style.display=target.style.minWidth='';}}requestAnimationFrame(frame); }
   // Position-based spy: the current section is the last one whose top has passed 35% of the viewport; none above the first.
   function spySections() {
     const line=innerHeight*.35; let cur=null;

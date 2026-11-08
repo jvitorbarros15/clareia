@@ -1336,6 +1336,22 @@ check('chart points keep focus ring and hit areas without the stale rules', asyn
   await page.close();
 });
 
+check('panorama numbers stay on their text lines while animating', async () => {
+  const page = await at(1440);
+  await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
+  const tops = await page.evaluate(() => new Promise(done => {
+    const sentence = document.querySelector('.p-overview-sentence'), seen = new Set(), start = performance.now();
+    sentence.scrollIntoView({ block: 'end', behavior: 'instant' });
+    const frame = () => {
+      seen.add([...sentence.querySelectorAll('.p-stat')].map(s => { const r = s.getBoundingClientRect(), b = sentence.getBoundingClientRect(); return Math.round(r.left - b.left) + '/' + Math.round(r.top - b.top); }).join());
+      if (performance.now() - start < 2500) requestAnimationFrame(frame); else done([...seen]);
+    };
+    frame();
+  }));
+  assert.equal(tops.length, 1, 'stat positions changed: ' + tops.join(' | '));
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;

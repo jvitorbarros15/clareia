@@ -895,7 +895,7 @@ body[data-model=editorial] .footer-links :is(a,button)::before{content:none}
 .close-button::before{content:"";position:absolute;inset:-8px}
 .dialog-body :is(.outline-button,.text-button,summary){position:relative}
 .dialog-body :is(.outline-button,.text-button,summary)::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
-body[data-model=editorial] .p-overview-sentence .p-stat{position:relative}
+body[data-model=editorial] .p-overview-sentence .p-stat{position:relative;animation:none;transform:none;opacity:1}
 body[data-model=editorial] .p-overview-sentence .p-stat::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:44px;transform:translate(-50%,-50%)}
 body .uf-tile path.tile-hit{fill:transparent!important;stroke:transparent!important;stroke-width:4!important;pointer-events:all}
 .linked-lines{overflow:visible}
