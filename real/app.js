@@ -19,9 +19,12 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const norm = value => value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   // Amounts are integer cents from the published version; every exact value shows its cents.
-  const money = cents => cents === null ? 'Não informado' : (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const compact = cents => Math.abs(cents) >= 100000 ? `R$ ${(cents / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : money(Math.round(cents));
+  const money = cents => cents === null ? 'Não informado' : (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/^-/, '−');
+  const compact = cents => Math.abs(cents) >= 100000 ? `${cents < 0 ? '−' : ''}R$\u00a0${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : money(Math.round(cents));
   const number = value => value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  // Positive categories are the only ones drawn as slices, so they are the base of every percentage on the page.
+  const shareBase = groups => groups.reduce((n, g) => n + Math.max(0, g.value), 0);
+  const share = (value, base) => `${(base > 0 ? value / base * 100 : 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   const sum = records => records.reduce((total, record) => total + record.amount, 0);
   const all = () => D.dataset();
   const person = id => all().find(p => p.id === id);
@@ -161,7 +164,7 @@
     if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); $('#answer-slot').before(chip); }
     const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric === 'mensal';
     chip.hidden = !narrowed;
-    chip.innerHTML = narrowed ? `<span>Filtrando: ${escape([state.uf === 'Brasil' ? 'Brasil' : state.uf, state.category === 'Todas' ? 'todas as categorias' : state.category, state.metric === 'mensal' ? 'por mês' : 'total'].join(' · '))}</span><button type="button" data-action="reset">Limpar</button>` : '';
+    chip.innerHTML = narrowed ? `<span>Filtrando: ${escape([state.uf === 'Brasil' ? null : state.uf, state.category === 'Todas' ? null : state.category, state.metric === 'mensal' ? 'por mês' : null].filter(Boolean).join(' · '))}</span><button type="button" data-action="reset">Limpar</button>` : '';
   }
   function markTab(animate = true) {
     const tabsEl = $('.editorial-rank .tabs'), on = tabsEl?.querySelector('[aria-pressed="true"]');
@@ -280,7 +283,7 @@
     showDialog('Fontes e metodologia', `<div class="text-content"><h3>O que somamos</h3><p>O valor líquido publicado pela Câmara, por competência financeira: o campo <code>vlrLiquido</code> do arquivo anual CEAP${union() ? ' e, nos registros que só a API traz, o <code>valorLiquido</code> da API' : ''}. Salário, gabinete e emendas não entram nesta conta.</p><h3>O que conferimos</h3><p>Duas capturas de cada fonte, identidade pelo ID oficial e contas em centavos, reconciliadas com uma segunda soma e com o banco.${audit ? ` Releitura independente do arquivo anual: <b>${audit.status === 'passed' ? 'sem divergências' : 'divergência encontrada'}</b> (${audit.selected} linhas, ${audit.groupsCompared} grupos pessoa/mês/categoria, ${date(audit.checkedAt)}).` : ''}</p>${compare?.paired !== undefined ? `<p>${compare.paired} registros (${money(compare.originCents.both)}) estão nas duas fontes, ${compare.missingInApi} (${money(compare.originCents.annual)}) só no arquivo anual e ${compare.extraInApi} (${money(compare.originCents.api)}) só na API.</p>` : compare?.missingInApi ? `<p>O arquivo anual contém ${compare.annualRecords} lançamentos; a API retornou ${compare.apiRecords}. Os ${compare.missingInApi} adicionais estão incluídos.</p>` : ''}<h3>O que não concluímos</h3><p>Gasto maior não demonstra irregularidade. O recorte não mede qualidade do mandato nem faz nova subtração de restituições. Fornecedor pessoa física aparece sem nome.</p><h3>Limites desta versão</h3><ul>${v.limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul><h3>Versão</h3><dl class="trace"><dt>Versão</dt><dd><code>${escape(index.snapshotId)}</code></dd><dt>Métrica</dt><dd><code>${escape(index.metric)}</code></dd><dt>Coleta</dt><dd>${date(index.collectedAt)} (Brasília)</dd><dt>Publicação</dt><dd>${date(index.publishedAt)} (Brasília)</dd></dl><p><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dicionário oficial da CEAP ↗</a> · <a href="https://dadosabertos.camara.leg.br/swagger/api.html" target="_blank" rel="noopener noreferrer">Documentação da API ↗</a></p></div>`);
   }
   function toast(text) { const el = $('#toast'); el.textContent = text; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2800); }
-  async function share() {
+  async function shareLink() {
     syncURL();
     try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(location.href); toast('Link com a investigação e os filtros copiado.'); }
     catch { showDialog('Compartilhar investigação', `<div class="manual-share"><p>Copie este link. Os filtros e a pergunta serão preservados.</p><label for="share-link">Link da consulta</label><input id="share-link" readonly value="${escape(location.href)}"></div>`); $('#share-link').select(); }
@@ -315,7 +318,7 @@
     else if (action === 'methodology') methodology();
     else if (action === 'focus-search') { $('#query').focus(); $('#query').scrollIntoView({ block: 'center' }); }
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog(); ask(`Compare ${person(id).name} e ${peer.name}`); }
-    else if (action === 'share') share();
+    else if (action === 'share') shareLink();
     else if (action === 'reset') { state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });
@@ -333,7 +336,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { context, model, state, all, person, records, sum, money, compact, number, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordDetail, showDialog, closeDialog, methodology, toast, refresh, sourceBlock, span, pending, byTotal };
+  window.Clareia = { context, model, state, all, person, records, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordDetail, showDialog, closeDialog, methodology, toast, refresh, sourceBlock, span, pending, byTotal };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false);
 })();

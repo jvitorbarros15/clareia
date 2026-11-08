@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "verify:browser": "node scripts/verify-real.cjs",
+    "verify:ui": "node scripts/verify-ui.cjs",
     "verify:annual": "tsx scripts/reconcile-annual.ts",
     "verify:api-annual": "tsx scripts/reconcile-api-annual.ts",
     "cache:portraits": "tsx scripts/cache-portraits.ts",

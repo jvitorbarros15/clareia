@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');
 let chromium;try{({chromium}=require('playwright'));}catch{({chromium}=require(path.join(process.env.APPDATA,'npm/node_modules/playwright')));}
 const base=process.env.BASE_URL||'http://127.0.0.1:4174',out=path.resolve('output/qa');fs.mkdirSync(out,{recursive:true});
-const money=c=>(c/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/\s+/g,' ');
+const money=c=>(c/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/\s+/g,' ').replace(/^-/,'−');
 const text=s=>s.replace(/\s+/g,' ').trim();
 (async()=>{const browser=await chromium.launch({headless:true});const errors=[],checks=[];
 try{
@@ -33,7 +33,7 @@ try{
   const adjusted=data.people.find(p=>p.negative.length);
   if(adjusted){
     await page.locator(`.bar-row[data-id="${adjusted.id}"]`).click();await page.locator('#detail [data-action=records]').click();
-    const row=page.locator('#detail tbody tr',{hasText:'-R$'}).first();await row.locator('[data-action=record]').click();
+    const row=page.locator('#detail tbody tr',{hasText:'−R$'}).first();await row.locator('[data-action=record]').click();
     const detail=text(await page.locator('#detail-body').innerText());assert.ok(detail.includes(money(Math.min(...adjusted.negative)))||adjusted.negative.some(c=>detail.includes(money(c))),'negative value keeps its sign');
     if(await page.locator('#detail .formula[data-equation=none]').count())assert.match(detail,/sem recálculo/);
     await page.screenshot({path:path.join(out,'real-adjustment-dialog.png')});await close();
