@@ -9,11 +9,16 @@
   const ids = D.dataset().map(p => p.id);
   const totalOf = p => p.records.reduce((n, r) => n + r.amount, 0);
   const byTotal = () => [...D.dataset()].sort((a, b) => totalOf(b) - totalOf(a));
+  // Only the parameters present and valid in the URL; a question applies what its words imply for the rest.
+  const fromURL = {};
+  if (categories.includes(initial.get('categoria'))) fromURL.category = initial.get('categoria');
+  if (['total', 'mensal'].includes(initial.get('metrica'))) fromURL.metric = initial.get('metrica');
+  if (['gastos', 'menos', 'projetos'].includes(initial.get('aba'))) fromURL.tab = initial.get('aba');
   const state = {
     year: D.year, uf: 'Brasil',
-    category: categories.includes(initial.get('categoria')) ? initial.get('categoria') : 'Todas',
-    metric: initial.get('metrica') === 'mensal' ? 'mensal' : 'total',
-    tab: ['menos', 'projetos'].includes(initial.get('aba')) ? initial.get('aba') : 'gastos',
+    category: fromURL.category ?? 'Todas',
+    metric: fromURL.metric ?? 'total',
+    tab: fromURL.tab ?? 'gastos',
     query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
   let dialogTrigger = null, toastTimer;
@@ -44,8 +49,9 @@
     return state.metric === 'mensal' ? result / p.months : result;
   }
   const formatted = (p, kind = state.tab) => kind === 'projetos' ? pending : compact(value(p, kind));
-  function ranking() {
-    return all().filter(p => state.uf === 'Brasil' || p.uf === state.uf).sort((a, b) => (state.tab === 'menos' ? value(a) - value(b) : value(b) - value(a)) || a.name.localeCompare(b.name, 'pt-BR'));
+  // The answer ranks expenses even when the Projetos tab is open, where value() has nothing to sort by.
+  function ranking(kind = state.tab) {
+    return all().filter(p => state.uf === 'Brasil' || p.uf === state.uf).sort((a, b) => (state.tab === 'menos' ? value(a, kind) - value(b, kind) : value(b, kind) - value(a, kind)) || a.name.localeCompare(b.name, 'pt-BR'));
   }
   const icon = name => {
     const paths = {
@@ -130,7 +136,7 @@
     if (answer.type === 'compare') {
       const a = value(ppl[0], answer.kind), b = value(ppl[1], answer.kind), c = compareValues(a, b), x = escape(first(ppl[0])), y = escape(first(ppl[1]));
       summary = c.equal ? `${x} e ${y} têm o mesmo valor no recorte.` : c.percent === null ? `${x} registrou ${money(c.diff)} ${c.more ? 'a mais' : 'a menos'} em despesas no período do que ${y}. Sem percentual: o valor de ${y} é ${b < 0 ? 'negativo' : 'zero'}, então não há base para uma porcentagem.` : `${x} registrou ${number(c.percent)}% ${c.more ? 'mais' : 'menos'} despesas no período.`;
-    } else summary = `${escape(ppl[0].name)} ${answer.type === 'rank' ? 'lidera este recorte' : 'nesta amostra'}.`;
+    } else summary = `${escape(ppl[0].name)} ${answer.type !== 'rank' ? 'nesta amostra' : state.tab === 'menos' ? 'tem o menor valor deste recorte' : 'lidera este recorte'}.`;
     const unit = state.category === 'Todas' ? 'Cota parlamentar' : label(state.category);
     return `<section class="answer" aria-label="Resultado da investigação"><p class="eyebrow">Resultado da investigação</p><div class="answer-bars">${ppl.map(p => `<div class="answer-row">${avatar(p)}<b>${escape(p.name)}</b><strong>${money(value(p, answer.kind))}</strong><span class="track"><i style="width:${Math.abs(value(p, answer.kind)) / max * 100}%"></i></span></div>`).join('')}</div><div class="answer-bottom"><div><p class="answer-summary">${summary}</p><p class="context">${escape(unit)} • ${span()}${state.metric === 'mensal' ? ' • média mensal' : ''}</p></div><div class="answer-actions"><button class="outline-button primary" data-action="answer-evidence">Como chegamos nisso? ${icon('external')}</button><button class="outline-button" data-action="share">${icon('share')} Compartilhar</button></div></div></section>`;
   }
@@ -195,7 +201,7 @@
     const before = new Map([...document.querySelectorAll('.rank-card')].map(el => [el.dataset.person, el.getBoundingClientRect()]));
     $('#rank-slot').innerHTML = rankingSection();
     if ($('#editorial-feature')) $('#editorial-feature').innerHTML = editorialFeature();
-    if (state.answer?.type === 'rank') state.answer.ids = ranking().slice(0, 3).map(p => p.id);
+    if (state.answer?.type === 'rank') state.answer.ids = ranking('gastos').slice(0, 3).map(p => p.id);
     $('#answer-slot').innerHTML = answerHTML();
     if (focusKey) document.querySelector(`[data-${focusKey[0]}="${focusKey[1]}"]`)?.focus({ preventScroll: true });
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches && document.body.dataset.motion !== 'off') document.querySelectorAll('.rank-card').forEach(el => {
@@ -220,7 +226,8 @@
     'COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA': ['auxilio', 'moradia']
   };
   const categoryFor = q => categories.find(c => (categoryTerms[c] || []).some(term => new RegExp(`\\b${term}`).test(q)));
-  function ask(query, scroll = true) {
+  // `fixed` holds filters the caller already decided (a shared link); they win over what the words imply. The answer is computed once, from the final state.
+  function ask(query, scroll = true, fixed = {}) {
     state.query = query.trim();
     if (!state.query) { $('#query').focus(); return; }
     const q = norm(state.query), years = q.match(/\b20\d{2}\b/g);
@@ -233,19 +240,19 @@
       else if (matches.length > 2) message = ['Escolha duas pessoas para comparar', `Experimente: “${examples()[0]}”.`];
       else if (!matches.length && !/\bquem\b|maiores gastos|menores gastos|^(gastos|despesas)$/.test(q)) message = ['Vamos delimitar a investigação', `Não identifiquei uma pergunta compatível ou uma pessoa da amostra. Experimente “${examples()[0]}” ou “Quem mais gastou por mês?”. A busca usa regras locais, sem IA conectada.`];
       else {
-        state.metric = /por mes|mensal|media/.test(q) ? 'mensal' : 'total';
-        state.category = categoryFor(q) || 'Todas';
-        state.tab = /quem.*menos|menor gasto/.test(q) ? 'menos' : 'gastos';
+        Object.assign(state, { metric: /por mes|mensal|media/.test(q) ? 'mensal' : 'total', category: categoryFor(q) || 'Todas', tab: /quem.*menos|menor gasto/.test(q) ? 'menos' : 'gastos' }, fixed);
         if (matches.length === 2) {
           matches.sort((a, b) => q.indexOf(norm(first(a))) - q.indexOf(norm(first(b))));
           state.answer = { type: 'compare', ids: matches.map(p => p.id), kind: 'gastos' };
         } else if (matches.length === 1) state.answer = { type: 'profile', ids: [matches[0].id], kind: 'gastos' };
-        else state.answer = { type: 'rank', ids: ranking().slice(0, 3).map(p => p.id), kind: 'gastos' };
+        else state.answer = { type: 'rank', ids: ranking('gastos').slice(0, 3).map(p => p.id), kind: 'gastos' };
       }
     }
     if (message) {
+      const cleared = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric !== 'total' || state.tab !== 'gastos';
+      document.dispatchEvent(new CustomEvent('clareia:reset'));
       state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos';
-      state.answer = { type: 'message', title: message[0], message: message[1] };
+      state.answer = { type: 'message', title: message[0], message: cleared ? `${message[1]} Os filtros ativos foram limpos.` : message[1] };
     }
     $('#query').value = state.query;
     closeSuggestions(); refresh();
@@ -378,10 +385,5 @@
   document.fonts?.ready.then(() => markTab(false));
   window.Clareia = { logo, label, context, model, state, all, person, records, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
-  if (state.query) {
-    // ask() derives metric, tab and category from the words; a shared link must keep what its parameters say.
-    const shared = { category: state.category, metric: state.metric, tab: state.tab };
-    ask(state.query, false);
-    if (state.answer?.type !== 'message') { Object.assign(state, shared); refresh(); }
-  }
+  if (state.query) ask(state.query, false, fromURL);
 })();

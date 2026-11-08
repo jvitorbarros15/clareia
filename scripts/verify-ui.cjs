@@ -11,12 +11,13 @@ const text = async locator => (await locator.innerText()).replace(/\s+/g, ' ').t
 const clean = value => value.replace(/\s+/g, ' ').trim();
 
 let browser;
-async function at(width, { height = 900, reducedMotion = 'no-preference', search = '', init } = {}) {
+async function at(width, { height = 900, reducedMotion = 'no-preference', search = '', init, before } = {}) {
   const page = await browser.newPage({ viewport: { width, height }, reducedMotion });
   page.errors = [];
   page.on('pageerror', error => page.errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') page.errors.push(message.text()); });
   if (init) await page.addInitScript(init);
+  if (before) await before(page);
   await page.goto(search ? `${base}/${search}` : base);
   await page.waitForSelector('.full-portal');
   return page;
@@ -1110,6 +1111,228 @@ check('quota labels use one term', async () => {
   const body = await page.locator('body').innerText();
   assert.doesNotMatch(body, /cota no recorte|categoria global/i);
   assert.match(await text(page.locator('#atlas')), /Todas as categorias./);
+  await page.close();
+});
+
+// Stubs the published files the page fetches, so coverage and values the real data lacks can be tested.
+// Expected values are always read back from the same stubbed JSON, independently of the page code.
+const stub = ({ months, records } = {}) => async page => {
+  const manifest = await (await page.request.get(`${base}/manifest.json`)).json();
+  const index = await (await page.request.get(`${base}/${manifest.base}/index.json`)).json();
+  await page.route('**/index.json', async route => {
+    const json = await (await route.fetch()).json();
+    if (months) json.scope.months = months;
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(json) });
+  });
+  await page.route('**/deputados/*/despesas.json', async route => {
+    let out = await (await route.fetch()).json();
+    const id = Number(route.request().url().match(/deputados\/(\d+)\//)[1]);
+    if (months) out = months.flatMap((m, k) => out.filter(r => r.month === (k % 2) + 1).map(r => ({ ...r, id: `${r.id}-stub${m}`, month: m, date: r.date && r.date.replace(/^(\d{4})-\d{2}/, `$1-${String(m).padStart(2, '0')}`) })));
+    if (records) out = records(out, index.people.find(p => p.id === id));
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(out) });
+  });
+};
+const FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const MON = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const sumOf = (person, category) => person.records.filter(r => !category || r.category === category).reduce((n, r) => n + r.cents, 0);
+const rankNames = (data, { category, ascending }) => data.people.map(p => ({ name: p.name, cents: sumOf(p, category) }))
+  .sort((a, b) => (ascending ? a.cents - b.cents : b.cents - a.cents) || a.name.localeCompare(b.name, 'pt-BR'));
+
+for (const [title, query, expected] of [
+  ['question implies the category', '?q=Quem mais gastou com passagens?', { category: 'PASSAGEM AÉREA - SIGEPA', ascending: false }],
+  ['question implies the low-spenders tab', '?q=Quem gastou menos?', { category: undefined, ascending: true }],
+  ['URL params override what the question implies', '?q=Quem mais gastou com passagens?&categoria=TELEFONIA&aba=menos', { category: 'TELEFONIA', ascending: true }],
+]) {
+  check(`shared link decides the final state before the answer: ${title}`, async () => {
+    const page = await at(1440, { search: query });
+    const data = await published(page);
+    const rank = rankNames(data, expected);
+    const state = await page.evaluate(() => ({ category: window.Clareia.state.category, tab: window.Clareia.state.tab }));
+    assert.equal(state.category, expected.category || 'Todas', 'category');
+    assert.equal(state.tab, expected.ascending ? 'menos' : 'gastos', 'tab');
+    assert.deepEqual(await page.locator('.answer-row b').allInnerTexts(), rank.map(r => r.name), 'answer order');
+    assert.deepEqual((await page.locator('.answer-row strong').allInnerTexts()).map(clean), rank.map(r => clean(brl(r.cents))), 'answer values');
+    assert.deepEqual(await page.locator('.rank-card .person-name').allInnerTexts(), rank.map(r => r.name), 'cards show the same slice');
+    const summary = clean(await page.locator('.answer-summary').innerText());
+    if (expected.ascending) assert.ok(!/lidera/.test(summary) && summary.includes(rank[0].name), `low-spenders summary: ${summary}`);
+    else assert.equal(summary, `${rank[0].name} lidera este recorte.`);
+    await page.close();
+  });
+}
+
+check('map with net-negative totals keeps data opacity and strips the currency from negative tiles', async () => {
+  const negateSP = (recs, meta) => meta.uf === 'SP' ? recs.map(r => ({ ...r, cents: -Math.abs(r.cents) })) : recs;
+  const page = await at(1440, { before: stub({ records: negateSP }) });
+  const data = await published(page);
+  const byUf = {};
+  for (const p of data.people) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p);
+  assert.ok(byUf.SP < 0 && Object.values(byUf).some(v => v > 0), 'stub gives SP a negative net total and another UF a positive one');
+  const max = Math.max(1, ...Object.values(byUf).map(Math.abs));
+  for (const [uf, cents] of Object.entries(byUf)) {
+    const tile = await page.locator(`[data-p-uf="${uf}"]`).evaluate(g => ({ style: g.querySelectorAll('path')[1].getAttribute('style'), value: g.querySelector('.tile-value')?.textContent }));
+    const opacity = Number(/fill-opacity:\s*([\d.]+)/.exec(tile.style)?.[1]);
+    assert.ok(Math.abs(opacity - (0.2 + 0.8 * Math.abs(cents) / max)) < 1e-6, `${uf} fill-opacity ${opacity} for ${cents}`);
+    const expected = Math.abs(cents) >= 100000 ? `${cents < 0 ? '−' : ''}${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : brl(cents).replace(`R$${NBSP}`, '');
+    assert.equal(clean(tile.value), expected, `${uf} tile value`);
+  }
+  await page.close();
+});
+
+check('spending footnote follows the month slider', async () => {
+  const page = await at(1440, { before: stub({ months: [1, 2, 3] }) });
+  await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+  const note = () => page.locator('.spend-details > .p-small').last().innerText().then(clean);
+  assert.ok((await note()).includes('Jan–Mar 2025'), await note());
+  await page.locator('#spend-range').evaluate(el => { el.value = 2; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  const after = await note();
+  assert.ok(after.includes('Jan–Fev 2025') && !after.includes('Jan–Mar'), `footnote after dragging to Fev: ${after}`);
+  await page.close();
+});
+
+check('disabled legend rows never preview R$ 0,00', async () => {
+  const page = await at(1440, { search: `?categoria=${encodeURIComponent('TELEFONIA')}` });
+  await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+  const before = clean(await page.locator('.donut-readout').innerText());
+  assert.ok(await page.locator('.donut-legend [data-p-highlight]:disabled').count() > 0, 'some rows are outside the filter');
+  await page.locator('.donut-legend [data-p-highlight]:disabled').first().evaluate(el => el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })));
+  const after = clean(await page.locator('.donut-readout').innerText());
+  assert.ok(!after.includes('R$ 0,00') && !after.includes('R$\u00a00,00'), `readout previews a disabled row: ${after}`);
+  assert.equal(after, before, 'readout unchanged');
+  await page.close();
+});
+
+check('unanswerable question clears filters, says so, and resets portal state', async () => {
+  const page = await at(1440, { search: `?categoria=${encodeURIComponent('TELEFONIA')}` });
+  await page.locator('[data-p-uf="SP"]').click();
+  assert.ok(!(await text(page.locator('#atlas-detail'))).includes('Escolha um estado'), 'state selected on the map');
+  await page.evaluate(() => window.Clareia.ask('Quem votou na reforma?', false));
+  const message = clean(await page.locator('.answer-message p').innerText());
+  assert.match(message, /filtros.*limpos/i, `message says filters were cleared: ${message}`);
+  assert.ok((await text(page.locator('#atlas-detail'))).includes('Escolha um estado'), 'map selection reset with the filters');
+  assert.equal(await page.evaluate(() => window.Clareia.state.category), 'Todas');
+  await page.evaluate(() => window.Clareia.ask('Quem votou na reforma?', false));
+  assert.doesNotMatch(clean(await page.locator('.answer-message p').innerText()), /limpos/i, 'nothing to clear, nothing claimed');
+  await page.close();
+});
+
+check('charts and sliders follow a coverage that does not start in January', async () => {
+  const months = [2, 3, 4];
+  const page = await at(1440, { before: stub({ months }) });
+  const data = await published(page);
+  const top = [...data.people].sort((a, b) => sumOf(b) - sumOf(a)).slice(0, 2);
+  const names = months.map(m => MON[m - 1]);
+  assert.equal(await page.locator('#despesas output').innerText().then(clean), `${names[0]} → ${names.at(-1)}`, 'spending slider label');
+  assert.equal(await page.locator('#spend-range').getAttribute('aria-valuetext'), `${FULL[months[0] - 1]} a ${FULL[months.at(-1) - 1]} de 2025`, 'spending aria-valuetext');
+  assert.deepEqual(await page.locator('.month-markers span').allInnerTexts(), names, 'month markers');
+  assert.deepEqual(await page.locator('.p-mini-bars small').allInnerTexts(), names, 'mini bars');
+  await page.locator('#despesas [data-p-month="3"]').click();
+  assert.equal(await page.locator('#despesas output').innerText().then(clean), `${names[0]} → ${names[1]}`, 'label after choosing a month');
+  assert.equal(await page.locator('#spend-range').getAttribute('aria-valuetext'), `${FULL[months[0] - 1]} a ${FULL[months[1] - 1]} de 2025`, 'aria-valuetext after choosing a month');
+  assert.ok(clean(await page.locator('.donut-hole span').innerText()).startsWith(`${names[0]}–${names[1]}`), 'donut period');
+  await page.locator('#comparacao').scrollIntoViewIfNeeded();
+  const axis = await page.locator('.linked-lines .x-label').evaluateAll(els => els.map(el => el.textContent));
+  assert.deepEqual(axis, names, 'chart x axis');
+  const labels = await page.locator('.linked-lines .chart-point').evaluateAll(gs => gs.map(g => g.getAttribute('aria-label').replace(/\s+/g, ' ')));
+  assert.equal(labels.length, 6, 'two people times three months');
+  for (const p of top) for (const m of months) {
+    const cents = p.records.filter(r => r.month === m).reduce((n, r) => n + r.cents, 0);
+    assert.ok(labels.includes(`${p.name}, ${MON[m - 1]}: ${clean(brl(cents))}. Abrir registros`), `point ${p.name} ${MON[m - 1]} ${brl(cents)} in ${JSON.stringify(labels)}`);
+  }
+  assert.ok(!(await page.locator('.linked-lines').innerHTML()).match(/NaN|undefined/), 'no NaN in the chart');
+  assert.equal(await page.locator('#linked-from-label').innerText(), names[0]);
+  assert.equal(await page.locator('#linked-to-label').innerText(), names.at(-1));
+  const min = Number(await page.locator('#linked-from').getAttribute('min'));
+  await page.locator('#linked-from').evaluate((el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, min + 1);
+  assert.equal(await page.locator('#linked-from-label').innerText(), names[1], 'label after moving the start');
+  assert.ok(clean(await page.locator('.linked-chart-body .records-note').innerText()).startsWith(`${names[1]}–${names[2]} 2025`), 'note scope');
+  const expectedA = top[0].records.filter(r => r.month >= months[1]).reduce((n, r) => n + r.cents, 0);
+  assert.equal(clean(await page.locator('.linked-totals strong').first().innerText()), clean(brl(expectedA)), 'total of the first person for the chosen range');
+  assert.ok(!(await page.locator('.linked-lines').innerHTML()).match(/NaN|undefined/), 'no NaN after moving');
+  await page.close();
+  const real = await at(1440);
+  assert.ok(clean(await real.locator('.linked-chart-body .records-note').innerText()).startsWith('Jan–Fev 2025'), 'Jan–Fev unchanged');
+  assert.deepEqual(await real.locator('.linked-lines .x-label').evaluateAll(els => els.map(el => el.textContent)), ['Jan', 'Fev']);
+  await real.close();
+});
+
+check('navigating inside a dialog keeps the highlight and returns focus', async () => {
+  const page = await at(1440);
+  await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+  await page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click();
+  const trigger = page.locator('.supplier-list [data-p-supplier]').first();
+  const name = await trigger.getAttribute('data-p-supplier');
+  await trigger.click();
+  await page.waitForSelector('#detail[open]');
+  await page.locator('#detail .record-row').first().click();
+  await page.locator('#detail [data-action=records]').click();
+  await page.locator('#detail .record-row').first().click();
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('#detail').open);
+  assert.equal(await page.locator('.donut-legend [aria-pressed=true]').count(), 1, 'highlight survives navigating in the dialog');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.pSupplier), name, 'focus back on the supplier row');
+  await page.close();
+});
+
+check('supplier expansion, evidence links and the slider keep the highlight and focus', async () => {
+  const page = await at(1440);
+  await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+  const pressed = () => page.locator('.donut-legend [aria-pressed=true]').count();
+  await page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click();
+  await page.locator('[data-p=all-suppliers]').click();
+  assert.equal(await pressed(), 1, 'highlight kept after Ver todos');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.p), 'all-suppliers', 'focus stays on the toggle');
+  for (const selector of ['.donut-caption [data-p=spend-evidence]', '.spend-details > [data-p=spend-evidence]']) {
+    await page.locator(selector).click();
+    await page.waitForSelector('#detail[open]');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('#detail').open);
+    assert.equal(await pressed(), 1, `highlight kept by ${selector}`);
+    assert.equal(await page.evaluate(sel => document.activeElement === document.querySelector(sel), selector), true, `focus back on ${selector}`);
+  }
+  await page.close();
+  const stubbed = await at(1440, { before: stub({ months: [1, 2, 3] }) });
+  await stubbed.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+  await stubbed.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click();
+  await stubbed.locator('#spend-range').click();
+  assert.equal(await stubbed.locator('.donut-legend [aria-pressed=true]').count(), 1, 'highlight kept while using the slider');
+  await stubbed.close();
+});
+
+check('comparison breakdown bars use magnitudes', async () => {
+  const page = await at(1440);
+  const data = await published(page);
+  const cats = await page.evaluate(() => window.ClareiaData.categories);
+  for (const [a, b] of [['Tiririca', 'Acácio Favacho'], ['Tabata Amaral', 'Tiririca'], ['Acácio Favacho', 'Tabata Amaral']]) {
+    await pickPair(page, data, a, b);
+    const vals = cats.map(c => [sumCents(data, a, c), sumCents(data, b, c)]);
+    const max = Math.max(1, ...vals.flat().map(Math.abs));
+    const widths = await page.locator('.compare-category').evaluateAll(rows => rows.map(r => [r.querySelector('.left-bar i').style.width, r.querySelector('.right-bar i').style.width].map(w => w === '' ? NaN : parseFloat(w))));
+    assert.equal(widths.length, cats.length);
+    widths.forEach(([l, r], i) => {
+      assert.ok(Math.abs(l - Math.abs(vals[i][0]) / max * 100) < 1e-3, `${a} bar ${i}: ${l} vs ${vals[i][0]}`);
+      assert.ok(Math.abs(r - Math.abs(vals[i][1]) / max * 100) < 1e-3, `${b} bar ${i}: ${r} vs ${vals[i][1]}`);
+    });
+  }
+  await page.close();
+});
+
+check('chart points keep focus ring and hit areas without the stale rules', async () => {
+  const page = await at(1440);
+  const rules = await page.evaluate(() => [...document.styleSheets].flatMap(s => [...s.cssRules].flatMap(function walk(r) { return r.cssRules?.length ? [...r.cssRules].flatMap(walk) : [r.cssText]; })).filter(t => /chart-hit|chart-point/.test(t)));
+  const stale = rules.filter(t => /r:\s*48px|stroke-width:\s*20px|pointer-events:\s*visiblePainted/.test(t) || (/\.chart-point/.test(t) && /stroke:\s*none/.test(t)));
+  assert.deepEqual(stale, [], 'stale chart rules');
+  await page.locator('#comparacao').scrollIntoViewIfNeeded();
+  const point = page.locator('.chart-point').first();
+  await point.scrollIntoViewIfNeeded();
+  await point.focus();
+  const info = await point.evaluate(g => {
+    const hit = g.querySelector('.chart-hit'), dot = g.querySelector('.chart-dot'), box = hit.getBoundingClientRect();
+    const center = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return { hitStroke: getComputedStyle(hit).stroke, dotStroke: getComputedStyle(dot).strokeWidth, reachable: g.contains(center) };
+  });
+  assert.equal(info.hitStroke, 'none', 'no ring around the hit rectangle');
+  assert.equal(info.dotStroke, '3px', 'focus ring on the dot');
+  assert.equal(info.reachable, true, 'hit area is clickable');
   await page.close();
 });
 
