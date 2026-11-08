@@ -59,7 +59,7 @@ Os três históricos amostrados vieram fora de ordem cronológica. No ID 204534,
 
 A auditoria relê os originais da própria execução, confirma seus hashes e calcula os conjuntos e índices sem chamar o parser, paginador ou comparador de produção. Confere também contagens e multiplicidades por pessoa/competência e a presença das páginas necessárias. O teste negativo altera os resultados para comprovar a detecção de divergência.
 
-Uma captura por recurso não garante estabilidade da fonte. Não foram coletados todos os históricos individuais nem confirmada a semântica de vigência de `dataHora`. Um relatório com auditoria de descoberta aprovada continua com estado `discovery-only`, não se torna publicação do domínio pessoas e não libera ranking nacional.
+Uma captura por recurso não garante estabilidade da fonte. Esta ferramenta de descoberta não coleta todos os históricos individuais nem confirma a semântica de vigência de `dataHora`. A coleta posterior em dois passes e a resolução mensal estão no [contrato de históricos](camara-people-history.md). Um relatório com auditoria de descoberta aprovada continua com estado `discovery-only`, não se torna publicação do domínio pessoas e não libera ranking nacional.
 
 ## Verificação
 

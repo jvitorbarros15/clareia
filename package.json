@@ -8,6 +8,8 @@
     "build:site": "tsx scripts/build-site.ts",
     "collect": "tsx src/collect.ts",
     "discover:people": "tsx scripts/discover-people.ts",
+    "collect:people": "tsx scripts/collect-people-history.ts",
+    "resolve:people": "tsx scripts/resolve-people-history.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "verify:browser": "node scripts/verify-real.cjs",

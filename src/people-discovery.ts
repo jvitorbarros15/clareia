@@ -37,7 +37,7 @@ export function parseDiscoveryScope(input:unknown,today=new Date().toISOString()
 export function sourceAllowed(url:string):boolean{
   let u:URL;try{u=new URL(url);}catch{return false;}
   return !u.username&&!u.password&&!u.hash&&(
-    u.origin==='https://dadosabertos.camara.leg.br'&&/^\/api\/v2\/(?:api-docs|deputados(?:\/\d+(?:\/historico)?)?)$/.test(u.pathname)||
+    u.origin==='https://dadosabertos.camara.leg.br'&&/^\/api\/v2\/(?:api-docs|deputados(?:\/\d+(?:\/historico)?)?|legislaturas\/\d+|referencias\/deputados\/codSituacao)$/.test(u.pathname)||
     u.origin==='https://www.camara.leg.br'&&/^\/cotas\/Ano-\d{4}\.csv\.zip$/.test(u.pathname)&&!u.search
   );
 }
