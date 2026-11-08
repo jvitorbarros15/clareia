@@ -35,3 +35,7 @@ npm run verify:browser
 `verify:browser` precisa do servidor ativo e do Playwright com Chromium. Relatórios ficam em `output/qa/`, fora do Git.
 
 O protótipo visual com dados fictícios foi retirado; o último estado dele está na tag `mvp-final`.
+
+## Descobrir o universo histórico
+
+`npm run discover:people -- --local --run descoberta-2025-2026` compara as listas históricas e os IDs dos anuais CEAP, preserva originais cifrados e produz uma conferência independente. Não altera o banco ou os dados do site. Contrato, uso, resultados observados e limites: [descoberta de pessoas](docs/source-contracts/camara-people-discovery.md).
