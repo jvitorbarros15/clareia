@@ -866,3 +866,6 @@ body[data-model=editorial] .linked-chart-body:not(.is-year)::before{display:none
   body[data-model=editorial] .compare-category>span:first-child{grid-area:lval;text-align:left;font-size:13px}
   body[data-model=editorial] .compare-category>span:last-child{grid-area:rval;text-align:right;font-size:13px}
 }
+
+.dock-filter{margin-left:auto;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:13px;font-weight:600;flex:none}
+.dock-filter[hidden]{display:none}

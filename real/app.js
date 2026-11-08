@@ -140,7 +140,7 @@
   function editorialFeature() {
     const p = person(state.featured);
     const choices = byTotal().slice(0, 3).map(c => `<button type="button" data-action="feature" data-id="${c.id}" aria-pressed="${c.id === p.id}">${avatar(c)}<span>${escape(first(c))}</span></button>`).join('');
-    return `<p class="eyebrow">Destaque · dados oficiais</p><button class="feature-value" id="total" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} ${state.category === 'Todas' ? 'de reembolsos' : 'em ' + escape(label(state.category).toLowerCase())} de ${escape(p.name)} em ${span()}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? →</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destacar</span>${choices}</div>`;
+    return `<p class="eyebrow">Destaque · dados oficiais</p><button class="feature-value" id="total" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} ${state.category === 'Todas' ? 'de reembolsos' : 'em ' + escape(label(state.category).toLowerCase())} de ${escape(p.name)} em ${span()}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? →</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destaques</span>${choices}</div>`;
   }
   function feature(id) {
     if (id === state.featured) return;
@@ -164,7 +164,10 @@
     if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); $('#answer-slot').before(chip); }
     const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric === 'mensal';
     chip.hidden = !narrowed;
-    chip.innerHTML = narrowed ? `<span>Filtrando: ${escape([state.uf === 'Brasil' ? null : state.uf, state.category === 'Todas' ? null : label(state.category), state.metric === 'mensal' ? 'por mês' : null].filter(Boolean).join(' · '))}</span><button type="button" data-action="reset">Limpar</button>` : '';
+    const scope = [state.uf === 'Brasil' ? null : state.uf, state.category === 'Todas' ? null : label(state.category), state.metric === 'mensal' ? 'por mês' : null].filter(Boolean).join(' · ');
+    chip.innerHTML = narrowed ? `<span>Filtrando: ${escape(scope)}</span><button type="button" data-action="reset" aria-label="Limpar filtros"><span aria-hidden="true">✕</span> Limpar</button>` : '';
+    const dock = $('#dock-filter');
+    if (dock) { dock.hidden = !narrowed; dock.innerHTML = narrowed ? `<span>${escape(scope)}</span><span aria-hidden="true">✕</span>` : ''; dock.setAttribute('aria-label', `Filtro ativo: ${scope}. Limpar filtros`); }
   }
   function markTab(animate = true) {
     const tabsEl = $('.editorial-rank .tabs'), on = tabsEl?.querySelector('[aria-pressed="true"]');
@@ -218,7 +221,10 @@
         else state.answer = { type: 'rank', ids: ranking().slice(0, 3).map(p => p.id), kind: 'gastos' };
       }
     }
-    if (message) state.answer = { type: 'message', title: message[0], message: message[1] };
+    if (message) {
+      state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos';
+      state.answer = { type: 'message', title: message[0], message: message[1] };
+    }
     $('#query').value = state.query;
     closeSuggestions(); refresh();
     if (scroll) $('#answer-slot').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'nearest' });
@@ -340,7 +346,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { label, context, model, state, all, person, records, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordDetail, showDialog, closeDialog, methodology, toast, refresh, sourceBlock, span, pending, byTotal };
+  window.Clareia = { label, context, model, state, all, person, records, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordDetail, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false);
 })();

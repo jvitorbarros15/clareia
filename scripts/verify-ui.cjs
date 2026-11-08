@@ -361,8 +361,45 @@ check('comparison stacks on mobile', async () => {
   await page.close();
 });
 
+const searchFor = async (page, q) => { await page.locator('#query').fill(q); await page.locator('#query').press('Enter'); await page.waitForTimeout(400); };
+
+check('search filter is visible', async () => {
+  const page = await at(1440);
+  await searchFor(page, 'quem gastou mais com passagens');
+  const sentence = await text(page.locator('#editorial-feature'));
+  assert.match(sentence, /em passagens aéreas/, `Destaque names the filter: ${sentence}`);
+  const chip = page.locator('#scope-chip');
+  assert.ok(await chip.isVisible(), 'chip visible');
+  assert.match(await text(chip), /✕/, 'chip has a close mark');
+  assert.match(await text(chip), /Passagens aéreas/);
+  await page.evaluate(() => scrollTo(0, 2400));
+  await page.waitForTimeout(300);
+  const dock = page.locator('.section-dock #dock-filter');
+  assert.ok(await dock.isVisible(), 'filter visible in the dock');
+  assert.match(await text(dock), /Passagens aéreas/);
+  const box = await dock.boundingBox();
+  assert.ok(box.y >= 0 && box.y < 120, 'dock filter is inside the sticky dock');
+  await searchFor(page, 'quem votou melhor');
+  assert.ok(await page.locator('.answer-message').count(), 'out-of-scope answer shown');
+  assert.ok(await chip.isHidden(), 'chip cleared');
+  assert.ok(await dock.isHidden(), 'dock filter cleared');
+  assert.equal(await page.evaluate(() => window.Clareia.state.category), 'Todas', 'filter cleared');
+  await page.close();
+});
+
+check('filtered mobile', async () => {
+  const page = await at(390);
+  await searchFor(page, 'quem gastou mais com passagens');
+  const expected = await page.evaluate(() => { const C = window.Clareia; return C.compact(C.sum(C.all().flatMap(C.records))); });
+  await page.evaluate(() => document.querySelector('#panorama').scrollIntoView());
+  await page.waitForTimeout(1200);
+  assert.equal(await text(page.locator('[data-p-summary=expenses] strong')), clean(expected), 'panorama total equals the filtered sum');
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no horizontal scroll');
+  await page.close();
+});
+
 (async () => {
-  browser = await chromium.launch({ headless: true });
+  browser =await chromium.launch({ headless: true });
   let failed = 0;
   try {
     for (const { name, fn } of checks) {
