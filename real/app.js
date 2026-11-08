@@ -28,6 +28,8 @@
   const shareBase = groups => groups.reduce((n, g) => n + Math.max(0, g.value), 0);
   const share = (value, base) => `${(base > 0 ? value / base * 100 : 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   const sum = records => records.reduce((total, record) => total + record.amount, 0);
+  // A percentage needs a positive base; with a zero or negative base only the difference is meaningful. Direction always comes from a > b.
+  const compareValues = (a, b) => ({ equal: a === b, more: a > b, diff: Math.abs(a - b), percent: b > 0 ? Math.abs(a - b) / b * 100 : null });
   const all = () => D.dataset();
   const person = id => all().find(p => p.id === id);
   const first = p => p.name.split(' ')[0];
@@ -100,7 +102,7 @@
     if (state.tab === 'projetos') return `<div class="empty-state"><b>Projetos de lei ainda não foram coletados.</b><p>A próxima etapa inclui PL, PLP e PEC da Câmara, separando autoria principal de coautoria. Nenhum número é mostrado antes da conferência.</p><button class="outline-button" data-tab="gastos">Ver gastos</button></div>`;
     return ranking().slice(0, 3).map((p, i) => `<article class="rank-card editorial-card" data-person="${p.id}">
       <button class="portrait-button" data-action="profile" data-id="${p.id}" aria-label="Abrir perfil de ${escape(p.name)}">${photo(p)}<span class="rank-number">0${i + 1}</span></button>
-      <div class="card-info"><h3 class="person-name">${escape(p.name)}</h3><p class="editorial-person-context">${context(p)}</p><button class="value-button" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}: ${money(value(p))}. Como chegamos nisso?">${formatted(p)}</button>
+      <div class="card-info"><h3 class="person-name">${escape(p.name)}</h3><p class="editorial-person-context">${escape(context(p))}</p><button class="value-button" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}: ${money(value(p))}. Como chegamos nisso?">${formatted(p)}</button>
       <p class="card-caption">${caption(p)}</p><button class="editorial-proof" data-action="evidence" data-id="${p.id}">Como chegamos nisso? →</button></div></article>`).join('');
   }
   function rankNote() {
@@ -126,9 +128,9 @@
     const ppl = answer.ids.map(person).filter(Boolean), max = Math.max(1, ...ppl.map(p => Math.abs(value(p, answer.kind))));
     let summary = '';
     if (answer.type === 'compare') {
-      const a = value(ppl[0], answer.kind), b = value(ppl[1], answer.kind), ratio = b ? Math.abs((a - b) / b * 100) : null;
-      summary = a === b ? `${first(ppl[0])} e ${first(ppl[1])} têm o mesmo valor no recorte.` : ratio === null ? 'O segundo valor é zero; não há percentual de comparação definido.' : `${first(ppl[0])} registrou ${number(ratio)}% ${a > b ? 'mais' : 'menos'} despesas no período.`;
-    } else summary = `${ppl[0].name} ${answer.type === 'rank' ? 'lidera este recorte' : 'nesta amostra'}.`;
+      const a = value(ppl[0], answer.kind), b = value(ppl[1], answer.kind), c = compareValues(a, b), x = escape(first(ppl[0])), y = escape(first(ppl[1]));
+      summary = c.equal ? `${x} e ${y} têm o mesmo valor no recorte.` : c.percent === null ? `${x} registrou ${money(c.diff)} ${c.more ? 'a mais' : 'a menos'} em despesas no período do que ${y}. Sem percentual: o valor de ${y} é ${b < 0 ? 'negativo' : 'zero'}, então não há base para uma porcentagem.` : `${x} registrou ${number(c.percent)}% ${c.more ? 'mais' : 'menos'} despesas no período.`;
+    } else summary = `${escape(ppl[0].name)} ${answer.type === 'rank' ? 'lidera este recorte' : 'nesta amostra'}.`;
     const unit = state.category === 'Todas' ? 'Cota parlamentar' : label(state.category);
     return `<section class="answer" aria-label="Resultado da investigação"><p class="eyebrow">Resultado da investigação</p><div class="answer-bars">${ppl.map(p => `<div class="answer-row">${avatar(p)}<b>${escape(p.name)}</b><strong>${money(value(p, answer.kind))}</strong><span class="track"><i style="width:${Math.abs(value(p, answer.kind)) / max * 100}%"></i></span></div>`).join('')}</div><div class="answer-bottom"><div><p class="answer-summary">${summary}</p><p class="context">${escape(unit)} • ${span()}${state.metric === 'mensal' ? ' • média mensal' : ''}</p></div><div class="answer-actions"><button class="outline-button primary" data-action="answer-evidence">Como chegamos nisso? ${icon('external')}</button><button class="outline-button" data-action="share">${icon('share')} Compartilhar</button></div></div></section>`;
   }
@@ -205,8 +207,19 @@
     syncURL();
     document.dispatchEvent(new CustomEvent('clareia:change'));
   }
-  // Category words a question may use, matched against the official names and the display labels.
-  const categoryFor = q => categories.find(c => norm(`${c} ${label(c)}`).split(/[^a-z]+/).filter(w => w.length > 5).some(w => q.includes(w.slice(0, 7))));
+  // Words that name one category, matched at the start of a word in the normalized question. Generic words of the official names (parlamentar, atividade, federal, distrito, exceto, apoio) and "mandato" alone must never select a category.
+  const categoryTerms = {
+    'DIVULGAÇÃO DA ATIVIDADE PARLAMENTAR.': ['divulga'],
+    'PASSAGEM AÉREA - SIGEPA': ['passage', 'aerea', 'aereo'],
+    'LOCAÇÃO OU FRETAMENTO DE VEÍCULOS AUTOMOTORES': ['locac', 'fretamento', 'veiculo'],
+    'COMBUSTÍVEIS E LUBRIFICANTES.': ['combust', 'lubrific'],
+    'MANUTENÇÃO DE ESCRITÓRIO DE APOIO À ATIVIDADE PARLAMENTAR': ['escritorio'],
+    'SERVIÇO DE TÁXI, PEDÁGIO E ESTACIONAMENTO': ['taxi', 'pedagio', 'estacionamento'],
+    'HOSPEDAGEM ,EXCETO DO PARLAMENTAR NO DISTRITO FEDERAL.': ['hospedag'],
+    'TELEFONIA': ['telefon'],
+    'COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA': ['auxilio', 'moradia']
+  };
+  const categoryFor = q => categories.find(c => (categoryTerms[c] || []).some(term => new RegExp(`\\b${term}`).test(q)));
   function ask(query, scroll = true) {
     state.query = query.trim();
     if (!state.query) { $('#query').focus(); return; }
@@ -264,10 +277,16 @@
     let formula = state.metric === 'mensal' ? `${money(total)} ÷ ${p.months} meses no recorte` : `Soma de ${records(p).length} registros = ${money(total)}`;
     let result = money(amount), resultCaption = state.metric === 'mensal' ? 'por mês no recorte' : 'no período';
     if (comparison) {
-      const b = value(comparison, 'gastos'), percent = b ? (amount - b) / b * 100 : null;
-      formula = `(${money(amount)} − ${money(b)}) ÷ ${money(b)} × 100`;
-      result = percent === null ? 'Indefinido' : `${number(Math.abs(percent))}%`;
-      resultCaption = percent === null ? 'O denominador é zero.' : percent === 0 ? 'valores iguais no recorte' : `${percent > 0 ? 'a mais' : 'a menos'} no período`;
+      const b = value(comparison, 'gastos'), c = compareValues(amount, b);
+      if (c.percent === null) {
+        formula = `${money(amount)} − ${money(b)}`;
+        result = money(c.diff);
+        resultCaption = c.equal ? 'valores iguais no recorte' : `${c.more ? 'a mais' : 'a menos'} no período, sem percentual: o valor de ${escape(first(comparison))} é ${b < 0 ? 'negativo' : 'zero'}`;
+      } else {
+        formula = `(${money(amount)} − ${money(b)}) ÷ ${money(b)} × 100`;
+        result = `${number(c.percent)}%`;
+        resultCaption = c.equal ? 'valores iguais no recorte' : `${c.more ? 'a mais' : 'a menos'} no período`;
+      }
     }
     showDialog('Como chegamos nisso?', `<p class="dialog-subtitle">${comparison ? 'A comparação, passo a passo' : 'O cálculo, passo a passo'}</p>
       <section class="evidence-step"><span class="step-number">1</span><div><h3>O que estamos comparando</h3><p>Despesas da cota parlamentar (valor líquido) • ${span()}</p><p>${escape(p.name)}${comparison ? ` × ${escape(comparison.name)}` : ''}</p></div></section>
@@ -340,7 +359,7 @@
     else if (action === 'focus-search') { $('#query').focus(); $('#query').scrollIntoView({ block: 'center' }); }
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog(); ask(`Compare ${person(id).name} e ${peer.name}`); }
     else if (action === 'share') shareLink();
-    else if (action === 'reset') { state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
+    else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });
   document.addEventListener('submit', event => { if (event.target.id === 'search-form') { event.preventDefault(); ask($('#query').value); } });
@@ -357,7 +376,12 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { logo, label, context, model, state, all, person, records, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal };
+  window.Clareia = { logo, label, context, model, state, all, person, records, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
-  if (state.query) ask(state.query, false);
+  if (state.query) {
+    // ask() derives metric, tab and category from the words; a shared link must keep what its parameters say.
+    const shared = { category: state.category, metric: state.metric, tab: state.tab };
+    ask(state.query, false);
+    if (state.answer?.type !== 'message') { Object.assign(state, shared); refresh(); }
+  }
 })();

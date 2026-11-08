@@ -11,12 +11,13 @@ const text = async locator => (await locator.innerText()).replace(/\s+/g, ' ').t
 const clean = value => value.replace(/\s+/g, ' ').trim();
 
 let browser;
-async function at(width, { height = 900, reducedMotion = 'no-preference' } = {}) {
+async function at(width, { height = 900, reducedMotion = 'no-preference', search = '', init } = {}) {
   const page = await browser.newPage({ viewport: { width, height }, reducedMotion });
   page.errors = [];
   page.on('pageerror', error => page.errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') page.errors.push(message.text()); });
-  await page.goto(base);
+  if (init) await page.addInitScript(init);
+  await page.goto(search ? `${base}/${search}` : base);
   await page.waitForSelector('.full-portal');
   return page;
 }
@@ -35,7 +36,8 @@ async function published(page) {
     const people = [];
     for (const id of index.scope.ids) {
       const records = await fetch(`/${manifest.base}/deputados/${id}/despesas.json`).then(r => r.json());
-      people.push({ id, name: index.people.find(p => p.id === id).name, records });
+      const meta = index.people.find(p => p.id === id);
+      people.push({ id, name: meta.name, uf: meta.uf, records });
     }
     const categories = {};
     for (const p of people) for (const r of p.records) categories[r.category] = (categories[r.category] || 0) + r.cents;
@@ -269,8 +271,8 @@ check('category labels', async () => {
 
 check('search matches display labels and official names', async () => {
   const page = await at(1440);
-  const category = await page.evaluate(() => { window.Clareia.ask('quem gastou mais com mandato'); return window.Clareia.state.category; });
-  assert.equal(category, 'DIVULGAÇÃO DA ATIVIDADE PARLAMENTAR.', 'a display-label word finds the official category');
+  const category = await page.evaluate(() => { window.Clareia.ask('quem gastou mais com divulgação'); return window.Clareia.state.category; });
+  assert.equal(category, 'DIVULGAÇÃO DA ATIVIDADE PARLAMENTAR.', 'a category term finds the official category');
   const param = await page.evaluate(() => new URLSearchParams(location.search).get('categoria'));
   assert.equal(param, 'DIVULGAÇÃO DA ATIVIDADE PARLAMENTAR.', 'URL keeps the official name');
   const official = await page.evaluate(() => { window.Clareia.ask('quem gastou mais com combustiveis'); return window.Clareia.state.category; });
@@ -320,10 +322,8 @@ check('donut panel', async () => {
   await page.keyboard.press('ArrowDown');
   assert.equal(await page.locator('.donut-legend [aria-pressed=true]').getAttribute('data-p-highlight'), second, 'ArrowDown moves the selection');
   assert.equal(await page.evaluate(() => document.activeElement.dataset.pHighlight), second, 'focus follows');
-  const value = await page.evaluate(name => {
-    const C = window.Clareia;
-    return C.money(C.sum(C.all().flatMap(C.records).filter(r => r.category === name)));
-  }, second);
+  const data = await published(page);
+  const value = brl(data.categories[second]);
   assert.equal(clean(await page.locator('.donut-hole strong').innerText()), clean(value), 'center shows the exact value');
   await page.keyboard.press('ArrowUp');
   assert.equal(await page.locator('.donut-legend [aria-pressed=true]').getAttribute('data-p-highlight'), first, 'ArrowUp moves back');
@@ -390,7 +390,10 @@ check('search filter is visible', async () => {
 check('filtered mobile', async () => {
   const page = await at(390);
   await searchFor(page, 'quem gastou mais com passagens');
-  const expected = await page.evaluate(() => { const C = window.Clareia; return C.compact(C.sum(C.all().flatMap(C.records))); });
+  const data = await published(page);
+  const filtered = data.people.flatMap(p => p.records).filter(r => r.category === 'PASSAGEM AÉREA - SIGEPA').reduce((n, r) => n + r.cents, 0);
+  assert.ok(filtered > 0, 'the published sample has air-ticket expenses');
+  const expected = brlCompact(filtered);
   await page.evaluate(() => document.querySelector('#panorama').scrollIntoView());
   await page.waitForTimeout(1200);
   assert.equal(await text(page.locator('[data-p-summary=expenses] strong')), clean(expected), 'panorama total equals the filtered sum');
@@ -486,10 +489,8 @@ const reach = `(() => {
       if (hit && (el === hit || el.contains(hit))) continue;
       const other = hit && hit.closest(TARGET);
       const hitNear = near.find(n => n.o === other);
-      // Not clickable here: excused only when another target closer than 44px shares that side of the box, and named in the report.
-      const side = near.filter(n => (x < cx - 1 ? n.b.left + n.b.width / 2 < cx : x > cx + 1 ? n.b.left + n.b.width / 2 > cx : false) || (y < cy - 1 ? n.b.top + n.b.height / 2 < cy : y > cy + 1 ? n.b.top + n.b.height / 2 > cy : false));
+      // Not clickable here: excused only when the point really hits another target closer than 44px, and named in the report.
       if (hitNear) { neighbours.add(name(other)); continue; }
-      if (side.length) { side.forEach(n => neighbours.add(name(n.o))); continue; }
       fail.push(Math.round(x - cx) + ',' + Math.round(y - cy) + ' hits ' + (hit ? hit.tagName + '.' + String(hit.className.baseVal ?? hit.className).slice(0, 30) : 'nothing'));
     }
     return { label, name: name(el), fail, neighbours: [...neighbours] };
@@ -841,6 +842,266 @@ check('mobile comparison', async () => {
   for (const l of m.labels) assert.ok(l.lines <= 2, `category label ≤ 2 lines: ${l.text} (${l.lines})`);
   assert.deepEqual(m.overflow, [], 'category values stay inside the section');
   assert.ok(m.scroll <= 0, 'no horizontal scroll');
+  await page.close();
+});
+
+
+const AUX = 'COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA';
+const sumCents = (data, name, category, month) => data.people.find(p => p.name === name).records
+  .filter(r => (!category || r.category === category) && (!month || r.month === month)).reduce((n, r) => n + r.cents, 0);
+const pickPair = async (page, data, a, b) => {
+  await page.locator('#comparacao').scrollIntoViewIfNeeded();
+  await page.locator('#compare-a').selectOption(String(data.people.find(p => p.name === a).id));
+  await page.locator('#compare-b').selectOption(String(data.people.find(p => p.name === b).id));
+};
+
+check('search category terms do not over-match', async () => {
+  const page = await at(1440);
+  const data = await published(page);
+  const names = Object.keys(data.categories);
+  const norm = v => v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const find = word => names.find(n => norm(n).includes(word));
+  const category = q => page.evaluate(q => { window.Clareia.ask(q); return window.Clareia.state.category; }, q);
+  for (const q of ['Quem mais gastou na cota parlamentar?', 'Quem mais gastou como deputado federal?', 'Quem mais gastou no mandato?', 'Quem mais gastou no distrito federal?', 'Quem mais gastou com apoio parlamentar?', 'Quem mais gastou com atividade parlamentar, exceto viagens?']) {
+    assert.equal(await category(q), 'Todas', `"${q}" must not filter a category`);
+  }
+  for (const [q, word] of [['Quem mais gastou com divulgação?', 'divulga'], ['Quem mais gastou com passagens?', 'passagem'], ['Quem mais gastou com combustíveis?', 'combust'], ['Quem mais gastou com hospedagem?', 'hospedagem'], ['Quem mais gastou com telefonia?', 'telefonia'], ['Quem mais gastou com aluguel de veículos?', 'locacao'], ['Quem mais gastou com táxi?', 'taxi'], ['Quem mais gastou com escritório?', 'escritorio'], ['Quem mais gastou com auxílio-moradia?', 'moradia']]) {
+    assert.equal(await category(q), find(word), `"${q}" finds the ${word} category`);
+  }
+  await page.close();
+});
+
+check('comparison with a zero or negative base has no percentage', async () => {
+  const page = await at(1440, { search: `?categoria=${encodeURIComponent(AUX)}` });
+  const data = await published(page);
+  const tiririca = sumCents(data, 'Tiririca', AUX), acacio = sumCents(data, 'Acácio Favacho', AUX);
+  assert.ok(tiririca < 0 && acacio === 0, 'the published sample has a negative and a zero total in the category');
+  const diff = Math.abs(tiririca - acacio);
+  await pickPair(page, data, 'Tiririca', 'Acácio Favacho');
+  let center = clean(await page.locator('.comparison-center').innerText());
+  assert.ok(!center.includes('%'), `no percent when the base is zero: ${center}`);
+  assert.ok(center.includes(clean(brlCompact(diff))), `difference ${brlCompact(diff)} in: ${center}`);
+  assert.match(center, /a menos para Tiririca do que para Acácio/, `direction a < b: ${center}`);
+  await page.locator('[data-p=swap]').click();
+  center = clean(await page.locator('.comparison-center').innerText());
+  assert.ok(!center.includes('%'), `no percent after swap (base is negative): ${center}`);
+  assert.ok(center.includes(clean(brlCompact(diff))), `difference after swap: ${center}`);
+  assert.match(center, /a mais para Acácio do que para Tiririca/, `direction a > b after swap: ${center}`);
+  await page.locator('[data-p=compare-evidence]').click();
+  await page.waitForSelector('#detail[open]');
+  let result = clean(await page.locator('#detail .calculation-result').innerText());
+  assert.ok(!result.includes('%') && result.includes(clean(brl(diff))), `evidence result: ${result}`);
+  await page.keyboard.press('Escape');
+  for (const [q, direction] of [['Compare Tiririca e Acácio com auxílio-moradia', 'menos'], ['Compare Acácio e Tiririca com auxílio-moradia', 'mais']]) {
+    await page.evaluate(q => window.Clareia.ask(q, false), q);
+    const summary = clean(await page.locator('.answer-summary').innerText());
+    assert.ok(!summary.includes('%') && !/100/.test(summary), `answer without percent: ${summary}`);
+    assert.ok(summary.includes(clean(brl(diff))), `answer shows the difference: ${summary}`);
+    assert.ok(new RegExp(`\\b${direction}\\b`).test(summary), `answer direction "${direction}": ${summary}`);
+    await page.locator('[data-action=answer-evidence]').click();
+    await page.waitForSelector('#detail[open]');
+    result = clean(await page.locator('#detail .calculation-result').innerText());
+    assert.ok(!result.includes('%') && result.includes(clean(brl(diff))), `answer evidence result: ${result}`);
+    await page.keyboard.press('Escape');
+  }
+  await page.close();
+});
+
+check('comparison with a positive base keeps its percentage', async () => {
+  const page = await at(1440);
+  const data = await published(page);
+  const a = sumCents(data, 'Acácio Favacho'), b = sumCents(data, 'Tiririca');
+  await pickPair(page, data, 'Acácio Favacho', 'Tiririca');
+  const expected = (Math.abs(a - b) / b * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  const center = clean(await page.locator('.comparison-center').innerText());
+  assert.ok(center.includes(`${expected}%`) && /a mais para Acácio/.test(center), `${expected}% in: ${center}`);
+  await page.close();
+});
+
+check('month click scopes every label to the selected month', async () => {
+  const page = await at(1440);
+  const data = await published(page);
+  const jan = data.people.reduce((n, p) => n + sumCents(data, p.name, null, 1), 0);
+  await page.locator('#despesas [data-p-month="1"]').click();
+  const section = clean(await page.locator('#despesas').innerText());
+  assert.ok(!/Jan–Jan/.test(section), 'no "Jan–Jan"');
+  assert.ok(!section.includes('Jan–Fev'), `full period next to January-only data: ${section.match(/.{30}Jan–Fev.{10}/)}`);
+  assert.equal(clean(await page.locator('#despesas .range-heading h3').innerText()), 'Por mês · Jan 2025');
+  assert.equal(clean(await page.locator('.donut-hole span').innerText()), 'Jan 2025');
+  assert.equal(clean(await page.locator('.donut-hole strong').innerText()), clean(brlCompact(jan)), 'donut total is January only');
+  await page.locator('#despesas .donut-caption [data-p=spend-evidence]').click();
+  await page.waitForSelector('#detail[open]');
+  const note = clean(await page.locator('#detail .records-note').first().innerText());
+  assert.ok(note.includes('Jan 2025') && !note.includes('Jan–Fev'), `dialog scope: ${note}`);
+  assert.equal(clean(await page.locator('#detail .calculation-result').innerText()).split(' Soma')[0], clean(brl(jan)), 'dialog total is January only');
+  await page.keyboard.press('Escape');
+  await page.locator('.metric-toggle [data-metric=mensal]').click();
+  await page.locator('#scope-chip [data-action=reset]').click();
+  assert.equal(clean(await page.locator('#despesas .range-heading h3').innerText()), 'Por mês · Jan–Fev 2025', 'Limpar resets the month');
+  assert.equal(await page.locator('.p-mini-bars button.included').count(), 2, 'both months included again');
+  await page.close();
+});
+
+check('monthly chart with negative values uses a true axis', async () => {
+  const page = await at(1440, { search: `?categoria=${encodeURIComponent(AUX)}` });
+  const data = await published(page);
+  await pickPair(page, data, 'Tiririca', 'Acácio Favacho');
+  const lo = sumCents(data, 'Tiririca', AUX, 1);
+  assert.ok(lo < 0 && sumCents(data, 'Acácio Favacho', AUX, 1) === 0, 'January: negative and zero');
+  const chart = await page.evaluate(() => {
+    const svg = document.querySelector('.linked-lines');
+    return {
+      ticks: [...svg.querySelectorAll('.y-tick')].map(t => t.textContent.replace(/\s+/g, ' ').trim()),
+      points: [...svg.querySelectorAll('.chart-point')].map(g => ({ label: g.getAttribute('aria-label'), cy: +g.dataset.cy })),
+    };
+  });
+  assert.deepEqual([...chart.ticks].sort(), [lo, lo / 2, 0].map(v => clean(brlCompact(v))).sort(), `tick labels are true values: ${chart.ticks}`);
+  assert.ok(chart.points.every(p => Number.isFinite(p.cy) && p.cy > 0 && p.cy < 255), `points inside the plot: ${JSON.stringify(chart.points)}`);
+  const y = who => chart.points.find(p => p.label.startsWith(who) && p.label.includes('Jan')).cy;
+  assert.ok(y('Tiririca') > y('Acácio'), 'the negative value is drawn below zero');
+  await page.close();
+});
+
+check('shared link keeps metric, tab and category', async () => {
+  const cat = 'TELEFONIA';
+  const page = await at(1440, { search: `?q=${encodeURIComponent('Quem mais gastou?')}&metrica=mensal&aba=menos&categoria=${encodeURIComponent(cat)}` });
+  const state = await page.evaluate(() => ({ metric: window.Clareia.state.metric, tab: window.Clareia.state.tab, category: window.Clareia.state.category, search: location.search }));
+  assert.deepEqual([state.metric, state.tab, state.category], ['mensal', 'menos', cat], 'state follows the shared link');
+  const params = new URLSearchParams(state.search);
+  assert.deepEqual([params.get('metrica'), params.get('aba'), params.get('categoria')], ['mensal', 'menos', cat], 'URL keeps the parameters');
+  assert.equal(await text(page.locator('.metric-toggle [aria-pressed=true]')), 'Por mês');
+  await page.close();
+});
+
+check('map explanation lists its rows and coverage text is accurate', async () => {
+  const page = await at(1440);
+  const data = await published(page);
+  await page.locator('[data-p=map-evidence]').click();
+  await page.waitForSelector('#detail[open]');
+  const rows = await page.locator('#detail table tbody tr').evaluateAll(trs => trs.map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').trim())));
+  const byUf = {};
+  for (const p of data.people) { byUf[p.uf] ||= { n: 0, cents: 0 }; byUf[p.uf].n++; byUf[p.uf].cents += p.records.reduce((n, r) => n + r.cents, 0); }
+  assert.equal(rows.length, Object.keys(byUf).length, `one row per UF with deputies: ${JSON.stringify(rows)}`);
+  for (const [uf, v] of Object.entries(byUf)) {
+    const row = rows.find(r => r[0].includes(uf));
+    assert.ok(row, `row for ${uf}`);
+    assert.deepEqual([row[1], row[2]], [String(v.n), clean(brl(v.cents))], `${uf} profiles and exact value`);
+  }
+  await page.keyboard.press('Escape');
+  await page.locator('[data-p=coverage]').click();
+  await page.waitForSelector('#detail[open]');
+  const coverage = clean(await page.locator('#detail-body').innerText());
+  assert.ok(!/\bUF\b|partido/i.test(coverage), `coverage says UF or partido are not collected: ${coverage}`);
+  await page.close();
+});
+
+check('chart hit areas do not loop the resize observer', async () => {
+  const counters = () => {
+    window.__ro = { made: 0, observe: 0, writes: 0 };
+    const Native = window.ResizeObserver;
+    window.ResizeObserver = class extends Native {
+      constructor(callback) { window.__ro.made++; super(callback); }
+      observe(...args) { window.__ro.observe++; return super.observe(...args); }
+    };
+    const set = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (name, value) { if (this.classList && this.classList.contains('chart-hit')) window.__ro.writes++; return set.call(this, name, value); };
+  };
+  const page = await at(1440, { init: counters });
+  const read = () => page.evaluate(() => ({ ...window.__ro }));
+  await page.waitForTimeout(1200);
+  const first = await read();
+  await page.waitForTimeout(1500);
+  assert.deepEqual(await read(), first, 'idle: no new observers or writes');
+  assert.ok(first.made <= 1, `observers created: ${first.made}`);
+  const data = await published(page);
+  await pickPair(page, data, 'Tabata Amaral', 'Tiririca');
+  await page.waitForTimeout(500);
+  const second = await read();
+  await page.waitForTimeout(1500);
+  assert.deepEqual(await read(), second, 'idle after changing the pair');
+  assert.ok(second.made <= 1, `still one observer: ${second.made}`);
+  await page.close();
+});
+
+check('Explorar a state with one deputy keeps a valid pair', async () => {
+  const page = await at(1440);
+  const data = await published(page);
+  const solo = Object.entries(data.people.reduce((m, p) => ({ ...m, [p.uf]: (m[p.uf] || 0) + 1 }), {})).find(([, n]) => n === 1)[0];
+  await page.locator('#map-select').selectOption(solo);
+  await page.locator('[data-p=apply-state]').click();
+  const [a, b] = await page.evaluate(() => [document.querySelector('#compare-a').value, document.querySelector('#compare-b').value]);
+  assert.notEqual(a, b, `the comparison compares ${a} with itself`);
+  await page.close();
+});
+
+check('closing a dialog opened from the category panel returns focus', async () => {
+  const page = await at(1440);
+  await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+  await page.locator('.donut-legend [data-p-highlight]').first().click();
+  await page.locator('[data-p-drill]').click();
+  await page.waitForSelector('#detail[open]');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('#detail').open);
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement.closest('[data-p-drill]'))), true, 'focus back on "Ver fornecedores"');
+  await page.locator('.supplier-list [data-p-supplier]').first().click();
+  await page.waitForSelector('#detail[open]');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('#detail').open);
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement.closest('.supplier-list [data-p-supplier]'))), true, 'focus back on the supplier row');
+  await page.close();
+});
+
+check('saving by keyboard keeps focus in the same section', async () => {
+  const page = await at(1440);
+  for (const section of ['#comparacao', '#pessoas']) {
+    const button = page.locator(`${section} [data-p-follow]`).last();
+    const id = await button.getAttribute('data-p-follow');
+    await button.focus();
+    await page.keyboard.press('Enter');
+    const where = await page.evaluate(() => ({ section: document.activeElement.closest('section')?.id, id: document.activeElement.dataset.pFollow }));
+    assert.deepEqual(where, { section: section.slice(1), id }, `focus after saving from ${section}`);
+  }
+  await page.close();
+});
+
+check('Visão inicial keeps focus', async () => {
+  const page = await at(1440);
+  await page.locator('[data-p-uf=SP]').click();
+  await page.locator('[data-p=map-reset]').click();
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.p), 'map-reset');
+  await page.close();
+});
+
+check('external text is escaped once', async () => {
+  const page = await at(1440);
+  const probe = await page.evaluate(() => {
+    const C = window.Clareia, D = window.ClareiaData;
+    const [p] = C.all(), category = D.categories[1];
+    const name = `D'Ávila & <u data-xss=name>Filho</u>`, catName = `Foo & 'bar' <u data-xss=cat>x</u>`;
+    p.name = name; p.party = `PX<u data-xss=party>`;
+    D.categories[1] = catName;
+    for (const person of C.all()) for (const r of person.records) if (r.category === category) r.category = catName;
+    C.refresh();
+    return { name, shown: D.label(catName) };
+  });
+  const inspect = async step => {
+    assert.equal(await page.locator('u[data-xss]').count(), 0, `markup injected at ${step}`);
+    const body = await page.evaluate(() => document.body.innerText + [...document.querySelectorAll('dialog')].map(d => d.innerText).join('\n'));
+    assert.ok(!/&amp;|&#39;|&lt;/.test(body), `double escaping at ${step}`);
+  };
+  await inspect('page');
+  const body = await page.evaluate(() => document.body.innerText);
+  assert.ok(body.includes(probe.name), 'the name renders literally, once');
+  assert.ok(body.includes(probe.shown), 'the category renders literally, once');
+  const aria = await page.evaluate(() => [...document.querySelectorAll('[data-p-follow]')].map(b => b.getAttribute('aria-label')));
+  assert.ok(aria.some(l => l.endsWith(probe.name)), 'attribute keeps the exact name');
+  await page.locator('.bar-row').first().click(); await page.waitForSelector('#detail[open]'); await inspect('evidence');
+  await page.keyboard.press('Escape');
+  await page.locator('.portrait-button').first().click(); await page.waitForSelector('#detail[open]'); await inspect('profile');
+  await page.keyboard.press('Escape');
+  await page.locator('#despesas .donut-legend [data-p-highlight]').nth(1).click();
+  await page.locator('#despesas [data-p-drill]').click(); await page.waitForSelector('#detail[open]'); await inspect('supplier dialog');
+  await page.keyboard.press('Escape');
   await page.close();
 });
 
