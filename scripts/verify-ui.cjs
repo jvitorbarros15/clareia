@@ -398,6 +398,78 @@ check('filtered mobile', async () => {
   await page.close();
 });
 
+check('short heading hierarchy', async () => {
+  const page = await at(1440);
+  const found = await page.evaluate(() => {
+    const visible = el => el.offsetParent && !el.closest('dialog') && !el.classList.contains('sr-only');
+    const pick = (selector, skip) => [...document.querySelectorAll(selector)].filter(el => visible(el) && !el.closest(skip)).map(el => {
+      const s = getComputedStyle(el);
+      return { text: el.textContent.trim().slice(0, 30), size: parseFloat(s.fontSize), spacing: parseFloat(s.letterSpacing) / parseFloat(s.fontSize) };
+    });
+    return {
+      h1: pick('h1', 'x'),
+      h2: pick('main section h2, .full-portal section h2', '.bar-section'),
+      h3: pick('main section h3, .full-portal section h3', '.person-name, .directory-person, .timeline-event'),
+    };
+  });
+  assert.ok(found.h2.length >= 5, 'section h2 found');
+  assert.ok(found.h3.length >= 5, 'section h3 found');
+  assert.equal(new Set(found.h2.map(h => h.size)).size, 1, `one h2 size: ${JSON.stringify(found.h2.map(h => [h.text, h.size]))}`);
+  for (const h of found.h2) assert.ok(Math.abs(h.spacing + 0.035) <= 0.005, `h2 letter-spacing ${h.text}: ${h.spacing.toFixed(4)}em`);
+  assert.equal(new Set(found.h3.map(h => h.size)).size, 1, `one h3 size: ${JSON.stringify(found.h3.map(h => [h.text, h.size]))}`);
+  assert.ok(found.h3[0].size < found.h2[0].size, 'h3 smaller than h2');
+  assert.ok(found.h1[0].size >= 90, `hero h1 keeps its editorial size (${found.h1[0].size})`);
+  await page.close();
+});
+
+for (const width of [1440, 390]) {
+  check(`dock indicator on its rule (${width})`, async () => {
+    const page = await at(width);
+    for (const id of ['despesas', 'atlas']) {
+      await page.evaluate(target => document.getElementById(target).scrollIntoView(), id);
+      await page.waitForTimeout(700);
+      const geometry = await page.evaluate(() => {
+        const dock = document.querySelector('.section-dock');
+        const link = dock.querySelector('a.current');
+        if (!link) return null;
+        const after = getComputedStyle(link, '::after');
+        const l = link.getBoundingClientRect();
+        const d = dock.getBoundingClientRect();
+        const top = l.top + parseFloat(after.top);
+        const bottom = top + parseFloat(after.height);
+        const left = l.left;
+        const right = l.left + parseFloat(after.width);
+        const hits = [...document.querySelectorAll('main *, .full-portal *')].filter(el => {
+          if (dock.contains(el) || el.contains(dock)) return false;
+          const r = el.getBoundingClientRect();
+          return r.width && r.height && r.top >= d.bottom - 0.5 && r.left < right && r.right > left && r.top < bottom - 0.5;
+        }).map(el => el.tagName + '.' + el.className);
+        return { bottom, dockBottom: d.bottom, hits };
+      });
+      assert.ok(geometry, `${id}: current dock link exists`);
+      assert.ok(Math.abs(geometry.bottom - geometry.dockBottom) <= 1, `${id}: indicator bottom ${geometry.bottom} vs dock bottom ${geometry.dockBottom}`);
+      assert.deepEqual(geometry.hits, [], `${id}: indicator overlaps content below the dock`);
+    }
+    await page.close();
+  });
+}
+
+check('ranking tabs aligned', async () => {
+  for (const width of [1440, 390]) {
+    const page = await at(width);
+    const gap = await page.evaluate(() => {
+      const tabs = document.querySelector('.editorial-rank .tabs');
+      const first = tabs.querySelector('button');
+      const node = [...first.childNodes].find(n => n.nodeType === 3 && n.textContent.trim()) || first;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      return range.getBoundingClientRect().left - tabs.getBoundingClientRect().left;
+    });
+    assert.ok(Math.abs(gap) <= 1, `first tab text offset ${gap}px at ${width}`);
+    await page.close();
+  }
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;
