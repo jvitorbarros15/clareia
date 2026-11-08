@@ -105,7 +105,7 @@
     return `<div class="editorial-follow-up"><span>Continue investigando</span><button type="button" data-metric="${monthly ? 'total' : 'mensal'}">${monthly ? 'E se compararmos o total do período?' : 'A ordem muda quando comparamos por mês?'} →</button></div>`;
   }
   function rankingSection() {
-    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados da amostra</h2>${tabs()}<div class="editorial-controls"><div class="selects"><span class="select-label real-year">${span()}</span></div>${metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
+    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados da amostra</h2>${tabs()}<div class="editorial-controls"><div class="selects"><span class="real-year">${span()}</span></div>${metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
   }
   function answerHTML() {
     if (!state.answer) return '';
