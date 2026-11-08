@@ -784,3 +784,17 @@ body[data-model=editorial] .section-dock .follow-nav{gap:9px}
 .follow-count:has(#saved-count:empty){display:none}
 .follow-nav:hover .follow-count,.follow-nav:focus-visible .follow-count{background:var(--accent);border-color:var(--accent);color:var(--on-accent);box-shadow:0 3px 9px #164bff24}
 @media(prefers-reduced-motion:reduce){.follow-count{transition:none}}
+
+/* The handwritten note arrives one letter at a time, once on page entry. */
+body[data-model=editorial][data-motion=on] .editorial-handwritten{animation:none}
+.handwritten-line{display:block;white-space:nowrap}
+.handwritten-letter{display:inline-block;transform-origin:50% 85%}
+.handwritten-space{width:.23em}
+@keyframes handwritten-letter-arrive{
+  0%{opacity:0;transform:translate3d(0,12px,0) rotate(-14deg) scale(.82);filter:blur(2px)}
+  65%{opacity:1;transform:translate3d(0,-2px,0) rotate(3deg) scale(1.04);filter:blur(0)}
+  100%{opacity:1;transform:translate3d(0,0,0) rotate(0) scale(1);filter:blur(0)}
+}
+@media(prefers-reduced-motion:no-preference){
+  .handwritten-letter{animation:handwritten-letter-arrive 540ms var(--letter-delay) cubic-bezier(.22,1,.36,1) both}
+}

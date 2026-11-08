@@ -120,9 +120,18 @@
     const unit = state.category === 'Todas' ? 'Cota parlamentar' : state.category;
     return `<section class="answer" aria-label="Resultado da investigação"><p class="eyebrow">Resultado da investigação</p><div class="answer-bars">${ppl.map(p => `<div class="answer-row">${avatar(p)}<b>${escape(p.name)}</b><strong>${money(value(p, answer.kind))}</strong><span class="track"><i style="width:${Math.abs(value(p, answer.kind)) / max * 100}%"></i></span></div>`).join('')}</div><div class="answer-bottom"><div><p class="answer-summary">${summary}</p><p class="context">${escape(unit)} • ${span()}${state.metric === 'mensal' ? ' • média mensal' : ''}</p></div><div class="answer-actions"><button class="outline-button primary" data-action="answer-evidence">Como chegamos nisso? ${icon('external')}</button><button class="outline-button" data-action="share">${icon('share')} Compartilhar</button></div></div></section>`;
   }
+  function handwrittenNote() {
+    let index = 0;
+    const lines = ['Todo número', 'tem uma', 'fonte.'];
+    const letters = lines.map(line => `<span class="handwritten-line">${Array.from(line).map(char => {
+      const delay = 500 + index++ * 75;
+      return `<span class="handwritten-letter${char === ' ' ? ' handwritten-space' : ''}" style="--letter-delay:${delay}ms">${char === ' ' ? '&nbsp;' : escape(char)}</span>`;
+    }).join('')}</span>`).join('');
+    return `<p class="editorial-handwritten"><span class="sr-only">Todo número tem uma fonte.</span><span aria-hidden="true">${letters}</span></p>`;
+  }
   function layout() {
     document.body.dataset.model = model;
-    const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗</button></div></div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured))}</div><p class="editorial-handwritten">Todo número<br>tem uma<br>fonte.</p><div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section><div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
+    const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗</button></div></div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured))}</div>${handwrittenNote()}<div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section><div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
     $('#app').innerHTML = `<div class="site">${header()}<main id="main">${main}</main><footer class="footer"></footer></div>`;
   }
   function editorialFeature() {
