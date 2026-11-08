@@ -39,13 +39,18 @@ export function sourceAllowed(url:string):boolean{
   const legacy=u.origin==='https://www.camara.leg.br'&&u.pathname==='/SitCamaraWS/Deputados.asmx/ObterDetalhesDeputado'&&
     [...u.searchParams.keys()].sort().join(',')==='ideCadastro,numLegislatura'&&
     ['ideCadastro','numLegislatura'].every(key=>/^[1-9]\d{0,8}$/.test(u.searchParams.get(key)||''));
+  const expenses=u.origin==='https://dadosabertos.camara.leg.br'&&/^\/api\/v2\/deputados\/[1-9]\d{0,8}\/despesas$/.test(u.pathname)&&
+    [...u.searchParams.keys()].sort().join(',')==='ano,idLegislatura,itens,mes,ordem,ordenarPor,pagina'&&
+    ['ano','idLegislatura','itens','mes','pagina'].every(key=>/^[1-9]\d{0,8}$/.test(u.searchParams.get(key)||''))&&
+    Number(u.searchParams.get('ano'))>=2009&&Number(u.searchParams.get('mes'))<=12&&[25,100].includes(Number(u.searchParams.get('itens')))&&u.searchParams.get('ordem')==='ASC'&&u.searchParams.get('ordenarPor')==='codDocumento';
   return !u.username&&!u.password&&!u.hash&&(
     u.origin==='https://dadosabertos.camara.leg.br'&&/^\/api\/v2\/(?:api-docs|deputados(?:\/\d+(?:\/historico)?)?|legislaturas\/\d+|referencias\/deputados\/codSituacao)$/.test(u.pathname)||
-    u.origin==='https://www.camara.leg.br'&&/^\/cotas\/Ano-\d{4}\.csv\.zip$/.test(u.pathname)&&!u.search||legacy
+    u.origin==='https://www.camara.leg.br'&&/^\/cotas\/Ano-\d{4}\.csv\.zip$/.test(u.pathname)&&!u.search||legacy||expenses
   );
 }
 export class PeopleCapture {
   readonly captures:Capture[]=[];
+  readonly stats={cacheHits:0,requests:0,retries:0,downloadedBytes:0};
   constructor(readonly directory:string,private readonly key:Buffer,private readonly fetcher:Fetcher=fetch,private readonly wait:(ms:number)=>Promise<void>=ms=>new Promise(r=>setTimeout(r,ms))){
     if(key.length!==32)throw new Error('Chave de originais inválida');
   }
@@ -60,14 +65,16 @@ export class PeopleCapture {
       if(source.url!==url||source.file!==file)throw new Error('Captura não corresponde à requisição');
       bytes=open(await fs.readFile(path.join(this.directory,file)),this.key);
       if(hash(bytes)!==source.sha256||bytes.length!==source.bytes)throw new Error('Hash de original diverge');
+      this.stats.cacheHits++;
     }catch(error){
       if((error as NodeJS.ErrnoException).code!=='ENOENT')throw new Error('Captura preservada inválida; não sobrescrever o original');
       let result:Uint8Array|undefined;
       for(let attempt=0;attempt<=RETRY_WAITS.length;attempt++){
         let retry:number|undefined;
         try{
+          this.stats.requests++;if(attempt)this.stats.retries++;
           const response=await this.fetcher(url,{headers:{Accept:url.endsWith('.zip')?'application/zip':new URL(url).pathname.endsWith('/ObterDetalhesDeputado')?'application/xml, text/xml':'application/json','User-Agent':'clareia-people-discovery'},redirect:'error',signal:AbortSignal.timeout(60_000)});
-          if(response.ok){result=await readLimited(response,url.endsWith('.zip')?100_000_000:12_000_000);break;}
+          if(response.ok){result=await readLimited(response,url.endsWith('.zip')?100_000_000:12_000_000);this.stats.downloadedBytes+=result.length;break;}
           if(response.status!==429&&response.status<500)throw new HttpFailure(response.status);
           const raw=response.headers.get('retry-after');
           const ms=raw===null?NaN:/^\d+$/.test(raw)?Number(raw)*1000:Date.parse(raw)-Date.now();

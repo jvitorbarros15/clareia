@@ -43,10 +43,10 @@ export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef):Expens
   const id=hash(canonical({personId,raw:r})),supplierId=(r.txtCNPJCPF||'').replace(/\D/g,'');const verified=validCnpj(supplierId),supplier=publicSupplier(r.txtFornecedor||'',supplierId);
   return {id,personId,year,month,category:r.txtDescricao,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,lot:r.numLote||'',receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
 }
-export async function parseAnnual(bytes:Uint8Array,scope:Scope):Promise<{rows:{raw:AnnualRow;row:number}[];scanned:number}> {
-  const stream=Readable.from((function*(){for(let i=0;i<bytes.length;i+=65536)yield bytes.subarray(i,i+65536);})()).pipe(parse({columns:(headers:string[])=>{for(const field of ['ideCadastro','numAno','numMes','codLegislatura','txtDescricao','vlrLiquido','vlrDocumento','vlrGlosa','ideDocumento','txtFornecedor','txtCNPJCPF','urlDocumento','txtNumero','datEmissao','numLote'])if(!headers.includes(field))throw new Error('Contrato CSV mudou: coluna ausente '+field);return headers;},delimiter:';',bom:true,skip_empty_lines:true}));
+export async function parseAnnual(bytes:Uint8Array,scope:Scope,observe?:(row:AnnualRow)=>void):Promise<{rows:{raw:AnnualRow;row:number}[];scanned:number}> {
+  const stream=Readable.from((function*(){for(let i=0;i<bytes.length;i+=65536)yield bytes.subarray(i,i+65536);})()).pipe(parse({columns:(headers:string[])=>{if(new Set(headers).size!==headers.length)throw new Error('Contrato CSV mudou: coluna duplicada');for(const field of ['ideCadastro','numAno','numMes','codLegislatura','txtDescricao','vlrLiquido','vlrDocumento','vlrGlosa','ideDocumento','txtFornecedor','txtCNPJCPF','urlDocumento','txtNumero','datEmissao','numLote'])if(!headers.includes(field))throw new Error('Contrato CSV mudou: coluna ausente '+field);return headers;},delimiter:';',bom:true,skip_empty_lines:true}));
   const rows=[];let scanned=0;
-  for await(const raw of stream){const row=scanned++;if(scope.ids.includes(Number(raw.ideCadastro))&&Number(raw.numAno)===scope.year&&scope.months.includes(Number(raw.numMes)))rows.push({raw,row});}
+  for await(const raw of stream){const row=scanned++;observe?.(raw);if(scope.ids.includes(Number(raw.ideCadastro))&&Number(raw.numAno)===scope.year&&scope.months.includes(Number(raw.numMes)))rows.push({raw,row});}
   if(scanned===0)throw new Error('Arquivo anual vazio');
   return {rows,scanned};
 }

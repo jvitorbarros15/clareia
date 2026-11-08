@@ -43,3 +43,5 @@ O protótipo visual com dados fictícios foi retirado; o último estado dele est
 Após a descoberta, `npm run collect:people -- --local --discovery-run ID --run ID` coleta todos os históricos em dois passes. `npm run resolve:people -- --local --run ID` deriva intervalos e competências e audita contra os originais, com atribuição pública desativada. [Contrato e limites do histórico](docs/source-contracts/camara-people-history.md).
 
 `npm run collect:people:legacy -- --local --discovery-run ID --history-run ID --run ID` preserva períodos e filiações da fonte oficial em XML. `npm run verify:people:legacy -- --local --run ID` cruza com a v2, audita os originais e propõe uma amostra intermediária para revisão. [Contrato, resultados e pendências](docs/source-contracts/camara-people-legacy.md).
+
+`npm run collect:expenses:intermediate -- --local --selection-run ID --run ID` coleta o ano de 2025 para a seleção intermediária, em dois passes cifrados. `npm run verify:expenses:intermediate -- --local --run ID` audita as fontes e os estados de cobertura, sem alterar o site. [Contrato e pendências da carga financeira](docs/source-contracts/camara-expense-intermediate.md).

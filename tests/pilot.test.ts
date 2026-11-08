@@ -36,6 +36,7 @@ test('annual parser filters by official ID and competence rather than display na
   const parsed=await parseAnnual(new TextEncoder().encode(data),scope);assert.equal(parsed.rows.length,1);assert.equal(parsed.scanned,3);
   await assert.rejects(parseAnnual(new TextEncoder().encode('ideCadastro;numAno\n1;2025\n'),scope),/coluna ausente/);
   await assert.rejects(parseAnnual(new TextEncoder().encode(header.replace('txtFornecedor','txtNomeFornecedor')+'\n'),scope),/coluna ausente txtFornecedor/);
+  await assert.rejects(parseAnnual(new TextEncoder().encode(header+';numMes\n'),scope),/coluna duplicada/);
 });
 test('an individual supplier reaches a record without name, CPF or receipt link',()=>{
   const fromApi=normalize({...expense(),cnpjCpfFornecedor:'11144477735',nomeFornecedor:'Maria da Silva',urlDocumento:'https://www.camara.leg.br/cota-parlamentar/nota-fiscal-eletronica?ideDocumentoFiscal=1'},1,scope,source);
