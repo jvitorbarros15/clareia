@@ -470,37 +470,221 @@ check('ranking tabs aligned', async () => {
   }
 });
 
-for (const width of [1440, 390]) {
-  check(`targets 44px (${width})`, async () => {
+const reach = `(() => {
+  const TARGET = 'button,a[href],summary,select,input,textarea,[role=button],[data-action],[data-p],.uf-tile';
+  const name = el => (el.getAttribute('aria-label') || el.textContent || String(el.className.baseVal ?? el.className) || el.tagName).replace(/\\s+/g, ' ').trim().slice(0, 40);
+  return (el, label) => {
+    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    const r = [...(el.querySelector('.chart-dot') || el).getClientRects()].sort((a, b) => b.width - a.width)[0] || el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const edges = [[0, -21], [21, 0], [0, 21], [-21, 0]], corners = [[-21, -21], [21, -21], [21, 21], [-21, 21]];
+    const pts = (el.matches('.uf-tile') ? edges : [...edges, ...corners]).map(([dx, dy]) => [cx + dx, cy + dy]);
+    const fail = [], neighbours = new Set();
+    const gap = (a, b) => Math.max(0, a.left - b.right, b.left - a.right, a.top - b.bottom, b.top - a.bottom);
+    const near = [...document.querySelectorAll(TARGET)].filter(o => o !== el && !el.contains(o) && !o.contains(el) && gap(r, o.getBoundingClientRect()) < 44 && o.getBoundingClientRect().width).map(o => ({ o, b: o.getBoundingClientRect() }));
+    for (const [x, y] of pts) {
+      const hit = document.elementFromPoint(x, y);
+      if (hit && (el === hit || el.contains(hit))) continue;
+      const other = hit && hit.closest(TARGET);
+      const hitNear = near.find(n => n.o === other);
+      // Not clickable here: excused only when another target closer than 44px shares that side of the box, and named in the report.
+      const side = near.filter(n => (x < cx - 1 ? n.b.left + n.b.width / 2 < cx : x > cx + 1 ? n.b.left + n.b.width / 2 > cx : false) || (y < cy - 1 ? n.b.top + n.b.height / 2 < cy : y > cy + 1 ? n.b.top + n.b.height / 2 > cy : false));
+      if (hitNear) { neighbours.add(name(other)); continue; }
+      if (side.length) { side.forEach(n => neighbours.add(name(n.o))); continue; }
+      fail.push(Math.round(x - cx) + ',' + Math.round(y - cy) + ' hits ' + (hit ? hit.tagName + '.' + String(hit.className.baseVal ?? hit.className).slice(0, 30) : 'nothing'));
+    }
+    return { label, name: name(el), fail, neighbours: [...neighbours] };
+  };
+})()`;
+
+// Samples the corners and edge midpoints of a 44x44 box centred on each target; a hit on another target closer than 44px is an exception, listed by name.
+async function measureTargets(page, selectors) {
+  const report = { fails: [], exceptions: [] };
+  for (const [label, selector] of selectors) {
+    const results = await page.evaluate(({ selector, label, reach }) => {
+      const measure = eval(reach);
+      return [...document.querySelectorAll(selector)].filter(el => { const r = el.getBoundingClientRect(); return (r.width || r.height) && getComputedStyle(el).visibility !== 'hidden' && !el.disabled; }).map(el => measure(el, label));
+    }, { selector, label, reach });
+    if (!results.length) report.fails.push(`${label}: none found`);
+    for (const r of results) {
+      if (r.fail.length) report.fails.push(`${label} "${r.name}": ${r.fail.join('; ')}`);
+      else if (r.neighbours.length) report.exceptions.push(`${label} "${r.name}" shares its box with ${r.neighbours.join(', ')}`);
+    }
+  }
+  return report;
+}
+
+for (const width of [1440, 768, 390]) {
+  check(`real 44px targets (${width})`, async () => {
     const page = await at(width);
-    await page.evaluate(() => document.querySelector('#comparacao').scrollIntoView());
-    await page.waitForTimeout(500);
-    const small = await page.evaluate(() => {
-      const selectors = ['.header-search', '.value-button', '.footer-links a, .footer-links button', '.swap-button', '[data-p=map-reset]', '.chart-hit', '.donut-legend [data-p-highlight]'];
-      const out = [];
-      for (const selector of selectors) {
-        const els = [...document.querySelectorAll(selector)].filter(el => { const r = el.getBoundingClientRect(); return r.width && r.height && getComputedStyle(el).visibility !== 'hidden'; });
-        if (!els.length) { out.push(`${selector}: none found`); continue; }
-        for (const el of els) {
-          const r = el.getBoundingClientRect();
-          let w = r.width, h = r.height;
-          for (const pseudo of ['::before', '::after']) {
-            const s = getComputedStyle(el, pseudo);
-            if (s.position === 'absolute' && s.content !== 'none') { w = Math.max(w, parseFloat(s.width) || 0); h = Math.max(h, parseFloat(s.height) || 0); }
-          }
-          if (w < 43.5 || h < 43.5) { out.push(`${selector}: ${Math.round(w)}x${Math.round(h)}`); break; }
-        }
-      }
-      return out;
-    });
-    assert.deepEqual(small, [], `targets under 44px at ${width}`);
+    await page.waitForTimeout(1200);
+    const main = await measureTargets(page, [
+      ['header search', '.header-search'], ['value button', '.value-button'], ['footer links', '.footer-links a, .footer-links button'],
+      ['swap', '.swap-button'], ['Visão inicial', '[data-p=map-reset]'], ['chart point', '.chart-point'], ['legend row', '.donut-legend [data-p-highlight]'],
+      ['panorama stat', '[data-p-summary]'], ['month bar', '.p-mini-bars button'], ['map tile', '.uf-tile'],
+    ]);
+    await page.locator('.bar-row').first().click();
+    await page.waitForSelector('#detail[open]');
+    await page.locator('#detail [data-action=records]').click();
+    await page.waitForTimeout(300);
+    const list = await measureTargets(page, [['dialog close', '#detail .close-button'], ['record Conferir', '#detail .record-go button'], ['dialog buttons', '#detail .action-row button']]);
+    await page.locator('#detail .record-row').first().click();
+    await page.waitForTimeout(300);
+    const detail = await measureTargets(page, [
+      ['dialog close', '#detail .close-button'], ['dialog buttons', '#detail .action-row a, #detail .dialog-body > .text-button'], ['Rastreabilidade', '#detail summary'],
+    ]);
+    const dialog = { fails: [...list.fails, ...detail.fails], exceptions: [...list.exceptions, ...detail.exceptions] };
+    for (const e of [...main.exceptions, ...dialog.exceptions]) console.log(`  EXCEPTION (${width}) ${e}`);
+    assert.deepEqual([...main.fails, ...dialog.fails], [], `targets whose 44x44 box is not clickable at ${width}`);
     await page.close();
   });
 }
 
+check('no "reembols" in the interface', async () => {
+  for (const width of [1440, 390]) {
+    const page = await at(width);
+    const scan = () => page.evaluate(() => {
+      const labels = [...document.querySelectorAll('[aria-label],[title],[alt],[placeholder]')].flatMap(e => ['aria-label', 'title', 'alt', 'placeholder'].map(a => e.getAttribute(a) || ''));
+      return [document.body.innerText, ...labels, ...[...document.querySelectorAll('dialog')].map(d => d.textContent)].join('\n');
+    });
+    const found = [];
+    const look = async step => { if (/reembols/i.test(await scan())) found.push(step); };
+    await look('page');
+    await page.locator('.bar-row').first().click(); await page.waitForSelector('#detail[open]'); await look('evidence');
+    await page.locator('#detail [data-action=records]').click(); await look('records');
+    await page.keyboard.press('Escape');
+    await page.locator('.portrait-button').first().click(); await page.waitForSelector('#detail[open]'); await look('profile');
+    await page.keyboard.press('Escape');
+    for (const sel of ['[data-p-summary=expenses]', '#despesas [data-p=spend-evidence]', '[data-p=map-evidence]', '[data-p=compare-evidence]', '[data-action=methodology]']) {
+      await page.locator(sel).first().click(); await page.waitForSelector('#detail[open]'); await look(sel); await page.keyboard.press('Escape');
+    }
+    await page.locator('#despesas .donut-legend [data-p-highlight]').first().click();
+    await page.locator('#despesas [data-p-drill]').click(); await look('supplier dialog'); await page.keyboard.press('Escape');
+    await page.locator('#map-metric').selectOption('average'); await look('map average');
+    assert.deepEqual(found, [], `"reembols" found at ${width}`);
+    await page.close();
+  }
+});
+
+check('panorama dialog reuses the record rows', async () => {
+  const page = await at(1440);
+  const data = await published(page);
+  await page.locator('[data-p-summary=expenses]').click();
+  await page.waitForSelector('#detail[open]');
+  const info = await page.evaluate(() => {
+    const d = document.querySelector('#detail');
+    const rows = [...d.querySelectorAll('.record-row')].map(r => ({
+      when: r.querySelector('.record-when').childNodes[0].textContent.trim(), amount: r.querySelector('.record-amount').textContent,
+      supplier: !!r.querySelector('.record-supplier'), meta: !!r.querySelector('.record-meta'), go: !!r.querySelector('.record-go button'),
+      hasId: Boolean(r.dataset.record) && r.textContent.includes(r.dataset.record),
+    }));
+    return { rows, note: d.querySelector('.records-note').textContent.trim(), text: d.innerText, months: window.ClareiaData.monthNames };
+  });
+  assert.equal(info.rows.length, data.people.reduce((n, p) => n + p.records.length, 0), 'one row per published record');
+  assert.ok(info.rows.every(r => r.supplier && r.meta && r.go), 'supplier, category/document line and Conferir on every row');
+  assert.ok(!info.rows.some(r => r.hasId), 'no record id as visible text');
+  assert.doesNotMatch(info.text, /[0-9a-f]{24,}/i, 'no hash in the dialog text');
+  assert.doesNotMatch(info.note, /[·•\-–]\s*$/, `scope line ends with a separator: ${info.note}`);
+  const cents = s => Math.round(parseFloat(s.replace(/[^\d,\-−]/g, '').replace('−', '-').replace('.', '').replace(',', '.')) * 100);
+  const order = info.rows.map(r => [info.months.indexOf(r.when.split('/')[0]), cents(r.amount)]);
+  for (let i = 1; i < order.length; i++) assert.ok(order[i][0] > order[i - 1][0] || (order[i][0] === order[i - 1][0] && order[i][1] <= order[i - 1][1]), `default record ordering broken at row ${i}`);
+  await page.locator('#detail .record-row').first().click();
+  assert.match(await text(page.locator('#detail-title')), /registro/i, 'a row opens the record detail');
+  await page.close();
+});
+
+check('supplier note names companies and individuals', async () => {
+  const page = await at(1440);
+  const body = clean(await page.evaluate(() => document.body.innerText));
+  assert.ok(body.includes("Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'."), 'N5 note');
+  assert.ok(!body.includes('Fornecedor pessoa física aparece sem nome'), 'old note gone');
+  await page.close();
+});
+
+check('per-month bars label months and values', async () => {
+  for (const width of [1440, 390]) {
+    const page = await at(width);
+    const data = await published(page);
+    const info = await page.evaluate(() => {
+      const D = window.ClareiaData;
+      return { coverage: D.coverage, names: D.monthNames, bars: [...document.querySelectorAll('.p-mini-bars button')].map(b => {
+        const small = b.querySelector('small'), bar = b.querySelector(':scope > span:not(.bar-value)'), value = b.querySelector('.bar-value');
+        return { label: small && small.textContent.trim(), value: value && value.textContent.replace(/\s+/g, ' ').trim(), valueBottom: value && value.getBoundingClientRect().bottom, barTop: bar && bar.getBoundingClientRect().top };
+      }) };
+    });
+    assert.equal(info.bars.length, info.coverage.length, 'one bar per covered month');
+    info.bars.forEach((b, k) => {
+      assert.equal(b.label, info.names[info.coverage[k]], 'label comes from the data (Jan/Fev)');
+      const month = data.people.flatMap(p => p.records).filter(r => r.month === info.coverage[k] + 1).reduce((n, r) => n + r.cents, 0);
+      assert.equal(b.value, clean(brlCompact(month)), `value of ${b.label} equals the published records`);
+      assert.ok(b.valueBottom <= b.barTop + 0.5, 'value sits above the bar');
+    });
+    await page.close();
+  }
+});
+
+check('record detail spacing and buttons', async () => {
+  const page = await at(1440);
+  const styles = () => page.evaluate(() => [...document.querySelectorAll('#detail .action-row a, #detail .action-row button')].map(b => { const s = getComputedStyle(b); return { primary: b.classList.contains('primary'), line: s.textDecorationLine, bg: s.backgroundColor, border: s.borderTopColor, color: s.color, radius: s.borderTopLeftRadius, text: b.textContent.trim() }; }));
+  await openRecords(page, (await peopleOf(page))[0]);
+  const fromList = await styles();
+  await page.locator('#detail .record-row').first().click();
+  await page.waitForTimeout(300);
+  const info = await page.evaluate(() => {
+    const row = document.querySelector('#detail .action-row'), notice = row.nextElementSibling;
+    return { gap: notice.getBoundingClientRect().top - row.getBoundingClientRect().bottom, notice: notice.textContent.slice(0, 30) };
+  });
+  const buttons = [...fromList, ...await styles()];
+  assert.ok(info.gap >= 8 - 0.5 && info.gap <= 8.5, `gap before the notice is ${info.gap}px: ${info.notice}`);
+  assert.ok(buttons.every(b => !b.line.includes('underline')), `underlined button: ${JSON.stringify(buttons.filter(b => b.line.includes('underline')))}`);
+  const secondary = buttons.filter(b => !b.primary);
+  assert.ok(secondary.length >= 3, 'secondary buttons found');
+  assert.equal(new Set(secondary.map(b => [b.bg, b.border, b.color, b.radius].join('|'))).size, 1, `one secondary button style: ${JSON.stringify(secondary)}`);
+  await page.close();
+});
+
+check('Ver registros is the solid primary', async () => {
+  const page = await at(1440);
+  await page.locator('.bar-row').first().click();
+  await page.waitForSelector('#detail[open]');
+  const s = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('#detail [data-action=records]')); return { bg: c.backgroundColor, color: c.color }; });
+  assert.ok(!/rgba\(0, 0, 0, 0\)|transparent/.test(s.bg), `Ver registros background is ${s.bg}`);
+  assert.notEqual(s.bg, s.color, 'text differs from the fill');
+  await page.close();
+});
+
+check('out-of-scope search brings the answer into view (390)', async () => {
+  const page = await at(390);
+  await searchFor(page, 'quem votou melhor');
+  await page.waitForTimeout(900);
+  const box = await page.evaluate(() => { const r = document.querySelector('.answer-message').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, h: innerHeight }; });
+  assert.ok(box.top >= 0 && box.bottom <= box.h, `answer at ${Math.round(box.top)}-${Math.round(box.bottom)} of ${box.h}`);
+  await page.close();
+});
+
+check('arrow keys move the donut legend selection', async () => {
+  const page = await at(1440);
+  const rows = page.locator('#despesas .donut-legend [data-p-highlight]');
+  await rows.first().focus();
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator('#despesas .donut-legend [aria-pressed=true]').count(), 1);
+  const first = await page.locator('#despesas .donut-legend [aria-pressed=true]').getAttribute('data-p-highlight');
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(200);
+  const second = await page.locator('#despesas .donut-legend [aria-pressed=true]').getAttribute('data-p-highlight');
+  assert.notEqual(first, second, 'selection moved');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.pHighlight), second, 'focus follows the selection');
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator('#despesas .donut-legend [aria-pressed=true]').getAttribute('data-p-highlight'), first, 'ArrowUp goes back');
+  await page.close();
+});
+
+
 check('low-res portrait', async () => {
   for (const width of [1440, 390]) {
     const page = await at(width);
+    await page.evaluate(() => document.querySelectorAll('.photo img').forEach(img => { img.loading = 'eager'; }));
     await page.waitForFunction(() => [...document.querySelectorAll('.photo img')].every(img => img.complete));
     const imgs = await page.evaluate(() => [...document.querySelectorAll('.photo img')].filter(img => img.offsetParent).map(img => {
       const r = img.getBoundingClientRect(), frame = img.closest('.photo').getBoundingClientRect(), fit = getComputedStyle(img).objectFit;

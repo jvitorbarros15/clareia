@@ -889,3 +889,28 @@ body .uf-tile.has-data text:not(.tile-value){font-size:12px}
   #perguntar .closing-questions{grid-column:2;grid-row:1/span 4;flex-direction:column;align-items:stretch;margin:0}
   #perguntar .closing-questions button{width:100%;justify-content:space-between}
 }
+/* Real 44px hit areas: measured with elementFromPoint by scripts/verify-ui.cjs, so pseudo-elements and padding must sit where the pointer lands. */
+body[data-model=editorial] .footer-links{gap:0}
+body[data-model=editorial] .footer-links :is(a,button){display:flex;align-items:center;min-height:44px}
+body[data-model=editorial] .footer-links :is(a,button)::before{content:none}
+.close-button{position:relative}
+.close-button::before{content:"";position:absolute;inset:-8px}
+.dialog-body :is(.outline-button,.text-button,summary){position:relative}
+.dialog-body :is(.outline-button,.text-button,summary)::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
+body[data-model=editorial] .p-overview-sentence .p-stat{position:relative}
+body[data-model=editorial] .p-overview-sentence .p-stat::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:44px;transform:translate(-50%,-50%)}
+body .uf-tile path.tile-hit{fill:transparent!important;stroke:transparent!important;stroke-width:4!important;pointer-events:all}
+.linked-lines{overflow:visible}
+body[data-model=editorial] .chart-point,body[data-model=editorial] .chart-point:focus{stroke:none;stroke-width:0;pointer-events:auto}
+.chart-point:focus .chart-dot{stroke:var(--ink);stroke-width:3}
+.p-mini-bars{grid-template-columns:repeat(var(--cols,12),minmax(0,84px));justify-content:start}
+.p-mini-bars button{position:relative}
+.p-mini-bars button>span{width:34px}
+.p-mini-bars .bar-value{position:absolute;left:50%;bottom:calc(24px + var(--height)*.8);transform:translateX(-50%);font:600 12px/1.2 var(--sans);font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink);pointer-events:none}
+@media(max-width:560px){.p-mini-bars button>span{width:22px}}
+.dialog-body .outline-button{text-decoration:none}
+.dialog-body .outline-button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.dialog-body .outline-button.primary:hover{background:var(--accent);filter:brightness(1.1)}
+.dialog-body .outline-button:not(.primary){background:var(--surface);border-color:var(--line);color:var(--ink)}
+.dialog-body .outline-button:not(.primary):hover{background:var(--accent-soft)}
+.dialog-body .action-row+.context{margin-top:8px}
