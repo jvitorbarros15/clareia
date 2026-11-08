@@ -36,9 +36,10 @@ export function independentEquationReview(scope:Scope,inputs:EquationInput[]){
     if(documentKnown){const ceiling=BigInt(documentFace!)-BigInt(documentGlosa!);documentKnown=documentFace!>=0&&documentGlosa!>=0&&ceiling>=0n&&annual.every(r=>r.face===documentFace&&r.glosa===documentGlosa&&r.net>=0);}
     const documentSafe=documentKnown&&totalObserved<=BigInt(documentFace!)-BigInt(documentGlosa!),original=originalGroups.get(group)!;
     const hasInstallment=original.some(input=>{const value=input.kind==='annual'?input.raw.numParcela:input.raw.parcela;return /^[1-9][0-9]*$/.test(String(value))&&Number.isSafeInteger(Number(value));});
-    if(hasInstallment&&!documentSafe){
+    const exceedsDocument=[annual,api].some(list=>{const head=list[0];return new Set(list.map(r=>r.signature)).size>=2&&head.face!==null&&head.glosa!==null&&list.every(r=>r.face===head.face&&r.glosa===head.glosa&&r.net>=0)&&list.reduce((n,r)=>n+BigInt(r.net),0n)>BigInt(head.face)-BigInt(head.glosa);});
+    if(exceedsDocument||hasInstallment&&!documentSafe){
       const key=(input:EquationInput)=>hash(JSON.stringify([input.kind,input.personId,input.source.url,input.source.sha256,input.source.row]));
-      original.forEach(input=>blockedKeys.add(key(input)));holds.push({personId:original[0].personId,year:scope.year,documentKey:hash(group),months:[...new Set(original.map(input=>Number(input.kind==='annual'?input.raw.numMes:input.raw.mes)))].sort((a,b)=>a-b),annualKeys:original.filter(input=>input.kind==='annual').map(key).sort(),apiKeys:original.filter(input=>input.kind==='api').map(key).sort(),reason:documentKnown?'over-document-limit':'document-group-unconfirmed'});continue;
+      original.forEach(input=>blockedKeys.add(key(input)));holds.push({personId:original[0].personId,year:scope.year,documentKey:hash(group),months:[...new Set(original.map(input=>Number(input.kind==='annual'?input.raw.numMes:input.raw.mes)))].sort((a,b)=>a-b),annualKeys:original.filter(input=>input.kind==='annual').map(key).sort(),apiKeys:original.filter(input=>input.kind==='api').map(key).sort(),reason:documentKnown||exceedsDocument?'over-document-limit':'document-group-unconfirmed'});continue;
     }
     const installment=documentSafe?pairs.filter(({a:r})=>r.face!==null&&r.glosa!==null&&r.net>=0&&BigInt(r.net)<BigInt(r.face)-BigInt(r.glosa)&&r.parcel!==null&&r.parcel>0):[];
     if(installment.length){
@@ -53,6 +54,12 @@ export function independentEquationReview(scope:Scope,inputs:EquationInput[]){
       for(const p of explain){permissions.set(p.a.key,'balanced-document-split');permissions.set(p.b.key,'balanced-document-split');}
       decisions.push({basis:'balanced-document-split',personId:annual[0].person,year:annual[0].year,documentKey:hash(group),annualKeys:pairs.map(p=>p.a.key).sort(),apiKeys:pairs.map(p=>p.b.key).sort(),months:[...new Set(annual.map(r=>r.month))].sort((a,b)=>a-b)});
     }
+  }
+  const auditKey=(input:EquationInput)=>hash(JSON.stringify([input.kind,input.personId,input.source.url,input.source.sha256,input.source.row]));
+  for(const [group,original] of [...originalGroups].filter(([g])=>!groups.has(g)).sort(([a],[b])=>a.localeCompare(b))){
+    if(!original.some(input=>/^[1-9][0-9]*$/.test(String(input.kind==='annual'?input.raw.numParcela:input.raw.parcela))))continue;
+    original.forEach(input=>blockedKeys.add(auditKey(input)));
+    holds.push({personId:original[0].personId,year:scope.year,documentKey:hash(group),months:[...new Set(original.map(input=>Number(input.kind==='annual'?input.raw.numMes:input.raw.mes)))].sort((a,b)=>a-b),annualKeys:original.filter(input=>input.kind==='annual').map(auditKey).sort(),apiKeys:original.filter(input=>input.kind==='api').map(auditKey).sort(),reason:'document-group-unconfirmed'});
   }
   return {permissions,decisions,holds,blockedKeys};
 }

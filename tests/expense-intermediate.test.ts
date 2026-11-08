@@ -23,15 +23,15 @@ const contract={paths:{'/deputados/{id}/despesas':{get:{parameters:['ano','mes',
 const apiRow=(month=1,overrides:Record<string,unknown>={})=>({ano:2025,mes:month,codDocumento:'10',codLote:1,codTipoDocumento:1,parcela:0,numDocumento:'N1',numRessarcimento:'',tipoDespesa:'COMBUSTÍVEIS',tipoDocumento:'Recibos/Outros',nomeFornecedor:'Empresa',cnpjCpfFornecedor:'11222333000181',dataDocumento:'2025-01-02T00:00:00',urlDocumento:null,valorDocumento:10.21,valorGlosa:0,valorLiquido:10.21,...overrides});
 const columns='ideCadastro;numAno;numMes;codLegislatura;txtDescricao;vlrLiquido;vlrDocumento;vlrGlosa;ideDocumento;txtFornecedor;txtCNPJCPF;urlDocumento;txtNumero;datEmissao;numLote;numParcela';
 const annualLine=(id=1,month=1,category='COMBUSTÍVEIS',amount='10.21',doc='10')=>`${id};2025;${month};57;${category};${amount};${amount};0;${doc};Empresa;11222333000181;;N1;2025-01-02T00:00:00;1;0`;
-const annual=(lines=[annualLine()])=>zipSync({'Ano-2025.csv':strToU8(columns+'\n'+lines.join('\n')+'\n')});
-async function setup(t:test.TestContext,reply?:(url:string,pass:number)=>unknown,fullYear=false,portal=false){
+const annual=(lines=[annualLine()])=>zipSync({'Ano-2025.csv':strToU8(columns+'\n'+lines.join('\n')+'\n')},{mtime:'2025-01-01'});
+async function setup(t:test.TestContext,reply?:(url:string,pass:number)=>unknown,fullYear=false,portal=false,tune?:(t:TemporalReport)=>void){
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-expense-batch-')),key=randomBytes(32);t.after(()=>fs.rm(dir,{recursive:true,force:true}));
   const capture=(pass:number)=>new PeopleCapture(path.join(dir,'pass-'+pass),key,async url=>{
     const u=new URL(url),override=reply?.(url,pass);
     const value=override===undefined?u.pathname.endsWith('api-docs')?contract:u.pathname.endsWith('.zip')?annual():{dados:u.pathname.includes('/1/')&&u.searchParams.get('mes')==='1'?[apiRow()]:[],links:[{rel:'self',href:url}]}:override;
     return value instanceof Response?value:new Response(value instanceof Uint8Array?Buffer.from(value):JSON.stringify(value));
   },async()=>{});
-  const selectedScope=fullYear?{...scope,months:Array.from({length:12},(_,i)=>i+1)}:scope,selectedTemporal=structuredClone(temporal);
+  const selectedScope=fullYear?{...scope,months:Array.from({length:12},(_,i)=>i+1)}:scope,selectedTemporal=structuredClone(temporal);tune?.(selectedTemporal as TemporalReport);
   if(fullYear)for(const p of selectedTemporal.people)p.months=selectedScope.months.map(month=>({...p.months[0],month,start:new Date(Date.UTC(2025,month-1,1)).toISOString().slice(0,19),end:new Date(Date.UTC(2025,month,1)).toISOString().slice(0,19)}));
   const one=capture(1),two=capture(2),report=await collectExpenseBatch(selectedScope,selectedTemporal,hash('proposal'),one,two,{wait:async()=>{},portal});
   const read=async(s:{pass:number;file:string})=>open(await fs.readFile(path.join(dir,'pass-'+s.pass,s.file)),key);
@@ -156,4 +156,28 @@ test('financial CLI takes its lock before reading inputs and refuses a different
   const script=fileURLToPath(new URL('../scripts/collect-expense-intermediate.ts',import.meta.url)),args=['--import',import.meta.resolve('tsx'),script,'--local','--offline','--run','test-run','--selection-run','another-selection'];
   await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}));assert.equal(await fs.readFile(path.join(root,'run.json'),'utf8'),original);await assert.rejects(fs.stat(path.join(root,'running.lock')),{code:'ENOENT'});
   await fs.writeFile(path.join(root,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('EEXIST'));assert.equal(await fs.readFile(path.join(root,'running.lock'),'utf8'),'keep');
+});
+
+const sigepa=(month:number,overrides:Record<string,unknown>={})=>apiRow(month,{tipoDespesa:'PASSAGEM AÉREA - SIGEPA',codDocumento:'11',numDocumento:'T1',valorDocumento:500,valorLiquido:500,...overrides});
+const firstMonth=(rows:unknown[])=>(url:string)=>{const u=new URL(url);return u.pathname.includes('/1/despesas')&&u.searchParams.get('mes')==='1'?{dados:rows,links:[{rel:'self',href:url}]}:undefined;};
+const cell=(r:{cells:any[]},id=1,month=1)=>r.cells.find(c=>c.personId===id&&c.month===month);
+test('an API row from another competence holds the month instead of entering its total',async t=>{
+  const {report}=await setup(t,firstMonth([apiRow(),sigepa(2)]));
+  assert.equal(cell(report).status,'held-review');assert.deepEqual(cell(report).reasons,['api-row-outside-competence']);assert.equal(cell(report).totalCents,null);
+});
+test('expenses in a month outside the mandate open review and carry no approved value',async t=>{
+  const {report}=await setup(t,undefined,false,false,tr=>{tr.people[0].months[0].exercise='outside';});
+  assert.equal(cell(report).status,'held-review');assert.deepEqual(cell(report).reasons,['expense-outside-exercise']);assert.deepEqual(cell(report).records,[]);assert.equal(cell(report).totalCents,null);
+});
+test('repeated SIGEPA amounts that differ only outside the money stay held',async t=>{
+  const {report}=await setup(t,firstMonth([apiRow(),sigepa(1,{numRessarcimento:''}),sigepa(1,{numRessarcimento:null})]));
+  assert.deepEqual(cell(report).reasons,['sigepa-unit-unconfirmed']);assert.equal(cell(report).totalCents,null);
+});
+test('a selected identity with another year in the annual file stops the run instead of vanishing',async t=>{
+  const line='1;2024;1;57;COMBUSTÍVEIS;10.21;10.21;0;10;Empresa;11222333000181;;N1;2024-01-02T00:00:00;1;0';
+  await assert.rejects(setup(t,url=>url.endsWith('.zip')?annual([annualLine(),line]):undefined));
+});
+test('an annual file without numParcela stops the run',async t=>{
+  const noParcel=zipSync({'Ano-2025.csv':strToU8(columns.replace(';numParcela','')+'\n'+annualLine().replace(/;0$/,'')+'\n')});
+  await assert.rejects(setup(t,url=>url.endsWith('.zip')?noParcel:undefined));
 });

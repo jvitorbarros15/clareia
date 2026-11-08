@@ -21,6 +21,7 @@ function payment(input:EquationInput,scope:Scope):Payment|null{
 }
 // An exemption only explains the document equation. It never changes the
 // reported net, authorizes a duplicate, joins by supplier or declares legitimacy.
+const hasInstallment=(i:EquationInput)=>{const value=i.kind==='annual'?i.raw.numParcela:i.raw.parcela;return /^[1-9]\d*$/.test(String(value))&&Number.isSafeInteger(Number(value));};
 export function reviewExpenseEquations(scope:Scope,inputs:EquationInput[]){
   const payments:Payment[]=[],invalidGroups=new Set<string>(),permissions=new Map<string,FinancialBasis>(),decisions:EquationDecision[]=[],holds:EquationHold[]=[],blockedKeys=new Set<string>(),inputGroups=new Map<string,EquationInput[]>();
   for(const input of inputs){const r=input.raw;if(r&&typeof r==='object'){const group=canonical([input.personId,Number(input.kind==='annual'?r.numAno:r.ano),String((input.kind==='annual'?r.ideDocumento:r.codDocumento)??'')]);inputGroups.set(group,[...(inputGroups.get(group)??[]),input]);const p=payment(input,scope);if(p)payments.push(p);else invalidGroups.add(group);}}
@@ -38,9 +39,11 @@ export function reviewExpenseEquations(scope:Scope,inputs:EquationInput[]){
     const knownBudget=!invalidGroups.has(group)&&pairs.length>0&&pairs.length===bucket.annual.length&&pairs.length===bucket.api.length&&face!==null&&face!==undefined&&glosa!==null&&glosa!==undefined&&face>=0&&glosa>=0&&face>=glosa&&bucket.annual.every(p=>p.face===face&&p.glosa===glosa&&p.net>=0);
     const withinBudget=knownBudget&&groupNet<=BigInt(face!)-BigInt(glosa!);
     const members=inputGroups.get(group)!;
-    if(members.some(i=>{const value=i.kind==='annual'?i.raw.numParcela:i.raw.parcela;return /^[1-9]\d*$/.test(String(value))&&Number.isSafeInteger(Number(value));})&&!withinBudget){
+    // The ceiling is a property of the document, so it does not depend on parcela.
+    const overDocument=(['annual','api'] as const).some(kind=>{const rows=bucket[kind],first=rows[0];return new Set(rows.map(p=>p.signature)).size>1&&first.face!==null&&first.glosa!==null&&rows.every(p=>p.face===first.face&&p.glosa===first.glosa&&p.net>=0)&&rows.reduce((sum,p)=>sum+BigInt(p.net),0n)>BigInt(first.face)-BigInt(first.glosa);});
+    if(overDocument||members.some(hasInstallment)&&!withinBudget){
       for(const input of members)blockedKeys.add(equationKey(input));
-      const sample=members[0];holds.push({personId:sample.personId,year:scope.year,documentKey:hash(group),months:[...new Set(members.map(i=>Number(i.kind==='annual'?i.raw.numMes:i.raw.mes)))].sort((a,b)=>a-b),annualKeys:members.filter(i=>i.kind==='annual').map(equationKey).sort(),apiKeys:members.filter(i=>i.kind==='api').map(equationKey).sort(),reason:knownBudget?'over-document-limit':'document-group-unconfirmed'});continue;
+      const sample=members[0];holds.push({personId:sample.personId,year:scope.year,documentKey:hash(group),months:[...new Set(members.map(i=>Number(i.kind==='annual'?i.raw.numMes:i.raw.mes)))].sort((a,b)=>a-b),annualKeys:members.filter(i=>i.kind==='annual').map(equationKey).sort(),apiKeys:members.filter(i=>i.kind==='api').map(equationKey).sort(),reason:knownBudget||overDocument?'over-document-limit':'document-group-unconfirmed'});continue;
     }
     const approve=(basis:FinancialBasis,rows:typeof pairs)=>{
       if(!rows.length)return;
@@ -61,6 +64,11 @@ export function reviewExpenseEquations(scope:Scope,inputs:EquationInput[]){
       for(const pair of mismatched){permissions.set(pair.annual.key,'balanced-document-split');permissions.set(pair.api.key,'balanced-document-split');}
       const sample=values[0];decisions.push({basis:'balanced-document-split',personId:sample.input.personId,year:sample.year,documentKey:sample.documentKey,annualKeys:pairs.map(p=>p.annual.key).sort(),apiKeys:pairs.map(p=>p.api.key).sort(),months:[...new Set(values.map(p=>p.month))].sort((a,b)=>a-b)});
     }
+  }
+  for(const [group,members] of [...inputGroups].filter(([group])=>!pool.has(group)).sort(([a],[b])=>a.localeCompare(b))){
+    if(!members.some(hasInstallment))continue;
+    for(const input of members)blockedKeys.add(equationKey(input));
+    holds.push({personId:members[0].personId,year:scope.year,documentKey:hash(group),months:[...new Set(members.map(i=>Number(i.kind==='annual'?i.raw.numMes:i.raw.mes)))].sort((a,b)=>a-b),annualKeys:members.filter(i=>i.kind==='annual').map(equationKey).sort(),apiKeys:members.filter(i=>i.kind==='api').map(equationKey).sort(),reason:'document-group-unconfirmed'});
   }
   return {permissions,decisions,holds,blockedKeys};
 }

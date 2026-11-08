@@ -52,7 +52,7 @@ export async function expenseAnnual(capture:PeopleCapture,scope:Scope,pass:1|2){
   const {bytes:archive,source}=await capture.get(annualUrl(scope.year));assertArchive(archive,22);
   const name=`Ano-${scope.year}.csv`,files=unzipSync(archive,{filter:file=>{if(file.name!==name)return false;if(file.originalSize>200_000_000)throw Error('CSV financeiro acima do limite');return true;}}),bytes=files[name];if(!bytes)throw Error('CSV financeiro ausente');
   const known=new Set<string>(),parsed=await parseAnnual(bytes,scope,raw=>{
-    if(scope.ids.includes(Number(raw.ideCadastro))&&(!/^\d+$/.test(raw.ideCadastro)||!/^\d{4}$/.test(raw.numAno)||!/^(?:0?[1-9]|1[0-2])$/.test(raw.numMes)))throw Error('Identidade ou competência anual inválida');
+    if(scope.ids.includes(Number(raw.ideCadastro))&&(!/^\d+$/.test(raw.ideCadastro)||!/^\d{4}$/.test(raw.numAno)||!/^(?:0?[1-9]|1[0-2])$/.test(raw.numMes)||Number(raw.numAno)!==scope.year||!('numParcela' in raw)))throw Error('Identidade ou competência anual inválida');
     for(const value of [raw.txtCNPJCPF,raw.cpf]){const digits=(value||'').replace(/\D/g,'');if(digits.length===11)known.add(hash(digits));}
   });
   const digest=hash(parsed.rows.map(r=>canonical(r.raw)).sort().join('\n'));
@@ -97,6 +97,7 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
     try{
       const digest=(rows:ApiRow[])=>hash(rows.map(r=>canonical(r.raw)).sort().join('\n'));
       if(digest(api[0]!)!==digest(api[1]!)){c.reasons.push('api-changed-between-passes');continue;}
+      if(api[1]!.some(r=>Number((r.raw as any).ano)!==c.year||Number((r.raw as any).mes)!==c.month)){c.reasons.push('api-row-outside-competence');continue;}
       const budgetBlocked=selected.some(({row})=>equationReview.blockedKeys.has(equationKey({kind:'annual',personId:c.personId,source:{...secondAnnual.source,sha256:secondAnnual.csvSha256,row}})))||api[1]!.some(({row,source})=>equationReview.blockedKeys.has(equationKey({kind:'api',personId:c.personId,source:{...source,row}})));
       if(budgetBlocked){c.reasons.push('installment-document-review');continue;}
       const counts=new Map<string,number>();for(const r of api[1]!){const key=canonical(r.raw);counts.set(key,(counts.get(key)??0)+1);}
@@ -110,7 +111,8 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
       // Matching routes or a second interface can corroborate source rows, not
       // establish whether each repeated amount is a separate debit to the quota.
       // Retain all originals/proofs, but withhold the entire competence for now.
-      if(repeated.length){c.reasons.push('sigepa-unit-unconfirmed');continue;}
+      const sameTicket=new Map<string,number>();for(const r of api[1]! as {raw:any}[])if(r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA'){const key=canonical([r.raw.codDocumento,r.raw.numDocumento,r.raw.valorLiquido]);sameTicket.set(key,(sameTicket.get(key)??0)+1);}
+      if(repeated.length||[...sameTicket.values()].some(n=>n>1)){c.reasons.push('sigepa-unit-unconfirmed');continue;}
     }catch{c.reasons.push('ambiguous-identical-occurrences');continue;}
     let annual:Expense[],apiRecords:Expense[];
     try{
@@ -119,6 +121,7 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
     }catch{c.reasons.push('financial-normalization-failed');continue;}
     c.diagnostics=unmatched(annual,apiRecords);
     try{c.records=unionRecords(annual,apiRecords).records;}catch{c.reasons.push('unreconciled-source-occurrences');continue;}
+    if(c.records.length&&c.exercise==='outside'){c.records=[];c.reasons.push('expense-outside-exercise');continue;}
     const sum=c.records.reduce((n,r)=>n+BigInt(r.cents),0n);if(sum>BigInt(Number.MAX_SAFE_INTEGER)||sum<BigInt(Number.MIN_SAFE_INTEGER))throw Error('Total financeiro fora do limite');
     c.totalCents=Number(sum);c.status=c.records.length?'complete':'no-expenses-confirmed';
   }

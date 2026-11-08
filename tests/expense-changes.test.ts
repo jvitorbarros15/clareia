@@ -55,3 +55,12 @@ test('comparison CLI retains an existing lock and releases earlier locks when th
   const script=fileURLToPath(new URL('../scripts/compare-expense-intermediate.ts',import.meta.url)),args=['--import',import.meta.resolve('tsx'),script,'--local','--before-run','b','--before-version',hash('before'),'--after-run','a','--after-version',hash('after')];await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}));assert.equal(await fs.readFile(path.join(root,'b/running.lock'),'utf8'),'keep');await assert.rejects(fs.stat(path.join(root,'a/running.lock')),{code:'ENOENT'});
   await assert.rejects(promisify(execFile)(process.execPath,args.map(v=>v===hash('before')?'../escape':v),{cwd}));await assert.rejects(fs.stat(path.join(root,'a/running.lock')),{code:'ENOENT'});
 });
+
+test('a month whose records all vanish is flagged for review while keeping the arithmetic',()=>{
+  const before=batch(),after=batch();before.cells[0].records=[row('one')];refresh(before);after.cells[0].records=[];after.cells[0].status='no-expenses-confirmed';refresh(after);
+  const r=compareExpenseBatches(before,after);assert.ok(r.reasons.includes('all-records-vanished-review'));assert.equal(r.summary.deltaCents,'-100');
+});
+test('a change of source representation for the same occurrence is metadata, not a withdrawal',()=>{
+  const before=batch(),after=batch();before.cells[0].records=[{...row('one'),disallowedCents:null}];refresh(before);after.cells[0].records=[{...row('one'),disallowedCents:0,origin:'api'}];refresh(after);
+  const r=compareExpenseBatches(before,after);assert.equal(r.summary.removedOccurrences,0);assert.equal(r.summary.addedOccurrences,0);assert.equal(r.summary.metadataChanged,1);
+});

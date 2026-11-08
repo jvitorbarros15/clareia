@@ -34,7 +34,7 @@ function ledger(bytes:Uint8Array,portalId:number,year:number,month:number):Ledge
     if(id==='totalFinalAnalitico'){if(total!==null||portalText(columns[0])!=='Total')throw Error();total=cash(portalText(columns[6]));continue;}
     if(total!==null||id!=='analitico'+rows.length)throw Error();
     const anchors=portalNodes(columns[7]).filter(n=>n.tagName==='a');if(anchors.length!==1)throw Error();
-    const u=new URL(portalAttr(anchors[0],'href')||'','https://www.camara.leg.br'),p=u.searchParams;
+    const u=new URL(portalAttr(anchors[0],'href')||'','https://www.camara.leg.br/cota-parlamentar/analitico'),p=u.searchParams;
     if(u.origin!=='https://www.camara.leg.br'||u.pathname!=='/cota-parlamentar/documento'||u.username||u.password||u.hash||[...p.keys()].sort().join(',')!=='cnpjFornecedor,despesa,idDocumento,idDocumentoFiscal,nuDeputadoId,numAno,numMes'||p.get('nuDeputadoId')!==String(portalId)||p.get('numAno')!==String(year)||p.get('numMes')!==String(month)||p.get('despesa')!=='998')throw Error();
     const provider=portalText(columns[1]).replace(/\D/g,''),number=portalText(columns[3]),document=p.get('idDocumentoFiscal')||'',date=portalText(columns[2]),deductions=portalText(columns[5]);
     if(![11,14].includes(provider.length)||p.get('cnpjFornecedor')?.replace(/\D/g,'')!==provider||p.get('idDocumento')!==number||! /^(?:[0-9]{1,18}|[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12})$/i.test(document)||!/^\d{2}\/\d{2}\/\d{4}$/.test(date))throw Error();

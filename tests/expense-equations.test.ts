@@ -67,3 +67,15 @@ test('unmatched quantities, absent routes, cosmetic differences and extra annual
   for(const edit of edits){const rows=flights();edit(rows);assert.equal(multiplicity(rows).covered.size,0);}
   const other=flights();for(const r of other)if(r.kind==='api')r.raw.tipoDespesa='OTHER';else r.raw.txtDescricao='OTHER';assert.equal(multiplicity(other).covered.size,0);
 });
+
+test('a document over its ceiling is held whatever the parcela value',()=>{
+  const r=review([...pair(1,'100'),...pair(2,'100')]);
+  assert.equal(r.holds.length,1);assert.equal(r.holds[0].reason,'over-document-limit');assert.equal(r.blockedKeys.size,4);assert.equal(r.permissions.size,0);
+});
+test('installments on an unusable document number have no ceiling to confirm and are held',()=>{
+  const r=review([...pair(1,'100',1,'0'),...pair(2,'100',2,'0')]);
+  assert.equal(r.holds.length,1);assert.equal(r.holds[0].reason,'document-group-unconfirmed');assert.equal(r.blockedKeys.size,4);
+});
+test('one complete occurrence of a document is not held by the ceiling',()=>{
+  const r=review(pair(1,'100'));assert.equal(r.holds.length,0);assert.equal(r.blockedKeys.size,0);
+});
