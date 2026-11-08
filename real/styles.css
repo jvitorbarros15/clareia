@@ -798,3 +798,43 @@ body[data-model=editorial][data-motion=on] .editorial-handwritten{animation:none
 @media(prefers-reduced-motion:no-preference){
   .handwritten-letter{animation:handwritten-letter-arrive 540ms var(--letter-delay) cubic-bezier(.22,1,.36,1) both}
 }
+
+/* Records dialog: a table on desktop, stacked rows (supplier left, amount right) up to 600px. */
+.detail-dialog.records-wide{width:min(760px,100%)}
+.dialog-body .fixture-note{margin-top:8px}
+.dialog-body .detail-section:has(+ .fixture-note){padding-bottom:0}
+.dialog-body .evidence-step .action-row{margin-top:14px}
+.category-row{display:block;margin-bottom:16px}
+.category-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}
+.category-head strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.category-row .track{width:100%}
+.record-list{width:100%;border-collapse:collapse;margin-top:20px;text-align:left}
+.record-list th{color:var(--muted);font-weight:500;padding:10px 8px;border-bottom:1px solid var(--line)}
+.record-list td{padding:12px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.record-list small{display:block;color:var(--muted);font-size:13px;line-height:1.4}
+.record-list .record-extra{display:none}
+.record-list .record-supplier{display:block;font-weight:600;overflow-wrap:anywhere}
+.record-list th:nth-child(3),.record-list td.record-amount,.record-list tfoot td:nth-child(2){text-align:right}
+.record-list .record-amount,.record-list-total{font-variant-numeric:tabular-nums;white-space:nowrap}
+.record-list .record-amount{font-weight:600}
+.record-row{cursor:pointer}
+.record-row:hover{background:var(--soft)}
+.record-row:focus-within{outline:2px solid var(--accent);outline-offset:-2px}
+.record-row .text-button{min-height:44px;white-space:nowrap;outline:0}
+.record-list tfoot th,.record-list tfoot td{border-bottom:0;padding-top:14px}
+@media(max-width:600px){
+  .record-list,.record-list tbody,.record-list tfoot{display:block}
+  .record-list thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .record-list .record-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"what amount" "what go";column-gap:12px;align-items:start;min-height:64px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .record-list .record-row td{padding:0;border:0}
+  .record-list .record-when,.record-list .record-origin{display:none}
+  .record-list .record-what{display:block;grid-area:what;padding:0;border:0;min-width:0}
+  .record-list .record-extra{display:inline}
+  .record-list .record-amount{display:block;grid-area:amount;text-align:right;padding:0;border:0}
+  .record-list .record-go{display:block;grid-area:go;justify-self:end;padding:0;border:0}
+  .record-list tfoot tr{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-top:12px}
+  .record-list tfoot th,.record-list tfoot td{padding:0}
+  .record-list tfoot th{flex:1}
+  .record-list tfoot th[colspan]{text-align:left}
+}
+

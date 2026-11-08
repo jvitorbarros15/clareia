@@ -44,7 +44,7 @@
     const total = C.sum(people.flatMap(C.records));
     if (editorial) {
       const n=people.length, recs=people.flatMap(C.records).length;
-      const stat=(key,value,text,format='number')=>`<button class="p-stat" data-p-summary="${key}"><strong>${format==='money'?compact(value):number(value)}</strong> ${text}</button>`;
+      const stat=(key,value,text,format='number')=>{const final=format==='money'?compact(value):number(value);return `<button class="p-stat" data-p-summary="${key}" aria-label="${final} ${text}"><strong data-counter="${value}" data-format="${format}" aria-hidden="true">${final}</strong> <span aria-hidden="true">${text}</span></button>`;};
       return `<div class="p-overview-head"><h2 class="p-overview-title">Panorama da amostra</h2><span>${scopeText()}</span></div><p class="p-overview-sentence">Neste recorte, ${stat('people',n,n===1?'deputado':'deputados')} ${n===1?'soma':'somam'} ${stat('expenses',total,'em reembolsos','money')}, distribuídos em ${stat('records',recs,'registros')}, e ${n===1?'teve':'tiveram'} ${stat('coverage',people[0]?people[0].months:0,'meses publicados')} (${C.span()}). Projetos de lei ainda não foram coletados.</p>`;
     }
     return `<div class="p-overview-head">${editorial?'<h2 class="p-overview-title">Panorama da amostra</h2>':label('01','Panorama da amostra')}<span>${scopeText()}</span></div><div class="p-stats">${[
@@ -209,9 +209,11 @@
     observer?.disconnect();
     document.querySelectorAll('.p-section-intro,.p-panel,.p-stat,.dossier-card,.project-card,.vote-card,.timeline-event').forEach(el=>el.classList.add('p-reveal'));
     if (!state.motion) { document.querySelectorAll('.p-reveal').forEach(el=>el.classList.add('is-visible')); return; }
-    observer=new IntersectionObserver(entries=>entries.forEach(({target,isIntersecting})=>{if(isIntersecting){target.classList.add('is-visible');observer.unobserve(target);}}),{threshold:.08});
+    observer=new IntersectionObserver(entries=>entries.forEach(({target,isIntersecting})=>{if(isIntersecting){target.classList.add('is-visible');if(target.matches('.p-stat'))animateCounter(target);observer.unobserve(target);}}),{threshold:.08});
     document.querySelectorAll('.p-reveal:not(.is-visible)').forEach(el=>observer.observe(el));
   }
+  // The count-up is visual only: each button carries the final value in aria-label.
+  function animateCounter(el) { const target=el.querySelector('[data-counter]');if(!target)return;const value=+target.dataset.counter,start=performance.now();function frame(now){if(!target.isConnected)return;const t=Math.min(1,(now-start)/700),n=Math.round(value*(1-Math.pow(1-t,3)));target.textContent=target.dataset.format==='money'?compact(n):number(n);if(t<1&&state.motion)requestAnimationFrame(frame);else target.textContent=target.dataset.format==='money'?compact(value):number(value);}requestAnimationFrame(frame); }
   // Position-based spy: the current section is the last one whose top has passed 35% of the viewport; none above the first.
   function spySections() {
     const line=innerHeight*.35; let cur=null;
