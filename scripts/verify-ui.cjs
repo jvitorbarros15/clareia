@@ -470,6 +470,93 @@ check('ranking tabs aligned', async () => {
   }
 });
 
+for (const width of [1440, 390]) {
+  check(`targets 44px (${width})`, async () => {
+    const page = await at(width);
+    await page.evaluate(() => document.querySelector('#comparacao').scrollIntoView());
+    await page.waitForTimeout(500);
+    const small = await page.evaluate(() => {
+      const selectors = ['.header-search', '.value-button', '.footer-links a, .footer-links button', '.swap-button', '[data-p=map-reset]', '.chart-hit', '.donut-legend [data-p-highlight]'];
+      const out = [];
+      for (const selector of selectors) {
+        const els = [...document.querySelectorAll(selector)].filter(el => { const r = el.getBoundingClientRect(); return r.width && r.height && getComputedStyle(el).visibility !== 'hidden'; });
+        if (!els.length) { out.push(`${selector}: none found`); continue; }
+        for (const el of els) {
+          const r = el.getBoundingClientRect();
+          let w = r.width, h = r.height;
+          for (const pseudo of ['::before', '::after']) {
+            const s = getComputedStyle(el, pseudo);
+            if (s.position === 'absolute' && s.content !== 'none') { w = Math.max(w, parseFloat(s.width) || 0); h = Math.max(h, parseFloat(s.height) || 0); }
+          }
+          if (w < 43.5 || h < 43.5) { out.push(`${selector}: ${Math.round(w)}x${Math.round(h)}`); break; }
+        }
+      }
+      return out;
+    });
+    assert.deepEqual(small, [], `targets under 44px at ${width}`);
+    await page.close();
+  });
+}
+
+check('low-res portrait', async () => {
+  for (const width of [1440, 390]) {
+    const page = await at(width);
+    await page.waitForFunction(() => [...document.querySelectorAll('.photo img')].every(img => img.complete));
+    const imgs = await page.evaluate(() => [...document.querySelectorAll('.photo img')].filter(img => img.offsetParent).map(img => {
+      const r = img.getBoundingClientRect(), frame = img.closest('.photo').getBoundingClientRect(), fit = getComputedStyle(img).objectFit;
+      const scale = fit === 'cover' ? Math.max(r.width / img.naturalWidth, r.height / img.naturalHeight) : r.width / img.naturalWidth;
+      return { src: img.getAttribute('src').slice(-30), natural: img.naturalWidth, scale, centered: Math.abs((r.left + r.width / 2) - (frame.left + frame.width / 2)) <= 1 };
+    }));
+    assert.ok(imgs.length > 0, 'portraits rendered');
+    const low = imgs.filter(i => i.natural < 200);
+    assert.ok(low.length > 0, `a portrait under 200 px natural width exists at ${width}: ${JSON.stringify(imgs.map(i => i.natural))}`);
+    for (const i of low) { assert.ok(i.scale <= 1.5 + 0.01, `${i.src} (${i.natural}px) upscaled ${i.scale.toFixed(2)}x at ${width}`); assert.ok(i.centered, `${i.src} centered at ${width}`); }
+    await page.close();
+  }
+});
+
+check('launcher at 390', async () => {
+  const page = await at(390);
+  const shown = () => page.evaluate(() => { const l = document.querySelector('.assistant-launcher'), s = getComputedStyle(l); return s.visibility !== 'hidden' && parseFloat(s.opacity) > 0.05; });
+  for (const y of [0, 150, 300, 450, 600]) {
+    await page.evaluate(y => scrollTo(0, y), y);
+    await page.waitForTimeout(400);
+    const inView = await page.evaluate(() => { const r = document.querySelector('#query').getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; });
+    if (inView) assert.ok(!(await shown()), `launcher visible with #query in view at scroll ${y}`);
+  }
+  await page.evaluate(() => scrollTo(0, 2400));
+  await page.waitForTimeout(400);
+  assert.ok(await shown(), 'launcher visible far below the search');
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.waitForTimeout(400);
+  const overlap = await page.evaluate(() => {
+    const note = document.querySelector('.editorial-handwritten').getBoundingClientRect();
+    const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    return ['.hero-portrait .photo', '.section-dock'].map(s => [s, document.querySelector(s)]).filter(([, el]) => el && hit(note, el.getBoundingClientRect())).map(([s]) => s);
+  });
+  assert.deepEqual(overlap, [], 'the handwritten note overlaps');
+  await page.close();
+});
+
+check('hero value affordance', async () => {
+  const page = await at(1440);
+  const underline = () => page.evaluate(() => getComputedStyle(document.querySelector('#total')).textDecorationLine);
+  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('#total')).cursor), 'pointer');
+  await page.locator('#total').hover();
+  await page.waitForTimeout(250);
+  assert.match(await underline(), /underline/, 'underline on hover');
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(250);
+  await page.keyboard.press('Tab');
+  await page.evaluate(() => document.querySelector('#total').focus());
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'total');
+  await page.waitForTimeout(250);
+  assert.match(await underline(), /underline/, 'underline on focus');
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;

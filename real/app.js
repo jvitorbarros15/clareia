@@ -60,6 +60,13 @@
     return `<span class="photo"><img src="${escape(p.photo)}" alt="Retrato oficial de ${escape(p.name)}" loading="lazy"></span>`;
   }
   const avatar = p => `<span class="avatar">${photo(p)}</span>`;
+  document.addEventListener('load', event => {
+    const img = event.target;
+    if (img.tagName === 'IMG' && img.naturalWidth < 200 && img.closest('.photo') && !img.closest('.avatar')) {
+      img.closest('.photo').classList.add('low-res');
+      img.style.setProperty('--natural', img.naturalWidth);
+    }
+  }, true);
   function syncURL() {
     const url = new URL(location.href);
     url.search = '';

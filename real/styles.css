@@ -286,7 +286,7 @@ body[data-model=editorial] .editorial-card .person-name{margin-top:0}
 /* Phone hero: a single column, so the portrait and the note never cover the headline or the figure. */
 body[data-model=editorial] .editorial-hero{display:flex;flex-direction:column;min-height:0;padding-bottom:4px}
 body[data-model=editorial] .editorial-left .search-wrap{width:100%}
-body[data-model=editorial] .editorial-handwritten{order:3;position:relative;top:auto;right:auto;align-self:flex-end;margin:18px 6px -54px 0;font-size:24px;max-width:150px}
+body[data-model=editorial] .editorial-handwritten{order:3;position:relative;top:auto;right:auto;align-self:flex-end;margin:18px 6px 12px 0;font-size:24px;max-width:150px}
 body[data-model=editorial] .hero-portrait{order:4;position:relative;width:100%;height:auto;aspect-ratio:4/3;right:auto;bottom:auto}
 body[data-model=editorial] .editorial-feature{order:5;padding:24px 0 28px}
 body[data-model=editorial] .editorial-feature .feature-value{font-size:52px;white-space:normal}
@@ -463,7 +463,7 @@ body[data-model=editorial] :is(.p-link,.topic-tabs button,.p-metric button,.comp
 body[data-model=editorial] :is(select,input:not([type=range]),.search-submit){min-height:44px}
 body[data-model=editorial] .bar-row{min-height:44px}
 body[data-model=editorial] :is(.project-bottom button,.donut-caption button,.map-topline button,.footer-links :is(a,button),.footer-disclaimer button,.motion-toggle,.logo){position:relative}
-body[data-model=editorial] :is(.project-bottom button,.donut-caption button,.map-topline button,.footer-links :is(a,button),.footer-disclaimer button,.motion-toggle,.logo)::before{content:"";position:absolute;inset:-12px}
+body[data-model=editorial] :is(.project-bottom button,.donut-caption button,.map-topline button,.footer-links :is(a,button),.footer-disclaimer button,.motion-toggle,.logo)::before{content:"";position:absolute;inset:-13px}
 
 /* Follow is a heart: outline to follow, filled when following. */
 .follow-button .heart{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;transition:fill 160ms ease,transform 160ms cubic-bezier(.23,1,.32,1)}
@@ -589,6 +589,7 @@ body[data-model=editorial] .assistant-launcher>svg,body[data-model=editorial].pa
 body[data-model=editorial] :is(.supplier-list button>span,.supplier-list button small,.supplier-list button>b,.atlas-people button small,.compare-person p,.project-author span small,.your-vote span small,.linked-totals small,.timeline-event p){font-size:13px}
 body[data-model=editorial] :is(.atlas-people>div>button,.linked-chart-body details>summary){min-height:44px}
 body[data-model=editorial] .chart-hit{cursor:pointer}
+@media (max-width:560px){body[data-model=editorial] .chart-hit{r:48px}}
 body[data-model=editorial]{padding-bottom:80px}
 /* Full-bleed bands use 100vw, which includes a classic scrollbar; clip (not hidden) keeps sticky elements working. */
 body[data-model=editorial]{overflow-x:clip}
@@ -671,7 +672,8 @@ body[data-model=editorial] .portrait-button[aria-pressed=true] .photo img{filter
 .real-year{font-size:15px;color:var(--muted);align-self:center}
 .real-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .real-actions .outline-button,.real-actions .text-button{min-height:44px}
-body[data-model=editorial] .feature-value{font-variant-numeric:tabular-nums;cursor:default}
+body[data-model=editorial] .feature-value{font-variant-numeric:tabular-nums;cursor:pointer;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:.12em;text-decoration-thickness:2px;transition:text-decoration-color 160ms var(--ease-out)}
+body[data-model=editorial] .feature-value:is(:hover,:focus-visible){text-decoration-color:currentColor}
 body[data-model=editorial] .donut-legend .all-category i{display:inline-block}
 .real-months{grid-template-columns:repeat(auto-fit,minmax(90px,1fr))!important;align-items:end;height:auto!important}
 .real-months button{height:auto!important;display:flex!important;flex-direction:column;justify-content:flex-end}
@@ -874,3 +876,7 @@ body[data-model=editorial] :is(.p-section-intro h2,.closing-top h2,h2.p-overview
 body[data-model=editorial] section h3:not(.person-name,dialog *,.directory-person *,.timeline-event *){font-size:var(--h3-size);letter-spacing:-.02em}
 body[data-model=editorial] .editorial-rank .tabs button{flex:none}
 body[data-model=editorial] .editorial-rank .tabs button:first-child{padding-left:0}
+
+/* A portrait smaller than 200 px is shown at up to 1.5x its size, framed, instead of stretched to the card. */
+body[data-model=editorial] .photo.low-res{display:grid;place-items:center;background:color-mix(in srgb,var(--ink) 6%,var(--bg))}
+body[data-model=editorial] .photo.low-res img{width:calc(var(--natural) * 1.5px);height:auto;max-width:100%;max-height:100%;object-fit:contain}
