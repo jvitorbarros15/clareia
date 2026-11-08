@@ -141,7 +141,7 @@
   }
   function mapFormat(value) {return state.mapMetric==='projects'?number(value)+' projetos':money(value);}
   function mapControls() {
-    return `<div class="map-metrics"><label>Colorir por<select id="map-metric"><option value="total" ${state.mapMetric==='total'?'selected':''}>Total de despesas</option><option value="average" ${state.mapMetric==='average'?'selected':''}>Despesas por representante</option></select></label><p class="p-small">Mais intenso = maior valor nesta amostra. Ausência de dados tem preenchimento distinto. ${C.state.category==='Todas'?'Todas as categorias':catText(C.state.category)}. ${C.span()}.</p><button class="p-link" data-p="map-evidence">Como chegamos nisso? →</button></div>`;
+    return `<div class="map-metrics"><div class="map-metric-row"><span id="map-metric-label">Colorir por</span><div class="map-segment" role="group" aria-labelledby="map-metric-label">${[['total','Total de despesas'],['average','Por representante']].map(([value,label])=>`<button type="button" data-p="map-metric" data-value="${value}" aria-pressed="${state.mapMetric===value}">${label}</button>`).join('')}</div></div><p class="p-small">Mais intenso = maior valor nesta amostra. Ausência de dados tem preenchimento distinto. ${C.state.category==='Todas'?'Todas as categorias':catText(C.state.category)}. ${C.span()}.</p><button class="p-link" data-p="map-evidence">Como chegamos nisso? →</button></div>`;
   }
   // Hit areas for every person go first, under all visible points: a large target must never cover another person's point.
   function linkedChart() {
@@ -347,6 +347,7 @@
       case 'clear-highlight':state.highlightCategory=null;updateSpending();focusMatch('.donut-legend button:not(:disabled)');break;
       case 'spend-evidence':expenseEvidence();break;
       case 'map-evidence':C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.span()} · ${state.mapMetric==='projects'?'autoria principal':catText(C.state.category)}</p><p>UF de representação, não destino da despesa. Média por representante = soma das despesas dividida pelo número de perfis da UF; não ajusta tempo em exercício.</p><table class="data-table"><thead><tr><th>UF</th><th>Perfis</th><th>Valor</th></tr></thead><tbody>${Object.entries(UF).filter(([uf])=>C.all().some(p=>p.uf===uf)).map(([uf,[name]])=>`<tr><td>${uf} / ${name}</td><td>${C.all().filter(p=>p.uf===uf).length}</td><td>${mapFormat(mapValue(uf))}</td></tr>`).join('')}</tbody></table><p class="fixture-note">UF de representação conforme o cadastro da Câmara. UFs sem deputados nesta amostra aparecem como indisponíveis; indisponível não significa zero.</p>`);break;
+      case 'map-metric':state.mapMetric=b.dataset.value;renderPart('atlas',atlas);focusMatch('[data-p=map-metric][data-value='+state.mapMetric+']');break;
       case 'map-reset':state.mapUF=null;renderPart('atlas',atlas);focusMatch('[data-p=map-reset]');break;
       case 'apply-state':{const local=C.all().filter(p=>p.uf===state.mapUF);state.a=local[0].id;state.b=(local[1]||C.byTotal().find(p=>p.id!==state.a)).id;C.state.uf=state.mapUF;C.refresh();}C.toast(`Recorte aplicado: ${UF[state.mapUF][0]}.`);break;
       case 'swap':[state.a,state.b]=[state.b,state.a];renderPart('comparacao',comparison);focusMatch('[data-p="swap"]');break;
@@ -369,7 +370,7 @@
   });
   document.addEventListener('change',e=>{
     const id=e.target.id,val=e.target.value;
-    if(id==='map-metric'){state.mapMetric=val;renderPart('atlas',atlas);focusMatch('#map-metric');}
+    
     if(id==='map-select'){state.mapUF=val||null;renderPart('atlas',atlas);focusMatch('#map-select');}
     if(id==='compare-a'||id==='compare-b'){const k=id==='compare-a'?'a':'b',other=k==='a'?'b':'a';if(state[other]===val)state[other]=state[k];state[k]=val;renderPart('comparacao',comparison);focusMatch('#'+id);if(editorial&&id==='compare-a'){state.voter=val;state.timeline=val;renderPart('votacoes',voteSection);renderPart('acompanhar',following);watchMotion();focusMatch('#compare-a');}}
     if(id==='project-stage'){state.stage=val;renderPart('project-grid',projectCards);watchMotion();}

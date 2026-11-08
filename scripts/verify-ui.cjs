@@ -561,7 +561,7 @@ check('no "reembols" in the interface', async () => {
     }
     await page.locator('#despesas .donut-legend [data-p-highlight]').first().click();
     await page.locator('#despesas [data-p-drill]').click(); await look('supplier dialog'); await page.keyboard.press('Escape');
-    await page.locator('#map-metric').selectOption('average'); await look('map average');
+    await page.locator('[data-p=map-metric][data-value=average]').click(); await look('map average');
     assert.deepEqual(found, [], `"reembols" found at ${width}`);
     await page.close();
   }
@@ -1453,7 +1453,7 @@ check('unanswerable question reports any active filter, app or portal', async ()
   const message = page => page.locator('.answer-message p').innerText().then(clean);
   const cases = {
     'map selection': async page => { await page.locator('[data-p-uf="SP"]').click(); },
-    'map metric': async page => { await page.locator('#map-metric').selectOption('average'); },
+    'map metric': async page => { await page.locator('[data-p=map-metric][data-value=average]').click(); },
     'month': async page => { await page.locator('[data-p-month="1"]').click(); },
     'highlight': async page => { await page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click(); },
   };
@@ -1534,6 +1534,18 @@ check('Voltar aos registros returns to the list the reader came from', async () 
   await openRecords(page, (await published(page)).people[0].id);
   await page.waitForSelector('#detail[open] .record-row');
   await roundTrip(page, 'deputy list');
+  await page.close();
+});
+
+check('map metric is a segmented control', async () => {
+  const page = await at(1440);
+  assert.equal(await page.locator('#map-metric').count(), 0, 'no native select');
+  const total = page.locator('[data-p=map-metric][data-value=total]'), average = page.locator('[data-p=map-metric][data-value=average]');
+  assert.equal(await total.getAttribute('aria-pressed'), 'true');
+  await average.focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await average.getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.value), 'average', 'focus stays on the choice');
   await page.close();
 });
 
