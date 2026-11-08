@@ -1105,6 +1105,14 @@ check('external text is escaped once', async () => {
   await page.close();
 });
 
+check('quota labels use one term', async () => {
+  const page = await at(1440);
+  const body = await page.locator('body').innerText();
+  assert.doesNotMatch(body, /cota no recorte|categoria global/i);
+  assert.match(await text(page.locator('#atlas')), /Todas as categorias./);
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;
