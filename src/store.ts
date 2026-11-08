@@ -28,6 +28,7 @@ export async function openDB(memory=false):Promise<DB> {
     `CREATE INDEX IF NOT EXISTS publications_domain ON publications(domain,seq)`,
     `CREATE TABLE IF NOT EXISTS expenses_v2 (publication_id text REFERENCES publications(id), position integer NOT NULL, occurrence_id text NOT NULL, person_id integer NOT NULL, year integer NOT NULL, month integer NOT NULL, category text NOT NULL, supplier_key text NOT NULL, amount_cents bigint NOT NULL, record jsonb NOT NULL, PRIMARY KEY(publication_id,occurrence_id))`,
     `CREATE INDEX IF NOT EXISTS expenses_person ON expenses_v2(publication_id,person_id,year,month)`,
+    `CREATE TABLE IF NOT EXISTS people_coverage_v1 (publication_id text REFERENCES publications(id), position integer NOT NULL, person_id integer NOT NULL, year integer NOT NULL, month integer NOT NULL, record jsonb NOT NULL, PRIMARY KEY(publication_id,person_id,year,month))`,
     `CREATE TABLE IF NOT EXISTS active_publication (domain text PRIMARY KEY, publication_id text NOT NULL REFERENCES publications(id))`,
     `CREATE TABLE IF NOT EXISTS withheld_publications (publication_id text PRIMARY KEY REFERENCES publications(id), reason text NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS publication_audits (publication_id text PRIMARY KEY REFERENCES publications(id), status text NOT NULL CHECK(status IN ('passed','failed')), checked_at timestamptz NOT NULL, report jsonb NOT NULL)`,
