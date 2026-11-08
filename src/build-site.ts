@@ -6,6 +6,8 @@ import {activePublication,publicationAudit,readRecords} from './publications.ts'
 import type {Domain,Publication} from './publications.ts';
 import type {DB} from './store.ts';
 import {csv} from './view.ts';
+import {readPeopleCoverage} from './people-publication.ts';
+import {buildSiteSummary} from './site-summary.ts';
 
 const DOMAINS:Domain[]=['pessoas','despesas','votacoes','projetos','eleicoes','emendas'];
 const MAX_FILES=15000,MAX_BYTES=10*1024*1024;
@@ -50,6 +52,8 @@ export async function buildSite(db:DB,outDir:string,portraitsDir:string):Promise
     await fs.writeFile(path.join(person,'despesas.json'),JSON.stringify(records));
     await fs.writeFile(path.join(person,'despesas.csv'),csv(records));
   }
+  const peopleVersion=await activePublication(db,'pessoas');
+  await fs.writeFile(path.join(data,'summary.json'),JSON.stringify(buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:await readRecords(db,active.id),expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await readPeopleCoverage(db,peopleVersion.id):[]})));
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
   await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,audit:await publicationAudit(db,active.id)}));
   await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base,domains}));
