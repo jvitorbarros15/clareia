@@ -8,8 +8,8 @@ import {collectExpenseBatch} from '../src/expense-intermediate.ts';
 import {vaultKey} from '../src/vault.ts';
 
 const args=process.argv.slice(2),value=(flag:string)=>{const i=args.indexOf(flag);return i<0?'':args[i+1];};
-if(args.includes('--help')){console.log('npm run collect:expenses:intermediate -- --local --selection-run ID --run ID [--offline] [--workers 1|2|3]\nCaptura financeira intermediária cifrada, sem publicação. --offline não consulta a rede.');process.exit(0);}
-for(let i=0;i<args.length;i++){if(['--local','--offline'].includes(args[i]))continue;if(['--selection-run','--run','--workers'].includes(args[i])&&args[i+1]&&!args[i+1].startsWith('--')){i++;continue;}throw Error('Argumento inválido');}
+if(args.includes('--help')){console.log('npm run collect:expenses:intermediate -- --local --selection-run ID --run ID [--offline] [--portal] [--workers 1|2|3]\nCaptura financeira intermediária cifrada, sem publicação. --portal confere o relatório oficial SIGEPA e permanece ativo nas retomadas. --offline não consulta a rede.');process.exit(0);}
+for(let i=0;i<args.length;i++){if(['--local','--offline','--portal'].includes(args[i]))continue;if(['--selection-run','--run','--workers'].includes(args[i])&&args[i+1]&&!args[i+1].startsWith('--')){i++;continue;}throw Error('Argumento inválido');}
 const runId=value('--run'),selectionId=value('--selection-run'),workers=Number(value('--workers')||'2');
 if([runId,selectionId].some(id=>!/^[a-zA-Z0-9-]{1,80}$/.test(id))||!Number.isInteger(workers)||workers<1||workers>3)throw Error('Execução inválida');
 const root=path.resolve('data/private/expense-intermediate',runId),selectionRoot=path.resolve('data/private/people-legacy',selectionId),key=args.includes('--local')?await readLocalPeopleKey():vaultKey();
@@ -36,11 +36,12 @@ try{
   const {proposal,temporal}=input,scope={year:proposal.year,legislature:temporal.scope.legislature,ids:proposal.people.map((p:any)=>p.id),months:proposal.months};
   if(proposal.temporalSha256!==hash(canonical(temporal))||input.originAudit.temporalSha256!==proposal.temporalSha256||input.originAudit.crosscheckSha256!==proposal.crosscheckSha256)throw Error('Origem temporal diverge');
   const firstAttempt=previous?.firstAttempt??(previous?.reportSha256&&previous.metrics?{reportSha256:previous.reportSha256,metrics:previous.metrics}:undefined);
-  const manifest={runId,selectionRun:selectionId,inputSha256:hash(canonical(input)),proposalSha256:hash(canonical(proposal)),scope,startedAt:previous?.startedAt??new Date().toISOString(),firstAttempt};
+  const portalRequested=args.includes('--portal')||previous?.portalRequested===true;
+  const manifest={runId,selectionRun:selectionId,inputSha256:hash(canonical(input)),proposalSha256:hash(canonical(proposal)),scope,portalRequested,startedAt:previous?.startedAt??new Date().toISOString(),firstAttempt};
   await fs.writeFile(path.join(root,'run.json'),JSON.stringify({...manifest,status:'collecting'},null,2));
   try{
     const offline=args.includes('--offline'),capture=(pass:number)=>new PeopleCapture(path.join(root,'pass-'+pass),key,offline?async()=>new Response('',{status:404}):undefined);
-    const report=await collectExpenseBatch(scope,temporal,hash(canonical(proposal)),capture(1),capture(2),{workers,wait:offline?async()=>{}:undefined,progress:(pass,done,total)=>{if(done%12===0||done===total)console.log(`Despesas 2025: passe ${pass}, ${done}/${total} competências`);}});
+    const report=await collectExpenseBatch(scope,temporal,hash(canonical(proposal)),capture(1),capture(2),{workers,portal:portalRequested,wait:offline?async()=>{}:undefined,progress:(pass,done,total)=>{if(done%12===0||done===total)console.log(`Despesas 2025: passe ${pass}, ${done}/${total} competências`);}});
     const version=hash(canonical(report)),folder=path.join(root,'reports');await fs.mkdir(folder,{recursive:true});
     await fs.writeFile(path.join(folder,version+'.batch.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(root,'batch.json'),JSON.stringify(report,null,2));
     const coverage=report.cells.reduce<Record<string,number>>((out,c)=>{out[c.status]=(out[c.status]||0)+1;return out;},{});

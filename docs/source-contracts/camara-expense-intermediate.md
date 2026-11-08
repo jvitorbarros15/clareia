@@ -23,8 +23,8 @@ A versão temporal pode conter desconhecido, conflito e troca intramês. Esses e
 - O link `self`, quando fornecido, deve identificar a mesma página/competência solicitada; uma resposta vazia de outro recorte é retida, mesmo sem registros para validar a identidade pelo conteúdo.
 - Para página terminal cheia sem prova, exige uma página seguinte vazia preservada. O comportamento observado de `next` redundante depois da última página cheia só é aceito quando a última página declarada corresponde exatamente à anterior e sua sucessora é vazia. Página vazia em outra posição, recorte alterado ou dados depois de uma falsa indicação de término retêm o caso.
 - Mantém a regra de união aprovada no piloto: somente TELEFONIA e COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA podem ficar apenas no anual; somente PASSAGEM AÉREA - SIGEPA pode ficar apenas na API. Novas exceções não são aceitas automaticamente.
-- Compara ocorrências por identidade oficial/competência/documento/categoria/centavos, preservando multiplicidade; confere número, emissão e lote dos pares. Linhas integralmente idênticas continuam retidas, sem deduplicação automática.
-- Usa os normalizadores financeiros existentes: negativos e campos desconhecidos são preservados; divergência na equação documento/glosa/líquido retém a competência. Não subtrai restituição novamente nem soma valores de face de documentos para substituir o líquido.
+- Compara ocorrências por identidade oficial/competência/documento/categoria/centavos, preservando multiplicidade; confere número, emissão e lote dos pares. Linhas integralmente idênticas sem evidência que distinga suas ocorrências continuam retidas, sem deduplicação automática. O incremento seguinte acrescenta [corroboração restrita de trechos SIGEPA](camara-expense-equations.md).
+- Usa normalização estrita por padrão: negativos e campos desconhecidos são preservados. O incremento seguinte explica parcelas corroboradas e grupos de documentos divididos segundo um [contrato próprio](camara-expense-equations.md), sem alterar os líquidos originais. Equação não explicada continua retida. Não subtrai restituição novamente nem soma valores de face de documentos para substituir o líquido.
 - Montantes são inteiros em centavos, com acumulação independente em `BigInt` e limites de precisão. Sem total geral quando qualquer competência estiver retida ou sem fonte completa.
 
 Originais anuais/API são cifrados antes de gravar. Relatórios incluem apenas registros normalizados permitidos. O scan guarda hashes dos CPFs de fornecedores e parlamentares encontrados nos originais, incluindo linhas fora da seleção; a saída não contém esses identificadores. Colunas CSV duplicadas são recusadas.
@@ -50,7 +50,7 @@ O relatório completo tem hash de evidência; `contentSha256` identifica o conte
 
 Adicionar `--offline` ao comando de coleta reaproveita os originais sem rede. Em uma retomada normal, recursos já preservados também são imutáveis; capturas faltantes podem ser completadas. Para verificar atualização, iniciar outro `--run`. A primeira medição operacional fica em `run.json/firstAttempt`, mesmo após reprocessamentos.
 
-## Execução observada em 08/11/2026
+## Execução inicial observada em 08/11/2026
 
 Execução `expenses-2025-intermediate-20261108`: 16 pessoas, janeiro–dezembro de 2025, 192 competências.
 
@@ -72,9 +72,9 @@ O `batch.json` privado tem cerca de 13,6 MB. Não serve como arquivo inicial da 
 
 ## Pendências e próxima revisão
 
-1. Investigar as 13 competências com ocorrências idênticas, preservando quantidade e posições nas duas fontes. Não aceitar remoção arbitrária para fechar total.
-2. Contratar o tratamento dos dez casos de equação financeira, incluindo parcela, limite de reembolso, documento compartilhado e restituição, quando os originais demonstrarem essas situações. A [documentação oficial da CEAP](https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html) distingue valor de face, líquido, competência, parcela e restituição; o identificador do documento não é uma chave de ocorrência. Não resolver esses casos alterando valores ou dispensando a conferência.
-3. Completar fixtures/medidas de retirada e retificação entre execuções e mudança exclusiva da API, além da política de aprovação e da conferência SQL de publicação. A coleta intermediária não usa o atalho anual `--if-changed` do piloto.
+1. O [incremento de equações e trechos](camara-expense-equations.md) reduziu as 23 retenções a três. O [relatório analítico SIGEPA](camara-cota-portal.md), conferido em dois passes com todas as linhas e total mensal, corroborou as quatro repetições restantes. Resultado: 160 competências conciliadas, 32 sem despesas nas fontes capturadas, 13.827 registros; total candidato de R$ 7.068.295,62 para as 16 pessoas, publicação desativada. Os seis HTML adicionais ficam cifrados com os originais.
+2. As dez competências antes retidas por equação foram explicadas por parcelas ou grupos de documentos divididos, com evidência entre fontes e regra auditada. Casos novos, restituições e equações fora dessas regras continuam exigindo revisão; nenhum valor é alterado para fechar a conta.
+3. Fixtures de novas capturas demonstram retificação e retirada exclusiva da API com anual inalterado, retirada em ambas as fontes e retenção quando só um lado retira uma categoria que exige par. Um anual inteiro vazio é recusado. A coleta intermediária não usa o atalho anual `--if-changed` do piloto. Ainda faltam relatório de diferenças entre versões, política de revisão/aprovação e conferência SQL de publicação; os testes de coleta não substituem essa integração.
 4. Concluir o domínio próprio de pessoas/cobertura, os resumos para o frontend e a leitura sob demanda, mantendo a referência de versão em cada publicação de despesas.
 5. Só ampliar para todo o universo após revisão dos casos da carga intermediária. O aviso de amostra e a publicação atual continuam válidos.
 

@@ -43,9 +43,14 @@ export function sourceAllowed(url:string):boolean{
     [...u.searchParams.keys()].sort().join(',')==='ano,idLegislatura,itens,mes,ordem,ordenarPor,pagina'&&
     ['ano','idLegislatura','itens','mes','pagina'].every(key=>/^[1-9]\d{0,8}$/.test(u.searchParams.get(key)||''))&&
     Number(u.searchParams.get('ano'))>=2009&&Number(u.searchParams.get('mes'))<=12&&[25,100].includes(Number(u.searchParams.get('itens')))&&u.searchParams.get('ordem')==='ASC'&&u.searchParams.get('ordenarPor')==='codDocumento';
+  const portal=u.origin==='https://www.camara.leg.br'&&u.pathname==='/cota-parlamentar/analitico'&&
+    [...u.searchParams.keys()].sort().join(',')==='cnpjFornecedor,dataFim,dataInicio,despesa,nomeFornecedor,nomeHospede,nomePassageiro,nuDeputadoId,numDocumento,sguf'&&
+    /^[1-9]\d{0,8}$/.test(u.searchParams.get('nuDeputadoId')||'')&&u.searchParams.get('despesa')==='998'&&
+    /^(?:[1-9]|1[0-2])\/\d{4}$/.test(u.searchParams.get('dataInicio')||'')&&u.searchParams.get('dataInicio')===u.searchParams.get('dataFim')&&
+    ['cnpjFornecedor','nomeFornecedor','nomeHospede','nomePassageiro','numDocumento','sguf'].every(k=>u.searchParams.get(k)==='');
   return !u.username&&!u.password&&!u.hash&&(
     u.origin==='https://dadosabertos.camara.leg.br'&&/^\/api\/v2\/(?:api-docs|deputados(?:\/\d+(?:\/historico)?)?|legislaturas\/\d+|referencias\/deputados\/codSituacao)$/.test(u.pathname)||
-    u.origin==='https://www.camara.leg.br'&&/^\/cotas\/Ano-\d{4}\.csv\.zip$/.test(u.pathname)&&!u.search||legacy||expenses
+    u.origin==='https://www.camara.leg.br'&&/^\/cotas\/Ano-\d{4}\.csv\.zip$/.test(u.pathname)&&!u.search||legacy||expenses||portal
   );
 }
 export class PeopleCapture {
@@ -73,7 +78,7 @@ export class PeopleCapture {
         let retry:number|undefined;
         try{
           this.stats.requests++;if(attempt)this.stats.retries++;
-          const response=await this.fetcher(url,{headers:{Accept:url.endsWith('.zip')?'application/zip':new URL(url).pathname.endsWith('/ObterDetalhesDeputado')?'application/xml, text/xml':'application/json','User-Agent':'clareia-people-discovery'},redirect:'error',signal:AbortSignal.timeout(60_000)});
+          const response=await this.fetcher(url,{headers:{Accept:url.endsWith('.zip')?'application/zip':new URL(url).pathname.endsWith('/ObterDetalhesDeputado')?'application/xml, text/xml':new URL(url).pathname==='/cota-parlamentar/analitico'?'text/html':'application/json','User-Agent':'clareia-people-discovery'},redirect:'error',signal:AbortSignal.timeout(60_000)});
           if(response.ok){result=await readLimited(response,url.endsWith('.zip')?100_000_000:12_000_000);this.stats.downloadedBytes+=result.length;break;}
           if(response.status!==429&&response.status<500)throw new HttpFailure(response.status);
           const raw=response.headers.get('retry-after');

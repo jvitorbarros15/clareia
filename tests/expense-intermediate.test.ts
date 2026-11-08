@@ -10,7 +10,8 @@ import {fileURLToPath} from 'node:url';
 import {zipSync,strToU8} from 'fflate';
 import {BASE,hash,canonical} from '../src/model.ts';
 import {PeopleCapture,sourceAllowed} from '../src/people-discovery.ts';
-import {collectExpenseBatch,expenseUrl,validateExpenseScope,expensePages} from '../src/expense-intermediate.ts';
+import {collectExpenseBatch,expenseUrl,validateExpenseScope,expensePages,expenseBatchContentId} from '../src/expense-intermediate.ts';
+import {portalHtml} from './fixtures/cota-portal.ts';
 import type {TemporalReport,MonthlyCoverage} from '../src/people-temporal.ts';
 import {open} from '../src/vault.ts';
 import {auditExpenseBatch} from '../src/expense-intermediate-audit.ts';
@@ -20,20 +21,22 @@ const dimension={status:'single' as const,value:'SP',values:['SP'],rows:[0]};
 const temporal={schema:'clareia.people-temporal.v1',ruleVersion:'camara.history-reported-change.v1',historySha256:hash('history'),scope:{legislature:57,start:'2025-01-01',end:'2025-12-31',sampleIds:[1]},createdAt:'2026-11-08T12:00:00Z',status:'review-required',publicAttributionEnabled:false,people:[1,2].map(id=>({id,collectionStatus:'stable',events:[],intervals:[],issues:[],months:[1,2].map<MonthlyCoverage>(month=>({year:2025,month,start:`2025-0${month}-01T00:00:00`,end:`2025-0${month+1}-01T00:00:00`,exercise:id===1?'full':'unknown',party:id===1?{...dimension,value:'A',values:['A']}:{status:'unknown',value:null,values:[],rows:[]},uf:dimension,partialScope:false,financialCollection:'not-collected'}))}))} as TemporalReport;
 const contract={paths:{'/deputados/{id}/despesas':{get:{parameters:['ano','mes','idLegislatura','itens','pagina','ordem','ordenarPor'].map(name=>({name,in:'query'}))}}}};
 const apiRow=(month=1,overrides:Record<string,unknown>={})=>({ano:2025,mes:month,codDocumento:'10',codLote:1,codTipoDocumento:1,parcela:0,numDocumento:'N1',numRessarcimento:'',tipoDespesa:'COMBUSTÍVEIS',tipoDocumento:'Recibos/Outros',nomeFornecedor:'Empresa',cnpjCpfFornecedor:'11222333000181',dataDocumento:'2025-01-02T00:00:00',urlDocumento:null,valorDocumento:10.21,valorGlosa:0,valorLiquido:10.21,...overrides});
-const columns='ideCadastro;numAno;numMes;codLegislatura;txtDescricao;vlrLiquido;vlrDocumento;vlrGlosa;ideDocumento;txtFornecedor;txtCNPJCPF;urlDocumento;txtNumero;datEmissao;numLote';
-const annualLine=(id=1,month=1,category='COMBUSTÍVEIS',amount='10.21',doc='10')=>`${id};2025;${month};57;${category};${amount};${amount};0;${doc};Empresa;11222333000181;;N1;2025-01-02T00:00:00;1`;
+const columns='ideCadastro;numAno;numMes;codLegislatura;txtDescricao;vlrLiquido;vlrDocumento;vlrGlosa;ideDocumento;txtFornecedor;txtCNPJCPF;urlDocumento;txtNumero;datEmissao;numLote;numParcela';
+const annualLine=(id=1,month=1,category='COMBUSTÍVEIS',amount='10.21',doc='10')=>`${id};2025;${month};57;${category};${amount};${amount};0;${doc};Empresa;11222333000181;;N1;2025-01-02T00:00:00;1;0`;
 const annual=(lines=[annualLine()])=>zipSync({'Ano-2025.csv':strToU8(columns+'\n'+lines.join('\n')+'\n')});
-async function setup(t:test.TestContext,reply?:(url:string,pass:number)=>unknown){
+async function setup(t:test.TestContext,reply?:(url:string,pass:number)=>unknown,fullYear=false,portal=false){
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-expense-batch-')),key=randomBytes(32);t.after(()=>fs.rm(dir,{recursive:true,force:true}));
   const capture=(pass:number)=>new PeopleCapture(path.join(dir,'pass-'+pass),key,async url=>{
     const u=new URL(url),override=reply?.(url,pass);
     const value=override===undefined?u.pathname.endsWith('api-docs')?contract:u.pathname.endsWith('.zip')?annual():{dados:u.pathname.includes('/1/')&&u.searchParams.get('mes')==='1'?[apiRow()]:[],links:[{rel:'self',href:url}]}:override;
     return value instanceof Response?value:new Response(value instanceof Uint8Array?Buffer.from(value):JSON.stringify(value));
   },async()=>{});
-  const one=capture(1),two=capture(2),report=await collectExpenseBatch(scope,temporal,hash('proposal'),one,two,{wait:async()=>{}});
+  const selectedScope=fullYear?{...scope,months:Array.from({length:12},(_,i)=>i+1)}:scope,selectedTemporal=structuredClone(temporal);
+  if(fullYear)for(const p of selectedTemporal.people)p.months=selectedScope.months.map(month=>({...p.months[0],month,start:new Date(Date.UTC(2025,month-1,1)).toISOString().slice(0,19),end:new Date(Date.UTC(2025,month,1)).toISOString().slice(0,19)}));
+  const one=capture(1),two=capture(2),report=await collectExpenseBatch(selectedScope,selectedTemporal,hash('proposal'),one,two,{wait:async()=>{},portal});
   const read=async(s:{pass:number;file:string})=>open(await fs.readFile(path.join(dir,'pass-'+s.pass,s.file)),key);
-  assert.equal((await auditExpenseBatch(report,temporal,scope,hash('proposal'),read)).status,'passed');
-  return {dir,key,report,one,two,read};
+  assert.equal((await auditExpenseBatch(report,selectedTemporal,selectedScope,hash('proposal'),read)).status,'passed');
+  return {dir,key,report,one,two,read,selectedScope,selectedTemporal};
 }
 test('expanded scope accepts arbitrary IDs/months and rejects duplicates, future months and query changes',()=>{
   validateExpenseScope(scope);validateExpenseScope({...scope,ids:Array.from({length:648},(_,i)=>i+1),months:Array.from({length:12},(_,i)=>i+1)});
@@ -44,9 +47,39 @@ test('batch reconciles sources and classifies captured empty competences separat
   const r=await setup(t);assert.equal(r.report.cells.length,4);assert.deepEqual(r.report.cells.map(c=>c.status),['complete','no-expenses-confirmed','no-expenses-confirmed','no-expenses-confirmed']);assert.equal(r.report.totalCents,1021);assert.equal(r.report.cells[2].exercise,'unknown');assert.equal(r.report.cells[2].party.status,'unknown');assert.equal(r.report.cells[0].records[0].origin,'both');assert.equal(r.report.publicationEligible,false);
   const plain=await r.read(r.report.sources[0]),sealed=await fs.readFile(path.join(r.dir,'pass-1',r.report.sources[0].file));assert.notDeepEqual(Buffer.from(plain),sealed);
 });
+test('a corroborated reported installment retains its net and evidence instead of requiring the full document face',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine().replace(';10.21;10.21;0;',';4.00;10.21;0;').replace(/;0$/,';1')]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{valorLiquido:4,parcela:1})],links:[]}:undefined);
+  assert.equal(r.report.cells[0].status,'complete');assert.equal(r.report.totalCents,400);assert.equal(r.report.cells[0].records[0].documentCents,1021);assert.equal(r.report.cells[0].records[0].financialBasis,'reported-installment');
+  r.report.cells[0].records[0].financialBasis='balanced-document-split';assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='financial-records-coverage-or-union'));
+  r.report.equationDecisions[0].annualKeys[0]=hash('wrong evidence');assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='equation-review-evidence'));
+});
+test('a complete-year split across months preserves each competence and does not multiply the document face',async t=>{
+  const line=(month:number,net:string)=>annualLine(1,month,'COMBUSTÍVEIS','10.00').replace(';10.00;10.00;0;',`;${net};10.00;0;`);
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([line(1,'4.00'),line(2,'6.00')]):url.includes('/1/despesas')?{dados:Number(new URL(url).searchParams.get('mes'))<=2?[apiRow(Number(new URL(url).searchParams.get('mes')),{valorDocumento:10,valorLiquido:Number(new URL(url).searchParams.get('mes'))===1?4:6})]:[],links:[]}:undefined,true);
+  assert.equal(r.report.totalCents,1000);assert.equal(r.report.cells[0].totalCents,400);assert.equal(r.report.cells[1].totalCents,600);assert.equal(r.report.cells[0].records[0].financialBasis,'balanced-document-split');assert.deepEqual(r.report.equationDecisions[0].months,[1,2]);assert.equal(r.report.cells.length,24);
+});
+test('two distinct annual flight routes preserve two identical API projections without deduplication or doubled union',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?zipSync({'Ano-2025.csv':strToU8(columns+';txtTrecho\n'+annualLine(1,1,'PASSAGEM AÉREA - SIGEPA')+';AAA/BBB\n'+annualLine(1,1,'PASSAGEM AÉREA - SIGEPA')+';BBB/AAA\n')}):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{tipoDespesa:'PASSAGEM AÉREA - SIGEPA'}),apiRow(1,{tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})],links:[]}:undefined);
+  assert.equal(r.report.cells[0].status,'complete');assert.equal(r.report.cells[0].records.length,2);assert.equal(r.report.totalCents,2042);assert.equal(new Set(r.report.cells[0].records.map(r=>r.id)).size,2);assert.ok(r.report.cells[0].records.every(r=>r.origin==='both'));
+  r.report.multiplicityDecisions[0].count=1;assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='multiplicity-review-evidence'));
+});
 test('an exactly full terminal page needs a preserved empty probe and remains independently auditable',async t=>{
   const r=await setup(t,url=>url.endsWith('.zip')?annual(Array.from({length:25},(_,i)=>annualLine(1,1,'COMBUSTÍVEIS','10.21',String(10+i)))):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:new URL(url).searchParams.get('pagina')==='1'?Array.from({length:25},(_,i)=>apiRow(1,{codDocumento:String(10+i)})):[],links:[]}:undefined);
   assert.equal(r.report.cells[0].status,'complete');assert.equal(r.report.cells[0].api[1].pages.length,2);assert.equal(r.report.cells[0].api[1].count,25);assert.equal(r.report.totalCents,25525);
+});
+test('API-only SIGEPA duplicates require a stable whole portal ledger and get distinct persistent occurrence IDs',async t=>{
+  const reply=(url:string)=>url.endsWith('.zip')?zipSync({'Ano-2025.csv':strToU8(columns+';nuDeputadoId\n'+annualLine()+';99\n')}):url.includes('/analitico?')?new Response(portalHtml([{net:1021},{net:1021},{net:-1021}])):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(),... [10.21,10.21,-10.21].map(net=>apiRow(1,{codDocumento:'11',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:net,valorLiquido:net}))],links:[]}:undefined;
+  const r=await setup(t,reply,false,true),cell=r.report.cells[0];assert.equal(cell.status,'complete');assert.equal(r.report.totalCents,2042);assert.equal(cell.records.length,4);assert.equal(new Set(cell.records.map(r=>r.id)).size,4);assert.equal(r.report.portalChecks[0].status,'matched');assert.equal(r.report.portalChecks[0].count,3);assert.equal(r.report.publicationEligible,false);
+  const repeated=cell.records.filter(r=>r.multiplicityBasis);assert.deepEqual(repeated.map(r=>r.occurrenceOrdinal),[0,1]);assert.ok(repeated.every(r=>r.origin==='api'));
+  const capture=(pass:number)=>new PeopleCapture(path.join(r.dir,'pass-'+pass),r.key,async()=>{throw Error('network forbidden');},async()=>{}),resumed=await collectExpenseBatch(scope,temporal,hash('proposal'),capture(1),capture(2),{portal:true,wait:async()=>{}});assert.equal(resumed.metrics.requests,0);assert.equal(resumed.contentSha256,r.report.contentSha256);
+  const original=structuredClone(r.report),audit=()=>auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read);
+  for(const edit of [()=>r.report.portalChecks[0].count=2,()=>r.report.cells[0].records.find(r=>r.multiplicityBasis)!.occurrenceOrdinal=8,()=>r.report.cells[0].records[2].id=r.report.cells[0].records[1].id]){edit();r.report.contentSha256=expenseBatchContentId(r.report);assert.equal((await audit()).status,'failed');Object.assign(r.report,structuredClone(original));}
+});
+test('missing, changed or mismatched portal evidence never clears an unresolved SIGEPA month',async t=>{
+  for(const mode of ['missing','changed','mismatch','no-identity'] as const){
+    const r=await setup(t,(url,pass)=>url.endsWith('.zip')?mode==='no-identity'?annual():zipSync({'Ano-2025.csv':strToU8(columns+';nuDeputadoId\n'+annualLine()+';99\n')}):url.includes('/analitico?')?mode==='missing'&&pass===2?new Response('',{status:404}):new Response(portalHtml(mode==='mismatch'?[{}]:mode==='changed'&&pass===2?[{net:1022},{}]:[{},{}])):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(),apiRow(1,{codDocumento:'11',tipoDespesa:'PASSAGEM AÉREA - SIGEPA'}),apiRow(1,{codDocumento:'11',tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})],links:[]}:undefined,false,true);
+    assert.equal(r.report.cells[0].status,'held-review');assert.equal(r.report.cells[0].totalCents,null);assert.equal(r.report.totalCents,null);assert.equal(r.report.portalChecks[0].status,mode==='changed'?'changed':mode==='mismatch'?'mismatch':'unavailable');
+  }
 });
 test('an extra next link after a declared full last page needs an empty successor with the same filters',async t=>{
   const r=await setup(t,url=>url.endsWith('.zip')?annual(Array.from({length:25},(_,i)=>annualLine(1,1,'COMBUSTÍVEIS','10.21',String(10+i)))):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:new URL(url).searchParams.get('pagina')==='1'?Array.from({length:25},(_,i)=>apiRow(1,{codDocumento:String(10+i)})):[],links:new URL(url).searchParams.get('pagina')==='1'&&new URL(url).searchParams.get('itens')==='25'?[{rel:'next',href:expenseUrl(scope,1,1,2,2)},{rel:'last',href:expenseUrl(scope,1,1,2)}]:[]}:undefined);
@@ -55,6 +88,19 @@ test('an extra next link after a declared full last page needs an empty successo
 test('resuming immutable captures performs no network and keeps the logical content version',async t=>{
   const r=await setup(t),capture=(pass:number)=>new PeopleCapture(path.join(r.dir,'pass-'+pass),r.key,async()=>{throw Error('network forbidden');},async()=>{});
   const resumed=await collectExpenseBatch(scope,temporal,hash('proposal'),capture(1),capture(2),{wait:async()=>{}});assert.equal(resumed.metrics.requests,0);assert.equal(resumed.contentSha256,r.report.contentSha256);assert.equal(resumed.cells[0].records.length,r.report.cells[0].records.length);assert.equal((await auditExpenseBatch(resumed,temporal,scope,hash('proposal'),r.read)).status,'passed');
+});
+test('fresh captures detect API-only corrections and withdrawals even when both annual archives stay identical',async t=>{
+  const withApi=(net:number|null)=>(url:string)=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(),...(net===null?[]:[apiRow(1,{codDocumento:'12',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:net,valorLiquido:net})])],links:[]}:undefined;
+  const before=await setup(t,withApi(3)),preserved=canonical(before.report),corrected=await setup(t,withApi(4)),withdrawn=await setup(t,withApi(null));
+  assert.deepEqual(before.report.annual.map(a=>a.source.sha256),corrected.report.annual.map(a=>a.source.sha256));assert.deepEqual(before.report.annual.map(a=>a.source.sha256),withdrawn.report.annual.map(a=>a.source.sha256));
+  assert.deepEqual([before.report.totalCents,corrected.report.totalCents,withdrawn.report.totalCents],[1321,1421,1021]);assert.equal(withdrawn.report.cells[0].records.length,1);assert.notEqual(before.report.contentSha256,corrected.report.contentSha256);assert.notEqual(before.report.contentSha256,withdrawn.report.contentSha256);assert.equal(canonical(before.report),preserved);
+  assert.ok([before,corrected,withdrawn].every(r=>r.report.publicationEligible===false));
+});
+test('withdrawal in both new sources can confirm an empty month, whereas one-sided withdrawal stays held',async t=>{
+  const before=await setup(t),empty=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(99)]):url.includes('/despesas?')?{dados:[],links:[]}:undefined),oneSided=await setup(t,url=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[],links:[]}:undefined);
+  assert.equal(before.report.cells[0].records.length,1);assert.equal(empty.report.cells[0].status,'no-expenses-confirmed');assert.equal(empty.report.cells[0].totalCents,0);assert.equal(empty.report.totalCents,0);assert.notEqual(empty.report.contentSha256,before.report.contentSha256);
+  assert.equal(oneSided.report.cells[0].status,'held-review');assert.equal(oneSided.report.cells[0].totalCents,null);assert.equal(oneSided.report.totalCents,null);assert.equal(before.report.totalCents,1021);
+  await assert.rejects(setup(t,url=>url.endsWith('.zip')?annual([]):undefined),/Arquivo anual vazio/);
 });
 test('API-only SIGEPA and negative annual-only adjustments survive without widening unreviewed exception categories',async t=>{
   const r=await setup(t,(url)=>url.endsWith('.zip')?annual([annualLine(),annualLine(1,1,'COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA','-2.00','11')]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(),apiRow(1,{codDocumento:'12',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:3,valorLiquido:3})],links:[]}:undefined);

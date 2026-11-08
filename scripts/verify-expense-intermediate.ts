@@ -13,7 +13,7 @@ const root=path.resolve('data/private/expense-intermediate',runId),key=args.incl
 try{
   const load=async(name:string)=>JSON.parse(await fs.readFile(path.join(root,name),'utf8'));
   const manifest=await load('run.json'),input=await load('input.json'),report=await load('batch.json');
-  if(manifest.runId!==runId||manifest.status!=='review-required'||hash(canonical(input))!==manifest.inputSha256||hash(canonical(report))!==manifest.reportSha256||hash(canonical(input.proposal))!==manifest.proposalSha256)throw Error('Versões financeiras divergem');
+  if(manifest.runId!==runId||manifest.status!=='review-required'||manifest.portalRequested!==report.portalRequested||hash(canonical(input))!==manifest.inputSha256||hash(canonical(report))!==manifest.reportSha256||hash(canonical(input.proposal))!==manifest.proposalSha256)throw Error('Versões financeiras divergem');
   const scope={year:input.proposal.year,legislature:input.temporal.scope.legislature,ids:input.proposal.people.map((p:any)=>p.id),months:input.proposal.months};
   if(canonical(scope)!==canonical(manifest.scope)||input.proposal.temporalSha256!==hash(canonical(input.temporal))||input.originAudit.status!=='passed'||input.originAudit.temporalSha256!==input.proposal.temporalSha256||input.originAudit.crosscheckSha256!==input.proposal.crosscheckSha256)throw Error('Seleção financeira diverge');
   const audit=await auditExpenseBatch(report,input.temporal,scope,manifest.proposalSha256,async source=>{

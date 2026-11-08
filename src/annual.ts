@@ -6,7 +6,7 @@ import {unzipSync} from 'fflate';
 import {canonical,hash,cents,snapshotId,validCnpj,officialUrl,stableDigest,publicSupplier,readLimited,RETRY_WAITS,retryWait,sourceError} from './model.ts';
 import {pairOccurrences} from './reconcile.ts';
 import {assertArchive} from './sources.ts';
-import type {Snapshot,Scope,Expense,SourceRef} from './model.ts';
+import type {Snapshot,Scope,Expense,SourceRef,FinancialBasis} from './model.ts';
 
 // Which record types may exist in one source only. Rule and rationale: real/README.md.
 const ANNUAL_ONLY=new Set(['TELEFONIA','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA']),API_ONLY=new Set(['PASSAGEM AÉREA - SIGEPA']);
@@ -33,15 +33,15 @@ export function removedRecords(previous:Snapshot,current:Expense[],scope:Scope):
 }
 
 export type AnnualRow=Record<string,string>;
-export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef):Expense {
+export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef,basis?:FinancialBasis):Expense {
   const personId=Number(r.ideCadastro),year=Number(r.numAno),month=Number(r.numMes);
   if(!scope.ids.includes(personId)||year!==scope.year||!scope.months.includes(month)||Number(r.codLegislatura)!==scope.legislature)throw new Error('Linha anual fora do escopo');
   const required=['txtDescricao','vlrLiquido'];for(const field of required)if(!r[field]?.trim())throw new Error('Campo anual obrigatório ausente: '+field);
   const money=(field:string)=>r[field]?.trim()?cents(r[field].trim().replace(',','.')):null;
   const net=money('vlrLiquido')!,face=money('vlrDocumento'),glosa=money('vlrGlosa');
-  if(face!==null&&glosa!==null&&face-glosa!==net)throw new Error('Equação financeira anual diverge');
+  if(face!==null&&glosa!==null&&face-glosa!==net&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Equação financeira anual diverge');
   const id=hash(canonical({personId,raw:r})),supplierId=(r.txtCNPJCPF||'').replace(/\D/g,'');const verified=validCnpj(supplierId),supplier=publicSupplier(r.txtFornecedor||'',supplierId);
-  return {id,personId,year,month,category:r.txtDescricao,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,lot:r.numLote||'',receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
+  return {id,personId,year,month,category:r.txtDescricao,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,lot:r.numLote||'',receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }
 export async function parseAnnual(bytes:Uint8Array,scope:Scope,observe?:(row:AnnualRow)=>void):Promise<{rows:{raw:AnnualRow;row:number}[];scanned:number}> {
   const stream=Readable.from((function*(){for(let i=0;i<bytes.length;i+=65536)yield bytes.subarray(i,i+65536);})()).pipe(parse({columns:(headers:string[])=>{if(new Set(headers).size!==headers.length)throw new Error('Contrato CSV mudou: coluna duplicada');for(const field of ['ideCadastro','numAno','numMes','codLegislatura','txtDescricao','vlrLiquido','vlrDocumento','vlrGlosa','ideDocumento','txtFornecedor','txtCNPJCPF','urlDocumento','txtNumero','datEmissao','numLote'])if(!headers.includes(field))throw new Error('Contrato CSV mudou: coluna ausente '+field);return headers;},delimiter:';',bom:true,skip_empty_lines:true}));
