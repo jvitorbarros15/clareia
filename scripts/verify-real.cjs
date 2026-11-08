@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');
 let chromium;try{({chromium}=require('playwright'));}catch{({chromium}=require(path.join(process.env.APPDATA,'npm/node_modules/playwright')));}
 const base=process.env.BASE_URL||'http://127.0.0.1:4174',out=path.resolve('output/qa');fs.mkdirSync(out,{recursive:true});
-const money=c=>(c/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/\s+/g,' ');
+const money=c=>(c/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/\s+/g,' ').replace(/^-/,'−');
 const text=s=>s.replace(/\s+/g,' ').trim();
 (async()=>{const browser=await chromium.launch({headless:true});const errors=[],checks=[];
 try{
@@ -16,11 +16,11 @@ try{
     assert.equal(text(await page.locator('#detail .calculation-result').innerText()).split(' no período')[0],money(p.cents),`evidence total ${p.name}`);
     assert.match(await page.locator('#detail-body').innerText(),new RegExp(`${p.count} registros oficiais`));
     await page.locator('#detail [data-action=records]').click();
-    assert.equal(await page.locator('#detail tbody tr').count(),p.count,`record rows ${p.name}`);
-    assert.equal(text(await page.locator('#detail tfoot td strong').innerText()),money(p.cents),`record table total ${p.name}`);
+    assert.equal(await page.locator('#detail .record-row').count(),p.count,`record rows ${p.name}`);
+    assert.equal(text(await page.locator('#detail .record-list-total').innerText()),money(p.cents),`record table total ${p.name}`);
     const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#detail [data-action=download]').click()]);
     assert.equal(fs.readFileSync(await download.path(),'utf8').split('\r\n').length-1,p.count,`CSV rows ${p.name}`);
-    await page.locator('#detail [data-action=record]').first().click();
+    await page.locator('#detail .record-row').first().click();
     const detail=await page.locator('#detail-body').innerText();assert.match(detail,/Documento|Sem documento fiscal/);assert.match(await page.locator('#detail-body a.primary').getAttribute('href'),/^https:\/\/(www\.camara\.leg\.br|dadosabertos\.camara\.leg\.br)\//);
     await close();
   }
@@ -33,7 +33,7 @@ try{
   const adjusted=data.people.find(p=>p.negative.length);
   if(adjusted){
     await page.locator(`.bar-row[data-id="${adjusted.id}"]`).click();await page.locator('#detail [data-action=records]').click();
-    const row=page.locator('#detail tbody tr',{hasText:'-R$'}).first();await row.locator('[data-action=record]').click();
+    const row=page.locator('#detail .record-row',{hasText:'−R$'}).first();await row.click();
     const detail=text(await page.locator('#detail-body').innerText());assert.ok(detail.includes(money(Math.min(...adjusted.negative)))||adjusted.negative.some(c=>detail.includes(money(c))),'negative value keeps its sign');
     if(await page.locator('#detail .formula[data-equation=none]').count())assert.match(detail,/sem recálculo/);
     await page.screenshot({path:path.join(out,'real-adjustment-dialog.png')});await close();
