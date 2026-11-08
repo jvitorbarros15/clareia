@@ -27,16 +27,16 @@ catch { ({ chromium } = require(path.join(process.env.APPDATA, 'npm/node_modules
       const angle = -Math.PI / 2 + Math.PI * share;
       const point = new DOMPoint(100 + 90 * Math.cos(angle), 100 + 90 * Math.sin(angle))
         .matrixTransform(document.querySelector('.donut-svg').getScreenCTM());
-      return { x: point.x, y: point.y, name };
+      return { x: point.x, y: point.y, name, label: window.ClareiaData.label(name) };
     });
     await page.mouse.move(point.x, point.y);
-    assert.equal(await page.locator('.donut-readout strong').innerText(), point.name);
+    assert.equal(await page.locator('.donut-readout strong').innerText(), point.label);
     assert.equal(await page.locator('[data-donut-slice][aria-pressed=true]').count(), 0);
     await page.mouse.click(point.x, point.y);
     await page.mouse.move(0, 0);
     assert.equal(await page.locator('[data-donut-slice][aria-pressed=true]').count(), 1);
     assert.equal(await page.locator('.donut-legend [aria-pressed=true]').getAttribute('data-p-highlight'), point.name);
-    assert.equal(await page.locator('.donut-hole strong').innerText(), total);
+    assert.match(await page.locator('.donut-hole strong').innerText(), /^R\$\s[\d.]+,\d\d$/, 'the center shows the selected category exact value');
     assert.ok(await page.locator('.category-bar-part').count() > 0);
     await page.locator('#despesas h2').click();
     assert.equal(await page.locator('[data-donut-slice][aria-pressed=true]').count(), 0);
@@ -53,7 +53,7 @@ catch { ({ chromium } = require(path.join(process.env.APPDATA, 'npm/node_modules
     assert.equal(await page.locator('[data-donut-slice][aria-pressed=true]').count(), 0);
     await slices.first().focus();
     await page.keyboard.press('Enter');
-    await page.locator('#spend-range').fill('1');
+    await page.locator('[data-p-month="1"]').click();
     assert.equal(await page.locator('[data-donut-slice][aria-pressed=true]').getAttribute('data-p-highlight'), point.name);
     await page.locator('[data-p=clear-highlight]').click();
     assert.equal(await page.locator('[data-donut-slice][aria-pressed=true]').count(), 0);

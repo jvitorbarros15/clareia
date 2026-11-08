@@ -226,6 +226,141 @@ check('keyboard drill', async () => {
   await page.close();
 });
 
+check('bar values fit', async () => {
+  for (const width of [1440, 390]) {
+    const page = await at(width);
+    await page.locator('.bar-section').scrollIntoViewIfNeeded();
+    const rows = await page.evaluate(() => [...document.querySelectorAll('.bar-section .bar-row')].map(row => {
+      const box = row.getBoundingClientRect(), value = row.querySelector('.bar-value').getBoundingClientRect();
+      const name = row.querySelector('.bar-name').getBoundingClientRect(), track = row.querySelector('.track').getBoundingClientRect();
+      return { overflow: value.right - box.right, sameLine: value.top < name.bottom - 1, track: [track.width, track.height] };
+    }));
+    assert.ok(rows.length >= 3, 'bar rows');
+    for (const row of rows) {
+      assert.ok(row.overflow <= 0.5, `value overflows its row by ${row.overflow}px at ${width}`);
+      assert.ok(row.track[0] > 20 && row.track[1] > 0, `bar visible at ${width}: ${row.track}`);
+      if (width <= 600) assert.ok(!row.sameLine, 'name and value share a line at 390');
+    }
+    await page.close();
+  }
+});
+
+check('category labels', async () => {
+  const page = await at(1440);
+  const data = await published(page);
+  const names = Object.keys(data.categories);
+  const body = await page.evaluate(() => document.body.innerText);
+  for (const name of names) assert.ok(!body.includes(name), `official name on the page: ${name}`);
+  const labels = await page.evaluate(names => names.map(n => window.ClareiaData.label(n)), names);
+  assert.ok(labels.includes('Passagens aéreas') && labels.includes('Divulgação do mandato'), labels.join(' | '));
+  await page.locator('.bar-row').first().click();
+  await page.waitForSelector('#detail[open]');
+  const dialog = clean(await page.locator('#detail-body').innerText());
+  assert.ok(dialog.includes('Nome na fonte: '), 'person dialog shows the official name');
+  assert.ok(names.every(n => !dialog.includes(n) || dialog.includes(`Nome na fonte: ${n}`)), 'official name only as "Nome na fonte"');
+  await page.keyboard.press('Escape');
+  await settle(page);
+  await page.locator('.donut-legend [data-p-highlight]').first().click();
+  await page.locator('[data-p-drill]').first().click();
+  await page.waitForSelector('#detail[open]');
+  assert.ok(clean(await page.locator('#detail-body').innerText()).includes('Nome na fonte: '), 'category dialog shows the official name');
+  await page.close();
+});
+
+check('search matches display labels and official names', async () => {
+  const page = await at(1440);
+  const category = await page.evaluate(() => { window.Clareia.ask('quem gastou mais com mandato'); return window.Clareia.state.category; });
+  assert.equal(category, 'DIVULGAÇÃO DA ATIVIDADE PARLAMENTAR.', 'a display-label word finds the official category');
+  const param = await page.evaluate(() => new URLSearchParams(location.search).get('categoria'));
+  assert.equal(param, 'DIVULGAÇÃO DA ATIVIDADE PARLAMENTAR.', 'URL keeps the official name');
+  const official = await page.evaluate(() => { window.Clareia.ask('quem gastou mais com combustiveis'); return window.Clareia.state.category; });
+  assert.equal(official, 'COMBUSTÍVEIS E LUBRIFICANTES.', 'official words still match');
+  await page.close();
+});
+
+check('month chart covers the period', async () => {
+  const page = await at(1440);
+  const info = await page.evaluate(() => {
+    const D = window.ClareiaData, svg = document.querySelector('.linked-lines');
+    const rect = el => el.getBoundingClientRect();
+    const ticks = [...svg.querySelectorAll('.y-tick')].map(rect), labels = [...svg.querySelectorAll('.line-label')].map(rect);
+    const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const parse = c => (c.match(/\d+/g) || []).slice(0, 3).map(Number);
+    const strokes = [...svg.querySelectorAll('path[stroke]')].map(p => parse(getComputedStyle(p).stroke));
+    return {
+      axis: [...svg.querySelectorAll('text')].map(t => t.textContent.trim()).filter(t => D.monthNames.includes(t)),
+      coverage: D.coverage.map(i => D.monthNames[i]),
+      sliders: document.querySelectorAll('#linked-from, #linked-to').length,
+      ticks: ticks.length, labels: labels.length, clash: labels.some(l => ticks.some(t => hit(l, t))),
+      strokes, distance: strokes.length === 2 ? strokes[0].reduce((n, v, i) => n + Math.abs(v - strokes[1][i]), 0) : 0,
+    };
+  });
+  assert.deepEqual(info.axis, info.coverage, 'x-axis shows exactly the coverage months');
+  if (info.coverage.length < 3) assert.equal(info.sliders, 0, 'no range input below 3 months');
+  assert.ok(info.ticks > 0 && info.labels === 2, `y ticks ${info.ticks}, series labels ${info.labels}`);
+  assert.ok(!info.clash, 'series labels intersect y-tick labels');
+  assert.ok(info.distance > 200, `series colors too similar: ${JSON.stringify(info.strokes)}`);
+  await page.close();
+});
+
+check('donut panel', async () => {
+  const page = await at(1440);
+  await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+  const slack = await page.evaluate(() => {
+    const panel = document.querySelector('.donut-panel'), box = panel.getBoundingClientRect();
+    return box.bottom - Math.max(...[...panel.children].map(c => c.getBoundingClientRect().bottom));
+  });
+  assert.ok(slack <= 32, `donut card has ${Math.round(slack)}px of empty space under its content`);
+  assert.ok(clean(await page.locator('.donut-readout').innerText()).includes('Selecione uma fatia ou uma linha da legenda'), 'prompt text');
+  assert.equal(await page.locator('.category-path').count(), 0, 'no category link list');
+  assert.doesNotMatch(clean(await page.locator('#despesas').innerText()), /Explorar .*↗/, 'no "Explorar … ↗"');
+  const legend = page.locator('.donut-legend [data-p-highlight]:not(:disabled)');
+  const first = await legend.nth(0).getAttribute('data-p-highlight'), second = await legend.nth(1).getAttribute('data-p-highlight');
+  await legend.nth(0).click();
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await page.locator('.donut-legend [aria-pressed=true]').getAttribute('data-p-highlight'), second, 'ArrowDown moves the selection');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.pHighlight), second, 'focus follows');
+  const value = await page.evaluate(name => {
+    const C = window.Clareia;
+    return C.money(C.sum(C.all().flatMap(C.records).filter(r => r.category === name)));
+  }, second);
+  assert.equal(clean(await page.locator('.donut-hole strong').innerText()), clean(value), 'center shows the exact value');
+  await page.keyboard.press('ArrowUp');
+  assert.equal(await page.locator('.donut-legend [aria-pressed=true]').getAttribute('data-p-highlight'), first, 'ArrowUp moves back');
+  const links = clean(await page.locator('#despesas').innerText()).match(/Ver fornecedores de [^→]+→/g) || [];
+  assert.equal(links.length, 1, `one supplier link: ${links}`);
+  await page.close();
+});
+
+check('negative category', async () => {
+  const page = await at(1440);
+  const data = await published(page);
+  const [name, cents] = Object.entries(data.categories).find(([, c]) => c < 0);
+  const row = page.locator(`.donut-legend [data-p-highlight="${name}"]`);
+  const rowText = clean(await row.innerText());
+  assert.ok(rowText.includes(clean(brl(cents))), `exact negative value in the row: ${rowText}`);
+  assert.ok(/ajuste/.test(rowText), 'row says ajuste');
+  assert.equal(await page.locator(`[data-donut-slice][data-p-highlight="${name}"]`).count(), 0, 'no slice for the negative category');
+  await page.close();
+});
+
+check('comparison stacks on mobile', async () => {
+  const page = await at(390);
+  await page.locator('#comparacao').scrollIntoViewIfNeeded();
+  const info = await page.evaluate(() => {
+    const [a, b] = [...document.querySelectorAll('.compare-person')].map(el => el.getBoundingClientRect());
+    const rows = [...document.querySelectorAll('.compare-category')].map(row => {
+      const label = row.querySelector('b').getBoundingClientRect();
+      return { height: label.height, lines: Math.round(label.height / parseFloat(getComputedStyle(row.querySelector('b')).lineHeight || 16)), right: row.getBoundingClientRect().right };
+    });
+    return { stacked: b.top >= a.bottom - 1, rows, scroll: document.documentElement.scrollWidth <= innerWidth };
+  });
+  assert.ok(info.stacked, 'the two people stack');
+  assert.ok(info.scroll, 'no horizontal scroll');
+  assert.ok(info.rows.every(r => r.lines <= 2 && r.right <= 390), `category labels: ${JSON.stringify(info.rows)}`);
+  await page.close();
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
   let failed = 0;
