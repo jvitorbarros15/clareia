@@ -53,10 +53,48 @@
       ['Registros de despesa',people.flatMap(C.records).length,'registros oficiais nesta versão','records']
     ].map(([title,value,detail,key])=>`<button class="p-stat" data-p-summary="${key}"><span class="p-stat-label">${title} ${ext()}</span><strong data-counter="${value}" data-format="${key==='expenses'?'money':'number'}">${key==='expenses'?compact(value):number(value)}</strong><span class="p-stat-detail">${detail}</span></button>`).join('')}</div>`;
   }
+  function donutChart(groups, total, highlighted) {
+    const positiveTotal = groups.reduce((sum,g) => sum + Math.max(0,g.value), 0);
+    const negativeTotal = groups.reduce((sum,g) => sum + Math.min(0,g.value), 0);
+    const valid = positiveTotal > 0;
+    const shareLabel = negativeTotal < 0 ? 'dos saldos positivos' : 'do total';
+    let angle = -Math.PI / 2;
+    const point = (r, a) => `${100 + r * Math.cos(a)} ${100 + r * Math.sin(a)}`;
+    const slices = valid ? groups.filter(g => g.value > 0).map(g => {
+      const sweep = g.value / positiveTotal * Math.PI * 2, end = angle + sweep;
+      const attrs = `class="donut-segment ${highlighted && highlighted !== g.name ? 'is-dimmed' : ''}" data-donut-slice data-p-highlight="${esc(g.name)}" data-detail="${esc(money(g.value))} · ${number(g.value / positiveTotal * 100)}% ${shareLabel}" tabindex="0" role="button" aria-pressed="${highlighted === g.name}" aria-label="${esc(g.name)}: ${esc(money(g.value))}, ${number(g.value / positiveTotal * 100)}% ${shareLabel}. Selecionar categoria."`;
+      const shape = sweep >= Math.PI * 2 - 1e-9
+        ? `<circle ${attrs} cx="100" cy="100" r="90" fill="none" stroke="${g.color}" stroke-width="16"/>`
+        : `<path ${attrs} fill="${g.color}" d="M ${point(98,angle)} A 98 98 0 ${sweep > Math.PI ? 1 : 0} 1 ${point(98,end)} L ${point(82,end)} A 82 82 0 ${sweep > Math.PI ? 1 : 0} 0 ${point(82,angle)} Z"/>`;
+      angle = end;
+      return shape;
+    }).join('') : '';
+    const selected = groups.find(g => g.name === highlighted);
+    return `<div class="donut-shell"><div class="spend-donut interactive-donut"><svg class="donut-svg" viewBox="0 0 200 200" role="group" aria-label="Composição das despesas. Selecione uma fatia ou use a legenda."><circle cx="100" cy="100" r="90" fill="none" stroke="var(--line)" stroke-width="16"/>${slices}</svg><div class="donut-hole"><span>Jan–${months[state.month-1]} ${C.state.year}</span><strong>${compact(total)}</strong><small>${negativeTotal < 0 ? 'reembolsos l?quidos' : 'reembolsos no recorte'}</small></div></div></div>${negativeTotal < 0 ? `<p class="donut-adjustment">Fatias: ${money(positiveTotal)} em categorias com saldo positivo. Ajustes de ${money(negativeTotal)} entram no total l?quido central e est?o na legenda.</p>` : ''}<div class="donut-readout" aria-live="polite"><strong>${selected ? esc(selected.name) : valid ? 'Explore as categorias' : 'Composição indisponível'}</strong><span>${selected ? `${money(selected.value)} · ${selected.value < 0 ? 'ajuste negativo' : `${positiveTotal ? number(selected.value / positiveTotal * 100) : 0}% ${shareLabel}`}` : valid ? 'Passe sobre uma fatia ou clique para fixar o destaque.' : 'Consulte a legenda: o recorte está vazio ou contém ajustes negativos.'}</span></div>`;
+  }
+  function previewDonut(category) {
+    const panel = $('.donut-panel');
+    if (!panel) return;
+    const slices = [...panel.querySelectorAll('[data-donut-slice]')];
+    const legend = [...panel.querySelectorAll('.donut-legend [data-p-highlight]')];
+    const selected = legend.find(s => s.getAttribute('aria-pressed') === 'true');
+    const name = category || selected?.dataset.pHighlight;
+    const active = slices.find(s => s.dataset.pHighlight === name) || legend.find(s => s.dataset.pHighlight === name);
+    slices.forEach(s => {
+      s.classList.toggle('is-preview', s.dataset.pHighlight === active?.dataset.pHighlight);
+      s.classList.toggle('is-dimmed', Boolean(active && s.dataset.pHighlight !== active.dataset.pHighlight));
+    });
+    panel.querySelectorAll('.donut-legend [data-p-highlight]').forEach(b => b.classList.toggle('is-preview', b.dataset.pHighlight === active?.dataset.pHighlight));
+    if (!slices.length && !active) return;
+    panel.querySelector('.donut-readout strong').textContent = active ? active.dataset.pHighlight : 'Explore as categorias';
+    panel.querySelector('.donut-readout span').textContent = active ? active.dataset.detail : 'Passe sobre uma fatia ou clique para fixar o destaque.';
+  }
   function spending() {
     const entries=scopeRecords(), total=C.sum(entries);
     const groups=window.ClareiaData.categories.map((name,i)=>({name,color:PALETTE[i%PALETTE.length],value:C.sum(entries.filter(r=>r.category===name))}));
     if(editorial)groups.sort((a,b)=>b.value-a.value);
+    const positiveTotal = groups.reduce((sum,g) => sum + Math.max(0,g.value),0);
+    const shareLabel = groups.some(g=>g.value<0) ? 'dos saldos positivos' : 'do total';
     // A category excluded by the filter is not zero; say so instead of printing R$ 0.
     const out=g=>editorial&&C.state.category!=='Todas'&&g.name!==C.state.category;
     const highlighted = editorial && groups.some(g=>g.name===state.highlightCategory && !out(g)) ? state.highlightCategory : null;
@@ -64,10 +102,8 @@
     const monthPart=i=>C.sum(monthRows[i].filter(r=>r.category===highlighted));
     // One row per supplier inside each category: a category total is never shown next to a single supplier's name.
     const suppliers=groups.filter(g=>!out(g)).flatMap(g=>{const rows=entries.filter(r=>r.category===g.name);return [...new Set(rows.map(r=>r.supplier))].map(name=>({name,category:g.name,value:C.sum(rows.filter(r=>r.supplier===name))})).sort((a,b)=>b.value-a.value);});
-    let start=0;
-    const stops=groups.map(g=>{const end=start+(total?g.value/total*100:0);const s=`${highlighted && highlighted!==g.name ? "var(--line)" : g.color} ${start}% ${end}%`;start=end;return s;}).join(',');
     return `${intro('02','Siga o dinheiro','Um total. Muitas histórias.','Arraste o período e veja de que é feita a conta. Cada categoria leva aos registros que a compõem.',badge('Cota parlamentar'))}
-      <div class="spending-grid"><div class="p-panel donut-panel"><div class="donut-caption"><span>Composição das despesas</span><button data-p="spend-evidence" aria-label="Como calculamos as despesas">${editorial?'Como chegamos nisso? →':icon('info')}</button></div><div class="donut-shell"><div class="spend-donut" style="background:${total?'conic-gradient('+stops+')':'var(--line)'}"><div class="donut-hole"><span>Jan–${months[state.month-1]} ${C.state.year}</span><strong>${compact(total)}</strong><small>reembolsos no recorte</small></div></div></div><div class="donut-legend">${groups.map(g=>`<button ${editorial ? `data-p-highlight="${esc(g.name)}" aria-pressed="${highlighted===g.name}" ${out(g)?'disabled':''}` : `data-p-category="${esc(g.name)}"`} style="--cat:${g.color}" class="${highlighted && highlighted!==g.name?'category-muted':''}"><span><i></i>${esc(g.name)}</span>${out(g)?'<strong class="is-out">fora do filtro</strong><small></small>':`<strong>${compact(g.value)}</strong><small>${total?number(g.value/total*100):'0'}%</small>`}</button>`).join('')}</div></div>
+      <div class="spending-grid"><div class="p-panel donut-panel"><div class="donut-caption"><span>Composição das despesas</span><button data-p="spend-evidence" aria-label="Como calculamos as despesas">${editorial?'Como chegamos nisso? →':icon('info')}</button></div>${donutChart(groups,total,highlighted)}<div class="donut-legend">${groups.map(g=>`<button ${editorial ? `data-p-highlight="${esc(g.name)}" data-detail="${esc(money(g.value))} ? ${g.value < 0 ? 'ajuste negativo' : `${positiveTotal ? number(g.value/positiveTotal*100) : 0}% ${shareLabel}`}" aria-pressed="${highlighted===g.name}" ${out(g)?'disabled':''}` : `data-p-category="${esc(g.name)}"`} style="--cat:${g.color}" class="${highlighted && highlighted!==g.name?'category-muted':''}"><span><i></i>${esc(g.name)}</span>${out(g)?'<strong class="is-out">fora do filtro</strong><small></small>':`<strong>${compact(g.value)}</strong><small>${g.value < 0 ? 'ajuste' : `${positiveTotal?number(g.value/positiveTotal*100):'0'}%`}</small>`}</button>`).join('')}</div></div>
       <div class="spend-details"><div class="range-heading"><h3>Explore o ano</h3><output for="spend-range">Jan → ${months[state.month-1]}</output></div><label class="sr-only" for="spend-range">Último mês incluído nas despesas</label><input id="spend-range" class="month-range" type="range" min="1" max="${COVER}" value="${state.month}" aria-valuetext="Janeiro a ${months[state.month-1]} de ${C.state.year}"><div class="month-markers">${months.slice(0,COVER).map(m=>`<span>${m}</span>`).join('')}</div>
       <div class="p-mini-bars">${months.slice(0,COVER).map((m,i)=>{const value=monthTotals[i];return `<button data-p-month="${i+1}" class="${i<state.month?'included':''}" aria-label="Incluir até ${m}: ${money(value)} no mês${highlighted?', sendo '+money(monthPart(i))+' em '+esc(highlighted):''}"><span style="--height:${Math.max(2,value/maxMonth*100)}%;${highlighted?'background:var(--line)':''}">${highlighted?`<i class="category-bar-part" style="height:${value?monthPart(i)/value*100:0}%;background:${groups.find(g=>g.name===highlighted).color}"></i>`:''}</span><small>${m[0]}</small></button>`;}).join('')}</div>
       ${editorial?`<div class="category-focus" aria-live="polite">${highlighted?`<p><strong>${esc(highlighted)}</strong>: ${compact(groups.find(g=>g.name===highlighted).value)} · ${total?number(groups.find(g=>g.name===highlighted).value/total*100):0}% do total de jan–${months[state.month-1]}.</p><p class="p-small">A cor destaca a parcela da categoria. O total e a escala permanecem iguais.</p><button class="p-link" data-p-drill="${esc(highlighted)}">Quais fornecedores aparecem nesta categoria? →</button><button class="category-clear" data-p="clear-highlight">Limpar destaque</button>`:'<p class="p-small">Selecione uma categoria na legenda para destacar sua parcela nos meses e nos fornecedores.</p>'}</div>`:''}<div class="category-path"><span>Categoria → fornecedor → registros</span>${groups.filter(g=>!out(g)).slice(0,4).map(g=>`<button class="p-link" data-p-drill="${esc(g.name)}">Explorar ${esc(g.name)} ↗</button>`).join('')}</div><h3 class="supplier-heading">Fornecedores das despesas reembolsadas</h3><p class="p-small">Fornecedores nos registros oficiais selecionados. Fornecedor pessoa física aparece sem nome.</p><div class="supplier-list">${(state.allSuppliers?suppliers:suppliers.slice(0,8)).map((s,i)=>`<button data-p-supplier="${esc(s.name)}" data-category="${esc(s.category)}" class="${highlighted && highlighted!==s.category?'category-muted':''}" ${highlighted===s.category?'data-highlighted="true"':''}><span class="supplier-index">${String(i+1).padStart(2,'0')}</span><span>${esc(s.name)}<small>${esc(s.category)}</small></span><b>${compact(s.value)}</b>${ext()}</button>`).join('')||'<p class="p-small">Sem registros neste recorte.</p>'}</div>${suppliers.length>8?`<button class="p-link" data-p="all-suppliers">${state.allSuppliers?'Mostrar só os 8 maiores':`Ver todos os ${suppliers.length} fornecedores`} →</button>`:''}<button class="p-link" data-p="spend-evidence">Como chegamos nisso? ${ext()}</button><p class="p-small">${scopeText()} · não inclui salários, gabinete ou emendas.</p></div></div>`;
@@ -223,7 +259,7 @@
     // Hit areas overlap, so the click goes to the visible point nearest to the pointer, whoever's area was on top.
     if(hit){const d=p=>{const r=p.getBoundingClientRect();return Math.hypot(r.x+r.width/2-e.clientX,r.y+r.height/2-e.clientY);};[...document.querySelectorAll('#linked-result .chart-point')].sort((a,b)=>d(a)-d(b))[0]?.dispatchEvent(new MouseEvent('click',{bubbles:true}));return;}
     const b=e.target.closest('[data-p-highlight],[data-p],[data-p-follow],[data-p-uf],[data-p-category],[data-p-supplier],[data-p-drill],[data-p-month],[data-p-metric],[data-p-topic],[data-p-project],[data-p-project-save],[data-p-vote],[data-p-dossier],[data-p-event],[data-p-summary],[data-p-ask],[data-p-add-compare]');if(!b)return;
-    if(b.dataset.pHighlight){state.highlightCategory=state.highlightCategory===b.dataset.pHighlight?null:b.dataset.pHighlight;updateSpending();focusMatch(`[data-p-highlight="${CSS.escape(b.dataset.pHighlight)}"]`);return;}
+    if(b.dataset.pHighlight){const slice=b.hasAttribute('data-donut-slice');state.highlightCategory=state.highlightCategory===b.dataset.pHighlight?null:b.dataset.pHighlight;updateSpending();focusMatch(`${slice?'[data-donut-slice]':'.donut-legend button'}[data-p-highlight="${CSS.escape(b.dataset.pHighlight)}"]`);previewDonut(null);return;}
     if(b.dataset.pSupplier){expenseEvidence(b.dataset.category,b.dataset.pSupplier);return;}
     if(b.dataset.pDrill){supplierDetail(b.dataset.pDrill);return;}
     if(b.dataset.pAddCompare){state.a=b.dataset.pAddCompare;if(state.b===state.a)state.b=C.byTotal().find(p=>p.id!==state.a).id;renderPart('comparacao',comparison);if(editorial){C.toast(`${C.person(state.a).name.split(' ')[0]} entrou na comparação, ao lado de ${C.person(state.b).name.split(' ')[0]}.`);const h=$('#comparacao h2');if(h){h.tabIndex=-1;h.focus({preventScroll:true});}}$('#comparacao').scrollIntoView({behavior:state.motion?'smooth':'instant',block:'start'});return;}
@@ -282,5 +318,34 @@
   document.addEventListener('pointermove',e=>{if(C.model!=='explorador'||!state.motion||e.pointerType==='touch')return;const card=e.target.closest('.dossier-card,.project-card');if(!card)return;const r=card.getBoundingClientRect();card.style.setProperty('--tilt-x',`${-(e.clientY-r.top-r.height/2)/r.height*3}deg`);card.style.setProperty('--tilt-y',`${(e.clientX-r.left-r.width/2)/r.width*3}deg`);});
   document.addEventListener('pointerout',e=>{const card=e.target.closest('.dossier-card,.project-card');if(card&&!card.contains(e.relatedTarget)){card.style.setProperty('--tilt-x','0deg');card.style.setProperty('--tilt-y','0deg');}});
   reduced.addEventListener('change',e=>{if(e.matches){state.motion=false;document.body.dataset.motion='off';watchMotion();}});
+  // Run after the existing action handlers so outside controls still complete their action.
+  document.addEventListener('click', e => {
+    if (!state.highlightCategory || !(e.target instanceof Element)) return;
+    if (e.target.closest('.interactive-donut,.donut-legend')) return;
+    state.highlightCategory = null;
+    updateSpending();
+    previewDonut(null);
+  });
+  const donutTarget = target => target instanceof Element ? target.closest('[data-donut-slice],.donut-legend [data-p-highlight]') : null;
+  document.addEventListener('pointerover', e => {
+    const target = donutTarget(e.target);
+    if (target && e.pointerType !== 'touch') previewDonut(target.dataset.pHighlight);
+  });
+  document.addEventListener('pointerout', e => {
+    if (donutTarget(e.target) && e.pointerType !== 'touch') previewDonut(donutTarget(e.relatedTarget)?.dataset.pHighlight);
+  });
+  document.addEventListener('focusin', e => {
+    const target = donutTarget(e.target);
+    if (target) previewDonut(target.dataset.pHighlight);
+  });
+  document.addEventListener('focusout', e => {
+    if (donutTarget(e.target)) previewDonut(donutTarget(e.relatedTarget)?.dataset.pHighlight);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('[data-donut-slice]') && ['Enter', ' '].includes(e.key)) {
+      e.preventDefault();
+      e.target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }
+  });
   mount();
 })();
