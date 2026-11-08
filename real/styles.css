@@ -911,3 +911,11 @@ body .uf-tile path.tile-hit{fill:transparent!important;stroke:transparent!import
 .dialog-body .outline-button:not(.primary){background:var(--surface);border-color:var(--line);color:var(--ink)}
 .dialog-body .outline-button:not(.primary):hover{background:var(--accent-soft)}
 .dialog-body .action-row+.context{margin-top:8px}
+
+/* Net-negative states: a dashed outline on a neutral tint, outside the accent intensity scale and apart from the plain no-data tile. */
+body{--neg:#9c2f28}
+body[data-model=explorador]{--neg:#ff9a8f}
+body .uf-tile.negative path:not(.tile-hit){fill:color-mix(in srgb,var(--neg) 10%,var(--surface));stroke:var(--neg);stroke-width:2;stroke-dasharray:4 3}
+body .uf-tile.negative text{fill:var(--ink)}
+body .uf-tile.negative.selected path:not(.tile-hit){stroke:var(--ink);stroke-width:3}
+.map-key i.negative{border:1.5px dashed var(--neg);background:color-mix(in srgb,var(--neg) 10%,var(--surface))}

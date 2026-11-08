@@ -1160,18 +1160,21 @@ for (const [title, query, expected] of [
   });
 }
 
-check('map with net-negative totals keeps data opacity and strips the currency from negative tiles', async () => {
+check('map with net-negative totals shades by the largest positive value and strips the currency from negative tiles', async () => {
   const negateSP = (recs, meta) => meta.uf === 'SP' ? recs.map(r => ({ ...r, cents: -Math.abs(r.cents) })) : recs;
   const page = await at(1440, { before: stub({ records: negateSP }) });
   const data = await published(page);
   const byUf = {};
   for (const p of data.people) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p);
   assert.ok(byUf.SP < 0 && Object.values(byUf).some(v => v > 0), 'stub gives SP a negative net total and another UF a positive one');
-  const max = Math.max(1, ...Object.values(byUf).map(Math.abs));
+  const max = Math.max(1, ...Object.values(byUf).filter(v => v > 0));
   for (const [uf, cents] of Object.entries(byUf)) {
     const tile = await page.locator(`[data-p-uf="${uf}"]`).evaluate(g => ({ style: g.querySelectorAll('path')[1].getAttribute('style'), value: g.querySelector('.tile-value')?.textContent }));
-    const opacity = Number(/fill-opacity:\s*([\d.]+)/.exec(tile.style)?.[1]);
-    assert.ok(Math.abs(opacity - (0.2 + 0.8 * Math.abs(cents) / max)) < 1e-6, `${uf} fill-opacity ${opacity} for ${cents}`);
+    if (cents < 0) assert.ok(!/fill-opacity/.test(tile.style || ''), `${uf} negative tile has no intensity: ${tile.style}`);
+    else {
+      const opacity = Number(/fill-opacity:\s*([\d.]+)/.exec(tile.style)?.[1]);
+      assert.ok(Math.abs(opacity - (0.2 + 0.8 * cents / max)) < 1e-6, `${uf} fill-opacity ${opacity} for ${cents}`);
+    }
     const expected = Math.abs(cents) >= 100000 ? `${cents < 0 ? '−' : ''}${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : brl(cents).replace(`R$${NBSP}`, '');
     assert.equal(clean(tile.value), expected, `${uf} tile value`);
   }
@@ -1264,7 +1267,7 @@ check('navigating inside a dialog keeps the highlight and returns focus', async 
   await trigger.click();
   await page.waitForSelector('#detail[open]');
   await page.locator('#detail .record-row').first().click();
-  await page.locator('#detail [data-action=records]').click();
+  await page.locator('#detail [data-action=back-to-list]').click();
   await page.locator('#detail .record-row').first().click();
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('#detail').open);
@@ -1349,6 +1352,188 @@ check('panorama numbers stay on their text lines while animating', async () => {
     frame();
   }));
   assert.equal(tops.length, 1, 'stat positions changed: ' + tops.join(' | '));
+  await page.close();
+});
+
+const searchOf = async page => new URLSearchParams(await page.evaluate(() => location.search));
+
+check('shared link with a question keeps defaults the reader chose, and short links stay short', async () => {
+  const page = await at(1440, { search: `?q=${encodeURIComponent('Quem mais gastou por mês?')}` });
+  assert.equal(await page.evaluate(() => window.Clareia.state.metric), 'mensal', 'the question implies monthly');
+  await page.locator('.metric-toggle [data-metric=total]').click();
+  const link = await page.evaluate(() => location.search);
+  const params = new URLSearchParams(link);
+  assert.deepEqual([params.get('metrica'), params.get('aba'), params.get('categoria')], ['total', 'gastos', 'Todas'], `explicit defaults in ${link}`);
+  const reopened = await at(1440, { search: link });
+  assert.deepEqual(await reopened.evaluate(() => [window.Clareia.state.metric, window.Clareia.state.tab, window.Clareia.state.category]), ['total', 'gastos', 'Todas'], 'reopened link keeps Total');
+  await reopened.close();
+  await page.close();
+  const plain = await at(1440);
+  await plain.locator('.metric-toggle [data-metric=mensal]').click();
+  await plain.locator('.metric-toggle [data-metric=total]').click();
+  const keys = [...(await searchOf(plain)).keys()].filter(k => k !== 'destaque');
+  assert.deepEqual(keys, [], 'a link without a question carries no default parameters');
+  await plain.close();
+});
+
+check('UF travels in the shared link and scopes the answer and cards', async () => {
+  const probe = await at(1440);
+  const data = await published(probe);
+  await probe.close();
+  const ufs = [...new Set(data.people.map(p => p.uf))];
+  const uf = ufs.find(u => data.people.some(p => p.uf !== u));
+  assert.ok(uf, 'sample has more than one UF');
+  const inUF = data.people.filter(p => p.uf === uf).map(p => p.name).sort();
+  const page = await at(1440);
+  await page.locator(`[data-p-uf="${uf}"]`).click();
+  await page.locator('[data-p=apply-state]').click();
+  const link = await page.evaluate(() => location.search);
+  assert.equal(new URLSearchParams(link).get('uf'), uf, `uf in ${link}`);
+  await page.close();
+  const reopened = await at(1440, { search: `${link}&q=${encodeURIComponent('Quem mais gastou?')}` });
+  assert.equal(await reopened.evaluate(() => window.Clareia.state.uf), uf, 'uf restored');
+  assert.deepEqual((await reopened.locator('.answer-row b').allInnerTexts()).sort(), inUF, 'answer scoped to the UF');
+  assert.deepEqual((await reopened.locator('.rank-card .person-name').allInnerTexts()).sort(), inUF, 'cards scoped to the UF');
+  await reopened.close();
+  const bogus = await at(1440, { search: '?uf=ZZ' });
+  assert.equal(await bogus.evaluate(() => window.Clareia.state.uf), 'Brasil', 'unknown UF ignored');
+  await bogus.close();
+  const brasil = await at(1440, { search: `?q=${encodeURIComponent('Quem mais gastou?')}` });
+  assert.equal((await searchOf(brasil)).get('uf'), null, 'Brasil is not written');
+  await brasil.close();
+});
+
+const channels = css => css.match(/-?[\d.]+/g).slice(0, 3).map(Number);
+const luminance = css => {
+  const c = channels(css).map(v => (css.startsWith('color(') ? v : v / 255)).map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
+  return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+};
+const contrast = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); };
+
+check('map shades only positive values and gives net-negative tiles their own style', async () => {
+  const page = await at(1440, { search: `?q=${encodeURIComponent('Quem mais gastou com auxílio-moradia?')}` });
+  const data = await published(page);
+  const cat = await page.evaluate(() => window.Clareia.state.category);
+  const byUf = {};
+  for (const p of data.people) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p, cat);
+  assert.ok(Object.values(byUf).some(v => v < 0), 'real data has a net-negative state for this category');
+  const maxPositive = Math.max(0, ...Object.values(byUf).filter(v => v > 0));
+  const read = uf => page.locator(`[data-p-uf="${uf}"]`).evaluate(g => {
+    const path = g.querySelectorAll('path')[1], cs = getComputedStyle(path);
+    return { cls: g.getAttribute('class'), style: path.getAttribute('style'), aria: g.getAttribute('aria-label'), value: g.querySelector('.tile-value')?.textContent, fill: cs.fill, dash: cs.strokeDasharray, stroke: cs.stroke, ink: getComputedStyle(g.querySelector('text')).fill };
+  });
+  const empty = await page.locator('.uf-tile:not(.has-data)').first().evaluate(g => { const cs = getComputedStyle(g.querySelectorAll('path')[1]); return { fill: cs.fill, dash: cs.strokeDasharray, stroke: cs.stroke }; });
+  for (const [uf, cents] of Object.entries(byUf)) {
+    const tile = await read(uf);
+    if (cents < 0) {
+      assert.ok(/\bnegative\b/.test(tile.cls), `${uf} has the negative class`);
+      assert.ok(!/fill-opacity/.test(tile.style || ''), `${uf} is not on the accent intensity scale: ${tile.style}`);
+      const expected = Math.abs(cents) >= 100000 ? `−${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : brl(cents).replace(`R$${NBSP}`, '');
+      assert.equal(clean(tile.value), expected, `${uf} keeps its value`);
+      assert.ok(tile.aria.includes(brl(cents)), `${uf} aria-label keeps the exact value: ${tile.aria}`);
+      assert.notEqual(tile.dash, 'none', 'negative tiles are dashed');
+      assert.notEqual(`${tile.fill}|${tile.dash}|${tile.stroke}`, `${empty.fill}|${empty.dash}|${empty.stroke}`, 'distinct from the no-data look');
+      assert.ok(contrast(tile.ink, tile.fill) >= 4.5, `text contrast ${contrast(tile.ink, tile.fill).toFixed(2)} on ${tile.fill}`);
+    } else {
+      assert.ok(!/\bnegative\b/.test(tile.cls), `${uf} is not negative`);
+      const opacity = Number(/fill-opacity:\s*([\d.]+)/.exec(tile.style)?.[1]);
+      const expected = 0.2 + 0.8 * (maxPositive ? cents / maxPositive : 0);
+      assert.ok(Math.abs(opacity - expected) < 1e-6, `${uf} opacity ${opacity}, expected ${expected} for ${cents}`);
+    }
+  }
+  assert.ok((await text(page.locator('.map-key'))).includes('Valor líquido negativo'), 'legend names the negative style');
+  await page.close();
+  const normal = await at(1440);
+  assert.ok(!(await text(normal.locator('.map-key'))).includes('Valor líquido negativo'), 'no negative entry without a negative tile');
+  await normal.close();
+});
+
+check('unanswerable question reports any active filter, app or portal', async () => {
+  const ask = page => page.evaluate(() => window.Clareia.ask('Quem votou na reforma?', false));
+  const message = page => page.locator('.answer-message p').innerText().then(clean);
+  const cases = {
+    'map selection': async page => { await page.locator('[data-p-uf="SP"]').click(); },
+    'map metric': async page => { await page.locator('#map-metric').selectOption('average'); },
+    'month': async page => { await page.locator('[data-p-month="1"]').click(); },
+    'highlight': async page => { await page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click(); },
+  };
+  for (const [name, act] of Object.entries(cases)) {
+    const page = await at(1440);
+    await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+    await act(page);
+    await ask(page);
+    assert.match(await message(page), /filtros ativos foram limpos/i, `${name}: ${await message(page)}`);
+    await ask(page);
+    assert.doesNotMatch(await message(page), /limpos/i, `${name}: second time nothing to clear`);
+    await page.close();
+  }
+  const range = await at(1440, { before: stub({ months: [1, 2, 3] }) });
+  await range.locator('#linked-from').evaluate(el => { el.value = 2; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await ask(range);
+  assert.match(await message(range), /filtros ativos foram limpos/i, 'comparison range');
+  await range.close();
+  const idle = await at(1440);
+  await ask(idle);
+  assert.doesNotMatch(await message(idle), /limpos/i, 'nothing active, nothing claimed');
+  await idle.close();
+});
+
+check('donut readout returns to its rest text after the preview ends', async () => {
+  const page = await at(1440, { search: `?q=${encodeURIComponent('Quem mais gastou com auxílio-moradia?')}` });
+  await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+  const readout = () => page.locator('.donut-readout').innerText().then(clean);
+  const rest = await readout();
+  const row = page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first();
+  await row.hover();
+  assert.notEqual(await readout(), rest, 'hover previews the row');
+  await page.mouse.move(2, 2);
+  assert.equal(await readout(), rest, 'pointer leaving restores the rest text');
+  assert.equal(await page.locator('.donut-legend .is-preview').count(), 0, 'no preview highlight left');
+  await row.focus();
+  assert.notEqual(await readout(), rest, 'focus previews the row');
+  await page.evaluate(() => document.activeElement.blur());
+  assert.equal(await readout(), rest, 'blur restores the rest text');
+  await page.close();
+});
+
+check('Voltar aos registros returns to the list the reader came from', async () => {
+  const rows = page => page.locator('#detail .record-row').evaluateAll(trs => trs.map(tr => `${tr.dataset.id}|${tr.dataset.record}`));
+  const snapshot = async page => ({ title: await text(page.locator('#detail-title')), rows: await rows(page), total: await text(page.locator('#detail .record-list-total')), note: await text(page.locator('#detail .records-note').first()) });
+  const roundTrip = async (page, name) => {
+    const before = await snapshot(page);
+    assert.ok(before.rows.length > 1, `${name}: list has rows`);
+    const target = page.locator('#detail .record-row').last();
+    const id = await target.getAttribute('data-record');
+    await target.locator('button').click();
+    await page.locator('#detail .text-button', { hasText: 'Voltar aos registros' }).click();
+    assert.deepEqual(await snapshot(page), before, `${name}: same list after going back`);
+    assert.equal(await page.evaluate(() => document.activeElement.closest('.record-row')?.dataset.record), id, `${name}: focus returns to the opened row`);
+  };
+  const closeDetail = page => page.locator('#detail .close-button').click();
+  const page = await at(1440);
+  await page.locator('[data-p-summary=expenses]').click();
+  await page.waitForSelector('#detail[open] .record-row');
+  await roundTrip(page, 'panorama');
+  await closeDetail(page);
+  await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
+  await page.locator('.supplier-list [data-p-supplier]').first().click();
+  await page.waitForSelector('#detail[open] .record-row');
+  await roundTrip(page, 'supplier');
+  await closeDetail(page);
+  await page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click();
+  await page.locator('[data-p-drill]').click();
+  await page.locator('#detail .supplier-list [data-p-supplier]').first().click();
+  await page.waitForSelector('#detail[open] .record-row');
+  await roundTrip(page, 'category supplier');
+  await closeDetail(page);
+  await page.evaluate(() => document.querySelector('.linked-lines').scrollIntoView());
+  await page.locator('.chart-point').first().click();
+  await page.waitForSelector('#detail[open] .record-row');
+  await roundTrip(page, 'chart month');
+  await closeDetail(page);
+  await openRecords(page, (await published(page)).people[0].id);
+  await page.waitForSelector('#detail[open] .record-row');
+  await roundTrip(page, 'deputy list');
   await page.close();
 });
 

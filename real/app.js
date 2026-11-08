@@ -11,17 +11,18 @@
   const byTotal = () => [...D.dataset()].sort((a, b) => totalOf(b) - totalOf(a));
   // Only the parameters present and valid in the URL; a question applies what its words imply for the rest.
   const fromURL = {};
-  if (categories.includes(initial.get('categoria'))) fromURL.category = initial.get('categoria');
+  if (categories.includes(initial.get('categoria')) || initial.get('categoria') === 'Todas') fromURL.category = initial.get('categoria');
   if (['total', 'mensal'].includes(initial.get('metrica'))) fromURL.metric = initial.get('metrica');
   if (['gastos', 'menos', 'projetos'].includes(initial.get('aba'))) fromURL.tab = initial.get('aba');
+  if (D.dataset().some(p => p.uf === initial.get('uf'))) fromURL.uf = initial.get('uf');
   const state = {
-    year: D.year, uf: 'Brasil',
+    year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
     tab: fromURL.tab ?? 'gastos',
     query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
-  let dialogTrigger = null, toastTimer;
+  let dialogTrigger = null, toastTimer, listOrigin = null;
   const $ = selector => document.querySelector(selector);
   const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const norm = value => value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -80,7 +81,9 @@
   function syncURL() {
     const url = new URL(location.href);
     url.search = '';
-    Object.entries({ categoria: state.category === 'Todas' ? '' : state.category, metrica: state.metric === 'total' ? '' : state.metric, aba: state.tab === 'gastos' ? '' : state.tab, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
+    // On load an absent parameter means "let the question decide", so a link with a question spells out every choice, defaults included.
+    const explicit = Boolean(state.query);
+    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || state.metric !== 'total' ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
     try { history.replaceState(null, '', url); } catch { /* file previews may restrict history */ }
   }
   const examples = () => { const [a, b] = byTotal(); return [`${first(a)} gastou mais que ${first(b)}?`, 'Quem mais gastou por mês?', 'Quem mais gastou com passagens?', 'Quem gastou menos?']; };
@@ -249,7 +252,7 @@
       }
     }
     if (message) {
-      const cleared = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric !== 'total' || state.tab !== 'gastos';
+      const cleared = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric !== 'total' || state.tab !== 'gastos' || Boolean(window.Clareia.portalActive?.());
       document.dispatchEvent(new CustomEvent('clareia:reset'));
       state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos';
       state.answer = { type: 'message', title: message[0], message: cleared ? `${message[1]} Os filtros ativos foram limpos.` : message[1] };
@@ -311,7 +314,15 @@
   const recordRow = (p, r, who = false) => `<tr class="record-row" data-action="record" data-id="${p.id}" data-record="${escape(r.id)}"><td class="record-when">${monthNames[r.month]}/${state.year}<small>${docLabel(r.raw)}</small></td><td class="record-what"><span class="record-supplier">${escape(r.supplier)}</span><small class="record-meta">${escape(label(r.category))}${who ? ` · ${escape(first(p))}` : ''}<span class="record-extra"> · ${monthNames[r.month]}/${state.year} · ${docLabel(r.raw)}</span></small>${r.raw.origin ? `<small class="record-origin">${originLabel(r.raw)}</small>` : ''}</td><td class="record-amount">${money(r.amount)}</td><td class="record-go"><button type="button" class="text-button" aria-label="Conferir registro de ${escape(r.supplier)}: ${docLabel(r.raw)}">Conferir →</button></td></tr>`;
   const byRecordOrder = (x, y) => x.month - y.month || y.amount - x.amount;
   const recordListHTML = (caption, rows, total) => `<table class="record-list"><caption class="sr-only">${caption}</caption><thead><tr><th>Competência / documento</th><th>Fornecedor / categoria</th><th>Valor líquido</th><th><span class="sr-only">Ação</span></th></tr></thead><tbody>${rows.join('') || '<tr><td colspan="4">Nenhum registro neste recorte. Isso não afirma ausência de despesas fora da cobertura.</td></tr>'}</tbody><tfoot><tr><th colspan="2">Total</th><td><strong class="record-list-total">${money(total)}</strong></td><td>${rows.length} itens</td></tr></tfoot></table>`;
+  // The record detail goes back to whichever list opened it, with the same rows and filter.
+  const rememberList = reopen => { listOrigin = reopen; };
+  function backToList(personId, recordId) {
+    (listOrigin || (() => recordTable(person(personId))))();
+    const row = [...document.querySelectorAll('#detail .record-row')].find(tr => tr.dataset.record === recordId);
+    row?.querySelector('button')?.focus();
+  }
   function recordTable(p, month) {
+    rememberList(() => recordTable(p, month));
     const items = records(p).filter(r => month === undefined || r.month === month).sort(byRecordOrder);
     showDialog(`Registros de ${first(p)}`, `<p class="records-note">${month === undefined ? span() : `${monthNames[month]} ${state.year}`} • ${state.category === 'Todas' ? 'Todas as categorias' : `${escape(label(state.category))} (Nome na fonte: ${escape(state.category)})`} • ${items.length} registros oficiais.</p><div class="calculation-result">${money(sum(items))}<small>Soma exata dos registros abaixo</small></div><div class="action-row"><button class="outline-button" data-action="download" data-id="${p.id}" ${month === undefined ? '' : `data-month="${month}"`}>Baixar CSV</button><button class="outline-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Voltar ao cálculo</button></div>${recordListHTML(`Registros de ${escape(p.name)}`, items.map(r => recordRow(p, r)), sum(items))}${sourceNote()}`);
     $('#detail').classList.add('records-wide');
@@ -319,7 +330,7 @@
   function recordDetail(p, id) {
     const rec = p.records.find(x => x.id === id); if (!rec) return;
     const r = rec.raw, api = r.origin === 'api';
-    showDialog('O registro por trás do valor', `<p class="records-note">${escape(p.name)} · ${months[r.month - 1]} / ${r.year}</p><h3>${escape(r.supplier)}</h3><p>${escape(label(r.category))}</p><p class="context">Nome na fonte: ${escape(r.category)}</p>${r.origin ? `<p class="context">Fonte: ${originLabel(r)}</p>` : ''}${r.documentCents !== null && r.disallowedCents !== null && r.documentCents - r.disallowedCents === r.cents ? `<div class="formula"><span>Documento <b>${money(r.documentCents)}</b></span><span>− Glosa <b>${money(r.disallowedCents)}</b></span><span>= Líquido <b>${money(r.cents)}</b></span></div>` : `<div class="formula" data-equation="none"><span>Valor do documento <b>${money(r.documentCents)}</b></span><span>Glosa <b>${money(r.disallowedCents)}</b></span><span>Valor líquido <b>${money(r.cents)}</b></span></div><p class="context">A fonte não informa todos os campos da conta documento − glosa. O valor líquido é o publicado pela Câmara, sem recálculo.${r.cents < 0 ? ' Valor negativo: ajuste registrado na origem.' : ''}</p>`}<p>${docLabel(r)} · número ${escape(r.documentNumber)}<br>${noDocument(r) ? '<span class="context">Cobrança interna de telefonia da Câmara. O "0" é o identificador de documento publicado na fonte, não um valor: o valor do lançamento é o líquido acima.</span><br>' : ''}Emissão informada: ${day(r.date)}</p><div class="action-row"><a class="outline-button primary" href="${escape(r.source.url)}" target="_blank" rel="noopener noreferrer">${api ? 'Abrir consulta oficial da API' : 'Baixar arquivo oficial'} ↗</a>${r.receipt ? `<a class="outline-button" href="${escape(r.receipt)}" target="_blank" rel="noopener noreferrer">Comprovante informado ↗</a>` : '<span class="context">Comprovante não informado na fonte.</span>'}</div><p class="context">O link do comprovante foi informado pela Câmara; sua disponibilidade e autenticidade não foram auditadas pelo Clareia.</p><details><summary>Rastreabilidade deste item</summary><dl class="trace"><dt>Coleta</dt><dd>${date(r.source.fetchedAt)} (Brasília)</dd><dt>${api ? 'Posição na página da API (base zero)' : 'Posição no CSV, sem cabeçalho (base zero)'}</dt><dd>${r.source.row}</dd><dt>${api ? 'SHA-256 da página preservada' : 'SHA-256 do CSV preservado'}</dt><dd><code>${r.source.sha256}</code></dd><dt>ID desta ocorrência</dt><dd><code>${escape(r.id)}</code></dd></dl></details><button class="text-button" data-action="records" data-id="${p.id}">← Voltar aos registros</button>`);
+    showDialog('O registro por trás do valor', `<p class="records-note">${escape(p.name)} · ${months[r.month - 1]} / ${r.year}</p><h3>${escape(r.supplier)}</h3><p>${escape(label(r.category))}</p><p class="context">Nome na fonte: ${escape(r.category)}</p>${r.origin ? `<p class="context">Fonte: ${originLabel(r)}</p>` : ''}${r.documentCents !== null && r.disallowedCents !== null && r.documentCents - r.disallowedCents === r.cents ? `<div class="formula"><span>Documento <b>${money(r.documentCents)}</b></span><span>− Glosa <b>${money(r.disallowedCents)}</b></span><span>= Líquido <b>${money(r.cents)}</b></span></div>` : `<div class="formula" data-equation="none"><span>Valor do documento <b>${money(r.documentCents)}</b></span><span>Glosa <b>${money(r.disallowedCents)}</b></span><span>Valor líquido <b>${money(r.cents)}</b></span></div><p class="context">A fonte não informa todos os campos da conta documento − glosa. O valor líquido é o publicado pela Câmara, sem recálculo.${r.cents < 0 ? ' Valor negativo: ajuste registrado na origem.' : ''}</p>`}<p>${docLabel(r)} · número ${escape(r.documentNumber)}<br>${noDocument(r) ? '<span class="context">Cobrança interna de telefonia da Câmara. O "0" é o identificador de documento publicado na fonte, não um valor: o valor do lançamento é o líquido acima.</span><br>' : ''}Emissão informada: ${day(r.date)}</p><div class="action-row"><a class="outline-button primary" href="${escape(r.source.url)}" target="_blank" rel="noopener noreferrer">${api ? 'Abrir consulta oficial da API' : 'Baixar arquivo oficial'} ↗</a>${r.receipt ? `<a class="outline-button" href="${escape(r.receipt)}" target="_blank" rel="noopener noreferrer">Comprovante informado ↗</a>` : '<span class="context">Comprovante não informado na fonte.</span>'}</div><p class="context">O link do comprovante foi informado pela Câmara; sua disponibilidade e autenticidade não foram auditadas pelo Clareia.</p><details><summary>Rastreabilidade deste item</summary><dl class="trace"><dt>Coleta</dt><dd>${date(r.source.fetchedAt)} (Brasília)</dd><dt>${api ? 'Posição na página da API (base zero)' : 'Posição no CSV, sem cabeçalho (base zero)'}</dt><dd>${r.source.row}</dd><dt>${api ? 'SHA-256 da página preservada' : 'SHA-256 do CSV preservado'}</dt><dd><code>${r.source.sha256}</code></dd><dt>ID desta ocorrência</dt><dd><code>${escape(r.id)}</code></dd></dl></details><button class="text-button" data-action="back-to-list" data-id="${p.id}" data-record="${escape(id)}">← Voltar aos registros</button>`);
   }
   function profile(id) {
     const p = person(id), peer = byTotal().find(other => other.id !== id);
@@ -359,6 +370,7 @@
     else if (action === 'evidence') evidence(id, { kind: target.dataset.kind });
     else if (action === 'answer-evidence' && state.answer?.ids?.length) evidence(state.answer.ids[0], { kind: state.answer.kind, compare: state.answer.type === 'compare' ? state.answer.ids[1] : null });
     else if (action === 'records') recordTable(person(id));
+    else if (action === 'back-to-list') backToList(id, target.dataset.record);
     else if (action === 'record') recordDetail(person(id), target.dataset.record);
     else if (action === 'month') recordTable(person(id), Number(target.dataset.month));
     else if (action === 'profile') profile(id);
@@ -383,7 +395,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { logo, label, context, model, state, all, person, records, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
+  window.Clareia = { logo, label, context, model, state, all, person, records, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false, fromURL);
 })();
