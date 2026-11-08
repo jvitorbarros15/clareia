@@ -18,11 +18,13 @@
     motion: !reduced.matches
   };
   const UF = {
-    AC: ['Acre',2,2], RO:['Rondônia',4,2], AM:['Amazonas',3,1], RR:['Roraima',4,0], PA:['Pará',5,1], AP:['Amapá',6,0],
-    MT:['Mato Grosso',3,3], TO:['Tocantins',6,2], MA:['Maranhão',7,1], PI:['Piauí',8,2], CE:['Ceará',9,1], RN:['Rio Grande do Norte',11,1],
-    PB:['Paraíba',12,2], PE:['Pernambuco',10,2], AL:['Alagoas',11,3], SE:['Sergipe',9,3], BA:['Bahia',7,3], GO:['Goiás',5,3], DF:['Distrito Federal',6,4],
-    MS:['Mato Grosso do Sul',4,4], MG:['Minas Gerais',8,4], ES:['Espírito Santo',10,4], SP:['São Paulo',7,5], RJ:['Rio de Janeiro',9,5],
-    PR:['Paraná',5,5], SC:['Santa Catarina',6,6], RS:['Rio Grande do Sul',5,7]
+    RR:['Roraima',5,0], AP:['Amapá',9,0],
+    AM:['Amazonas',6,1], PA:['Pará',8,1], MA:['Maranhão',12,1], CE:['Ceará',14,1], RN:['Rio Grande do Norte',16,1],
+    AC:['Acre',3,2], RO:['Rondônia',5,2], TO:['Tocantins',9,2], PI:['Piauí',13,2], PE:['Pernambuco',15,2], PB:['Paraíba',17,2],
+    MT:['Mato Grosso',6,3], GO:['Goiás',10,3], BA:['Bahia',12,3], AL:['Alagoas',16,3],
+    MS:['Mato Grosso do Sul',7,4], DF:['Distrito Federal',11,4], MG:['Minas Gerais',13,4], SE:['Sergipe',15,4],
+    SP:['São Paulo',10,5], RJ:['Rio de Janeiro',12,5], ES:['Espírito Santo',14,5],
+    PR:['Paraná',9,6], SC:['Santa Catarina',8,7], RS:['Rio Grande do Sul',7,8]
   };
   const projects = [], votes = [];
   const color = ['var(--accent)','var(--chart2)','var(--chart3)'];
@@ -111,8 +113,9 @@
   // Packed hex grid: c counts half-tile steps so rows interlock; neighbours sit roughly where they are on the map.
   function tileMap() {
     const max=Math.max(1,...Object.keys(UF).map(mapValue).filter(v=>v!==null));
-    return `<svg class="uf-map" viewBox="0 0 382 360" role="group" aria-label="Mapa esquemático das 27 unidades federativas, não geográfico">${Object.entries(UF).map(([uf,[name,c,r]])=>{
-      const x=10+c*26,y=10+r*41, available=C.all().some(p=>p.uf===uf), value=mapValue(uf);
+    // Half-tile columns and rows placed near each state's real position; the steps leave a gap between tiles.
+    return `<svg class="uf-map" viewBox="0 0 548 424" role="group" aria-label="Mapa esquemático das 27 unidades federativas, não geográfico">${Object.entries(UF).map(([uf,[name,c,r]])=>{
+      const x=10+c*28,y=10+r*44, available=C.all().some(p=>p.uf===uf), value=mapValue(uf);
       return `<g role="button" tabindex="0" data-p-uf="${uf}" aria-label="${name}${available?' — '+mapFormat(value):' — sem dados nesta amostra'}" aria-pressed="${state.mapUF===uf}" class="uf-tile ${available?'has-data':''} ${available&&value/max>.55?'strong':''} ${state.mapUF===uf?'selected':''}" transform="translate(${x} ${y})"><path style="${available?'fill:var(--accent);fill-opacity:'+(.2+.8*value/max):''}" d="M0 12 25 0 50 12 50 40 25 52 0 40Z"/><text x="25" y="31" text-anchor="middle">${uf}</text><title>${name}${available?' · '+mapFormat(value):' · sem dados'}</title></g>`;
     }).join('')}</svg>`;
   }
@@ -124,7 +127,7 @@
   }
   function mapFormat(value) {return state.mapMetric==='projects'?number(value)+' projetos':money(value);}
   function mapControls() {
-    return `<div class="map-metrics"><label>Colorir por<select id="map-metric"><option value="total" ${state.mapMetric==='total'?'selected':''}>Total de reembolsos</option><option value="average" ${state.mapMetric==='average'?'selected':''}>Reembolsos por representante</option></select></label><p class="p-small">Mais intenso = maior valor nesta amostra. Ausência de dados tem preenchimento distinto. Despesas: categoria global selecionada. ${C.state.year} · jan–dez.</p><button class="p-link" data-p="map-evidence">Como chegamos nisso? →</button></div>`;
+    return `<div class="map-metrics"><label>Colorir por<select id="map-metric"><option value="total" ${state.mapMetric==='total'?'selected':''}>Total de reembolsos</option><option value="average" ${state.mapMetric==='average'?'selected':''}>Reembolsos por representante</option></select></label><p class="p-small">Mais intenso = maior valor nesta amostra. Ausência de dados tem preenchimento distinto. Despesas: categoria global selecionada. ${C.span()}.</p><button class="p-link" data-p="map-evidence">Como chegamos nisso? →</button></div>`;
   }
   // Hit areas for every person go first, under all visible points: a large target must never cover another person's point.
   function linkedChart() {
@@ -291,7 +294,7 @@
             case 'all-suppliers':state.allSuppliers=!state.allSuppliers;updateSpending();focusMatch('[data-p="all-suppliers"]');break;
       case 'clear-highlight':state.highlightCategory=null;updateSpending();focusMatch('.donut-legend button:not(:disabled)');break;
       case 'spend-evidence':expenseEvidence();break;
-      case 'map-evidence':C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.state.year} · jan–dez · ${state.mapMetric==='projects'?'autoria principal':C.state.category}</p><p>UF de representação, não destino da despesa. Média por representante = soma dos reembolsos dividida pelo número de perfis da UF; não ajusta tempo em exercício.</p><table class="data-table"><thead><tr><th>UF</th><th>Perfis</th><th>Valor</th></tr></thead></table><p class="fixture-note">UF de representação conforme o cadastro da Câmara. UFs sem deputados nesta amostra aparecem como indisponíveis; indisponível não significa zero.</p>`);break;
+      case 'map-evidence':C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.span()} · ${state.mapMetric==='projects'?'autoria principal':C.state.category}</p><p>UF de representação, não destino da despesa. Média por representante = soma dos reembolsos dividida pelo número de perfis da UF; não ajusta tempo em exercício.</p><table class="data-table"><thead><tr><th>UF</th><th>Perfis</th><th>Valor</th></tr></thead></table><p class="fixture-note">UF de representação conforme o cadastro da Câmara. UFs sem deputados nesta amostra aparecem como indisponíveis; indisponível não significa zero.</p>`);break;
       case 'map-reset':state.mapUF='SP';renderPart('atlas',atlas);break;
       case 'apply-state':{const local=C.all().filter(p=>p.uf===state.mapUF);state.a=local[0].id;state.b=(local[1]||local[0]).id;C.state.uf=state.mapUF;C.refresh();}C.toast(`Recorte aplicado: ${UF[state.mapUF][0]}.`);break;
       case 'swap':[state.a,state.b]=[state.b,state.a];renderPart('comparacao',comparison);focusMatch('[data-p="swap"]');break;
