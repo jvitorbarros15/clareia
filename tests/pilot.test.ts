@@ -94,6 +94,12 @@ test('checkpoint reuse avoids requests; tampering forces a verified refetch',asy
   const cache=new RunCache(dir,fetcher);const a=await cache.get(url,0);await new RunCache(dir,fetcher).get(url,0);assert.equal(count,1);
   await fs.writeFile(path.join(dir,a.page.file),'{}');await new RunCache(dir,fetcher).get(url,0);assert.equal(count,2);
 }));
+test('profile keeps the official UF and current party, unknown stays null, an invalid UF stops the run',async()=>{
+  const withStatus=(status:object)=>async(url:string)=>{const r=await fakeFetch(url);if(url.includes('/despesas'))return r;const j=await r.json();Object.assign(j.dados.ultimoStatus,status);return new Response(JSON.stringify(j));};
+  await temp(async dir=>{const s=await collect(scope,new RunCache(dir,withStatus({siglaUf:'SP',siglaPartido:'PSD',data:'2023-02-01'})));assert.deepEqual(s.people.map(p=>[p.uf,p.party,p.statusDate]),[['SP','PSD','2023-02-01'],['SP','PSD','2023-02-01'],['SP','PSD','2023-02-01']]);});
+  await temp(async dir=>{const s=await collect(scope,new RunCache(dir,fakeFetch));assert.deepEqual(s.people.map(p=>[p.uf,p.party]),[[null,null],[null,null],[null,null]]);});
+  await temp(async dir=>{await assert.rejects(collect(scope,new RunCache(dir,withStatus({siglaUf:'XX'}))),/UF/);});
+});
 test('collector validates two captures; an unstable or empty source is withheld',async()=>{
   await temp(async dir=>{const s=await collect(scope,new RunCache(dir,fakeFetch));assert.equal(s.records.length,6);assert.equal(s.validation.totalCents,60126);assert.equal(s.validation.independentTotalCents,'60126');});
   await temp(async dir=>{const fetcher=async(url:string)=>{const r=await fakeFetch(url),j=await r.json();if(url.includes('itens=25'))j.dados[0].valorLiquido=1;return new Response(JSON.stringify(j));};await assert.rejects(collect(scope,new RunCache(dir,fetcher)),/mudou/);});

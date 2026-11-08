@@ -29,6 +29,8 @@
   const records = p => p.records.filter(r => state.category === 'Todas' || r.category === state.category);
   const span = () => { const c = D.coverage; return `${monthNames[c[0]]}–${monthNames[c.at(-1)]} ${state.year}`; };
   const pending = 'Ainda não coletado';
+  // Party is the Câmara's current status at collection time, not a historical attribution.
+  const context = p => [p.uf, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
   function value(p, kind = state.tab) {
     if (kind === 'projetos') return null;
     const result = sum(records(p));
@@ -36,7 +38,7 @@
   }
   const formatted = (p, kind = state.tab) => kind === 'projetos' ? pending : compact(value(p, kind));
   function ranking() {
-    return [...all()].sort((a, b) => (state.tab === 'menos' ? value(a) - value(b) : value(b) - value(a)) || a.name.localeCompare(b.name, 'pt-BR'));
+    return all().filter(p => state.uf === 'Brasil' || p.uf === state.uf).sort((a, b) => (state.tab === 'menos' ? value(a) - value(b) : value(b) - value(a)) || a.name.localeCompare(b.name, 'pt-BR'));
   }
   const icon = name => {
     const paths = {
@@ -86,7 +88,7 @@
     if (state.tab === 'projetos') return `<div class="empty-state"><b>Projetos de lei ainda não foram coletados.</b><p>A próxima etapa inclui PL, PLP e PEC da Câmara, separando autoria principal de coautoria. Nenhum número é mostrado antes da conferência.</p><button class="outline-button" data-tab="gastos">Ver gastos</button></div>`;
     return ranking().slice(0, 3).map((p, i) => `<article class="rank-card editorial-card" data-person="${p.id}">
       <button class="portrait-button" data-action="profile" data-id="${p.id}" aria-label="Abrir perfil de ${escape(p.name)}">${photo(p)}<span class="rank-number">0${i + 1}</span></button>
-      <div class="card-info"><h3 class="person-name">${escape(p.name)}</h3><p class="editorial-person-context">Deputado(a) federal · ID Câmara ${p.officialId}</p><button class="value-button" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}: ${money(value(p))}. Como chegamos nisso?">${formatted(p)}</button>
+      <div class="card-info"><h3 class="person-name">${escape(p.name)}</h3><p class="editorial-person-context">${context(p)}</p><button class="value-button" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}: ${money(value(p))}. Como chegamos nisso?">${formatted(p)}</button>
       <p class="card-caption">${caption(p)}</p><button class="editorial-proof" data-action="evidence" data-id="${p.id}">Como chegamos nisso? →</button></div></article>`).join('');
   }
   function rankNote() {
@@ -148,9 +150,9 @@
   function scopeChip() {
     let chip = $('#scope-chip');
     if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); $('#answer-slot').before(chip); }
-    const narrowed = state.category !== 'Todas' || state.metric === 'mensal';
+    const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric === 'mensal';
     chip.hidden = !narrowed;
-    chip.innerHTML = narrowed ? `<span>Filtrando: ${escape([state.category === 'Todas' ? 'todas as categorias' : state.category, state.metric === 'mensal' ? 'por mês' : 'total'].join(' · '))}</span><button type="button" data-action="reset">Limpar</button>` : '';
+    chip.innerHTML = narrowed ? `<span>Filtrando: ${escape([state.uf === 'Brasil' ? 'Brasil' : state.uf, state.category === 'Todas' ? 'todas as categorias' : state.category, state.metric === 'mensal' ? 'por mês' : 'total'].join(' · '))}</span><button type="button" data-action="reset">Limpar</button>` : '';
   }
   function markTab(animate = true) {
     const tabsEl = $('.editorial-rank .tabs'), on = tabsEl?.querySelector('[aria-pressed="true"]');
@@ -262,7 +264,7 @@
   }
   function profile(id) {
     const p = person(id), peer = byTotal().find(other => other.id !== id);
-    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ID Câmara ${p.officialId}</p><p class="context">${p.months} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Reembolso médio / mês' : 'Reembolsos no recorte'}</span><strong>${money(value(p, 'gastos'))} ↗</strong></button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${pending}</strong></button></div>${categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗</a>` : ''}</div>${sourceNote()}`);
+    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">Partido e UF conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${p.months} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Reembolso médio / mês' : 'Reembolsos no recorte'}</span><strong>${money(value(p, 'gastos'))} ↗</strong></button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${pending}</strong></button></div>${categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗</a>` : ''}</div>${sourceNote()}`);
   }
   function methodology() {
     const v = index.validation, audit = index.audit, compare = v.apiComparison;
@@ -305,7 +307,7 @@
     else if (action === 'focus-search') { $('#query').focus(); $('#query').scrollIntoView({ block: 'center' }); }
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog(); ask(`Compare ${person(id).name} e ${peer.name}`); }
     else if (action === 'share') share();
-    else if (action === 'reset') { state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: todas as categorias, valor total.'); }
+    else if (action === 'reset') { state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });
   document.addEventListener('submit', event => { if (event.target.id === 'search-form') { event.preventDefault(); ask($('#query').value); } });
@@ -322,7 +324,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { model, state, all, person, records, sum, money, compact, number, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordDetail, showDialog, closeDialog, methodology, toast, refresh, sourceBlock, span, pending, byTotal };
+  window.Clareia = { context, model, state, all, person, records, sum, money, compact, number, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordDetail, showDialog, closeDialog, methodology, toast, refresh, sourceBlock, span, pending, byTotal };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false);
 })();

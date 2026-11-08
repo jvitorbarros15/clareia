@@ -711,3 +711,50 @@ body[data-model=editorial] .search-form:hover .search-submit{filter:brightness(1
 @media (prefers-reduced-motion:reduce){body[data-model=editorial] .search-form,body[data-model=editorial] .search-submit .icon{transition:none}body[data-model=editorial] .search-form:hover{transform:none}body[data-model=editorial] .search-form:hover .search-submit .icon{transform:none}}
 
 body[data-model=editorial] #despesas [data-p="all-suppliers"]{display:flex;width:fit-content;margin:18px 0 22px;font-weight:600}
+
+/* Section dock: hovering a link darkens it and draws a lighter underline from the left; the current section keeps the full one. */
+body[data-model=editorial] .section-dock a{transition:color 180ms var(--ease-out)}
+body[data-model=editorial] .section-dock a:after{transform-origin:left center}
+body[data-model=editorial] .section-dock a:hover,body[data-model=editorial] .section-dock a:focus-visible{color:var(--ink)}
+body[data-model=editorial] .section-dock a:not(.current):hover:after,body[data-model=editorial] .section-dock a:not(.current):focus-visible:after{transform:scaleX(1);background:color-mix(in srgb,var(--accent) 40%,var(--bg))}
+body[data-model=editorial] .motion-toggle{transition:color 180ms var(--ease-out)}
+body[data-model=editorial] .motion-toggle:hover{color:var(--ink)}
+@media (prefers-reduced-motion:reduce){body[data-model=editorial] .section-dock a,body[data-model=editorial] .section-dock a:after{transition:none}}
+
+/* A fine cobalt light travels around the search pill without covering its controls. */
+@property --search-orbit-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes search-border-orbit {
+  to { --search-orbit-angle: 360deg; }
+}
+@supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
+  body[data-model=editorial] .search-form::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1.5px;
+    pointer-events: none;
+    background: conic-gradient(from var(--search-orbit-angle),
+      transparent 0deg 235deg,
+      #164bff14 265deg,
+      #164bff80 300deg,
+      #164bff 326deg,
+      #92c5ff 341deg,
+      transparent 355deg);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: search-border-orbit 6s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body[data-model=editorial] .search-form::before {
+      animation: none;
+      background: linear-gradient(110deg, #164bff30, #164bff, #92c5ff, #164bff30);
+    }
+  }
+}
