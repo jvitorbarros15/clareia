@@ -80,7 +80,7 @@ A [documentação oficial antiga](https://www2.camara.leg.br/transparencia/dados
 
 Na inspeção de três pessoas, surgiram períodos explícitos que podem ajudar nas lacunas. Para o ID 160976, a data da troca coincide em 13/11/2025, mas o horário legado observado é 09:11:00 e o histórico v2 informa 09:00. Para o ID 74095, há períodos explícitos no legado onde a sequência v2 inclui `CONVOCADO` por longo intervalo.
 
-Essa foi uma sondagem de contrato, não um conector integrado nem uma auditoria cruzada completa. Não substituímos eventos nem promovemos os resultados por esse teste. O próximo cruzamento deve preservar os XML cifrados, contratar datas/fins de intervalo e confrontar as duas fontes antes de resolver essas pendências.
+Essa sondagem levou ao [conector e cruzamento para revisão](camara-people-legacy.md), implementado no incremento seguinte. Ele preserva XML cifrados em dois passes e audita as comparações. Não substitui eventos nem preenche lacunas; datas de fronteira, fins abertos e classificações não contratadas permanecem limitados explicitamente.
 
 ## Arquivos e verificações
 

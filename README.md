@@ -41,3 +41,5 @@ O protótipo visual com dados fictícios foi retirado; o último estado dele est
 `npm run discover:people -- --local --run descoberta-2025-2026` compara as listas históricas e os IDs dos anuais CEAP, preserva originais cifrados e produz uma conferência independente. Não altera o banco ou os dados do site. Contrato, uso, resultados observados e limites: [descoberta de pessoas](docs/source-contracts/camara-people-discovery.md).
 
 Após a descoberta, `npm run collect:people -- --local --discovery-run ID --run ID` coleta todos os históricos em dois passes. `npm run resolve:people -- --local --run ID` deriva intervalos e competências e audita contra os originais, com atribuição pública desativada. [Contrato e limites do histórico](docs/source-contracts/camara-people-history.md).
+
+`npm run collect:people:legacy -- --local --discovery-run ID --history-run ID --run ID` preserva períodos e filiações da fonte oficial em XML. `npm run verify:people:legacy -- --local --run ID` cruza com a v2, audita os originais e propõe uma amostra intermediária para revisão. [Contrato, resultados e pendências](docs/source-contracts/camara-people-legacy.md).

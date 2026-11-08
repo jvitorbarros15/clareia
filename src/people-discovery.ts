@@ -36,9 +36,12 @@ export function parseDiscoveryScope(input:unknown,today=new Date().toISOString()
 }
 export function sourceAllowed(url:string):boolean{
   let u:URL;try{u=new URL(url);}catch{return false;}
+  const legacy=u.origin==='https://www.camara.leg.br'&&u.pathname==='/SitCamaraWS/Deputados.asmx/ObterDetalhesDeputado'&&
+    [...u.searchParams.keys()].sort().join(',')==='ideCadastro,numLegislatura'&&
+    ['ideCadastro','numLegislatura'].every(key=>/^[1-9]\d{0,8}$/.test(u.searchParams.get(key)||''));
   return !u.username&&!u.password&&!u.hash&&(
     u.origin==='https://dadosabertos.camara.leg.br'&&/^\/api\/v2\/(?:api-docs|deputados(?:\/\d+(?:\/historico)?)?|legislaturas\/\d+|referencias\/deputados\/codSituacao)$/.test(u.pathname)||
-    u.origin==='https://www.camara.leg.br'&&/^\/cotas\/Ano-\d{4}\.csv\.zip$/.test(u.pathname)&&!u.search
+    u.origin==='https://www.camara.leg.br'&&/^\/cotas\/Ano-\d{4}\.csv\.zip$/.test(u.pathname)&&!u.search||legacy
   );
 }
 export class PeopleCapture {
@@ -63,7 +66,7 @@ export class PeopleCapture {
       for(let attempt=0;attempt<=RETRY_WAITS.length;attempt++){
         let retry:number|undefined;
         try{
-          const response=await this.fetcher(url,{headers:{Accept:url.endsWith('.zip')?'application/zip':'application/json','User-Agent':'clareia-people-discovery'},redirect:'error',signal:AbortSignal.timeout(60_000)});
+          const response=await this.fetcher(url,{headers:{Accept:url.endsWith('.zip')?'application/zip':new URL(url).pathname.endsWith('/ObterDetalhesDeputado')?'application/xml, text/xml':'application/json','User-Agent':'clareia-people-discovery'},redirect:'error',signal:AbortSignal.timeout(60_000)});
           if(response.ok){result=await readLimited(response,url.endsWith('.zip')?100_000_000:12_000_000);break;}
           if(response.status!==429&&response.status<500)throw new HttpFailure(response.status);
           const raw=response.headers.get('retry-after');
