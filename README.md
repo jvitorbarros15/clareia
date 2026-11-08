@@ -47,3 +47,5 @@ Após a descoberta, `npm run collect:people -- --local --discovery-run ID --run 
 `npm run collect:expenses:intermediate -- --local --selection-run ID --run ID` coleta o ano de 2025 para a seleção intermediária, em dois passes cifrados. `npm run verify:expenses:intermediate -- --local --run ID` audita as fontes e os estados de cobertura, sem alterar o site. [Contrato e pendências da carga financeira](docs/source-contracts/camara-expense-intermediate.md).
 
 Parcelas e documentos divididos têm [regras de conferência próprias](docs/source-contracts/camara-expense-equations.md). `--portal` acrescenta a [conferência oficial SIGEPA](docs/source-contracts/camara-cota-portal.md) para repetições sem explicação no anual. A amostra de 16 pessoas foi conciliada, mas continua em preparação, sem aprovação para publicação ou ampliação do site.
+
+`npm run compare:expenses:intermediate -- --help` mostra como [comparar duas versões preservadas](docs/source-contracts/camara-expense-changes.md), com nova releitura dos originais e cobertura explícita. Diferenças ficam em relatório privado; falhas e competências antes retidas não viram retiradas nem aumentos de gasto.

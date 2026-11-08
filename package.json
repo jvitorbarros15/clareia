@@ -13,6 +13,7 @@
     "verify:people:legacy": "tsx scripts/verify-people-legacy.ts",
     "collect:expenses:intermediate": "tsx scripts/collect-expense-intermediate.ts",
     "verify:expenses:intermediate": "tsx scripts/verify-expense-intermediate.ts",
+    "compare:expenses:intermediate": "tsx scripts/compare-expense-intermediate.ts",
     "resolve:people": "tsx scripts/resolve-people-history.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
