@@ -1,5 +1,7 @@
 # Parcelas, documentos divididos e projeções SIGEPA
 
+**Regra corrigida após revisão externa:** [erro de teto agregado, rechecagem dos sete documentos e retenção SIGEPA](precision-review-2026-11-08.md). As contagens históricas ao fim deste arquivo foram substituídas; as etapas 1 e 2 continuam abertas.
+
 Continuação da [carga intermediária](camara-expense-intermediate.md). Todas as regras abaixo explicam registros já existentes e preservam seus valores líquidos originais. Nenhuma altera um valor, rateia dinheiro, deduplica uma ocorrência ou aprova a legitimidade de uma despesa.
 
 ## Evidências oficiais e interpretação
@@ -18,6 +20,9 @@ Os normalizadores antigos continuam estritos por padrão. A carga intermediária
 2. Exatamente uma ocorrência correspondente em cada fonte. Multiplicidade ambígua não produz autorização.
 3. Parcela inteira positiva nas duas fontes. Face/glosa/líquido conhecidos e não negativos; líquido inferior ao disponível do documento depois da glosa.
 4. Estabilidade dos anuais e dos dois passes da API antes da resolução.
+5. Na regra `camara.ceap.correlated-net.v2`, todos os membros observados do documento devem estar pareados, sem valores inválidos, negativos ou orçamentos divergentes. A soma dos líquidos, contando cada ocorrência uma vez e incluindo membros sem parcela, não pode exceder face menos glosa. O teto e as referências do grupo ficam em `documentBudget`.
+
+Grupo sem orçamento confirmável ou acima do teto fica em `equationHolds`, sem liberação de nenhuma competência afetada. Esse controle também vale quando as equações individuais fecham: R$ 100 + R$ 100 não pode passar como parcelas de um documento de R$ 100. Dois líquidos de R$ 60 também ficam retidos; R$ 60 + R$ 40 pode satisfazer o limite, sem somar o anual novamente à API.
 
 O líquido é o informado no registro. Não completar o documento com saldo inventado, presumir pagamento futuro, levar valor para outro mês ou recalcular restituição.
 
@@ -31,22 +36,24 @@ O relatório guarda os identificadores das linhas de todo o grupo. Uma linha cuj
 
 ## Linhas iguais na API com trechos distintos no anual
 
-A projeção SIGEPA da API não inclui todos os campos do anual. Para um grupo de N linhas API integralmente iguais, a regra `camara.ceap.sigepa-annual-routes.v1` exige:
+A projeção SIGEPA da API não inclui todos os campos do anual. Para um grupo de N linhas API integralmente iguais, a conferência de trechos armazena evidência somente quando:
 
 - Categoria exatamente PASSAGEM AÉREA - SIGEPA, documento utilizável e os mesmos campos financeiros/cadastrais de correlação nas duas fontes.
 - Exatamente N linhas no anual, com referências diferentes, iguais em todos os campos exceto `txtTrecho`.
 - N trechos preenchidos e distintos, ignorando somente diferenças de espaço e caixa. Mudança cosmética não distingue ocorrência.
 - As N posições da API preservadas, com mesmo multiconjunto nos passes de 100/25 itens; sem duplicação de referência.
 
-Os N registros são preservados e pareados com os N do anual. Não viram N+N e não são reduzidos a um. Os identificadores normalizados vêm das linhas anuais distintas. Nomes de passageiros e trechos não são copiados para o relatório: ele registra quantidade e referências por hash.
+As N linhas originais são preservadas, sem virarem N+N nem serem reduzidas a uma. Nomes de passageiros e trechos não são copiados para o relatório: ele registra quantidade e referências por hash. Isso não confirma N débitos distintos. A política atual `camara.ceap.sigepa-preserve-hold.v2` mantém a competência retida, mesmo com a conferência de trechos ou portal aprovada, até confirmação oficial da unidade de contagem.
 
-Se o anual não trouxer esses N trechos, a quantidade divergir, outro campo anual diferir ou a categoria for outra, esta regra não explica a repetição. Ela continua retida, salvo corroboração pelo [contrato separado do relatório SIGEPA](camara-cota-portal.md). Isso não prova cobrança indevida nem autoriza apagar a linha.
+Se o anual não trouxer esses N trechos, a quantidade divergir, outro campo anual diferir ou a categoria for outra, esta conferência não explica a repetição. O [relatório SIGEPA](camara-cota-portal.md) pode fornecer evidência adicional, mas tampouco libera a soma das repetições. Isso não prova cobrança indevida nem autoriza apagar a linha.
 
 ## Implementação e auditoria
 
 `expense-equations.ts` deriva as permissões a partir dos originais preservados. As permissões se vinculam a tipo de fonte, ID oficial, URL, hash e posição da linha. `expense-equations-audit.ts` implementa separadamente projeção, decimais, correlação, equações e distinção de trechos; compartilha tipos e infraestrutura de hash, sem chamar o resolvedor de produção.
 
 A auditoria financeira relê todos os originais, recalcula as permissões/decisões e confere os registros e suas bases. Alterar a base de um registro, uma referência, o número de trechos ou a quantidade causa falha. Nenhum ledger fornecido pelo relatório autoriza sozinho uma exceção.
+
+“Independente” aqui descreve implementação separada, feita pelo mesmo autor com as mesmas regras. Não é revisão independente da metodologia. A omissão de teto passou pelos dois caminhos e pelos testes anteriores; esse resultado não deve ser apresentado como prova de correção das regras.
 
 Mesmos comandos da carga intermediária. Para reprocessar sem rede:
 
@@ -57,7 +64,7 @@ npm run verify:expenses:intermediate -- --local --run expenses-2025-intermediate
 
 O relatório ganha nova versão de conteúdo; os relatórios anteriores ficam preservados por hash. Isso é revisão de regra sobre originais fixados, não atualização silenciosa da origem nem mudança na publicação ativa.
 
-## Resultado observado em 08/11/2026
+## Histórico anterior à correção de 08/11/2026 — superado
 
 - Sete documentos com parcelas corroboradas e três grupos fechados de documentos divididos explicam as dez competências antes retidas por normalização financeira. Um desses grupos passa por uma competência que também tinha repetição SIGEPA.
 - Dez decisões de multiplicidade explicam repetições API com trechos anuais distintos, sem remover ocorrências.

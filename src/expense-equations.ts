@@ -2,7 +2,8 @@ import {canonical,cents,hash} from './model.ts';
 import type {FinancialBasis,Scope,SourceRef} from './model.ts';
 
 export type EquationInput={kind:'annual'|'api';personId:number;raw:Record<string,any>;source:SourceRef};
-export type EquationDecision={basis:FinancialBasis;personId:number;year:number;documentKey:string;annualKeys:string[];apiKeys:string[];months:number[]};
+export type EquationDecision={basis:FinancialBasis;personId:number;year:number;documentKey:string;annualKeys:string[];apiKeys:string[];months:number[];documentBudget?:{faceCents:number;disallowedCents:number;observedNetCents:string;annualKeys:string[];apiKeys:string[]}};
+export type EquationHold={personId:number;year:number;documentKey:string;months:number[];annualKeys:string[];apiKeys:string[];reason:'over-document-limit'|'document-group-unconfirmed'};
 export type MultiplicityDecision={personId:number;year:number;month:number;apiRowHash:string;count:number;distinctAnnualRoutes:number;annualKeys:string[];apiKeys:string[]};
 export const equationKey=(input:Pick<EquationInput,'kind'|'personId'|'source'>)=>hash(canonical([input.kind,input.personId,input.source.url,input.source.sha256,input.source.row]));
 type Payment={input:EquationInput;key:string;group:string;signature:string;documentKey:string;year:number;month:number;face:number|null;glosa:number|null;net:number;installment:number|null};
@@ -20,26 +21,38 @@ function payment(input:EquationInput,scope:Scope):Payment|null{
 }
 // An exemption only explains the document equation. It never changes the
 // reported net, authorizes a duplicate, joins by supplier or declares legitimacy.
-export function reviewExpenseEquations(scope:Scope,inputs:EquationInput[]):{permissions:Map<string,FinancialBasis>;decisions:EquationDecision[]}{
-  const payments:Payment[]=[],invalidGroups=new Set<string>(),permissions=new Map<string,FinancialBasis>(),decisions:EquationDecision[]=[];
-  for(const input of inputs){const p=payment(input,scope);if(p)payments.push(p);else{const r=input.raw;if(r&&typeof r==='object')invalidGroups.add(canonical([input.personId,Number(input.kind==='annual'?r.numAno:r.ano),String((input.kind==='annual'?r.ideDocumento:r.codDocumento)??'')]));}}
+export function reviewExpenseEquations(scope:Scope,inputs:EquationInput[]){
+  const payments:Payment[]=[],invalidGroups=new Set<string>(),permissions=new Map<string,FinancialBasis>(),decisions:EquationDecision[]=[],holds:EquationHold[]=[],blockedKeys=new Set<string>(),inputGroups=new Map<string,EquationInput[]>();
+  for(const input of inputs){const r=input.raw;if(r&&typeof r==='object'){const group=canonical([input.personId,Number(input.kind==='annual'?r.numAno:r.ano),String((input.kind==='annual'?r.ideDocumento:r.codDocumento)??'')]);inputGroups.set(group,[...(inputGroups.get(group)??[]),input]);const p=payment(input,scope);if(p)payments.push(p);else invalidGroups.add(group);}}
   const pool=new Map<string,{annual:Payment[];api:Payment[]}>();
   for(const p of payments){const bucket=pool.get(p.group)??{annual:[],api:[]};bucket[p.input.kind].push(p);pool.set(p.group,bucket);}
   const partial=(p:Payment)=>p.face!==null&&p.glosa!==null&&p.face>=0&&p.glosa>=0&&p.net>=0&&p.face-p.glosa>p.net;
   for(const [group,bucket] of [...pool].sort(([a],[b])=>a.localeCompare(b))){
     const pairs:{annual:Payment;api:Payment}[]=[],signatures=[...new Set([...bucket.annual,...bucket.api].map(p=>p.signature))].sort();
     for(const signature of signatures){const ar=bucket.annual.filter(p=>p.signature===signature),br=bucket.api.filter(p=>p.signature===signature);if(ar.length===1&&br.length===1)pairs.push({annual:ar[0],api:br[0]});}
+    const face=bucket.annual[0]?.face,glosa=bucket.annual[0]?.glosa;
+    // Count each corroborated occurrence once, including non-installment members.
+    // Missing/invalid/unpaired members, variable budgets or refunds cannot be
+    // used to authorize a partial payment or conceal an over-budget group.
+    const groupNet=bucket.annual.reduce((sum,p)=>sum+BigInt(p.net),0n);
+    const knownBudget=!invalidGroups.has(group)&&pairs.length>0&&pairs.length===bucket.annual.length&&pairs.length===bucket.api.length&&face!==null&&face!==undefined&&glosa!==null&&glosa!==undefined&&face>=0&&glosa>=0&&face>=glosa&&bucket.annual.every(p=>p.face===face&&p.glosa===glosa&&p.net>=0);
+    const withinBudget=knownBudget&&groupNet<=BigInt(face!)-BigInt(glosa!);
+    const members=inputGroups.get(group)!;
+    if(members.some(i=>{const value=i.kind==='annual'?i.raw.numParcela:i.raw.parcela;return /^[1-9]\d*$/.test(String(value))&&Number.isSafeInteger(Number(value));})&&!withinBudget){
+      for(const input of members)blockedKeys.add(equationKey(input));
+      const sample=members[0];holds.push({personId:sample.personId,year:scope.year,documentKey:hash(group),months:[...new Set(members.map(i=>Number(i.kind==='annual'?i.raw.numMes:i.raw.mes)))].sort((a,b)=>a-b),annualKeys:members.filter(i=>i.kind==='annual').map(equationKey).sort(),apiKeys:members.filter(i=>i.kind==='api').map(equationKey).sort(),reason:knownBudget?'over-document-limit':'document-group-unconfirmed'});continue;
+    }
     const approve=(basis:FinancialBasis,rows:typeof pairs)=>{
       if(!rows.length)return;
       for(const pair of rows){permissions.set(pair.annual.key,basis);permissions.set(pair.api.key,basis);}
       const sample=rows[0].annual;
-      decisions.push({basis,personId:sample.input.personId,year:sample.year,documentKey:sample.documentKey,annualKeys:rows.map(p=>p.annual.key).sort(),apiKeys:rows.map(p=>p.api.key).sort(),months:[...new Set(rows.map(p=>p.annual.month))].sort((a,b)=>a-b)});
+      decisions.push({basis,personId:sample.input.personId,year:sample.year,documentKey:sample.documentKey,annualKeys:rows.map(p=>p.annual.key).sort(),apiKeys:rows.map(p=>p.api.key).sort(),months:[...new Set(rows.map(p=>p.annual.month))].sort((a,b)=>a-b),...(basis==='reported-installment'?{documentBudget:{faceCents:face!,disallowedCents:glosa!,observedNetCents:String(groupNet),annualKeys:pairs.map(p=>p.annual.key).sort(),apiKeys:pairs.map(p=>p.api.key).sort()}}:{})});
     };
-    approve('reported-installment',pairs.filter(({annual:p})=>partial(p)&&p.installment!==null&&p.installment>0));
+    if(withinBudget)approve('reported-installment',pairs.filter(({annual:p})=>partial(p)&&p.installment!==null&&p.installment>0));
     // A split must close over the full contracted year, with every occurrence
     // paired exactly once, and a single document face/glosa. No inferred share.
     if(invalidGroups.has(group)||scope.months.length!==12||new Set(scope.months).size!==12||pairs.length<2||pairs.length!==bucket.annual.length||pairs.length!==bucket.api.length)continue;
-    const values=bucket.annual,face=values[0].face,glosa=values[0].glosa;
+    const values=bucket.annual;
     if(face===null||glosa===null||face<0||glosa<0||face-glosa<=0||values.some(p=>p.face!==face||p.glosa!==glosa||p.net<0||p.net>face-glosa)||values.reduce((sum,p)=>sum+BigInt(p.net),0n)!==BigInt(face)-BigInt(glosa))continue;
     // Keep already explained installments distinct; attach the split rule only
     // to the remaining mismatched rows, with the full group as evidence below.
@@ -49,11 +62,11 @@ export function reviewExpenseEquations(scope:Scope,inputs:EquationInput[]):{perm
       const sample=values[0];decisions.push({basis:'balanced-document-split',personId:sample.input.personId,year:sample.year,documentKey:sample.documentKey,annualKeys:pairs.map(p=>p.annual.key).sort(),apiKeys:pairs.map(p=>p.api.key).sort(),months:[...new Set(values.map(p=>p.month))].sort((a,b)=>a-b)});
     }
   }
-  return {permissions,decisions};
+  return {permissions,decisions,holds,blockedKeys};
 }
 
-// SIGEPA's API projection omits route. Preserve N occurrences only when N
-// distinct routes in the annual corroborate every financial field and quantity.
+// Source-row corroboration only: N distinct annual routes can explain the API
+// projection. This does not authorize summing N debits or release a competence.
 export function reviewFlightMultiplicity(scope:Scope,inputs:EquationInput[]){
   const covered=new Set<string>(),decisions:MultiplicityDecision[]=[],annual=inputs.filter(r=>r.kind==='annual').map(input=>({input,payment:payment(input,scope)})),groups=new Map<string,EquationInput[]>();
   for(const input of inputs.filter(r=>r.kind==='api')){const key=hash(canonical([input.personId,input.raw]));groups.set(key,[...(groups.get(key)??[]),input]);}

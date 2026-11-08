@@ -1,5 +1,7 @@
 # Diferenças entre capturas financeiras
 
+**Após a [revisão externa](precision-review-2026-11-08.md):** relatórios com as regras antigas de parcelas/multiplicidade são recusados na releitura. O histórico de comparação ao fim deste arquivo descreve a execução anterior à correção. A versão atual tem 13 competências retidas; compará-la consigo mesma não produz diferença total zero, e sim total indisponível com 179 competências comparáveis e 13 não comparáveis.
+
 Continuação da [carga intermediária](camara-expense-intermediate.md). A ferramenta produz evidência privada para revisão de versões; não escreve no banco, não altera uma publicação e não busca dados na rede.
 
 ```sh

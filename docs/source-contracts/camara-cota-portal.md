@@ -1,5 +1,7 @@
 # Relatório analítico oficial — corroboração de ocorrências SIGEPA
 
+**Estado atual:** [a unidade de soma continua sem confirmação oficial](precision-review-2026-11-08.md). O portal permanece como evidência de concordância; as competências com repetições estão novamente retidas. Os resultados numéricos de fechamento ao fim deste arquivo são históricos e não autorizam publicação ou expansão.
+
 Complementa a [carga intermediária](camara-expense-intermediate.md) e as [regras de equações e trechos](camara-expense-equations.md). Consulta somente de leitura, sem autenticação, na [busca oficial da cota](https://www.camara.leg.br/cota-parlamentar/).
 
 ## Quando consultar e como identificar a pessoa
@@ -22,13 +24,13 @@ Cada linha tem oito células, índice contínuo `analitico0…N`, um link de det
 - O multiconjunto completo precisa coincidir um a um com a API em documento fiscal, número, fornecedor, emissão, face, deduções compatíveis e líquido, além da quantidade e do total. Total igual com linhas diferentes não basta.
 - HTML ausente ou fora do contrato resulta em `unavailable`; passes diferentes, em `changed`; desacordo com a API, em `mismatch`. Nenhum desses estados libera a competência.
 
-`matched` corrobora a multiplicidade no relatório oficial. Os registros repetidos permanecem separados, com IDs estáveis derivados do conteúdo e de um ordinal por grupo (`portal-occurrence.v1`), `multiplicityBasis=portal-corroborated` e `occurrenceOrdinal`. Isso evita perder uma ocorrência na futura chave primária SQL. Não se soma portal + API: o portal é evidência de conferência, não uma nova parcela de dinheiro.
+`matched` confirma somente que o portal apresenta o mesmo multiconjunto que a API. A política `camara.ceap.sigepa-preserve-hold.v2` mantém essas competências em `held-review` com motivo `sigepa-unit-unconfirmed`, sem registros normalizados ou total aprovado. Os originais repetidos continuam cifrados e preservados. O mecanismo anterior de gerar IDs/ordinais para normalizá-los não é mais usado para liberação. Não se soma portal + API nem se deduplica para criar um total alternativo.
 
 O relatório analítico e a API são serviços da mesma Câmara e podem compartilhar o mesmo sistema de origem. Sua concordância não prova duas transações bancárias distintas, legalidade, cobertura externa ou ausência de erro na origem. A página de detalhe não serve como chave de ocorrência: várias linhas podem apontar para o mesmo documento e exibir apenas um desdobramento. A publicação deve explicar esse limite.
 
 ## Auditoria e retomada
 
-`cota-portal-audit.ts` reimplementa ligação de IDs, leitura da tabela, moeda, projeção, comparação de multiconjuntos e totais; compartilha apenas tipos, hash e navegação sintática do DOM. A auditoria da carga deriva a autorização novamente a partir dos originais, confere as evidências, os IDs/ordinais, os valores e as referências de fonte utilizadas. Alterar o ledger do relatório não autoriza multiplicidade.
+`cota-portal-audit.ts` reimplementa ligação de IDs, leitura da tabela, moeda, projeção, comparação de multiconjuntos e totais; compartilha apenas tipos, hash e navegação sintática do DOM. A auditoria da carga confere as evidências, os valores, as referências utilizadas e a retenção. São duas implementações das mesmas regras do Clareia, não validação independente da metodologia ou confirmação institucional da unidade de contagem. Alterar o ledger do relatório não autoriza a soma.
 
 ```sh
 npm run collect:expenses:intermediate -- --local --selection-run legacy-20261108 --run expenses-2025-intermediate-20261108 --workers 2 --portal
@@ -37,7 +39,7 @@ npm run verify:expenses:intermediate -- --local --run expenses-2025-intermediate
 
 Uma vez ativado, `--portal` permanece ativo no manifesto das retomadas, inclusive com `--offline` sem repetir a opção. Originais existentes são imutáveis; para atualizar as fontes, usar novo `--run`. Relatórios anteriores permanecem preservados por hash. Não há acesso ao banco ativo, geração do site ou aprovação automática.
 
-## Resultado real em 08/11/2026
+## Histórico real anterior à retenção semântica — superado para liberação
 
 | ID Câmara / competência | ID interno do portal | Linhas SIGEPA conferidas | Reembolso líquido SIGEPA |
 | --- | --- | --- | --- |

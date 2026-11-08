@@ -2,7 +2,7 @@
 
 Portal de transparência sobre deputados federais, com dados oficiais conferidos: despesas da cota parlamentar (CEAP) hoje; votações, projetos, eleições e emendas nas próximas etapas.
 
-Todo número publicado passa por uma releitura independente do arquivo oficial antes de entrar no site. Fornecedores pessoa física aparecem só como "Fornecedor pessoa física", e o site e o banco são varridos em busca de CPF antes de cada gravação.
+Todo número publicado passa por uma segunda implementação de leitura/cálculo do arquivo oficial antes de entrar no site. Essa conferência usa as mesmas regras e não substitui uma revisão independente da metodologia ou confirmação da fonte. Fornecedores pessoa física aparecem só como "Fornecedor pessoa física", e o site e o banco são varridos em busca de CPF antes de cada gravação.
 
 ## Como funciona
 
@@ -46,6 +46,6 @@ Após a descoberta, `npm run collect:people -- --local --discovery-run ID --run 
 
 `npm run collect:expenses:intermediate -- --local --selection-run ID --run ID` coleta o ano de 2025 para a seleção intermediária, em dois passes cifrados. `npm run verify:expenses:intermediate -- --local --run ID` audita as fontes e os estados de cobertura, sem alterar o site. [Contrato e pendências da carga financeira](docs/source-contracts/camara-expense-intermediate.md).
 
-Parcelas e documentos divididos têm [regras de conferência próprias](docs/source-contracts/camara-expense-equations.md). `--portal` acrescenta a [conferência oficial SIGEPA](docs/source-contracts/camara-cota-portal.md) para repetições sem explicação no anual. A amostra de 16 pessoas foi conciliada, mas continua em preparação, sem aprovação para publicação ou ampliação do site.
+Parcelas e documentos divididos têm [regras de conferência próprias](docs/source-contracts/camara-expense-equations.md). `--portal` acrescenta a [conferência oficial SIGEPA](docs/source-contracts/camara-cota-portal.md). Após a [revisão externa](docs/source-contracts/precision-review-2026-11-08.md), o teto agregado de parcelas foi corrigido e as repetições SIGEPA voltaram a ficar retidas, mesmo quando fontes concordam. A amostra de 16 pessoas continua em revisão; as etapas 1 e 2 estão abertas, sem aprovação de publicação ou expansão.
 
 `npm run compare:expenses:intermediate -- --help` mostra como [comparar duas versões preservadas](docs/source-contracts/camara-expense-changes.md), com nova releitura dos originais e cobertura explícita. Diferenças ficam em relatório privado; falhas e competências antes retidas não viram retiradas nem aumentos de gasto.

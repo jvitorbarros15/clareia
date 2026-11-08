@@ -98,8 +98,9 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   for(const id of scope.ids)for(const month of scope.months){const pair:[ReturnType<typeof api>,ReturnType<typeof api>]=[api(id,month,1),api(id,month,2)];reads.set(id+':'+month,pair);if(annualStable&&pair[0].rows!==null&&pair[1].rows!==null&&digest(pair[0].rows.map(r=>r.raw))===digest(pair[1].rows.map(r=>r.raw)))for(const r of pair[1].rows)equationInputs.push({kind:'api',personId:id,raw:r.raw,source:{url:r.source.url,sha256:r.source.sha256,row:r.row,fetchedAt:r.source.fetchedAt}});}
   const equationReview=independentEquationReview(scope,annualStable?equationInputs:[]);
   const multiplicityReview=independentFlightMultiplicity(scope,annualStable?equationInputs:[]);
-  if(report.equationRule!=='camara.ceap.correlated-net.v1'||canonical(report.equationDecisions)!==canonical(equationReview.decisions))fail('equation-review-evidence');
-  if(report.multiplicityRule!=='camara.ceap.sigepa-annual-routes.v1'||canonical(report.multiplicityDecisions)!==canonical(multiplicityReview.decisions))fail('multiplicity-review-evidence');
+  if(report.equationRule!=='camara.ceap.correlated-net.v2'||canonical(report.equationDecisions)!==canonical(equationReview.decisions))fail('equation-review-evidence');
+  if(canonical(report.equationHolds)!==canonical(equationReview.holds))fail('equation-review-holds');
+  if(report.multiplicityRule!=='camara.ceap.sigepa-preserve-hold.v2'||canonical(report.multiplicityDecisions)!==canonical(multiplicityReview.decisions))fail('multiplicity-review-evidence');
   if(report.portalRule!=='camara.ceap.sigepa-portal-ledger.v1'||typeof report.portalRequested!=='boolean')fail('portal-review-contract');
   const portalChecks:PortalCheck[]=[],portalCovered=new Set<string>();
   const permission=(kind:'annual'|'api',personId:number,r:RawRow)=>equationReview.permissions.get(hash(JSON.stringify([kind,personId,r.source.url,kind==='annual'?second.csvHash:r.source.sha256,r.row])));
@@ -119,16 +120,19 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
       const rowKey=(r:RawRow)=>hash(JSON.stringify(['api',c.personId,r.source.url,r.source.sha256,r.row]));
       const unresolved=b.filter(r=>(apiCounts.get(canonical(r.raw))??0)>1&&!multiplicityReview.covered.has(rowKey(r)));
       const apiStable=digest(a.map(r=>({personId:c.personId,raw:r.raw})))===digest(b.map(r=>({personId:c.personId,raw:r.raw})));
-      if(apiStable&&unresolved.length&&report.portalRequested&&unresolved.every(r=>r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA')){
+      const budgetBlocked=annual.some(r=>equationReview.blockedKeys.has(hash(JSON.stringify(['annual',c.personId,r.source.url,second.csvHash,r.row]))))||b.some(r=>equationReview.blockedKeys.has(rowKey(r)));
+      if(apiStable&&!budgetBlocked&&unresolved.length&&report.portalRequested&&unresolved.every(r=>r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA')){
         const check=await independentPortalReview(c.personId,scope.year,c.month,scope.legislature,[first.rows,second.rows],b.filter(r=>r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA').map(r=>r.raw),async(pass,url)=>{const key=pass+':'+url,source=refs.get(key),bytes=html.get(key);if(!source||!bytes)return null;used.add(key);return {source,bytes};});
         portalChecks.push(check);if(check.status==='matched')for(const r of unresolved)portalCovered.add(rowKey(r));
       }
       if(!apiStable)reasons=['api-changed-between-passes'];
+      else if(budgetBlocked)reasons=['installment-document-review'];
       else if(unresolved.some(r=>!portalCovered.has(rowKey(r))))reasons=['ambiguous-identical-occurrences'];
       else if(duplicates(annual))reasons=['ambiguous-identical-occurrences'];
+      else if(b.some(r=>(apiCounts.get(canonical(r.raw))??0)>1))reasons=['sigepa-unit-unconfirmed'];
       else{
         let ar:Expense[]=[],br:Expense[]=[];
-        try{ar=annual.map(r=>project(r,c.personId,scope,'annual',second.csvHash,permission('annual',c.personId,r)));const ordinals=new Map<string,number>();br=b.map(r=>{const record=project(r,c.personId,scope,'api',undefined,permission('api',c.personId,r));if(portalCovered.has(rowKey(r))){const ordinal=ordinals.get(record.id)??0;ordinals.set(record.id,ordinal+1);return {...record,id:hash(canonical(['portal-occurrence.v1',record.id,ordinal])),multiplicityBasis:'portal-corroborated' as const,occurrenceOrdinal:ordinal};}return record;});}catch{reasons=['financial-normalization-failed'];}
+        try{ar=annual.map(r=>project(r,c.personId,scope,'annual',second.csvHash,permission('annual',c.personId,r)));br=b.map(r=>project(r,c.personId,scope,'api',undefined,permission('api',c.personId,r)));}catch{reasons=['financial-normalization-failed'];}
         if(!reasons.length){
           const blank=(s:string)=>s==='Não informado'?'':s,key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
@@ -150,5 +154,5 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   if(used.size!==refs.size)fail('unreferenced-source');
   if(report.metrics.sourceBytes!==report.sources.reduce((n,s)=>n+s.bytes,0))fail('source-byte-count');
   if(findCpfs(JSON.stringify(report),known))fail('private-identifier');
-  return {schema:'clareia.expense-intermediate-audit.v1',status:failures.length?'failed':'passed',checkedAt:new Date().toISOString(),reportSha256:hash(canonical(report)),peopleVersion:hash(canonical(temporal)),proposalSha256,scope,competences:expectedKeys.length,failures,publicationEligible:false,note:'Releitura independente de originais, registros, centavos, paginação, multiplicidades, cobertura e união; casos retidos continuam retidos. Não aprova publicação nem legitimidade da despesa.'};
+  return {schema:'clareia.expense-intermediate-audit.v1',status:failures.length?'failed':'passed',checkedAt:new Date().toISOString(),reportSha256:hash(canonical(report)),peopleVersion:hash(canonical(temporal)),proposalSha256,scope,competences:expectedKeys.length,failures,publicationEligible:false,note:'Releitura dos originais por implementação separada das mesmas regras do Clareia. Não é revisão independente da metodologia, confirmação da unidade SIGEPA ou prova de ausência de erro na origem. Casos retidos continuam retidos; não aprova publicação ou legitimidade.'};
 }

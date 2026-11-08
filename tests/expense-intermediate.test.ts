@@ -53,27 +53,34 @@ test('a corroborated reported installment retains its net and evidence instead o
   r.report.cells[0].records[0].financialBasis='balanced-document-split';assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='financial-records-coverage-or-union'));
   r.report.equationDecisions[0].annualKeys[0]=hash('wrong evidence');assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='equation-review-evidence'));
 });
+test('over-budget installments retain both affected months and cannot produce a partial approved total',async t=>{
+  for(const net of [60,100]){
+    const line=(month:number)=>annualLine(1,month,'COMBUSTÍVEIS','100.00').replace(';100.00;100.00;0;',`;${net}.00;100.00;0;`).replace(/;0$/,`;${month}`);
+    const r=await setup(t,url=>url.endsWith('.zip')?annual([line(1),line(2)]):url.includes('/1/despesas')?{dados:[apiRow(Number(new URL(url).searchParams.get('mes')),{valorDocumento:100,valorLiquido:net,parcela:Number(new URL(url).searchParams.get('mes'))})],links:[]}:undefined);
+    assert.equal(r.report.equationDecisions.length,0);assert.equal(r.report.equationHolds[0].reason,'over-document-limit');assert.equal(r.report.totalCents,null);for(const c of r.report.cells.filter(c=>c.personId===1)){assert.equal(c.status,'held-review');assert.equal(c.totalCents,null);assert.deepEqual(c.records,[]);assert.deepEqual(c.reasons,['installment-document-review']);}
+    r.report.equationHolds=[];r.report.contentSha256=expenseBatchContentId(r.report);assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='equation-review-holds'));
+  }
+});
 test('a complete-year split across months preserves each competence and does not multiply the document face',async t=>{
   const line=(month:number,net:string)=>annualLine(1,month,'COMBUSTÍVEIS','10.00').replace(';10.00;10.00;0;',`;${net};10.00;0;`);
   const r=await setup(t,url=>url.endsWith('.zip')?annual([line(1,'4.00'),line(2,'6.00')]):url.includes('/1/despesas')?{dados:Number(new URL(url).searchParams.get('mes'))<=2?[apiRow(Number(new URL(url).searchParams.get('mes')),{valorDocumento:10,valorLiquido:Number(new URL(url).searchParams.get('mes'))===1?4:6})]:[],links:[]}:undefined,true);
   assert.equal(r.report.totalCents,1000);assert.equal(r.report.cells[0].totalCents,400);assert.equal(r.report.cells[1].totalCents,600);assert.equal(r.report.cells[0].records[0].financialBasis,'balanced-document-split');assert.deepEqual(r.report.equationDecisions[0].months,[1,2]);assert.equal(r.report.cells.length,24);
 });
-test('two distinct annual flight routes preserve two identical API projections without deduplication or doubled union',async t=>{
+test('distinct annual flight routes preserve the proof but cannot authorize summing identical API projections',async t=>{
   const r=await setup(t,url=>url.endsWith('.zip')?zipSync({'Ano-2025.csv':strToU8(columns+';txtTrecho\n'+annualLine(1,1,'PASSAGEM AÉREA - SIGEPA')+';AAA/BBB\n'+annualLine(1,1,'PASSAGEM AÉREA - SIGEPA')+';BBB/AAA\n')}):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{tipoDespesa:'PASSAGEM AÉREA - SIGEPA'}),apiRow(1,{tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})],links:[]}:undefined);
-  assert.equal(r.report.cells[0].status,'complete');assert.equal(r.report.cells[0].records.length,2);assert.equal(r.report.totalCents,2042);assert.equal(new Set(r.report.cells[0].records.map(r=>r.id)).size,2);assert.ok(r.report.cells[0].records.every(r=>r.origin==='both'));
+  assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].reasons,['sigepa-unit-unconfirmed']);assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.totalCents,null);assert.equal(r.report.multiplicityDecisions[0].count,2);
   r.report.multiplicityDecisions[0].count=1;assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='multiplicity-review-evidence'));
 });
 test('an exactly full terminal page needs a preserved empty probe and remains independently auditable',async t=>{
   const r=await setup(t,url=>url.endsWith('.zip')?annual(Array.from({length:25},(_,i)=>annualLine(1,1,'COMBUSTÍVEIS','10.21',String(10+i)))):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:new URL(url).searchParams.get('pagina')==='1'?Array.from({length:25},(_,i)=>apiRow(1,{codDocumento:String(10+i)})):[],links:[]}:undefined);
   assert.equal(r.report.cells[0].status,'complete');assert.equal(r.report.cells[0].api[1].pages.length,2);assert.equal(r.report.cells[0].api[1].count,25);assert.equal(r.report.totalCents,25525);
 });
-test('API-only SIGEPA duplicates require a stable whole portal ledger and get distinct persistent occurrence IDs',async t=>{
+test('a matched official portal ledger cannot release API-only SIGEPA duplicates while the accounting unit is unconfirmed',async t=>{
   const reply=(url:string)=>url.endsWith('.zip')?zipSync({'Ano-2025.csv':strToU8(columns+';nuDeputadoId\n'+annualLine()+';99\n')}):url.includes('/analitico?')?new Response(portalHtml([{net:1021},{net:1021},{net:-1021}])):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(),... [10.21,10.21,-10.21].map(net=>apiRow(1,{codDocumento:'11',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:net,valorLiquido:net}))],links:[]}:undefined;
-  const r=await setup(t,reply,false,true),cell=r.report.cells[0];assert.equal(cell.status,'complete');assert.equal(r.report.totalCents,2042);assert.equal(cell.records.length,4);assert.equal(new Set(cell.records.map(r=>r.id)).size,4);assert.equal(r.report.portalChecks[0].status,'matched');assert.equal(r.report.portalChecks[0].count,3);assert.equal(r.report.publicationEligible,false);
-  const repeated=cell.records.filter(r=>r.multiplicityBasis);assert.deepEqual(repeated.map(r=>r.occurrenceOrdinal),[0,1]);assert.ok(repeated.every(r=>r.origin==='api'));
+  const r=await setup(t,reply,false,true),cell=r.report.cells[0];assert.equal(cell.status,'held-review');assert.equal(r.report.totalCents,null);assert.deepEqual(cell.records,[]);assert.deepEqual(cell.reasons,['sigepa-unit-unconfirmed']);assert.equal(r.report.portalChecks[0].status,'matched');assert.equal(r.report.portalChecks[0].count,3);assert.equal(r.report.publicationEligible,false);
   const capture=(pass:number)=>new PeopleCapture(path.join(r.dir,'pass-'+pass),r.key,async()=>{throw Error('network forbidden');},async()=>{}),resumed=await collectExpenseBatch(scope,temporal,hash('proposal'),capture(1),capture(2),{portal:true,wait:async()=>{}});assert.equal(resumed.metrics.requests,0);assert.equal(resumed.contentSha256,r.report.contentSha256);
   const original=structuredClone(r.report),audit=()=>auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read);
-  for(const edit of [()=>r.report.portalChecks[0].count=2,()=>r.report.cells[0].records.find(r=>r.multiplicityBasis)!.occurrenceOrdinal=8,()=>r.report.cells[0].records[2].id=r.report.cells[0].records[1].id]){edit();r.report.contentSha256=expenseBatchContentId(r.report);assert.equal((await audit()).status,'failed');Object.assign(r.report,structuredClone(original));}
+  for(const edit of [()=>r.report.portalChecks[0].count=2,()=>r.report.cells[0].reasons=[],()=>{r.report.cells[0].status='no-expenses-confirmed';r.report.cells[0].totalCents=0;}]){edit();r.report.contentSha256=expenseBatchContentId(r.report);assert.equal((await audit()).status,'failed');Object.assign(r.report,structuredClone(original));}
 });
 test('missing, changed or mismatched portal evidence never clears an unresolved SIGEPA month',async t=>{
   for(const mode of ['missing','changed','mismatch','no-identity'] as const){
@@ -128,6 +135,9 @@ test('independent financial audit rejects altered cents, false empty status, mis
     edit();assert.equal((await audit()).status,'failed');Object.assign(r.report,structuredClone(original));
   }
   await assert.rejects(auditExpenseBatch(r.report,temporal,scope,hash('proposal'),async()=>strToU8('tampered')),/Hash/);
+});
+test('retired equation and SIGEPA policies are refused even if their content hash is recomputed',async t=>{
+  const r=await setup(t);Object.assign(r.report,{equationRule:'camara.ceap.correlated-net.v1',multiplicityRule:'camara.ceap.sigepa-annual-routes.v1'});r.report.contentSha256=expenseBatchContentId(r.report);const audit=await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read);assert.equal(audit.status,'failed');for(const code of ['equation-review-evidence','multiplicity-review-evidence'])assert.ok(audit.failures.some(f=>f.code===code));
 });
 test('known private identifiers cannot be written even in allowed document fields',async t=>{
   await assert.rejects(setup(t,url=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{numDocumento:'12345678901',cnpjCpfFornecedor:'12345678901'})],links:[]}:url.endsWith('.zip')?annual([annualLine().replace(';N1;',';12345678901;').replace('11222333000181','12345678901')]):undefined),/Identificador privado/);
