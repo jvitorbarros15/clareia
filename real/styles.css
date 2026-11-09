@@ -946,3 +946,6 @@ body .uf-tile.negative.selected path:not(.tile-hit){stroke:var(--ink);stroke-wid
 .no-exercise{font-size:16px!important;line-height:1.25}
 .test-notice{padding:10px 16px;background:var(--ink);color:var(--bg);font:500 14px/1.4 var(--sans);text-align:center}
 [aria-busy=true]{opacity:.5;pointer-events:none;transition:opacity 120ms linear 150ms}
+img.assistant-spark{width:24px;height:24px;border-radius:6px;flex:none}
+/* iOS clips glyphs of this script font at each animated letter box: the T and f lost their crossbars. */
+@media (hover:none) and (pointer:coarse){.handwritten-letter{padding:.3em .3em;margin:-.3em -.3em}}
