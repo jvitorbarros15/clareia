@@ -14,13 +14,13 @@
   if (categories.includes(initial.get('categoria')) || initial.get('categoria') === 'Todas') fromURL.category = initial.get('categoria');
   if (['total', 'mensal'].includes(initial.get('metrica'))) fromURL.metric = initial.get('metrica');
   if (['gastos', 'menos', 'projetos'].includes(initial.get('aba'))) fromURL.tab = initial.get('aba');
-  if (D.dataset().some(p => p.uf === initial.get('uf'))) fromURL.uf = initial.get('uf');
+  if (D.dataset().some(p => !p.noExercise && p.uf === initial.get('uf'))) fromURL.uf = initial.get('uf');
   const state = {
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
     tab: fromURL.tab ?? 'gastos',
-    query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
+    query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && !D.dataset().find(p => p.id === initial.get('destaque'))?.noExercise ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
   let dialogTrigger = null, toastTimer, listOrigin = null;
   const $ = selector => document.querySelector(selector);
@@ -130,8 +130,8 @@
     if (!state.answer) return '';
     const answer = state.answer;
     if (answer.type === 'message') return `<section class="answer" aria-label="Resposta da investigação"><p class="eyebrow">Busca por regras locais · sem IA conectada</p><div class="answer-message"><h3>${escape(answer.title)}</h3><p>${escape(answer.message)}</p><div class="answer-next"><span>Tente:</span>${examples().slice(0, 2).map(q => `<button type="button" class="outline-button" data-question="${escape(q)}">${escape(q)}</button>`).join('')}</div></div></section>`;
-    const ppl = answer.ids.map(person).filter(Boolean);
-    if (!ppl.length) return `<section class="answer"><p class="eyebrow">Resultado da investigação</p><p>Nenhum deputado com exercício confirmado neste recorte.</p></section>`;
+    const ppl = answer.ids.map(person).filter(p => p && !p.noExercise);
+    if (!ppl.length || ppl.length < answer.ids.length && answer.ids.length === 2) return `<section class="answer"><p class="eyebrow">Resultado da investigação</p><p>Nenhum deputado com exercício confirmado neste recorte.</p></section>`;
     const max = Math.max(1, ...ppl.map(p => Math.abs(value(p, answer.kind))));
     let summary = '';
     if (answer.type === 'compare') {
@@ -279,7 +279,7 @@
     return `<section class="detail-section"><h3>Despesas de ${escape(first(p))}</h3>${list.map(item => `<div class="category-row"><div class="category-head"><span>${escape(label(item.category))}</span><strong>${money(item.total)}</strong></div><small class="source-name">Nome na fonte: ${escape(item.category)}</small><span class="track"><i style="width:${Math.abs(item.total) / max * 100}%;opacity:.7"></i></span></div>`).join('')}<p class="context">Total do período: ${money(totalOf(p))}. ${state.category !== 'Todas' ? `O recorte atual usa apenas ${escape(label(state.category))}.` : ''}</p></section>`;
   }
   function evidence(id, options = {}) {
-    if (person(id)?.noExercise && !options.kindProjects) { showDialog('Sem exercício confirmado', `<p>${escape(person(id).name)} não tem exercício de mandato confirmado em ${state.year} nas fontes oficiais, e não há despesas nesse período. Por isso não aparece valor nem entra no ranking de gastos.</p>`); return; }
+    if (person(id)?.noExercise && options.kind !== 'projetos') { showDialog('Sem exercício confirmado', `<p>${escape(person(id).name)} não tem exercício de mandato confirmado em ${state.year} nas fontes oficiais, e não há despesas nesse período. Por isso não aparece valor nem entra no ranking de gastos.</p>`); return; }
     const p = person(id), kind = options.kind || state.tab, comparison = options.compare ? person(options.compare) : null;
     if (kind === 'projetos' && window.ClareiaData.billsApproved) { showDialog('Projetos de lei', `<p>A autoria e a situação de cada proposta estão na seção de atividade.</p>${sourceNote()}`); return; }
     if (kind === 'projetos') { showDialog('Projetos de lei', `<p class="records-note">Projetos de lei ainda não foram coletados nesta versão.</p><p>A próxima etapa inclui PL, PLP e PEC, separando autoria principal de coautoria. Nenhum número é mostrado antes da conferência.</p>${sourceNote()}`); return; }
@@ -334,7 +334,7 @@
   }
   function profile(id) {
     const p = person(id), peer = byTotal().find(other => other.id !== id);
-    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${p.months} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : `${money(value(p, 'gastos'))} ↗`}</strong></button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗</a>` : ''}</div>${sourceNote()}`);
+    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : `${money(value(p, 'gastos'))} ↗`}</strong></button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗</a>` : ''}</div>${sourceNote()}`);
   }
   function methodology() {
     const v = index.validation, audit = index.audit, compare = v.apiComparison;
