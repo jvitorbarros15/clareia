@@ -1549,6 +1549,15 @@ check('map metric is a segmented control', async () => {
   await page.close();
 });
 
+check('party is never shown as if it were the party of the period without approved coverage', async () => {
+  const page = await at(1440);
+  const summary = await page.evaluate(async () => { const m = await fetch('/manifest.json').then(r => r.json()); return fetch('/' + m.base + '/summary.json').then(r => r.json()); });
+  const contexts = await page.locator('.editorial-person-context').allInnerTexts();
+  assert.ok(contexts.length > 0, 'cards rendered');
+  if (!summary.coverageId) for (const c of contexts) assert.match(c, /\(atual\)|Deputado/, c);
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;

@@ -5,14 +5,23 @@
   const json = async url => { const r = await fetch(url); if (!r.ok) throw new Error('Versão indisponível. Nenhum valor foi estimado.'); return r.json(); };
   const load = src => new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('Falha ao carregar ' + src)); document.body.appendChild(s); });
   try {
-    const manifest = await json('/manifest.json'), base = '/' + manifest.base, index = await json(base + '/index.json');
+    const manifest = await json('/manifest.json'), base = '/' + manifest.base, index = await json(base + '/index.json'), summary = await json(base + '/summary.json');
+    // Only an approved monthly coverage can name the party of a past expense; otherwise the current one is labelled as such.
+    const partyOfPeriod = (id, current) => {
+      if (!summary.coverageId) return current ? `${current} (atual)` : null;
+      const months = summary.people.find(p => p.id === id)?.months ?? [], served = months.filter(m => m.partyStatus !== 'not-applicable');
+      if (!served.length || served.some(m => m.partyStatus === 'unavailable' || m.partyStatus === 'unknown')) return 'Partido indisponível';
+      if (served.some(m => m.partyStatus === 'review' || m.partyStatus === 'conflict')) return 'Partido em revisão';
+      const parties = [...new Set(served.flatMap(m => m.party ? [m.party] : m.partyValues))];
+      return parties.join(' → ');
+    };
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const people = await Promise.all(index.scope.ids.map(async id => {
       const r = await fetch(`${base}/deputados/${id}/despesas.json`);
       if (!r.ok && r.status !== 404) throw new Error('Versão indisponível. Nenhum valor foi estimado.');
       const raw = r.status === 404 ? [] : await r.json(), info = index.people.find(p => p.id === id) || { name: 'ID ' + id };
       const records = raw.map(x => ({ id: x.id, date: x.date, month: x.month - 1, category: x.category, amount: x.cents, supplier: x.supplier, raw: x }));
-      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, party: info.party ?? null, profileFetchedAt: info.profileFetchedAt, months: index.scope.months.length, projects: null, votes: null, records, total: records.reduce((n, x) => n + x.amount, 0) };
+      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, party: partyOfPeriod(id, info.party ?? null), profileFetchedAt: info.profileFetchedAt, months: index.scope.months.length, projects: null, votes: null, records, total: records.reduce((n, x) => n + x.amount, 0) };
     }));
     const byCategory = new Map();
     for (const p of people) for (const r of p.records) byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.amount));
