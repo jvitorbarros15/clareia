@@ -11,7 +11,7 @@ import {readLocalPeopleKey} from '../src/people-history.ts';
 import {open,vaultKey} from '../src/vault.ts';
 
 const args=process.argv.slice(2),value=(name:string)=>{const i=args.indexOf(name);return i<0?'':args[i+1]??'';};
-if(args.includes('--help')){console.log('npm run collect:votes -- --local --year AAAA --run ID [--offline]\nDois passes de votações, votos e objetos. Resultado apenas para revisão, sem publicação.');process.exit(0);}
+if(args.includes('--help')){console.log('npm run collect:votes -- --local --year AAAA --run ID [--offline]\nDois passes de votações, votos e proposições afetadas. Resultado apenas para revisão, sem publicação.');process.exit(0);}
 for(let i=0;i<args.length;i++){if(['--local','--offline'].includes(args[i]))continue;if(['--year','--run'].includes(args[i])&&args[i+1]&&!args[i+1].startsWith('--')){i++;continue;}throw new Error('Argumento inválido');}
 const year=Number(value('--year')),runId=value('--run');
 if(!/^20\d{2}$/.test(String(year))||!/^[a-zA-Z0-9-]{1,80}$/.test(runId))throw new Error('Ano ou execução inválidos');
@@ -22,7 +22,7 @@ try{
   const passes=[];
   for(const pass of [1,2]){
     const c=new PeopleCapture(path.join(root,'pass-'+pass),key,args.includes('--offline')?async()=>new Response('',{status:404}):undefined);
-    const votes=await c.get(voteFileUrl('votacoes',year)),ballots=await c.get(voteFileUrl('votacoesVotos',year)),objects=await c.get(voteFileUrl('votacoesObjetos',year));
+    const votes=await c.get(voteFileUrl('votacoes',year)),ballots=await c.get(voteFileUrl('votacoesVotos',year)),objects=await c.get(voteFileUrl('votacoesProposicoes',year));
     passes.push({derived:await deriveVotes(year,votes.bytes,ballots.bytes,objects.bytes),sources:c.captures.map(s=>({...s,pass})) as VoteSource[]});
   }
   if(canonical(passes[0].derived)!==canonical(passes[1].derived))throw new Error('Arquivos mudaram entre os passes; nada foi aprovado');

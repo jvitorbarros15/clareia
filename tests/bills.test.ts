@@ -89,3 +89,7 @@ test('a different norm cited in another entry or a norm older than the bill stay
   assert.equal(normFromTramitacoes('PL',[{despacho:'Transformado na Lei Ordinária 15172/2025'},{despacho:'Retificação: Lei Ordinária 15173/2025'}]),null);
   assert.equal(normFromTramitacoes('PL',said('Transformado na Lei Ordinária 8666/1993.'),2025),null);
 });
+
+test('a CPF in a bill summary is removed and the audit agrees',async()=>{
+  const r=await derive([bill(1).replace('Ementa 1','Ementa 529.982.247-25')],[author(1,10,1,1)]);assert.equal(r.bills[0].summary,'Ementa [CPF omitido]');
+});

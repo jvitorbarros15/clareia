@@ -1,10 +1,12 @@
 import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
 import {canonical,hash} from './model.ts';
+import {redactCpf} from './cpf-scan.ts';
 
-export const voteFileUrl=(kind:'votacoes'|'votacoesVotos'|'votacoesObjetos',year:number)=>`https://dadosabertos.camara.leg.br/arquivos/${kind}/csv/${kind}-${year}.csv`;
+export const voteFileUrl=(kind:'votacoes'|'votacoesVotos'|'votacoesProposicoes',year:number)=>`https://dadosabertos.camara.leg.br/arquivos/${kind}/csv/${kind}-${year}.csv`;
 export type VoteObject={billId:number|null;title:string|null;summary:string|null};
-export type Vote={id:string;date:string;organ:string;approved:string|null;description:string;objects:VoteObject[];declared:{yes:number;no:number;other:number};observed:Record<string,number>;ballots:number;issues:string[]};
+export type VoteKind='merito'|'requerimento'|'destaque'|'outro';
+export type Vote={id:string;date:string;organ:string;approved:string|null;kind:VoteKind;description:string;objects:VoteObject[];declared:{yes:number;no:number;other:number};observed:Record<string,number>;ballots:number;issues:string[]};
 export type Ballot=[voteId:string,deputyId:number,category:string];
 export type VoteSource={url:string;sha256:string;file:string;bytes:number;fetchedAt:string;pass?:number};
 export type VotesReport={schema:'clareia.votes.v1';contentSha256:string;status:'review-required';publicationEligible:false;year:number;createdAt:string;sources:VoteSource[];votes:Vote[];ballotsSha256:string;metrics:{votes:number;nominal:number;reconciled:number;held:number;ballots:number;orphanBallots:number;categories:Record<string,number>}};
@@ -18,6 +20,14 @@ async function rows(bytes:Uint8Array,required:string[],visit:(row:Row)=>void):Pr
   for await(const row of stream)visit(row as Row);
 }
 const count=(value:string)=>/^\d{1,4}$/.test(value)?Number(value):null;
+// Read only from the official description. Anything not clearly one of these stays 'outro'.
+export function classifyVote(description:string):VoteKind{
+  const head=description.split(/[,.:]/)[0];
+  if(/requerimento/i.test(head))return 'requerimento';
+  if(/^\s*(mantid|suprimid)/i.test(head)||/destaque|destacad/i.test(head)||/\b(sub)?emendas?\b/i.test(head)&&!/substitutiv/i.test(head))return 'destaque';
+  if(/\b(projeto|substitutivo|substitutiva|parecer|reda[çc][ãa]o|medida|mat[ée]ria|proposta)\b/i.test(head))return 'merito';
+  return 'outro';
+}
 export const votesContentId=(r:Pick<VotesReport,'schema'|'year'|'votes'|'ballotsSha256'|'metrics'>)=>hash(canonical({schema:r.schema,year:r.year,votes:r.votes,ballotsSha256:r.ballotsSha256,metrics:r.metrics}));
 export const ballotsHash=(ballots:Ballot[])=>hash(canonical(ballots));
 
@@ -29,9 +39,9 @@ export async function deriveVotes(year:number,votes:Uint8Array,ballots:Uint8Arra
   await rows(votes,VOTE_COLUMNS,r=>{
     if(list.has(r.id))throw new Error('Votação repetida no arquivo');
     const yes=count(r.votosSim),no=count(r.votosNao),other=count(r.votosOutros);if(yes===null||no===null||other===null)throw new Error('Placar inválido');
-    list.set(r.id,{id:r.id,date:r.data,organ:r.siglaOrgao,approved:r.aprovacao||null,description:r.descricao,objects:[],declared:{yes,no,other},observed:{},ballots:0,issues:r.data.startsWith(String(year))?[]:['year-date-mismatch']});
+    list.set(r.id,{id:r.id,date:r.data,organ:r.siglaOrgao,approved:r.aprovacao||null,kind:classifyVote(r.descricao),description:redactCpf(r.descricao),objects:[],declared:{yes,no,other},observed:{},ballots:0,issues:r.data.startsWith(String(year))?[]:['year-date-mismatch']});
   });
-  await rows(objects,OBJECT_COLUMNS,r=>{list.get(r.idVotacao)?.objects.push({billId:/^[1-9]\d*$/.test(r.proposicao_id)?Number(r.proposicao_id):null,title:r.proposicao_titulo||null,summary:r.proposicao_ementa||null});});
+  await rows(objects,OBJECT_COLUMNS,r=>{list.get(r.idVotacao)?.objects.push({billId:/^[1-9]\d*$/.test(r.proposicao_id)?Number(r.proposicao_id):null,title:r.proposicao_titulo?redactCpf(r.proposicao_titulo):null,summary:r.proposicao_ementa?redactCpf(r.proposicao_ementa):null});});
   const seen=new Set<string>(),out:Ballot[]=[],categories:Record<string,number>={};let orphanBallots=0;
   await rows(ballots,BALLOT_COLUMNS,r=>{
     const vote=list.get(r.idVotacao);if(!vote){orphanBallots++;return;}

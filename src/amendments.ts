@@ -9,13 +9,15 @@ export const MEASURES=['committed','liquidated','paid','carriedOver','carriedCan
 export type Measure=typeof MEASURES[number];
 export type Totals=Record<Measure,number>&{rows:number};
 const COLUMNS:Record<Measure,string>={committed:'Valor Empenhado',liquidated:'Valor Liquidado',paid:'Valor Pago',carriedOver:'Valor Restos A Pagar Inscritos',carriedCancelled:'Valor Restos A Pagar Cancelados',carriedPaid:'Valor Restos A Pagar Pagos'};
-export type AmendmentAuthor={code:string;name:string;names:string[];years:Record<string,Totals>};
+export type AuthorYear=Totals&{destinations:Record<string,Totals>};
+export type AmendmentAuthor={code:string;name:string;names:string[];years:Record<string,AuthorYear>};
 export type AmendmentLink={code:string;name:string;status:'proposed'|'ambiguous'|'unmatched';candidates:number[]};
 export type AmendmentSource={url:string;sha256:string;file:string;bytes:number;fetchedAt:string;pass?:number};
 export type AmendmentsReport={schema:'clareia.amendments.v1';contentSha256:string;status:'review-required';publicationEligible:false;fromYear:number;createdAt:string;sources:AmendmentSource[];authors:AmendmentAuthor[];links:AmendmentLink[];excluded:Record<string,Totals>;metrics:{rows:number;selected:number;individual:number;unattributed:number;repeatedRows:number}};
 export type KnownPerson={id:number;name:string};
 
 const empty=():Totals=>({rows:0,committed:0,liquidated:0,paid:0,carriedOver:0,carriedCancelled:0,carriedPaid:0});
+const DESTINATION='Localidade de aplicação do recurso';
 const BLANK_AUTHORS=new Set(['','S/I','-99']);
 export function brlCents(value:string):number{
   if(!/^-?\d+(?:,\d{1,2})?$/.test(value))throw new Error('Valor monetário inválido');
@@ -31,7 +33,7 @@ const add=(t:Totals,r:Record<string,string>)=>{t.rows++;for(const m of MEASURES)
 // Measures are never added to each other. Only individual amendments can reach a person, and
 // a name match is only a proposal: an unreviewed link never attributes money to anyone.
 export async function deriveAmendments(csvBytes:Uint8Array,fromYear:number,people:KnownPerson[]):Promise<Pick<AmendmentsReport,'authors'|'links'|'excluded'|'metrics'>>{
-  const text=new TextDecoder('latin1').decode(csvBytes),required=['Ano da Emenda','Tipo de Emenda','Código do Autor da Emenda','Nome do Autor da Emenda',...Object.values(COLUMNS)];
+  const text=new TextDecoder('latin1').decode(csvBytes),required=[DESTINATION,'Ano da Emenda','Tipo de Emenda','Código do Autor da Emenda','Nome do Autor da Emenda',...Object.values(COLUMNS)];
   const stream=Readable.from([text]).pipe(parse({delimiter:';',skip_empty_lines:true,columns:(h:string[])=>{for(const f of required)if(!h.includes(f))throw new Error('Contrato CSV de emendas mudou: coluna ausente '+f);return h;}}));
   const authors=new Map<string,AmendmentAuthor>(),excluded:Record<string,Totals>={},seen=new Set<string>();let rows=0,selected=0,individual=0,unattributed=0,repeatedRows=0;
   for await(const r of stream as AsyncIterable<Record<string,string>>){
@@ -42,7 +44,8 @@ export async function deriveAmendments(csvBytes:Uint8Array,fromYear:number,peopl
     individual++;
     if(BLANK_AUTHORS.has(code)){unattributed++;add(excluded['Emenda individual sem autor identificado']??=empty(),r);continue;}
     const authorName=r['Nome do Autor da Emenda'].trim(),author=authors.get(code)??{code,name:authorName,names:[],years:{}};if(!author.names.includes(authorName)){author.names.push(authorName);author.names.sort();author.name=author.names[0];}
-    add(author.years[year]??=empty(),r);authors.set(code,author);
+    const totals=author.years[year]??={...empty(),destinations:{}},destination=r[DESTINATION].trim()||'Sem localidade informada';
+    add(totals,r);add(totals.destinations[destination]??=empty(),r);authors.set(code,author);
   }
   const byName=new Map<string,number[]>();for(const p of people){const k=normalizeName(p.name);byName.set(k,[...(byName.get(k)??[]),p.id]);}
   const list=[...authors.values()].sort((a,b)=>a.code.localeCompare(b.code));

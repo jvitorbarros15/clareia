@@ -12,6 +12,8 @@ export function validCpf(digits:string):boolean{
   const check=(size:number)=>{const sum=[...digits.slice(0,size)].reduce((n,c,i)=>n+Number(c)*(size+1-i),0),rest=sum*10%11;return rest===10?0:rest;};
   return check(9)===Number(digits[9])&&check(10)===Number(digits[10]);
 }
+// Official free text can carry a formatted CPF; it must not reach any report or the site.
+export const redactCpf=(text:string)=>text.replace(/(?<![\d.])\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)/g,'[CPF omitido]');
 // Plain 11-digit numbers are usually document numbers, so they only count when this run saw them as a CPF.
 export function findCpfs(text:string,known:Set<string>):number{
   const formatted=[...text.matchAll(/(?<![\d.])\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)/g)].filter(m=>validCpf(m[0].replace(/\D/g,''))).length;

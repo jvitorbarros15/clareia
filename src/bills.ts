@@ -1,6 +1,7 @@
 import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
 import {canonical,hash} from './model.ts';
+import {redactCpf} from './cpf-scan.ts';
 
 export const BILL_TYPES=['PL','PLP','PEC'] as const;
 export const billsUrl=(year:number)=>`https://dadosabertos.camara.leg.br/arquivos/proposicoes/csv/proposicoes-${year}.csv`;
@@ -42,7 +43,7 @@ export async function deriveBills(year:number,bills:Uint8Array,authors:Uint8Arra
     const id=positive(r.id),number=positive(r.numero);if(id===null||number===null||r.ano!==String(year))throw new Error('Identificação de proposição inválida');
     if(selected.has(id))throw new Error('Proposição repetida no arquivo');
     const presentedAt=r.dataApresentacao||null,issues=presentedAt?.slice(0,4)===String(year)?[]:['year-date-mismatch'];
-    selected.set(id,{id,type:r.siglaTipo,number,year,presentedAt,summary:r.ementa,situation:r.ultimoStatus_descricaoSituacao||null,situationAt:r.ultimoStatus_dataHora||null,url:r.urlInteiroTeor||null,authors:[],otherAuthors:0,otherProponents:0,issues,normStatus:r.ultimoStatus_descricaoSituacao===NORM_SITUATION?'unresolved':'none',norm:null});
+    selected.set(id,{id,type:r.siglaTipo,number,year,presentedAt,summary:redactCpf(r.ementa),situation:r.ultimoStatus_descricaoSituacao||null,situationAt:r.ultimoStatus_dataHora||null,url:r.urlInteiroTeor||null,authors:[],otherAuthors:0,otherProponents:0,issues,normStatus:r.ultimoStatus_descricaoSituacao===NORM_SITUATION?'unresolved':'none',norm:null});
   });
   let orphanAuthorRows=0;const seen=new Set<string>(),withRows=new Set<number>();
   await rows(authors,AUTHOR_COLUMNS,r=>{

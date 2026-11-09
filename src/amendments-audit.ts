@@ -1,7 +1,7 @@
 import {parse} from 'csv-parse/sync';
 import {canonical,hash} from './model.ts';
 import {amendmentsContentId,amendmentsCsv,AMENDMENTS_URL} from './amendments.ts';
-import type {AmendmentsReport,AmendmentSource} from './amendments.ts';
+import type {AmendmentsReport,AmendmentSource,Totals} from './amendments.ts';
 
 const FIELDS=[['committed','Valor Empenhado'],['liquidated','Valor Liquidado'],['paid','Valor Pago'],['carriedOver','Valor Restos A Pagar Inscritos'],['carriedCancelled','Valor Restos A Pagar Cancelados'],['carriedPaid','Valor Restos A Pagar Pagos']] as const;
 const cents=(v:string)=>{const sign=v.startsWith('-')?-1n:1n,[a,b='']=v.replace('-','').split(',');return sign*(BigInt(a)*100n+BigInt((b+'00').slice(0,2)));};
@@ -24,7 +24,7 @@ export async function auditAmendments(report:AmendmentsReport,read:(s:AmendmentS
     if(['','S/I','-99'].includes(code))bump('x|Emenda individual sem autor identificado',r);else bump('a|'+code+'|'+r['Ano da Emenda'],r);
   }
   if(report.metrics.rows!==rows.length||report.metrics.selected!==selected||report.metrics.individual!==individual)failures.push('row-counts');
-  const shown=new Map<string,bigint[]>(),put=(key:string,t:Record<string,number>)=>shown.set(key,[BigInt(t.rows),...FIELDS.map(([m])=>BigInt(t[m]))]);
+  const shown=new Map<string,bigint[]>(),put=(key:string,t:Totals)=>shown.set(key,[BigInt(t.rows),...FIELDS.map(([m])=>BigInt(t[m]))]);
   for(const a of report.authors)for(const [y,t] of Object.entries(a.years))put('a|'+a.code+'|'+y,t);
   for(const [type,t] of Object.entries(report.excluded))put('x|'+type,t);
   const flat=(m:Map<string,bigint[]>)=>canonical([...m].map(([k,v])=>[k,v.map(String)]).sort(([a],[b])=>String(a).localeCompare(String(b))));

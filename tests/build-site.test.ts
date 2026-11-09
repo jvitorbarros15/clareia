@@ -192,3 +192,14 @@ test('approved bills must cover the year shown on the site',()=>{
   const v=version([record(100,1,0)]),input={publicationId:v.id,scope:v.scope,people:v.people,records:v.records,expectedTotalCents:100,coverageId:null,coverage:[],billsId:'x',bills:[]};
   assert.throws(()=>buildSiteSummary({...input,billsYears:[2024]}),/não cobrem/);assert.equal(buildSiteSummary({...input,billsYears:[2025]}).billsYears[0],2025);
 });
+
+test('approved bills and votes produce a per-deputy activity file and held votes stay out',()=>setup(async(db,dist,portraits)=>{
+  const {storeVotesVersion}=await import('../src/votes-publication.ts');
+  const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const vote=(id:string,issues:string[])=>({id,date:'2025-03-01',organ:'PLEN',approved:'1',kind:'merito' as const,description:'Aprovado o Projeto',objects:[{billId:5,title:'PL 5/2025',summary:null}],declared:{yes:1,no:0,other:0},observed:{Sim:1},ballots:1,issues});
+  const ballots:[string,number,string][]=[['ok',1,'Sim'],['held',1,'Sim']],votes=[vote('held',['empty-ballot']),vote('ok',[])],meta={schema:'clareia.votes-version.v1' as const,metric:'camara.votes.nominal.v1' as const,scope:{years:[2025]}};
+  const v={...meta,id:hash(canonical({schema:meta.schema,metric:meta.metric,scope:meta.scope,votes,ballotsSha256:hash(canonical(ballots))})),collectedAt:'2026-11-09T00:00:00Z',publishedAt:'2026-11-09T00:00:00Z',votes,ballots};
+  await storeVotesVersion(db,v);await recordDomainAudit(db,v.id,'passed',report);
+  const built=await buildSite(db,dist,portraits),activity=await json(dist,'data',built.publicationId,'atividade','1.json'),summary=await json(dist,'data',built.publicationId,'summary.json');
+  assert.deepEqual(activity.votes.map((x:{id:string})=>x.id),['ok']);assert.deepEqual(activity.votes[0].matters,['PL 5/2025']);assert.deepEqual(summary.people[0].votes,{Sim:1});assert.equal(JSON.stringify(activity).includes('cents'),false);
+}));

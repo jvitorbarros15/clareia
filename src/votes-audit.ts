@@ -29,6 +29,8 @@ export async function auditVotes(report:VotesReport,ballots:Ballot[],read:(sourc
     if(bad)issues.push('invalid-deputy');if(dup)issues.push('repeated-ballot');
     if(!n&&Number(d.votosSim)+Number(d.votosNao)+Number(d.votosOutros)>0)issues.push('ballots-missing');
     if(n){if(tally['']!==undefined)issues.push('empty-ballot');if(yes!==Number(d.votosSim))issues.push('yes-mismatch');if(no!==Number(d.votosNao))issues.push('no-mismatch');if(n-yes-no!==Number(d.votosOutros))issues.push('other-mismatch');}
+    const lead=d.descricao.split(/[,.:]/)[0].toLowerCase(),kind=lead.includes('requerimento')?'requerimento':/^\s*(mantid|suprimid)/.test(lead)||lead.includes('destaque')||lead.includes('destacad')||(/\b(sub)?emendas?\b/.test(lead)&&!lead.includes('substitutiv'))?'destaque':/\b(projeto|substitutivo|substitutiva|parecer|redação|redacao|medida|matéria|materia|proposta)\b/.test(lead)?'merito':'outro';
+    if(kind!==v.kind)failures.push('kind-'+d.id);
     if(canonical(issues.sort())!==canonical(v.issues))failures.push('issues-'+d.id);
     if(canonical(Object.entries(tally).sort(([a],[b])=>a.localeCompare(b)))!==canonical(Object.entries(v.observed).sort(([a],[b])=>a.localeCompare(b)))||v.ballots!==n)failures.push('tally-'+d.id);
     total+=n;if(issues.length)held++;

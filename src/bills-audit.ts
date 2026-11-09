@@ -41,7 +41,7 @@ export async function auditBills(report:BillsReport,read:(source:BillSource)=>Pr
     if(deputies.some(a=>!['0','1'].includes(a.proponente)))expected.add('invalid-author-flag');
     if(new Set(deputies.map(a=>a.idDeputadoAutor)).size!==deputies.length)expected.add('repeated-author-row');
     if(canonical([...expected].sort())!==canonical(bill.issues))failures.push('issues-'+p.id);
-    if(bill.situation!==(p.ultimoStatus_descricaoSituacao||null)||bill.summary!==p.ementa||bill.type!==p.siglaTipo)failures.push('fields-'+p.id);
+    if(bill.situation!==(p.ultimoStatus_descricaoSituacao||null)||bill.summary!==p.ementa.replace(/(?<![0-9.])[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}(?![0-9])/g,'[CPF omitido]')||bill.type!==p.siglaTipo)failures.push('fields-'+p.id);
     const isNorm=p.ultimoStatus_descricaoSituacao==='Transformado em Norma Jurídica',norm=isNorm?await normOf(p.id,p.siglaTipo):null;
     if(bill.normStatus!==(isNorm?norm?'resolved':'unresolved':'none')||(norm&&(bill.norm?.number!==norm.number||bill.norm.year!==norm.year||bill.norm.kind.toLowerCase()!==norm.kind)))failures.push('norm-'+p.id);
     if(!isNorm&&bill.norm)failures.push('norm-'+p.id);

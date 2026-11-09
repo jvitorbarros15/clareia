@@ -11,4 +11,4 @@ Fonte: arquivo EmendasParlamentares.zip do Portal da Transparência (CGU). Usa a
 
 ## Falta
 
-Tabela revisada código CGU para ID Câmara, destino da emenda, tabela própria, publicação com aprovação e ligação com o site. `publicationEligible` continua falso.
+Revisar as ligações (`--links`, com revisor, data e evidência) e ligar ao site. O destino é a localidade como a fonte escreve; valores nacionais ou múltiplos não são redistribuídos.

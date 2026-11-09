@@ -7,9 +7,9 @@ import type {AmendmentSource} from '../src/amendments.ts';
 import {auditAmendments} from '../src/amendments-audit.ts';
 import {sourceAllowed} from '../src/people-discovery.ts';
 
-const head='"Ano da Emenda";"Tipo de Emenda";"Código do Autor da Emenda";"Nome do Autor da Emenda";"Valor Empenhado";"Valor Liquidado";"Valor Pago";"Valor Restos A Pagar Inscritos";"Valor Restos A Pagar Cancelados";"Valor Restos A Pagar Pagos"';
+const head='"Localidade de aplicação do recurso";"Ano da Emenda";"Tipo de Emenda";"Código do Autor da Emenda";"Nome do Autor da Emenda";"Valor Empenhado";"Valor Liquidado";"Valor Pago";"Valor Restos A Pagar Inscritos";"Valor Restos A Pagar Cancelados";"Valor Restos A Pagar Pagos"';
 const IND='Emenda Individual - Transferências Especiais';
-const row=(year:number,type:string,code:string,name:string,committed='100,00',paid='40,50')=>`"${year}";"${type}";"${code}";"${name}";"${committed}";"0,00";"${paid}";"0,00";"0,00";"0,00"`;
+const row=(year:number,type:string,code:string,name:string,committed='100,00',paid='40,50')=>`"SP";"${year}";"${type}";"${code}";"${name}";"${committed}";"0,00";"${paid}";"0,00";"0,00";"0,00"`;
 const latin=(lines:string[])=>Uint8Array.from(Buffer.from([head,...lines].join('\n')+'\n','latin1'));
 const people=[{id:1,name:'Ana Lúcia'},{id:2,name:'Bruno Reis'},{id:3,name:'Bruno Reis'}];
 
@@ -18,7 +18,7 @@ test('money is parsed to integer cents, including negative values',()=>{
 });
 test('measures stay separate per author and year and earlier years are left out',async()=>{
   const r=await deriveAmendments(latin([row(2024,IND,'10','ANA LÚCIA'),row(2024,IND,'10','ANA LÚCIA','50,25','0,00'),row(2025,IND,'10','ANA LÚCIA'),row(2020,IND,'10','ANA LÚCIA')]),2023,people);
-  assert.deepEqual(r.authors[0].years['2024'],{rows:2,committed:15025,liquidated:0,paid:4050,carriedOver:0,carriedCancelled:0,carriedPaid:0});assert.equal(r.authors[0].years['2020'],undefined);assert.equal(r.metrics.selected,3);
+  assert.deepEqual(r.authors[0].years['2024'],{rows:2,committed:15025,liquidated:0,paid:4050,carriedOver:0,carriedCancelled:0,carriedPaid:0,destinations:{SP:{rows:2,committed:15025,liquidated:0,paid:4050,carriedOver:0,carriedCancelled:0,carriedPaid:0}}});assert.equal(r.authors[0].years['2020'],undefined);assert.equal(r.metrics.selected,3);
 });
 test('only individual amendments reach an author; bench, committee, rapporteur and unknown authors stay apart',async()=>{
   const r=await deriveAmendments(latin([row(2024,'Emenda de Bancada','8100','BANCADA'),row(2024,'Emenda de Relator','8100','RELATOR'),row(2024,IND,'S/I','Sem informação'),row(2024,IND,'-99','Sem informação')]),2023,people);

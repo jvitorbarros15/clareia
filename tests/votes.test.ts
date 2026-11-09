@@ -55,3 +55,8 @@ test('the audit recounts each category and catches changed tallies, holds and ba
   assert.ok((await edit(r=>{r.votes[1].issues=[];})).failures.includes('issues-b'));
   assert.ok((await auditVotes(report,[...derived.ballots,['a',9,'Sim']],read)).failures.includes('ballots-hash'));
 });
+
+test('a CPF written in official free text is removed before anything is kept',async()=>{
+  const r=await derive([vote('a',0,0,0).replace('Aprovado','Aprovado 529.982.247-25')],[],['"a";"10";"PL 1/2025";"Pensão a Fulana (CPF 529.982.247-25), filha"']);
+  assert.equal(JSON.stringify(r).includes('529.982'),false);assert.match(r.votes[0].objects[0].summary!,/\[CPF omitido\]/);
+});

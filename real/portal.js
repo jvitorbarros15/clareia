@@ -188,13 +188,32 @@
   }
   function projectCards() { return ''; }
 
+  const activityCache=new Map();
+  const activityData=id=>{if(!activityCache.has(id))activityCache.set(id,fetch(window.ClareiaData.activityUrl(id)).then(r=>{if(!r.ok)throw new Error();return r.json();}));return activityCache.get(id);};
+  const activityPerson=()=>state.activity&&C.person(state.activity)?state.activity:C.byTotal()[0].id;
+  const activitySelect=name=>`<label class="activity-person">Deputado<select id="activity-${name}">${C.byTotal().map(p=>`<option value="${p.id}" ${p.id===activityPerson()?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>`;
+  const KIND={merito:'Mérito',requerimento:'Requerimento',destaque:'Emenda ou destaque',outro:'Outro'};
+  const shortDate=value=>value?value.slice(8,10)+'/'+value.slice(5,7)+'/'+value.slice(0,4):'';
+  function billItem(b){const role=b.proponent?(b.joint?'Proponente, em conjunto':'Proponente'):'Coautoria';return `<li class="activity-item"><div class="activity-meta"><b>${esc(b.type)} ${b.number}/${b.year}</b><span>${role}</span></div><p>${esc(b.summary)}</p><p class="activity-state">${b.norm?`Virou ${esc(b.norm.kind)} ${esc(b.norm.number)}/${b.norm.year}`:esc(b.situation||'Situação não informada')}${b.situationAt?` · situação em ${shortDate(b.situationAt)}`:''}</p><a class="p-link" href="https://www.camara.leg.br/propostas-legislativas/${b.id}" rel="noopener" target="_blank">Ver na Câmara ↗</a></li>`;}
+  function voteItem(v){return `<li class="activity-item"><div class="activity-meta"><b>${shortDate(v.date)} · ${esc(v.organ)}</b><span>${KIND[v.kind]||'Outro'}</span></div>${v.matters.length?`<p class="activity-matter">${v.matters.map(esc).join(', ')}</p>`:''}<p>${esc(v.description)}</p><p class="activity-state">Voto registrado: <b>${esc(v.category)}</b></p><a class="p-link" href="https://dadosabertos.camara.leg.br/api/v2/votacoes/${encodeURIComponent(v.id)}" rel="noopener" target="_blank">Ver na fonte ↗</a></li>`;}
+  async function hydrateActivity(){
+    const id=activityPerson(),person=C.person(id),official=person.officialId,info=window.ClareiaData.activitySummary(official);
+    const fill=(selector,html)=>{const el=$(selector);if(el)el.innerHTML=html;};
+    let data;try{data=await activityData(official);}catch{fill('#bills-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');fill('#votes-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');return;}
+    if(activityPerson()!==id)return;
+    if(info?.bills)fill('#bills-list',`<div class="activity-numbers"><div><strong>${number(info.bills.proposed)}</strong><span>como proponente${info.bills.joint?`, ${number(info.bills.joint)} em conjunto`:''}</span></div><div><strong>${number(info.bills.coauthored)}</strong><span>em coautoria</span></div><div><strong>${number(info.bills.norms)}</strong><span>viraram norma</span></div></div><ul class="activity-list">${data.bills.map(billItem).join('')||'<li class="p-small">Nenhum projeto nesta versão.</li>'}</ul>`);
+    if(info?.votes)fill('#votes-list',`<div class="activity-numbers">${Object.entries(info.votes).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<div><strong>${number(n)}</strong><span>${esc(c)}</span></div>`).join('')}</div><ul class="activity-list">${data.votes.map(voteItem).join('')||'<li class="p-small">Nenhum voto nesta versão.</li>'}</ul>`);
+  }
+
   function projectSection() {
+    if(window.ClareiaData.billsApproved){queueMicrotask(hydrateActivity);return `${intro('05','Atividade do mandato','Ideias em movimento.',`PL, PLP e PEC de ${window.ClareiaData.billsYears.join(', ')}. Quantidade mostra atividade, não qualidade, e não é comparada com gastos.`)}${activitySelect('bills')}<div id="bills-list" aria-live="polite"><p class="p-small">Carregando…</p></div>`;}
     return `${intro('05','Além da quantidade','Ideias em movimento.','Apresentar um projeto é só o começo. Explore a proposta, a autoria e cada etapa do caminho.',badge('Próxima etapa'))}<div class="empty-state real-pending"><b>Projetos de lei ainda não foram coletados.</b><p>A próxima etapa traz PL, PLP e PEC da Câmara, separando autoria principal de coautoria e mostrando quais viraram lei. Nenhum número aparece aqui antes de ser conferido com a fonte oficial.</p></div>`;
   }
 
   function voteCards() { return ''; }
 
   function voteSection() {
+    if(window.ClareiaData.votesApproved){queueMicrotask(hydrateActivity);return `${intro('06','O voto e seu contexto','Como decidiram?',`Votações nominais de ${window.ClareiaData.votesYears.join(', ')}. Voto registrado não é presença nem falta.`)}${activitySelect('votes')}<div id="votes-list" aria-live="polite"><p class="p-small">Carregando…</p></div>`;}
     return `${intro('06','O voto e seu contexto','Como decidiram?', 'O objeto da votação vem antes do placar. Veja a etapa, o texto em discussão e a participação de cada pessoa.',badge('Próxima etapa'))}<div class="empty-state real-pending"><b>Votações nominais ainda não foram coletadas.</b><p>A próxima etapa separa a votação do projeto da votação de requerimentos e destaques. Nenhum número aparece aqui antes de ser conferido com a fonte oficial.</p></div>`;
   }
 
@@ -372,6 +391,7 @@
     const id=e.target.id,val=e.target.value;
     
     if(id==='map-select'){state.mapUF=val||null;renderPart('atlas',atlas);focusMatch('#map-select');}
+    if(id==='activity-bills'||id==='activity-votes'){state.activity=val;renderPart('projetos',projectSection);renderPart('votacoes',voteSection);focusMatch('#'+id);return;}
     if(id==='compare-a'||id==='compare-b'){const k=id==='compare-a'?'a':'b',other=k==='a'?'b':'a';if(state[other]===val)state[other]=state[k];state[k]=val;renderPart('comparacao',comparison);focusMatch('#'+id);if(editorial&&id==='compare-a'){state.voter=val;state.timeline=val;renderPart('votacoes',voteSection);renderPart('acompanhar',following);watchMotion();focusMatch('#compare-a');}}
     if(id==='project-stage'){state.stage=val;renderPart('project-grid',projectCards);watchMotion();}
     if(id==='voter'){state.voter=val;renderPart('vote-grid',voteCards);watchMotion();}
