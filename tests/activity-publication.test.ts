@@ -45,18 +45,21 @@ function amendments():AmendmentsReport{
   const year={...totals(300),rows:2,destinations:{'SP':totals(100),'Nacional':totals(200)}},authors=[{code:'10',name:'ANA',names:['ANA'],years:{'2025':year}}],metrics={rows:2,selected:2,individual:2,unattributed:0,repeatedRows:0},body={schema:'clareia.amendments.v1' as const,fromYear:2023,authors,links:[{code:'10',name:'ANA',status:'proposed' as const,candidates:[1]}],excluded:{},metrics};
   return {...body,contentSha256:amendmentsContentId(body),status:'review-required',publicationEligible:false,createdAt:now,sources:[]};
 }
+const known=new Set([1]);
 const reviewed={code:'10',deputyId:1,reviewer:'João',reviewedAt:now,evidence:'Conferido no portal'};
 test('a proposed name link attributes nothing and only a reviewed link produces rows',()=>{
   const r=amendments(),audit={status:'passed',contentSha256:r.contentSha256};
-  assert.equal(buildAmendmentsVersion(r,audit,[],now).rows.length,0);assert.equal(buildAmendmentsVersion(r,audit,[reviewed],now).rows.length,2);
-  assert.throws(()=>buildAmendmentsVersion(r,audit,[{...reviewed,deputyId:2}],now),/candidatos/);assert.deepEqual(buildAmendmentsVersion(r,audit,[reviewed],now).scope.links,[reviewed]);
-  const repeated=structuredClone(r);repeated.metrics.repeatedRows=1;repeated.contentSha256=amendmentsContentId(repeated);assert.throws(()=>buildAmendmentsVersion(repeated,{status:'passed',contentSha256:repeated.contentSha256},[],now),/repetidas/);
-  assert.throws(()=>buildAmendmentsVersion(r,audit,[{...reviewed,reviewer:''}],now),/revisão/);assert.throws(()=>buildAmendmentsVersion(r,audit,[{...reviewed,code:'99'}],now),/inexistente/);
+  assert.equal(buildAmendmentsVersion(r,audit,[],known,now).rows.length,0);assert.equal(buildAmendmentsVersion(r,audit,[reviewed],known,now).rows.length,2);
+  assert.throws(()=>buildAmendmentsVersion(r,audit,[{...reviewed,deputyId:2}],known,now),/candidatos/);assert.deepEqual(buildAmendmentsVersion(r,audit,[reviewed],known,now).reviews,[reviewed]);assert.equal(JSON.stringify(buildAmendmentsVersion(r,audit,[reviewed],known,now).scope).includes('João'),false);
+  assert.throws(()=>buildAmendmentsVersion(r,audit,[reviewed],new Set([9]),now),/desconhecido/);
+  const two=structuredClone(r);two.authors[0].names=['ANA','OUTRA'];two.links[0].candidates=[];two.links[0].status='ambiguous';two.contentSha256=amendmentsContentId(two);assert.throws(()=>buildAmendmentsVersion(two,{status:'passed',contentSha256:two.contentSha256},[reviewed],known,now),/mais de um nome/);
+  const repeated=structuredClone(r);repeated.metrics.repeatedRows=1;repeated.contentSha256=amendmentsContentId(repeated);assert.throws(()=>buildAmendmentsVersion(repeated,{status:'passed',contentSha256:repeated.contentSha256},[],known,now),/repetidas/);
+  assert.throws(()=>buildAmendmentsVersion(r,audit,[{...reviewed,reviewer:''}],known,now),/revisão/);assert.throws(()=>buildAmendmentsVersion(r,audit,[{...reviewed,code:'99'}],known,now),/inexistente/);
 });
 test('stored destinations must add back up to the audited author totals',async()=>{
   const db=await openDB(true);
   try{
-    const r=amendments(),v=buildAmendmentsVersion(r,{status:'passed',contentSha256:r.contentSha256},[reviewed],now);await storeAmendmentsVersion(db,v);
+    const r=amendments(),v=buildAmendmentsVersion(r,{status:'passed',contentSha256:r.contentSha256},[reviewed],known,now);await storeAmendmentsVersion(db,v);
     assert.equal((await readAmendmentRows(db,v.id)).length,2);assert.deepEqual((await auditAmendmentsVersion(db,v.id,r)).failures,[]);assert.equal(await activePublication(db,'emendas'),null);
     await db.query(`UPDATE amendments_v1 SET record=jsonb_set(record,'{totals,committed}','999') WHERE publication_id=$1 AND position=0`,[v.id]);
     const bad=await auditAmendmentsVersion(db,v.id,r);assert.ok(bad.failures.includes('totals-10|2025'));assert.ok(bad.failures.includes('content-id'));

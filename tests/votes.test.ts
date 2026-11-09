@@ -63,6 +63,6 @@ test('a CPF written in official free text is removed before anything is kept',as
 
 test('CPFs written in other forms next to the label are removed too',async()=>{
   const {redactCpf,findCpfs}=await import('../src/cpf-scan.ts');
-  for(const t of ['CPF n.529.982.247-25','CPF 52998224725','CPF 529982247-25','CPF 529.982.247/25']){assert.ok(findCpfs(t,new Set())>0,t);assert.equal(redactCpf(t).match(/\d{3}/),null,t);}
+  for(const t of ['CPF 52998224725 - 2024','inscrita no CPF sob o numero 52998224725','CPF/MF sob o nº 52998224725','CPF n.529.982.247-25','CPF 52998224725','CPF 529982247-25','CPF 529.982.247/25']){assert.ok(findCpfs(t,new Set())>0,t);assert.ok(redactCpf(t).includes('[CPF omitido]'),t);assert.equal(redactCpf(t).includes('529'),false,t);}
   assert.equal(redactCpf('Processo 1234/2025'),'Processo 1234/2025');
 });

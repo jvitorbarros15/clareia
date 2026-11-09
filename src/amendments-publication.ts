@@ -5,12 +5,12 @@ import type {AmendmentsReport,Totals} from './amendments.ts';
 
 export type ReviewedLink={code:string;deputyId:number;reviewer:string;reviewedAt:string;evidence:string};
 export type AmendmentRow={deputyId:number;code:string;year:number;destination:string;totals:Totals};
-export type AmendmentsVersion={schema:'clareia.amendments-version.v1';id:string;metric:'cgu.amendments.individual.v1';scope:{fromYear:number;linkedAuthors:number;authors:number;links:ReviewedLink[]};collectedAt:string;publishedAt:string;rows:AmendmentRow[]};
+export type AmendmentsVersion={schema:'clareia.amendments-version.v1';id:string;metric:'cgu.amendments.individual.v1';scope:{fromYear:number;linkedAuthors:number;authors:number};reviews:ReviewedLink[];collectedAt:string;publishedAt:string;rows:AmendmentRow[]};
 type Audit={status:string;contentSha256:string};
-const contentId=(v:Pick<AmendmentsVersion,'schema'|'metric'|'scope'|'rows'>)=>hash(canonical({schema:v.schema,metric:v.metric,scope:v.scope,rows:v.rows}));
+const contentId=(v:Pick<AmendmentsVersion,'schema'|'metric'|'scope'|'reviews'|'rows'>)=>hash(canonical({schema:v.schema,metric:v.metric,scope:v.scope,reviews:v.reviews,rows:v.rows}));
 
 // Only a reviewed link attributes an amendment to a deputy; a name match never does.
-export function buildAmendmentsVersion(report:AmendmentsReport,audit:Audit,links:ReviewedLink[],publishedAt:string):AmendmentsVersion{
+export function buildAmendmentsVersion(report:AmendmentsReport,audit:Audit,links:ReviewedLink[],knownDeputies:Set<number>,publishedAt:string):AmendmentsVersion{
   if(audit.status!=='passed'||audit.contentSha256!==report.contentSha256||amendmentsContentId(report)!==report.contentSha256)throw new Error('Emendas sem auditoria aprovada para esta versão');
   if(report.metrics.repeatedRows)throw new Error('Arquivo de emendas com linhas repetidas: revisão necessária');
   const proposals=new Map(report.links.map(l=>[l.code,l]));
@@ -20,9 +20,11 @@ export function buildAmendmentsVersion(report:AmendmentsReport,audit:Audit,links
     if(!l.reviewer.trim()||!l.reviewedAt.trim()||!l.evidence.trim()||!Number.isInteger(l.deputyId))throw new Error('Ligação sem revisão registrada: '+l.code);
     const author=authors.get(l.code);if(!author)throw new Error('Ligação para autor inexistente: '+l.code);
     const candidates=proposals.get(l.code)?.candidates??[];if(candidates.length&&!candidates.includes(l.deputyId))throw new Error('Ligação diverge dos candidatos: '+l.code);
+    if(!knownDeputies.has(l.deputyId))throw new Error('Deputado desconhecido na ligação: '+l.code);
+    if(author.names.length>1)throw new Error('Código de autor com mais de um nome: '+l.code);
     for(const year of Object.keys(author.years).sort())for(const [destination,totals] of Object.entries(author.years[year].destinations).sort(([a],[b])=>a.localeCompare(b)))rows.push({deputyId:l.deputyId,code:l.code,year:Number(year),destination,totals});
   }
-  const body={schema:'clareia.amendments-version.v1' as const,metric:'cgu.amendments.individual.v1' as const,scope:{fromYear:report.fromYear,linkedAuthors:links.length,authors:report.authors.length,links:[...links].sort((a,b)=>a.code.localeCompare(b.code))},rows};
+  const body={schema:'clareia.amendments-version.v1' as const,metric:'cgu.amendments.individual.v1' as const,scope:{fromYear:report.fromYear,linkedAuthors:links.length,authors:report.authors.length},reviews:[...links].sort((a,b)=>a.code.localeCompare(b.code)),rows};
   return {...body,id:contentId(body),collectedAt:report.createdAt,publishedAt};
 }
 export async function readAmendmentRows(db:DB,id:string):Promise<AmendmentRow[]>{
@@ -43,7 +45,7 @@ export async function reobserveAmendmentsVersion(db:DB,id:string):Promise<void>{
 // Rereads SQL and adds the destinations back up to the author-year totals in the audited report.
 export async function auditAmendmentsVersion(db:DB,id:string,report:AmendmentsReport):Promise<{status:'passed'|'failed';failures:string[];checkedAt:string}>{
   const failures:string[]=[],rows=await readAmendmentRows(db,id),body=(await db.query<{body:Omit<AmendmentsVersion,'rows'>}>(`SELECT body FROM publications WHERE id=$1 AND domain='emendas'`,[id])).rows[0]?.body;
-  if(!body||contentId({schema:body.schema,metric:body.metric,scope:body.scope,rows})!==id)failures.push('content-id');
+  if(!body||contentId({schema:body.schema,metric:body.metric,scope:body.scope,reviews:body.reviews,rows})!==id)failures.push('content-id');
   const sums=new Map<string,bigint[]>();
   for(const r of rows){const key=r.code+'|'+r.year,t=sums.get(key)??[0n,...MEASURES.map(()=>0n)];t[0]+=BigInt(r.totals.rows);MEASURES.forEach((m,i)=>{t[i+1]+=BigInt(r.totals[m]);});sums.set(key,t);}
   for(const [key,t] of sums){const [code,year]=key.split('|'),y=report.authors.find(a=>a.code===code)?.years[year];if(!y||canonical([BigInt(y.rows),...MEASURES.map(m=>BigInt(y[m]))].map(String))!==canonical(t.map(String)))failures.push('totals-'+key);}

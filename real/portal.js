@@ -202,7 +202,7 @@
     let data;try{data=await activityData(official);}catch{if(activityPerson()!==id)return;fill('#bills-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');fill('#votes-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');return;}
     if(activityPerson()!==id)return;
     if(info?.bills)fill('#bills-list',`<div class="activity-numbers"><div><strong>${number(info.bills.proposed)}</strong><span>como proponente${info.bills.joint?`, ${number(info.bills.joint)} em conjunto`:''}</span></div><div><strong>${number(info.bills.coauthored)}</strong><span>em coautoria</span></div><div><strong>${number(info.bills.norms)}</strong><span>viraram norma</span></div></div><ul class="activity-list">${data.bills.map(billItem).join('')||'<li class="p-small">Nenhum projeto nesta versão.</li>'}</ul>`);
-    if(info?.votes)fill('#votes-list',`<div class="activity-numbers">${Object.entries(info.votes).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<div><strong>${number(n)}</strong><span>${esc(c)}</span></div>`).join('')}</div><ul class="activity-list">${data.votes.map(voteItem).join('')||'<li class="p-small">Nenhum voto nesta versão.</li>'}</ul>`);
+    if(info?.votes)fill('#votes-list',`${info.votesHeld?`<p class="p-small">${number(info.votesHeld)} voto(s) em votações retidas para revisão não entram nos números nem na lista.</p>`:''}<div class="activity-numbers">${Object.entries(info.votes).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<div><strong>${number(n)}</strong><span>${esc(c)}</span></div>`).join('')}</div><ul class="activity-list">${data.votes.map(voteItem).join('')||'<li class="p-small">Nenhum voto nesta versão.</li>'}</ul>`);
   }
 
   function projectSection() {
@@ -377,7 +377,7 @@
       case 'brief':brief();break;
       case 'assistant':if(editorial){$('#query').scrollIntoView({block:'center',behavior:state.motion?'smooth':'instant'});$('#query').focus({preventScroll:true});}else assistant();break;
       case 'top':window.scrollTo({top:0,behavior:state.motion?'smooth':'instant'});break;
-      case 'coverage':C.showDialog('Cobertura desta versão',`<div class="text-content"><h3>Uma amostra pequena, declarada.</h3><p>${C.all().length} deputados, ${C.span()}, despesas da cota parlamentar com dados oficiais da Câmara. Amostra técnica, sem ranking nacional.</p><p>Projetos, votações, eleições, patrimônio e emendas ainda não foram coletados; as seções aparecem com o aviso “ainda não coletado”.</p><p>A busca usa regras locais, sem IA conectada. Favoritos ficam só neste navegador.</p></div>`);break;
+      case 'coverage':C.showDialog('Cobertura desta versão',`<div class="text-content"><h3>Uma amostra pequena, declarada.</h3><p>${C.all().length} deputados, ${C.span()}, despesas da cota parlamentar com dados oficiais da Câmara. Amostra técnica, sem ranking nacional.</p><p>${[window.ClareiaData.billsApproved?'':'Projetos',window.ClareiaData.votesApproved?'':'votações','eleições','patrimônio','emendas'].filter(Boolean).join(', ').replace(/^./,c=>c.toUpperCase())} ainda não foram publicados nesta versão; as seções aparecem com aviso.</p><p>A busca usa regras locais, sem IA conectada. Favoritos ficam só neste navegador.</p></div>`);break;
       case 'reset-saved':state.favorites.clear();state.projects.clear();save('clareia-favorites',[]);save('clareia-projects',[]);updateAll();updateFollowCount();C.toast('Favoritos locais apagados.');break;
     }
   });

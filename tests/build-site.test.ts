@@ -201,5 +201,5 @@ test('approved bills and votes produce a per-deputy activity file and held votes
   const v={...meta,id:hash(canonical({schema:meta.schema,metric:meta.metric,scope:meta.scope,votes,ballotsSha256:hash(canonical(ballots))})),collectedAt:'2026-11-09T00:00:00Z',publishedAt:'2026-11-09T00:00:00Z',votes,ballots};
   await storeVotesVersion(db,v);await recordDomainAudit(db,v.id,'passed',report);
   const built=await buildSite(db,dist,portraits),activity=await json(dist,'data',built.publicationId,'atividade','1.json'),summary=await json(dist,'data',built.publicationId,'summary.json');
-  assert.deepEqual(activity.votes.map((x:{id:string})=>x.id),['ok']);assert.deepEqual(activity.votes[0].matters,['PL 5/2025']);assert.deepEqual(summary.people[0].votes,{Sim:1});assert.equal(JSON.stringify(activity).includes('cents'),false);
+  assert.deepEqual(activity.votes.map((x:{id:string})=>x.id),['ok']);assert.deepEqual(activity.votes[0].matters,['PL 5/2025']);assert.deepEqual(summary.people[0].votes,{Sim:1});assert.equal(summary.people[0].votesHeld,1);assert.equal(JSON.stringify(activity).includes('cents'),false);
 }));
