@@ -22,12 +22,12 @@ export async function auditBills(report:BillsReport,read:(source:BillSource)=>Pr
   const normOf=async(id:string,type:string)=>{
     const s=source(billTramitacoesUrl(Number(id)));if(!s){failures.push('missing-tramitacao-'+id);return null;}
     const bytes=await read(s);if(hash(bytes)!==s.sha256){failures.push('source-hash');return null;}
-    const seen=new Set<string>();
+    const seen=new Set<string>();let anchored=false;
     for(const e of JSON.parse(Buffer.from(bytes).toString()).dados as Record<string,string|null>[])for(const field of ['despacho','descricaoTramitacao']){
-      const text=(e[field]??'').toLowerCase(),at=text.indexOf('transformad');if(at<0)continue;
-      for(const kind of ['lei ordinária','lei ordinaria','lei complementar','emenda constitucional'])for(let p=text.indexOf(kind,at);p>=0;p=text.indexOf(kind,p+1)){const tail=text.slice(p+kind.length).replace(/^[\sn.º°o]*/,'').split(/\s/)[0].replace(/[^0-9/.]/g,'').replace(/\.+$/,'');const [n,y]=tail.split('/');if(n&&y&&y.length===4&&(p-at<=20||seen.size>0))seen.add(JSON.stringify([kind.replace('ordinaria','ordinária'),n.replace(/\./g,''),Number(y)]));}
+      const text=(e[field]??'').toLowerCase(),at=text.indexOf('transformad');
+      for(const kind of ['lei ordinária','lei ordinaria','lei complementar','emenda constitucional'])for(let p=text.indexOf(kind,at);p>=0;p=text.indexOf(kind,p+1)){const tail=text.slice(p+kind.length).replace(/^[\sn.º°o]*/,'').split(/\s/)[0].replace(/[^0-9/.]/g,'').replace(/\.+$/,'');const [n,y]=tail.split('/');if(n&&y&&y.length===4){if(at>=0&&p>at&&p-at<=20)anchored=true;seen.add(JSON.stringify([kind.replace('ordinaria','ordinária'),n.replace(/\./g,''),Number(y)]));}}
     }
-    if(seen.size!==1)return null;const [kind,number,year]=JSON.parse([...seen][0]) as [string,string,number];return kind===expectedKind[type]?{kind,number,year}:null;
+    if(seen.size!==1||!anchored)return null;const [kind,number,year]=JSON.parse([...seen][0]) as [string,string,number];return kind===expectedKind[type]&&year>=report.year?{kind,number,year}:null;
   };
   if(reported.size!==wanted.length||report.metrics.selected!==wanted.length||report.metrics.propositions!==propositions.length)failures.push('bill-universe');
   if(report.metrics.orphanAuthorRows!==authorRows.filter(a=>!ids.has(a.idProposicao)).length)failures.push('orphan-author-rows');
@@ -41,7 +41,7 @@ export async function auditBills(report:BillsReport,read:(source:BillSource)=>Pr
     if(deputies.some(a=>!['0','1'].includes(a.proponente)))expected.add('invalid-author-flag');
     if(new Set(deputies.map(a=>a.idDeputadoAutor)).size!==deputies.length)expected.add('repeated-author-row');
     if(canonical([...expected].sort())!==canonical(bill.issues))failures.push('issues-'+p.id);
-    if(bill.situation!==(p.ultimoStatus_descricaoSituacao||null)||bill.summary!==p.ementa||bill.type!==p.siglaTipo)failures.push('fields-'+p.id);
+    if(bill.situation!==(p.ultimoStatus_descricaoSituacao||null)||bill.summary!==p.ementa.replace(/(?<![0-9.])[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}(?![0-9])/g,'[CPF omitido]')||bill.type!==p.siglaTipo)failures.push('fields-'+p.id);
     const isNorm=p.ultimoStatus_descricaoSituacao==='Transformado em Norma Jurídica',norm=isNorm?await normOf(p.id,p.siglaTipo):null;
     if(bill.normStatus!==(isNorm?norm?'resolved':'unresolved':'none')||(norm&&(bill.norm?.number!==norm.number||bill.norm.year!==norm.year||bill.norm.kind.toLowerCase()!==norm.kind)))failures.push('norm-'+p.id);
     if(!isNorm&&bill.norm)failures.push('norm-'+p.id);

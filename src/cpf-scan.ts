@@ -12,11 +12,15 @@ export function validCpf(digits:string):boolean{
   const check=(size:number)=>{const sum=[...digits.slice(0,size)].reduce((n,c,i)=>n+Number(c)*(size+1-i),0),rest=sum*10%11;return rest===10?0:rest;};
   return check(9)===Number(digits[9])&&check(10)===Number(digits[10]);
 }
+// Official free text can carry a formatted CPF; it must not reach any report or the site.
+const LABELLED=/\bC\.?P\.?F\.?[^0-9]{0,30}(?<!\d)(\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\/.\s]?\d{2})(?!\d)/gi;
+export const redactCpf=(text:string)=>text.replace(LABELLED,(whole,digits:string)=>whole.replace(digits,'[CPF omitido]')).replace(/(?<![\d.])\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)/g,'[CPF omitido]');
 // Plain 11-digit numbers are usually document numbers, so they only count when this run saw them as a CPF.
 export function findCpfs(text:string,known:Set<string>):number{
   const formatted=[...text.matchAll(/(?<![\d.])\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)/g)].filter(m=>validCpf(m[0].replace(/\D/g,''))).length;
   const plain=[...text.matchAll(/(?<!\d)\d{11}(?!\d)/g)].filter(m=>known.has(sha256(m[0]))).length;
-  return formatted+plain;
+  const labelled=[...text.matchAll(LABELLED)].length;
+  return formatted+plain+labelled;
 }
 export async function knownCpfs(directory:string):Promise<Set<string>>{
   const known=new Set<string>();

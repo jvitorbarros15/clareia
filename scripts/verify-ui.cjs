@@ -1558,6 +1558,22 @@ check('party is never shown as if it were the party of the period without approv
   await page.close();
 });
 
+check('approved activity lists bills and votes per deputy, loaded only on demand, with no money beside them', async () => {
+  const requests = [];
+  const page = await at(1440, { before: async p => {
+    p.on('request', r => { if (r.url().includes('/atividade/')) requests.push(r.url()); });
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.billsId = 'b'; s.votesId = 'v'; s.billsYears = [2025]; s.votesYears = [2025]; for (const q of s.people) { q.bills = { proposed: 2, joint: 1, coauthored: 1, norms: 1 }; q.votes = { Sim: 3, 'Não': 1 }; } await route.fulfill({ response: res, json: s }); });
+    await p.route('**/atividade/*.json', route => route.fulfill({ json: { bills: [{ id: 77, type: 'PL', number: 1, year: 2025, summary: '<u>Ementa</u>', situation: 'Aguardando Parecer', situationAt: '2025-04-01T10:00', norm: null, proponent: true, joint: false }], votes: [{ id: '1-1', date: '2025-03-01', organ: 'PLEN', kind: 'requerimento', description: 'Rejeitado o Requerimento', matters: ['PL 1/2025'], category: 'Sim' }] } }));
+  } });
+  await page.locator('#projetos .activity-item').first().waitFor();
+  const bills = await text(page.locator('#projetos')), votes = await text(page.locator('#votacoes'));
+  assert.match(bills, /PL 1\/2025/); assert.match(bills, /<u>Ementa<\/u>/, 'source text is escaped'); assert.doesNotMatch(bills, /ainda não foram coletados/); assert.doesNotMatch(bills + votes, /R\$/, 'no money in activity');
+  assert.match(votes, /Requerimento/); assert.match(votes, /Voto registrado: Sim/);
+  assert.equal(await page.locator('#projetos .activity-item a').first().getAttribute('href'), 'https://www.camara.leg.br/propostas-legislativas/77');
+  assert.equal(new Set(requests).size, 1, 'only the selected deputy is fetched');
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;

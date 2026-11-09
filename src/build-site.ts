@@ -6,9 +6,11 @@ import {activePublication,publicationAudit,readRecords} from './publications.ts'
 import type {Domain,Publication} from './publications.ts';
 import type {DB} from './store.ts';
 import {csv} from './view.ts';
+import {findCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary} from './site-summary.ts';
-import {assertBillsMatchVersion} from './bills-publication.ts';
+import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
+import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
 
 const DOMAINS:Domain[]=['pessoas','despesas','votacoes','projetos','eleicoes','emendas'];
 const MAX_FILES=15000,MAX_BYTES=10*1024*1024;
@@ -43,14 +45,24 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
     if(p)domains[domain]={version:p.id,coverage:p.scope,collectedAt:p.collectedAt,publishedAt:p.publishedAt};
   }
   const publicationId=hash(canonical(Object.values(domains).map(d=>d.version).sort())).slice(0,12),base=`data/${publicationId}`,data=path.join(outDir,'data',publicationId);
-  const peopleVersion=await activePublication(db,'pessoas'),billsVersion=await activePublication(db,'projetos');
-  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:await readRecords(db,active.id),expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[]});
+  const peopleVersion=await activePublication(db,'pessoas'),billsVersion=await activePublication(db,'projetos'),votesVersion=await activePublication(db,'votacoes');
+  if(votesVersion)await assertVotesMatchVersion(db,votesVersion.id);
+  const billList=billsVersion?await readBills(db,billsVersion.id):[],voteList=votesVersion?new Map((await readVotes(db,votesVersion.id)).map(v=>[v.id,v])):new Map();
+  const ballotsOf=new Map<number,Awaited<ReturnType<typeof readBallots>>>(),voteTotals=new Map<number,Record<string,number>>(),votesHeld=new Map<number,number>();
+  if(votesVersion)for(const id of active.scope.ids){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
+  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:await readRecords(db,active.id),expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld});
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const withoutData:number[]=[];
   for(const id of active.scope.ids){
     const records=await readRecords(db,active.id,id);
     await fs.copyFile(path.join(portraitsDir,`${id}.jpg`),path.join(data,'portraits',`${id}.jpg`)).catch(()=>{});
+    // Loaded by the page only when someone opens the section, and never joined to expenses.
+    if(billsVersion||votesVersion){
+      const bills=billList.filter(b=>!b.issues.length&&b.authors.some(a=>a.deputyId===id)).map(b=>({id:b.id,type:b.type,number:b.number,year:b.year,summary:b.summary,situation:b.situation,situationAt:b.situationAt,norm:b.norm,proponent:b.authors.find(a=>a.deputyId===id)!.proponent,joint:b.authors.filter(a=>a.proponent).length+b.otherProponents>1})).sort((x,y)=>y.id-x.id);
+      const votes=(ballotsOf.get(id)??[]).map(([voteId,,category])=>{const v=voteList.get(voteId)!;return {id:voteId,date:v.date,organ:v.organ,kind:v.kind,description:v.description,matters:v.objects.map((o:{title:string|null})=>o.title).filter(Boolean),category};}).sort((x,y)=>y.date.localeCompare(x.date)||x.id.localeCompare(y.id));
+      await fs.mkdir(path.join(data,'atividade'),{recursive:true});const activity=JSON.stringify({bills,votes});if(findCpfs(activity,new Set()))throw new Error('Identificador privado na atividade de um deputado');await fs.writeFile(path.join(data,'atividade',id+'.json'),activity);
+    }
     if(!records.length){withoutData.push(id);continue;}
     const person=path.join(data,'deputados',String(id));
     await fs.mkdir(person,{recursive:true});
