@@ -875,9 +875,6 @@ body[data-model=editorial] section h3:not(.person-name,dialog *,.directory-perso
 body[data-model=editorial] .editorial-rank .tabs button{flex:none}
 body[data-model=editorial] .editorial-rank .tabs button:first-child{padding-left:0}
 
-/* A portrait smaller than 200 px is shown at up to 1.5x its size, framed, instead of stretched to the card. */
-body[data-model=editorial] .photo.low-res{display:grid;place-items:center;background:color-mix(in srgb,var(--ink) 6%,var(--bg))}
-body[data-model=editorial] .photo.low-res img{width:calc(var(--natural) * 1.5px);height:auto;max-width:100%;max-height:100%;object-fit:contain}
 body .uf-tile text.tile-value{font-size:8px;font-weight:500}
 body .uf-tile.has-data text:not(.tile-value){font-size:12px}
 @media(min-width:801px){
@@ -939,3 +936,13 @@ body .uf-tile.negative.selected path:not(.tile-hit){stroke:var(--ink);stroke-wid
 .activity-item p{margin:6px 0}
 .activity-matter{font-weight:600}
 .activity-state{color:var(--muted);font-size:14px}
+.p-mini-bars.many{margin-top:32px}
+.p-mini-bars.many .bar-value{font-size:11px;line-height:1.1;text-align:center}
+.p-mini-bars.many button>span{width:min(34px,70%)}
+.activity-search{display:block;margin:0 0 12px}
+.activity-search input{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit}
+.activity-count{margin:0 0 8px}
+.activity-more{margin-top:16px;min-height:44px}
+.no-exercise{font-size:16px!important;line-height:1.25}
+.test-notice{padding:10px 16px;background:var(--ink);color:var(--bg);font:500 14px/1.4 var(--sans);text-align:center}
+[aria-busy=true]{opacity:.5;pointer-events:none;transition:opacity 120ms linear 150ms}

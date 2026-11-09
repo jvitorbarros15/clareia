@@ -48,7 +48,9 @@ async function published(page) {
 
 const NBSP = ' ';
 const brl = cents => `${cents < 0 ? '−' : ''}R$${NBSP}${(Math.abs(cents) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const brlCompact = cents => Math.abs(cents) >= 100000
+const brlCompact = cents => Math.abs(cents) >= 99995000
+  ? `${cents < 0 ? '−' : ''}R$${NBSP}${(Math.round(Math.abs(cents) / 1000000) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${Math.round(Math.abs(cents) / 1000000) / 100 < 2 ? 'milhão' : 'milhões'}`
+  : Math.abs(cents) >= 100000
   ? `${cents < 0 ? '−' : ''}R$${NBSP}${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`
   : brl(cents);
 const percentOf = value => (clean(value).match(/(\d+(?:,\d+)?)%/) || [])[1];
@@ -682,24 +684,6 @@ check('arrow keys move the donut legend selection', async () => {
   await page.close();
 });
 
-
-check('low-res portrait', async () => {
-  for (const width of [1440, 390]) {
-    const page = await at(width);
-    await page.evaluate(() => document.querySelectorAll('.photo img').forEach(img => { img.loading = 'eager'; }));
-    await page.waitForFunction(() => [...document.querySelectorAll('.photo img')].every(img => img.complete));
-    const imgs = await page.evaluate(() => [...document.querySelectorAll('.photo img')].filter(img => img.offsetParent).map(img => {
-      const r = img.getBoundingClientRect(), frame = img.closest('.photo').getBoundingClientRect(), fit = getComputedStyle(img).objectFit;
-      const scale = fit === 'cover' ? Math.max(r.width / img.naturalWidth, r.height / img.naturalHeight) : r.width / img.naturalWidth;
-      return { src: img.getAttribute('src').slice(-30), natural: img.naturalWidth, scale, centered: Math.abs((r.left + r.width / 2) - (frame.left + frame.width / 2)) <= 1 };
-    }));
-    assert.ok(imgs.length > 0, 'portraits rendered');
-    const low = imgs.filter(i => i.natural < 200);
-    assert.ok(low.length > 0, `a portrait under 200 px natural width exists at ${width}: ${JSON.stringify(imgs.map(i => i.natural))}`);
-    for (const i of low) { assert.ok(i.scale <= 1.5 + 0.01, `${i.src} (${i.natural}px) upscaled ${i.scale.toFixed(2)}x at ${width}`); assert.ok(i.centered, `${i.src} centered at ${width}`); }
-    await page.close();
-  }
-});
 
 check('logo is vector', async () => {
   const page = await at(1440);
@@ -1571,6 +1555,84 @@ check('approved activity lists bills and votes per deputy, loaded only on demand
   assert.match(votes, /Requerimento/); assert.match(votes, /Voto registrado: Sim/);
   assert.equal(await page.locator('#projetos .activity-item a').first().getAttribute('href'), 'https://www.camara.leg.br/propostas-legislativas/77');
   assert.equal(new Set(requests).size, 1, 'only the selected deputy is fetched');
+  await page.close();
+});
+
+check('compact money uses milhões from one million up', async () => {
+  const page = await at(1440);
+  const out = await page.evaluate(() => [99999999, 199600000, 100000000, 150000000, 645249188, -645249188].map(c => window.Clareia.compact(c).replace(/\s+/g, ' ')));
+  assert.deepEqual(out, ['R$ 1 milhão', 'R$ 2 milhões', 'R$ 1 milhão', 'R$ 1,5 milhão', 'R$ 6,45 milhões', '−R$ 6,45 milhões']);
+  await page.close();
+});
+
+for (const width of [1440, 390]) check(`twelve month bars keep their value labels apart (${width})`, async () => {
+  const page = await at(width, { before: stub({ months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }) });
+  await page.locator('.p-mini-bars .bar-value').first().waitFor({ state: 'attached' });
+  const boxes = await page.evaluate(() => [...document.querySelectorAll('.p-mini-bars .bar-value')].map(e => { const r = e.getBoundingClientRect(); return [r.left, r.right]; }));
+  assert.equal(boxes.length, 12);
+  boxes.slice(1).forEach((b, i) => assert.ok(b[0] >= boxes[i][1] - 0.5, `label ${i + 1} overlaps the next`));
+  await page.close();
+});
+
+check('activity lists start at five, grow by five and can be searched', async () => {
+  const page = await at(1440, { before: async p => {
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.billsId = 'b'; s.votesId = 'v'; s.billsYears = [2025]; s.votesYears = [2025]; for (const q of s.people) { q.bills = { proposed: 25, joint: 0, coauthored: 0, norms: 0 }; q.votes = { Sim: 1 }; } await route.fulfill({ response: res, json: s }); });
+    await p.route('**/atividade/*.json', route => route.fulfill({ json: { bills: Array.from({ length: 25 }, (_, i) => ({ id: i + 1, type: 'PL', number: i + 1, year: 2025, summary: i === 24 ? 'Educação indígena' : 'Assunto geral', situation: 'Aguardando Parecer', situationAt: null, norm: null, proponent: true, joint: false })), votes: [] } }));
+  } });
+  const items = page.locator('#bills-rows .activity-item'), more = page.locator('#bills-rows .activity-more');
+  await items.first().waitFor();
+  assert.equal(await items.count(), 5);
+  await more.click(); assert.equal(await items.count(), 10);
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.p), 'activity-more', 'focus stays on the button');
+  for (const n of [15, 20, 25]) { await more.click(); assert.equal(await items.count(), n); }
+  assert.equal(await more.count(), 0);
+  await page.locator('#activity-search-bills').fill('educacao');
+  assert.equal(await items.count(), 1); assert.equal(await page.evaluate(() => document.activeElement.id), 'activity-search-bills', 'typing keeps focus');
+  await page.locator('#activity-search-bills').fill('zzzz'); assert.match(await text(page.locator('#bills-rows')), /Nada encontrado/);
+  assert.match(await text(page.locator('#pessoas')), /25 projetos como proponente/);
+  await page.close();
+});
+
+check('every portrait fills its frame', async () => {
+  const page = await at(1440);
+  assert.equal(await page.locator('.photo.low-res').count(), 0);
+  await page.close();
+});
+
+check('changing the deputy swaps the activity list without blanking the section', async () => {
+  const page = await at(1440, { before: async p => {
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.billsId = 'b'; s.votesId = 'v'; s.billsYears = [2025]; s.votesYears = [2025]; for (const q of s.people) { q.bills = { proposed: 1, joint: 0, coauthored: 0, norms: 0 }; q.votes = { Sim: q.id % 1000 }; } await route.fulfill({ response: res, json: s }); });
+    await p.route('**/atividade/*.json', async route => { await new Promise(r => setTimeout(r, 150)); const id = route.request().url().match(/(\d+)\.json/)[1]; await route.fulfill({ json: { bills: [], votes: [{ id: id + '-1', date: '2025-03-01', organ: 'PLEN', kind: 'merito', description: 'Deputado ' + id, matters: [], category: 'Sim' }] } }); });
+  } });
+  await page.locator('#votes-rows .activity-item').first().waitFor();
+  const before = await text(page.locator('#votes-rows .activity-item').first());
+  await page.evaluate(() => { window.__section = document.querySelector('#votes-list'); window.__blank = 0; new MutationObserver(() => { if (/Carregando/.test(document.querySelector('#votes-list')?.textContent || '')) window.__blank++; }).observe(document.querySelector('#votacoes'), { childList: true, subtree: true }); });
+  const other = await page.locator('#activity-votes option').nth(1).getAttribute('value');
+  await page.locator('#activity-votes').selectOption(other);
+  await page.waitForFunction(old => document.querySelector('#votes-rows .activity-item')?.textContent.replace(/\s+/g, ' ').trim() !== old, before);
+  assert.equal(await page.evaluate(() => window.__blank), 0, 'never shows the loading state');
+  assert.equal(await page.evaluate(() => window.__section === document.querySelector('#votes-list')), true, 'section is not rebuilt');
+  assert.equal(await page.locator('#activity-bills').inputValue(), other, 'both selectors follow');
+  await page.close();
+});
+
+check('someone without confirmed exercise shows no zero and leaves the spending ranking', async () => {
+  let target;
+  const page = await at(1440, { before: async p => {
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.coverageId = 'c'; target = s.people.at(-1).id; for (const q of s.people) for (const m of q.months) { m.exercise = q.id === target ? 'unknown' : 'full'; m.partyStatus = 'single'; m.party = 'X'; } await route.fulfill({ response: res, json: s }); });
+    await p.route('**/deputados/*/despesas.json', async route => { if (target && route.request().url().includes('/' + target + '/')) return route.fulfill({ status: 404, body: '' }); return route.continue(); });
+  } });
+  const card = page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${target}"]`) }).first();
+  assert.match(await text(card), /Sem exercício confirmado em 2025/); assert.doesNotMatch(await text(card), /R\$ 0,00/);
+  assert.equal(await page.evaluate(id => window.Clareia.ranking ? window.Clareia.ranking('gastos').some(p => p.officialId === id) : false, target), false);
+  assert.equal(await page.locator(`.editorial-rank [data-id="${target}"]`).count(), 0, 'not in the ranking');
+  await page.close();
+});
+
+check('a test notice and held months are shown when the version declares them', async () => {
+  const page = await at(1440, { before: async p => { await p.route('**/index.json', async route => { const res = await route.fetch(), j = await res.json(); j.validation.testNotice = 'Versão de teste.'; j.validation.heldMonths = { [j.scope.ids[0]]: 1 }; await route.fulfill({ response: res, json: j }); }); } });
+  assert.equal(await text(page.locator('.test-notice')), 'Versão de teste.');
+  assert.equal(await page.evaluate(() => window.ClareiaData.dataset()[0].months), 1);
   await page.close();
 });
 
