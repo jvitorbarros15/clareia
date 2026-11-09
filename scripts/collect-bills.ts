@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {lock as acquireLock} from '../src/lock.ts';
 import {auditBills} from '../src/bills-audit.ts';
-import {billAuthorsUrl,billsReport,billsUrl,deriveBills} from '../src/bills.ts';
+import {billAuthorsUrl,billsReport,billsUrl,billTramitacoesUrl,deriveBills} from '../src/bills.ts';
 import type {BillSource} from '../src/bills.ts';
 import {findCpfs} from '../src/cpf-scan.ts';
 import {canonical} from '../src/model.ts';
@@ -20,7 +20,7 @@ await fs.mkdir(root,{recursive:true});
 const release=await acquireLock(path.join(root,'running.lock'));
 try{
   const capture=(pass:number)=>new PeopleCapture(path.join(root,'pass-'+pass),key,args.includes('--offline')?async()=>new Response('',{status:404}):undefined);
-  const passes=await Promise.all([1,2].map(async pass=>{const c=capture(pass),bills=await c.get(billsUrl(year)),authors=await c.get(billAuthorsUrl(year));return {derived:await deriveBills(year,bills.bytes,authors.bytes),sources:[bills.source,authors.source].map(s=>({...s,pass})) as BillSource[]};}));
+  const passes=[];for(const pass of [1,2])passes.push(await (async()=>{const c=capture(pass),bills=await c.get(billsUrl(year)),authors=await c.get(billAuthorsUrl(year));const derived=await deriveBills(year,bills.bytes,authors.bytes,async id=>JSON.parse(Buffer.from((await c.get(billTramitacoesUrl(id))).bytes).toString()).dados);return {derived,sources:c.captures.map(s=>({...s,pass})) as BillSource[]};})());
   if(canonical(passes[0].derived)!==canonical(passes[1].derived))throw new Error('Arquivos mudaram entre os passes; nada foi aprovado');
   const report=billsReport(year,passes[1].derived,passes.flatMap(p=>p.sources),new Date().toISOString());
   if(findCpfs(JSON.stringify(report),new Set()))throw new Error('Identificador privado no relatório');

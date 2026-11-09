@@ -9,11 +9,17 @@ Fontes: arquivos anuais oficiais `proposicoes-AAAA.csv` e `proposicoesAutores-AA
 - Autor sem `idDeputadoAutor` (Senado, comissão, Executivo) não vira pessoa.
 - Situação é a descrição da fonte na data da captura. Nada é inferido a partir dela.
 - Quantidade de projetos não mede qualidade.
+- A fonte marca mais de um proponente em alguns projetos. `joint` conta as propostas com proponente múltiplo; não trate `proposed` como autoria solo.
+- Norma resultante: só quando a situação é exatamente "Transformado em Norma Jurídica" e o despacho oficial traz o tipo e o número. PL gera lei ordinária, PLP lei complementar e PEC emenda constitucional; outro tipo, ou mais de uma norma citada, fica `unresolved`.
 
 ## Retenções
 
 Ficam fora das contagens, com a evidência preservada: ano do número diferente do ano da apresentação (há registros do arquivo de 2025 apresentados em 2003), sem linha de autor, autor repetido, URI de autor de outra pessoa e indicador de proponente inválido.
 
+## Publicação
+
+`npm run publish:bills -- --run ID [--run ID...]` junta os anos, grava a versão inativa na tabela `bills_v1` e reconta por pessoa a partir do banco. Só `--approve` ativa. Sem `DATABASE_URL`, `--approve` exige `--local`. A contagem no site só aparece com versão aprovada.
+
 ## Falta
 
-Tramitações pela API, norma resultante e tipo de norma, projetos antigos ainda ativos, tabela própria e ligação com o site. `publicationEligible` continua falso.
+Linha do tempo das tramitações para evidência no site e atualização recorrente dos projetos antigos ainda ativos. `publicationEligible` continua falso.

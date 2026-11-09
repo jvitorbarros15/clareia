@@ -8,6 +8,7 @@ import type {DB} from './store.ts';
 import {csv} from './view.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary} from './site-summary.ts';
+import {assertBillsMatchVersion} from './bills-publication.ts';
 
 const DOMAINS:Domain[]=['pessoas','despesas','votacoes','projetos','eleicoes','emendas'];
 const MAX_FILES=15000,MAX_BYTES=10*1024*1024;
@@ -42,8 +43,8 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
     if(p)domains[domain]={version:p.id,coverage:p.scope,collectedAt:p.collectedAt,publishedAt:p.publishedAt};
   }
   const publicationId=hash(canonical(Object.values(domains).map(d=>d.version).sort())).slice(0,12),base=`data/${publicationId}`,data=path.join(outDir,'data',publicationId);
-  const peopleVersion=await activePublication(db,'pessoas');
-  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:await readRecords(db,active.id),expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[]});
+  const peopleVersion=await activePublication(db,'pessoas'),billsVersion=await activePublication(db,'projetos');
+  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:await readRecords(db,active.id),expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[]});
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const withoutData:number[]=[];

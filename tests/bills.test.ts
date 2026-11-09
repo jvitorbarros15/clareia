@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {hash} from '../src/model.ts';
-import {billAuthorsUrl,billsReport,billsUrl,deriveBills} from '../src/bills.ts';
+import {billAuthorsUrl,billsReport,billsUrl,billTramitacoesUrl,deriveBills,normFromTramitacoes} from '../src/bills.ts';
 import type {BillSource} from '../src/bills.ts';
 import {auditBills} from '../src/bills-audit.ts';
 import {sourceAllowed} from '../src/people-discovery.ts';
@@ -16,7 +16,7 @@ const derive=(bills:string[],authors:string[])=>deriveBills(2025,csv(head,bills)
 
 test('proponent and co-signature come from the source flag, and signature order is not authorship',async()=>{
   const r=await derive([bill(1),bill(2)],[author(1,10,1,0),author(1,20,2,1),author(2,20,1,1)]);
-  assert.deepEqual(r.people,[{id:10,proposed:0,coauthored:1},{id:20,proposed:2,coauthored:0}]);
+  assert.deepEqual(r.people,[{id:10,proposed:0,joint:0,coauthored:1,norms:0},{id:20,proposed:2,joint:0,coauthored:0,norms:0}]);
 });
 test('only PL, PLP and PEC are selected and each bill counts once',async()=>{
   const r=await derive([bill(1),bill(2,'PLP'),bill(3,'PEC'),bill(4,'REQ')],[author(1,10,1,1),author(2,10,1,1),author(3,10,1,1),author(4,10,1,1)]);
@@ -51,4 +51,25 @@ test('the audit recounts the preserved files and catches a changed count, bill o
   assert.ok((await edit(r=>{r.bills[1].issues=[];})).failures.includes('issues-2'));
   assert.ok((await edit(r=>{r.bills[0].situation='Transformado em Norma Jurídica';})).failures.includes('fields-1'));
   assert.ok((await edit(r=>{r.publicationEligible=true as false;})).failures.includes('publication-gate'));
+});
+
+const normBill=(id:number,type='PL')=>`"${id}";"${type}";"${id}";"2025";"Ementa";"2025-03-01T10:00";"";"2025-04-01T10:00";"Transformado em Norma Jurídica"`;
+const said=(text:string)=>[{despacho:'Recebido'},{despacho:text}];
+test('the norm comes from the official dispatch and must match the bill type',()=>{
+  assert.deepEqual(normFromTramitacoes('PL',said('Transformado na Lei Ordinária 15172/2025. DOU 23/07/2025')),{kind:'Lei Ordinária',number:'15172',year:2025});
+  assert.deepEqual(normFromTramitacoes('PEC',said('Transformado na Emenda Constitucional 135/2024.')),{kind:'Emenda Constitucional',number:'135',year:2024});
+  assert.equal(normFromTramitacoes('PEC',said('Transformado na Lei Ordinária 1/2025.')),null);
+  assert.equal(normFromTramitacoes('PL',said('Aguardando sanção')),null);
+  assert.equal(normFromTramitacoes('PL',[{despacho:'Transformado na Lei Ordinária 1/2025'},{despacho:'Transformado na Lei Ordinária 2/2025'}]),null);
+});
+test('joint proposals, resolved norms and unresolved norms are counted apart',async()=>{
+  const r=await deriveBills(2025,csv(head,[normBill(1),normBill(2),bill(3)]),csv(authorHead,[author(1,10,1,1),author(2,10,1,1),author(3,10,1,1),author(3,20,2,1)]),async id=>id===1?said('Transformado na Lei Ordinária 15172/2025.'):said('Sem número'));
+  assert.deepEqual(r.people[0],{id:10,proposed:3,joint:1,coauthored:0,norms:1});assert.equal(r.metrics.normsResolved,1);assert.equal(r.metrics.normsUnresolved,1);assert.equal(r.bills[1].normStatus,'unresolved');assert.equal(r.bills[1].norm,null);
+});
+test('the audit rereads the dispatch and refuses an invented norm',async()=>{
+  const bills=csv(head,[normBill(1)]),authors=csv(authorHead,[author(1,10,1,1)]),tram=new TextEncoder().encode(JSON.stringify({dados:said('Transformado na Lei Ordinária 15172/2025.')}));
+  const file=new Map<string,Uint8Array>([['b',bills],['a',authors],['t',tram]]),source=(url:string,name:string):BillSource=>({url,sha256:hash(file.get(name)!),file:name,bytes:file.get(name)!.length,fetchedAt:'2026-11-09T00:00:00Z',pass:2});
+  const report=billsReport(2025,await deriveBills(2025,bills,authors,async()=>said('Transformado na Lei Ordinária 15172/2025.')),[source(billsUrl(2025),'b'),source(billAuthorsUrl(2025),'a'),source(billTramitacoesUrl(1),'t')],'2026-11-09T00:00:00Z'),read=async(s:BillSource)=>file.get(s.file)!;
+  assert.deepEqual((await auditBills(report,read)).failures,[]);
+  const copy=structuredClone(report);copy.bills[0].norm={kind:'Lei Ordinária',number:'99',year:2025};assert.ok((await auditBills(copy,read)).failures.includes('norm-1'));
 });
