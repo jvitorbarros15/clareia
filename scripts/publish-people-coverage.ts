@@ -12,6 +12,7 @@ for(let i=0;i<args.length;i++){if(['--dry-run','--approve','--local'].includes(a
 const historyRun=value('--history-run'),legacyRun=value('--legacy-run'),dryRun=args.includes('--dry-run'),approve=args.includes('--approve'),database=process.env.DATABASE_URL?'DATABASE_URL':'local';
 if(!historyRun||!legacyRun)throw new Error('Informe --history-run e --legacy-run');
 if(dryRun&&approve)throw new Error('--dry-run e --approve são exclusivos');
+if(args.includes('--local')&&process.env.DATABASE_URL)throw new Error('--local não pode ser usado com DATABASE_URL definida');
 // The scheduled build restores its database from R2, so a local approval never reaches it.
 if(approve&&database==='local'&&!args.includes('--local'))throw new Error('Aprovação sem DATABASE_URL só vale para o banco local: confirme com --local');
 const load=async(...parts:string[])=>JSON.parse(await fs.readFile(path.resolve('data/private',...parts),'utf8'));
@@ -27,7 +28,7 @@ await withLock(async()=>{
     await storePeopleCoverage(db,coverage);
     const audit=await auditPeopleCoverage(db,coverage.id,temporal,crosscheck);
     if(audit.status!=='passed'){await recordDomainAudit(db,coverage.id,'failed',audit);console.error(JSON.stringify({id:coverage.id,failures:audit.failures.length}));process.exitCode=1;}
-    else if(approve){await reobservePeopleCoverage(db,coverage.id);await recordDomainAudit(db,coverage.id,'passed',audit);}
+    else if(approve){await db.query('BEGIN');try{await reobservePeopleCoverage(db,coverage.id);await recordDomainAudit(db,coverage.id,'passed',audit);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}}
     console.log(JSON.stringify({...report,database,stored:true,audit:audit.status,active:(await activePublication(db,'pessoas'))?.id===coverage.id},null,2));
   }finally{await db.close();}
 });

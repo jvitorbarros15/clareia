@@ -39,6 +39,7 @@ export function sourceAllowed(url:string):boolean{
   const legacy=u.origin==='https://www.camara.leg.br'&&u.pathname==='/SitCamaraWS/Deputados.asmx/ObterDetalhesDeputado'&&
     [...u.searchParams.keys()].sort().join(',')==='ideCadastro,numLegislatura'&&
     ['ideCadastro','numLegislatura'].every(key=>/^[1-9]\d{0,8}$/.test(u.searchParams.get(key)||''));
+  if(u.origin==='https://dadosabertos.camara.leg.br'&&!u.search&&(/^\/arquivos\/(proposicoes\/csv\/proposicoes|proposicoesAutores\/csv\/proposicoesAutores)-20\d{2}\.csv$/.test(u.pathname)||/^\/api\/v2\/proposicoes\/[1-9]\d{0,9}\/tramitacoes$/.test(u.pathname)))return true;
   const expenses=u.origin==='https://dadosabertos.camara.leg.br'&&/^\/api\/v2\/deputados\/[1-9]\d{0,8}\/despesas$/.test(u.pathname)&&
     [...u.searchParams.keys()].sort().join(',')==='ano,idLegislatura,itens,mes,ordem,ordenarPor,pagina'&&
     ['ano','idLegislatura','itens','mes','pagina'].every(key=>/^[1-9]\d{0,8}$/.test(u.searchParams.get(key)||''))&&
@@ -78,8 +79,8 @@ export class PeopleCapture {
         let retry:number|undefined;
         try{
           this.stats.requests++;if(attempt)this.stats.retries++;
-          const response=await this.fetcher(url,{headers:{Accept:url.endsWith('.zip')?'application/zip':new URL(url).pathname.endsWith('/ObterDetalhesDeputado')?'application/xml, text/xml':new URL(url).pathname==='/cota-parlamentar/analitico'?'text/html':'application/json','User-Agent':'clareia-people-discovery'},redirect:'error',signal:AbortSignal.timeout(60_000)});
-          if(response.ok){result=await readLimited(response,url.endsWith('.zip')?100_000_000:12_000_000);this.stats.downloadedBytes+=result.length;break;}
+          const response=await this.fetcher(url,{headers:{Accept:url.endsWith('.zip')?'application/zip':url.endsWith('.csv')?'text/csv':new URL(url).pathname.endsWith('/ObterDetalhesDeputado')?'application/xml, text/xml':new URL(url).pathname==='/cota-parlamentar/analitico'?'text/html':'application/json','User-Agent':'clareia-people-discovery'},redirect:'error',signal:AbortSignal.timeout(url.endsWith('.csv')?300_000:60_000)});
+          if(response.ok){result=await readLimited(response,url.endsWith('.zip')?100_000_000:url.endsWith('.csv')?200_000_000:12_000_000);this.stats.downloadedBytes+=result.length;break;}
           if(response.status!==429&&response.status<500)throw new HttpFailure(response.status);
           const raw=response.headers.get('retry-after');
           const ms=raw===null?NaN:/^\d+$/.test(raw)?Number(raw)*1000:Date.parse(raw)-Date.now();

@@ -10,6 +10,8 @@
     "discover:people": "tsx scripts/discover-people.ts",
     "collect:people": "tsx scripts/collect-people-history.ts",
     "collect:people:legacy": "tsx scripts/collect-people-legacy.ts",
+    "publish:bills": "tsx scripts/publish-bills.ts",
+    "collect:bills": "tsx scripts/collect-bills.ts",
     "publish:people": "tsx scripts/publish-people-coverage.ts",
     "verify:people:legacy": "tsx scripts/verify-people-legacy.ts",
     "collect:expenses:intermediate": "tsx scripts/collect-expense-intermediate.ts",

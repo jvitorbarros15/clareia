@@ -175,3 +175,15 @@ test('a build refused by its limits leaves the previous output in place',()=>set
   await fs.writeFile(path.join(portraits,'1.jpg'),Buffer.alloc(11*1024*1024));
   await assert.rejects(buildSite(db,dist,portraits),/10 MiB/);assert.deepEqual(await tree(dist),before);
 }));
+
+test('approved bills reach the summary and an unapproved version does not',()=>setup(async(db,dist,portraits)=>{
+  const {storeBillsVersion}=await import('../src/bills-publication.ts');
+  const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const body={schema:'clareia.bills-version.v1' as const,metric:'camara.bills.authorship.v1' as const,scope:{years:[2025],types:['PL']},bills:[],people:[{id:1,proposed:3,joint:1,coauthored:2,norms:0}]};
+  const bills={...body,id:hash(canonical(body)),sources:[],collectedAt:'2026-11-09T00:00:00Z',publishedAt:'2026-11-09T00:00:00Z'};
+  await storeBillsVersion(db,bills);
+  let built=await buildSite(db,dist,portraits),summary=await json(dist,'data',built.publicationId,'summary.json');assert.equal(summary.billsId,null);assert.equal(summary.people[0].bills,null);
+  await recordDomainAudit(db,bills.id,'passed',report);
+  built=await buildSite(db,dist,portraits);summary=await json(dist,'data',built.publicationId,'summary.json');
+  assert.deepEqual(summary.people.map((p:{bills:unknown})=>p.bills),[{proposed:3,joint:1,coauthored:2,norms:0},{proposed:0,joint:0,coauthored:0,norms:0}]);
+}));
