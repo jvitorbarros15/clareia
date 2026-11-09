@@ -9,6 +9,7 @@ Thumbs.db
 .agents/
 .vercel/
 dist/
+dist.building/
 data/raw/
 data/private/
 data/local/

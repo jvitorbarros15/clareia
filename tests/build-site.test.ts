@@ -10,6 +10,10 @@ import {buildSite,checkLimits} from '../src/build-site.ts';
 import {personView} from '../src/view.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
+import {storePeopleCoverage} from '../src/people-publication.ts';
+import type {PeopleCoverage} from '../src/people-publication.ts';
+import {buildSiteSummary} from '../src/site-summary.ts';
+import {canonical,hash} from '../src/model.ts';
 
 function record(cents:number,personId:number,index:number):Expense{
   return {id:`r${personId}-${index}`,personId,year:2025,month:1,category:'TEST',supplier:'Fornecedor',supplierKey:'k',supplierVerified:false,documentId:'1',documentNumber:'1',date:null,receipt:null,cents,documentCents:cents,disallowedCents:0,source:{url:'https://dadosabertos.camara.leg.br/api/v2/x',sha256:'s',row:index,fetchedAt:'2025-03-01T00:00:00Z'}};
@@ -122,4 +126,52 @@ test('_headers marks data as immutable and manifest as revalidated',()=>setup(as
   assert.match(headers,/\/manifest\.json\s+Cache-Control: max-age=0, must-revalidate/);
   assert.match(headers,/Content-Security-Policy: default-src 'self'/);
   for(const file of ['index.html','app.js','view.js','styles.css'])await fs.access(path.join(dist,file));
+}));
+
+const coverageVersion=(party:string|null,review=false):PeopleCoverage=>{
+  const body={schema:'clareia.people-coverage.v1' as const,metric:'camara.people.monthly-coverage.v1' as const,scope:{legislature:57,start:'2025-01-01',end:'2025-01-31',sampleIds:[1]},temporalSha256:hash('t'),crosscheckSha256:hash('c'),collectedAt:'2026-11-08T12:00:00Z',rows:[1,2].map(personId=>({personId,year:2025,month:1,exercise:'full',partyStatus:review?'review':'single',party,partyValues:[],ufStatus:review?'review':'single',uf:party&&'SP',review,partialScope:false}))};
+  return {...body,id:hash(canonical({schema:body.schema,metric:body.metric,scope:body.scope,rows:body.rows})),publishedAt:'2026-11-08T13:00:00Z'};
+};
+const summaryInput=(records:Expense[],expectedTotalCents:number)=>{const v=version(records);return {publicationId:v.id,scope:v.scope,people:v.people,records,expectedTotalCents,coverageId:null,coverage:[]};};
+test('the site summary totals match the records in integer cents and carry no record rows',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0),record(250,1,1),record(-50,2,2)]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const {publicationId}=await buildSite(db,dist,portraits),summary=await json(dist,'data',publicationId,'summary.json');
+  assert.equal(summary.totalCents,300);assert.equal(summary.records,3);assert.deepEqual(summary.people.map((p:{cents:number})=>p.cents),[350,-50]);assert.equal(summary.people[0].months[0].records,2);
+  assert.equal(JSON.stringify(summary).includes('r1-0'),false);
+}));
+test('without approved coverage the summary shows no party, and inactive coverage changes nothing',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  await storePeopleCoverage(db,coverageVersion('PL'));
+  const {publicationId}=await buildSite(db,dist,portraits),month=(await json(dist,'data',publicationId,'summary.json')).people[0].months[0];
+  assert.deepEqual([month.partyStatus,month.party,month.uf],['unavailable',null,null]);
+}));
+test('approved coverage supplies the party of the month and a disputed month stays without one',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const known=coverageVersion('PL');await storePeopleCoverage(db,known);await recordDomainAudit(db,known.id,'passed',report);
+  let built=await buildSite(db,dist,portraits),summary=await json(dist,'data',built.publicationId,'summary.json');
+  assert.equal(summary.coverageId,known.id);assert.deepEqual([summary.people[0].months[0].party,summary.people[0].months[0].uf],['PL','SP']);
+  const disputed=coverageVersion(null,true);await storePeopleCoverage(db,disputed);await recordDomainAudit(db,disputed.id,'passed',report);
+  built=await buildSite(db,dist,portraits);summary=await json(dist,'data',built.publicationId,'summary.json');
+  assert.deepEqual([summary.people[0].months[0].party,summary.people[0].months[0].partyStatus,summary.people[0].months[0].review],[null,'review',true]);
+}));
+test('a summary that disagrees with the approved total or leaves the scope is refused',()=>{
+  assert.throws(()=>buildSiteSummary(summaryInput([record(100,1,0)],101)),/total aprovado/);
+  assert.throws(()=>buildSiteSummary(summaryInput([{...record(100,1,0),month:2}],100)),/recorte/);
+});
+
+test('tampered active coverage stops the build before the previous output is deleted',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const known=coverageVersion('PL');await storePeopleCoverage(db,known);await recordDomainAudit(db,known.id,'passed',report);
+  await buildSite(db,dist,portraits);const before=await tree(dist);
+  await db.query(`UPDATE people_coverage_v1 SET record=jsonb_set(record,'{party}','"XX"') WHERE publication_id=$1`,[known.id]);
+  await assert.rejects(buildSite(db,dist,portraits),/difere da versão aprovada/);
+  assert.deepEqual(await tree(dist),before);
+}));
+
+test('a build refused by its limits leaves the previous output in place',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  await buildSite(db,dist,portraits);const before=await tree(dist);
+  await fs.writeFile(path.join(portraits,'1.jpg'),Buffer.alloc(11*1024*1024));
+  await assert.rejects(buildSite(db,dist,portraits),/10 MiB/);assert.deepEqual(await tree(dist),before);
 }));

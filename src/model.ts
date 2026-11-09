@@ -66,7 +66,8 @@ export type Scope={year:number;months:number[];ids:number[];legislature:number};
 export type Person={id:number;name:string;photo:string|null;sourceUrl:string;profileFetchedAt:string;uf?:string|null;party?:string|null;statusDate?:string|null};
 export const UFS=new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
 export type SourceRef={url:string;sha256:string;row:number;fetchedAt:string};
-export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey:string;supplierVerified:boolean;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api'};
+export type FinancialBasis='reported-installment'|'balanced-document-split';
+export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey:string;supplierVerified:boolean;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis};
 export type Page={url:string;sha256:string;file:string;fetchedAt:string;pass:number;count:number|null};
 export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[]}};
 
@@ -78,16 +79,16 @@ export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|n
     u.protocol='https:';return u.href;
   }catch{return null;}
 }
-export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceRef):Expense {
+export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceRef,basis?:FinancialBasis):Expense {
   const r=expenseSchema.parse(raw);
   if(!scope.ids.includes(personId)||r.ano!==scope.year||!scope.months.includes(r.mes))throw new Error('Registro fora do recorte contratado');
   const net=cents(r.valorLiquido),face=cents(r.valorDocumento),glosa=cents(r.valorGlosa);
-  if(face-glosa!==net)throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
+  if(face-glosa!==net&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
   const supplierId=(r.cnpjCpfFornecedor||'').replace(/\D/g,'');
   // Only validated CNPJ businesses are grouped across records. CPF/missing IDs remain separate.
   const verified=validCnpj(supplierId),supplier=publicSupplier(r.nomeFornecedor,supplierId);
   const occurrence=hash(canonical({personId,raw}));
-  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source};
+  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }
 export function validCnpj(id:string):boolean {
   if(!/^\d{14}$/.test(id)||/^(\d)\1+$/.test(id))return false;
