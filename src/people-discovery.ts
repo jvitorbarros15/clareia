@@ -36,6 +36,7 @@ export function parseDiscoveryScope(input:unknown,today=new Date().toISOString()
 }
 export function sourceAllowed(url:string):boolean{
   let u:URL;try{u=new URL(url);}catch{return false;}
+  if(url==='https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/emendas-parlamentares/EmendasParlamentares.zip')return true;
   const legacy=u.origin==='https://www.camara.leg.br'&&u.pathname==='/SitCamaraWS/Deputados.asmx/ObterDetalhesDeputado'&&
     [...u.searchParams.keys()].sort().join(',')==='ideCadastro,numLegislatura'&&
     ['ideCadastro','numLegislatura'].every(key=>/^[1-9]\d{0,8}$/.test(u.searchParams.get(key)||''));

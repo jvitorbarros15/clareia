@@ -11,6 +11,7 @@
     "collect:people": "tsx scripts/collect-people-history.ts",
     "collect:people:legacy": "tsx scripts/collect-people-legacy.ts",
     "publish:bills": "tsx scripts/publish-bills.ts",
+    "collect:amendments": "tsx scripts/collect-amendments.ts",
     "collect:votes": "tsx scripts/collect-votes.ts",
     "collect:bills": "tsx scripts/collect-bills.ts",
     "publish:people": "tsx scripts/publish-people-coverage.ts",
