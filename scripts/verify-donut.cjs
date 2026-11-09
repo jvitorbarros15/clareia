@@ -19,7 +19,7 @@ catch { ({ chromium } = require(path.join(process.env.APPDATA, 'npm/node_modules
     // Aim at the middle of the first arc, not its bounding-box center (which can be in the hole).
     const point = await page.evaluate(() => {
       const C = window.Clareia;
-      const rows = C.all().filter(p => C.state.uf === 'Brasil' || p.uf === C.state.uf).flatMap(C.records);
+      const rows = C.all().filter(p => C.state.uf === 'Brasil' || p.uf === C.state.uf).flatMap(C.cells);
       const name = document.querySelector('[data-donut-slice]').dataset.pHighlight;
       const categories = [...new Set(rows.map(r => r.category))];
       const positive = categories.reduce((n, category) => n + Math.max(0, C.sum(rows.filter(r => r.category === category))), 0);

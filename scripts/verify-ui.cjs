@@ -23,10 +23,13 @@ async function at(width, { height = 900, reducedMotion = 'no-preference', search
   return page;
 }
 
+// Records are fetched when a list opens: wait until the loading note has been replaced.
+const recordsShown = page => page.waitForFunction(() => document.querySelector('#detail').open && !document.querySelector('#detail .records-loading'));
 async function openRecords(page, personId) {
   await page.locator(`.bar-row[data-id="${personId}"]`).click();
   await page.waitForSelector('#detail[open]');
   await page.locator('#detail [data-action=records]').click();
+  await recordsShown(page);
 }
 
 // Expected values come from the published files, independently of the page code.
@@ -223,6 +226,7 @@ check('keyboard drill', async () => {
   await settle(page);
   await tabTo(() => document.activeElement?.dataset?.action === 'records', 10, 'Ver registros');
   await page.keyboard.press('Enter');
+  await recordsShown(page);
   await tabTo(() => !!document.activeElement?.closest('#detail .record-row'), 10, 'the first record row');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.querySelector('#detail-title').textContent === 'O registro por trás do valor');
@@ -573,7 +577,7 @@ check('panorama dialog reuses the record rows', async () => {
   const page = await at(1440);
   const data = await published(page);
   await page.locator('[data-p-summary=expenses]').click();
-  await page.waitForSelector('#detail[open]');
+  await recordsShown(page);
   const info = await page.evaluate(() => {
     const d = document.querySelector('#detail');
     const rows = [...d.querySelectorAll('.record-row')].map(r => ({
@@ -915,7 +919,7 @@ check('month click scopes every label to the selected month', async () => {
   assert.equal(clean(await page.locator('.donut-hole span').innerText()), 'Jan 2025');
   assert.equal(clean(await page.locator('.donut-hole strong').innerText()), clean(brlCompact(jan)), 'donut total is January only');
   await page.locator('#despesas .donut-caption [data-p=spend-evidence]').click();
-  await page.waitForSelector('#detail[open]');
+  await recordsShown(page);
   const note = clean(await page.locator('#detail .records-note').first().innerText());
   assert.ok(note.includes('Jan 2025') && !note.includes('Jan–Fev'), `dialog scope: ${note}`);
   assert.equal(clean(await page.locator('#detail .calculation-result').innerText()).split(' Soma')[0], clean(brl(jan)), 'dialog total is January only');
@@ -1065,7 +1069,7 @@ check('external text is escaped once', async () => {
     const name = `D'Ávila & <u data-xss=name>Filho</u>`, catName = `Foo & 'bar' <u data-xss=cat>x</u>`;
     p.name = name; p.party = `PX<u data-xss=party>`;
     D.categories[1] = catName;
-    for (const person of C.all()) for (const r of person.records) if (r.category === category) r.category = catName;
+    for (const person of C.all()) for (const r of person.cells) if (r.category === category) r.category = catName;
     C.refresh();
     return { name, shown: D.label(catName) };
   });
@@ -1114,6 +1118,34 @@ const stub = ({ months, records } = {}) => async page => {
     if (months) out = months.flatMap((m, k) => out.filter(r => r.month === (k % 2) + 1).map(r => ({ ...r, id: `${r.id}-stub${m}`, month: m, date: r.date && r.date.replace(/^(\d{4})-\d{2}/, `$1-${String(m).padStart(2, '0')}`) })));
     if (records) out = records(out, index.people.find(p => p.id === id));
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(out) });
+  });
+  // The page reads totals from the summary files, so they are regrouped from the same stubbed records.
+  if (!months && !records) return;
+  const shaped = (async () => {
+    const out = {};
+    for (const id of index.scope.ids) {
+      const res = await page.request.get(`${base}/${manifest.base}/deputados/${id}/despesas.json`);
+      let rows = res.ok() ? await res.json() : [];
+      if (months) rows = months.flatMap((m, k) => rows.filter(r => r.month === (k % 2) + 1).map(r => ({ ...r, month: m })));
+      if (records) rows = records(rows, index.people.find(p => p.id === id));
+      out[id] = rows;
+    }
+    return out;
+  })();
+  await page.route('**/fornecedores.json', async route => {
+    const res = await route.fetch(), f = await res.json(), rows = await shaped, cells = {};
+    for (const [id, list] of Object.entries(rows)) {
+      const groups = new Map();
+      for (const r of list) { const k = [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplier)].join(':'), g = groups.get(k) || [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplier), 0, 0]; g[3] += r.cents; g[4]++; groups.set(k, g); }
+      cells[id] = [...groups.values()];
+    }
+    f.people = cells;
+    await route.fulfill({ response: res, json: f });
+  });
+  await page.route('**/summary.json', async route => {
+    const res = await route.fetch(), s = await res.json(), rows = await shaped;
+    for (const p of s.people) { const list = rows[p.id] || []; p.cents = list.reduce((n, r) => n + r.cents, 0); p.records = list.length; }
+    await route.fulfill({ response: res, json: s });
   });
 };
 const FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -1619,8 +1651,11 @@ check('changing the deputy swaps the activity list without blanking the section'
 check('someone without confirmed exercise shows no zero and leaves the spending ranking', async () => {
   let target;
   const page = await at(1440, { before: async p => {
-    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.coverageId = 'c'; target = s.people.at(-1).id; for (const q of s.people) for (const m of q.months) { m.exercise = q.id === target ? 'unknown' : 'full'; m.partyStatus = 'single'; m.party = 'X'; } await route.fulfill({ response: res, json: s }); });
-    await p.route('**/deputados/*/despesas.json', async route => { if (target && route.request().url().includes('/' + target + '/')) return route.fulfill({ status: 404, body: '' }); return route.continue(); });
+    const manifest = await (await p.request.get(`${base}/manifest.json`)).json();
+    target = (await (await p.request.get(`${base}/${manifest.base}/index.json`)).json()).scope.ids.at(-1);
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.coverageId = 'c'; for (const q of s.people) { for (const m of q.months) { m.exercise = q.id === target ? 'unknown' : 'full'; m.partyStatus = 'single'; m.party = 'X'; } if (q.id === target) Object.assign(q, { cents: 0, records: 0, cells: [] }); } await route.fulfill({ response: res, json: s }); });
+    await p.route('**/fornecedores.json', async route => { const res = await route.fetch(), f = await res.json(); f.people[target] = []; await route.fulfill({ response: res, json: f }); });
+    await p.route('**/deputados/*/despesas.json', async route => { if (route.request().url().includes('/' + target + '/')) return route.fulfill({ status: 404, body: '' }); return route.continue(); });
   } });
   const card = page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${target}"]`) }).first();
   assert.match(await text(card), /Sem exercício confirmado em 2025/); assert.doesNotMatch(await text(card), /R\$ 0,00/);
@@ -1642,6 +1677,59 @@ check('the question button uses the Clareia icon', async () => {
   assert.equal(await icon.getAttribute('src'), '/icon.svg');
   assert.ok(await icon.evaluate(i => i.complete && i.naturalWidth > 0), 'icon loaded');
   assert.doesNotMatch(await text(page.locator('.assistant-launcher')), /✳/);
+  await page.close();
+});
+
+check('the initial load fetches no individual record file', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }), urls = [];
+  page.on('request', r => urls.push(r.url()));
+  await page.goto(base + '/', { waitUntil: 'networkidle' });
+  await page.locator('#despesas .donut-hole strong').waitFor();
+  assert.deepEqual(urls.filter(u => /despesas\.(json|csv)/.test(u)), [], 'no despesas file on load');
+  assert.ok(urls.some(u => u.endsWith('/fornecedores.json')), 'supplier totals loaded');
+  await page.close();
+});
+
+check('every aggregate equals the published records, and categories keep their order', async () => {
+  const page = await at(1440);
+  const diff = await page.evaluate(async () => {
+    const D = window.ClareiaData, out = [], byCategory = new Map();
+    for (const p of D.dataset()) {
+      const res = await fetch(D.recordsUrl(p.officialId)), raw = res.status === 404 ? [] : await res.json(), want = new Map();
+      for (const r of raw) { const k = [r.month - 1, r.category, r.supplier].join('|'), w = want.get(k) || [0, 0]; w[0] += r.cents; w[1]++; want.set(k, w); byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.cents)); }
+      const got = new Map(p.cells.map(c => [[c.month, c.category, c.supplier].join('|'), [c.amount, c.count]]));
+      if (got.size !== want.size) out.push(`${p.name}: ${got.size} cells for ${want.size} groups`);
+      for (const [k, w] of want) { const g = got.get(k); if (!g || g[0] !== w[0] || g[1] !== w[1]) out.push(`${p.name} ${k}: ${g} vs ${w}`); }
+      if (p.total !== raw.reduce((n, r) => n + r.cents, 0)) out.push(`${p.name}: total ${p.total}`);
+    }
+    const order = [...byCategory].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+    if (order.join('|') !== D.categories.join('|')) out.push('category order differs: ' + D.categories.join(', '));
+    return out;
+  });
+  assert.deepEqual(diff, []);
+  await page.close();
+});
+
+check('a record list loads on demand with one row per counted record', async () => {
+  const page = await at(1440), urls = [];
+  page.on('request', r => urls.push(r.url()));
+  const id = (await peopleOf(page))[0];
+  await openRecords(page, id);
+  const expected = await page.evaluate(id => window.Clareia.count(window.Clareia.cells(window.Clareia.person(id))), id);
+  assert.equal(await page.locator('#detail .record-row').count(), expected);
+  assert.equal(urls.filter(u => u.includes('/despesas.json')).length, 1, 'only that deputy file');
+  await page.close();
+});
+
+check('a failed record file shows a notice and no number', async () => {
+  const page = await at(1440, { before: p => p.route('**/deputados/*/despesas.json', route => route.fulfill({ status: 500, body: '' })) });
+  await page.locator('.bar-row').first().click();
+  await page.waitForSelector('#detail[open]');
+  await page.locator('#detail [data-action=records]').click();
+  await page.locator('#detail [role=alert]').waitFor();
+  const body = await text(page.locator('#detail-body'));
+  assert.match(body, /Registros indisponíveis agora. Nenhum valor foi estimado./);
+  assert.doesNotMatch(body, /R\$/);
   await page.close();
 });
 
