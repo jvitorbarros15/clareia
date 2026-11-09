@@ -1,6 +1,6 @@
 import {canonical,hash} from './model.ts';
 import type {DB} from './store.ts';
-import {votesContentId} from './votes.ts';
+import {ballotsHash,votesContentId} from './votes.ts';
 import type {Ballot,Vote,VotesReport} from './votes.ts';
 
 export type VotesVersion={schema:'clareia.votes-version.v1';id:string;metric:'camara.votes.nominal.v1';scope:{years:number[]};collectedAt:string;publishedAt:string;votes:Vote[];ballots:Ballot[]};
@@ -11,7 +11,7 @@ const digest=(b:Ballot[])=>hash(canonical(b));
 
 export function buildVotesVersion(parts:{report:VotesReport;ballots:Ballot[];audit:Audit}[],publishedAt:string):VotesVersion{
   if(!parts.length)throw new Error('Nenhum ano informado');
-  for(const {report,audit} of parts)if(audit.status!=='passed'||audit.contentSha256!==report.contentSha256||votesContentId(report)!==report.contentSha256)throw new Error(`Votações de ${report.year} sem auditoria aprovada para esta versão`);
+  for(const {report,audit,ballots} of parts)if(audit.status!=='passed'||audit.contentSha256!==report.contentSha256||votesContentId(report)!==report.contentSha256||ballotsHash(ballots)!==report.ballotsSha256)throw new Error(`Votações de ${report.year} sem auditoria aprovada para esta versão`);
   const sorted=[...parts].sort((a,b)=>a.report.year-b.report.year),years=sorted.map(p=>p.report.year);
   if(new Set(years).size!==years.length)throw new Error('Ano repetido');
   const votes=sorted.flatMap(p=>p.report.votes.filter(v=>v.ballots>0||v.issues.length)),ballots=sorted.flatMap(p=>p.ballots);
@@ -57,6 +57,8 @@ export async function auditVotesVersion(db:DB,id:string):Promise<{status:'passed
   try{await assertVotesMatchVersion(db,id);}catch{failures.push('content-id');}
   const rows=await db.query<{vote_id:string;category:string;n:string}>('SELECT vote_id,category,count(*)::text AS n FROM vote_ballots_v1 WHERE publication_id=$1 GROUP BY vote_id,category',[id]),tally=new Map<string,Record<string,number>>();
   for(const r of rows.rows){const t=tally.get(r.vote_id)??{};t[r.category]=Number(r.n);tally.set(r.vote_id,t);}
-  for(const v of await readVotes(db,id))if(canonical(Object.entries(tally.get(v.id)??{}).sort(([a],[b])=>a.localeCompare(b)))!==canonical(Object.entries(v.observed).sort(([a],[b])=>a.localeCompare(b))))failures.push('tally-'+v.id);
+  const list=await readVotes(db,id),known=new Set(list.map(v=>v.id));
+  for(const key of tally.keys())if(!known.has(key))failures.push('orphan-ballot-'+key);
+  for(const v of list)if(canonical(Object.entries(tally.get(v.id)??{}).sort(([a],[b])=>a.localeCompare(b)))!==canonical(Object.entries(v.observed).sort(([a],[b])=>a.localeCompare(b))))failures.push('tally-'+v.id);
   return {status:failures.length?'failed':'passed',failures,checkedAt};
 }

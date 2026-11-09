@@ -47,8 +47,8 @@ test('only the official yearly files are allowed',()=>{
 });
 test('the audit recounts each category and catches changed tallies, holds and ballots',async()=>{
   const v=csv([voteHead,vote('a',1,1,0),vote('b',1,0,0)]),b=csv([ballotHead,ballot('a',1,'Sim'),ballot('a',2,'Não'),ballot('b',1,'Não')]),o=csv([objectHead]);
-  const file=new Map<string,Uint8Array>([['v',v],['b',b]]),source=(url:string,name:string):VoteSource=>({url,sha256:hash(file.get(name)!),file:name,bytes:file.get(name)!.length,fetchedAt:'2026-11-09T00:00:00Z',pass:2});
-  const derived=await deriveVotes(2025,v,b,o),report=votesReport(2025,derived,[source(voteFileUrl('votacoes',2025),'v'),source(voteFileUrl('votacoesVotos',2025),'b')],'2026-11-09T00:00:00Z'),read=async(s:VoteSource)=>file.get(s.file)!;
+  const file=new Map<string,Uint8Array>([['v',v],['b',b],['o',o]]),source=(url:string,name:string):VoteSource=>({url,sha256:hash(file.get(name)!),file:name,bytes:file.get(name)!.length,fetchedAt:'2026-11-09T00:00:00Z',pass:2});
+  const derived=await deriveVotes(2025,v,b,o),report=votesReport(2025,derived,[source(voteFileUrl('votacoes',2025),'v'),source(voteFileUrl('votacoesVotos',2025),'b'),source(voteFileUrl('votacoesProposicoes',2025),'o')],'2026-11-09T00:00:00Z'),read=async(s:VoteSource)=>file.get(s.file)!;
   assert.deepEqual((await auditVotes(report,derived.ballots,read)).failures,[]);
   const edit=(change:(r:typeof report)=>void)=>{const c=structuredClone(report);change(c);return auditVotes(c,derived.ballots,read);};
   assert.ok((await edit(r=>{r.votes[0].observed={Sim:2};})).failures.includes('tally-a'));
@@ -59,4 +59,10 @@ test('the audit recounts each category and catches changed tallies, holds and ba
 test('a CPF written in official free text is removed before anything is kept',async()=>{
   const r=await derive([vote('a',0,0,0).replace('Aprovado','Aprovado 529.982.247-25')],[],['"a";"10";"PL 1/2025";"Pensão a Fulana (CPF 529.982.247-25), filha"']);
   assert.equal(JSON.stringify(r).includes('529.982'),false);assert.match(r.votes[0].objects[0].summary!,/\[CPF omitido\]/);
+});
+
+test('CPFs written in other forms next to the label are removed too',async()=>{
+  const {redactCpf,findCpfs}=await import('../src/cpf-scan.ts');
+  for(const t of ['CPF n.529.982.247-25','CPF 52998224725','CPF 529982247-25','CPF 529.982.247/25']){assert.ok(findCpfs(t,new Set())>0,t);assert.equal(redactCpf(t).match(/\d{3}/),null,t);}
+  assert.equal(redactCpf('Processo 1234/2025'),'Processo 1234/2025');
 });

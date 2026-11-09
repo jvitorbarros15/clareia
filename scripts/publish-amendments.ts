@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {withLock} from '../src/lock.ts';
-import {auditAmendmentsVersion,buildAmendmentsVersion,storeAmendmentsVersion} from '../src/amendments-publication.ts';
+import {auditAmendmentsVersion,buildAmendmentsVersion,reobserveAmendmentsVersion,storeAmendmentsVersion} from '../src/amendments-publication.ts';
 import {activePublication,recordDomainAudit} from '../src/publications.ts';
 import {openDB} from '../src/store.ts';
 
@@ -23,7 +23,7 @@ await withLock(async()=>{
     await storeAmendmentsVersion(db,version);
     const result=await auditAmendmentsVersion(db,version.id,report);
     if(result.status!=='passed'){await recordDomainAudit(db,version.id,'failed',result);process.exitCode=1;}
-    else if(approve)await recordDomainAudit(db,version.id,'passed',result);
+    else if(approve){await db.query('BEGIN');try{await reobserveAmendmentsVersion(db,version.id);await recordDomainAudit(db,version.id,'passed',result);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}}
     console.log(JSON.stringify({...summary,database,stored:true,audit:result.status,active:(await activePublication(db,'emendas'))?.id===version.id}));
   }finally{await db.close();}
 });

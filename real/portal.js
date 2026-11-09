@@ -189,17 +189,17 @@
   function projectCards() { return ''; }
 
   const activityCache=new Map();
-  const activityData=id=>{if(!activityCache.has(id))activityCache.set(id,fetch(window.ClareiaData.activityUrl(id)).then(r=>{if(!r.ok)throw new Error();return r.json();}));return activityCache.get(id);};
+  const activityData=id=>{if(!activityCache.has(id))activityCache.set(id,fetch(window.ClareiaData.activityUrl(id)).then(r=>{if(!r.ok)throw new Error();return r.json();}).catch(error=>{activityCache.delete(id);throw error;}));return activityCache.get(id);};
   const activityPerson=()=>state.activity&&C.person(state.activity)?state.activity:C.byTotal()[0].id;
   const activitySelect=name=>`<label class="activity-person">Deputado<select id="activity-${name}">${C.byTotal().map(p=>`<option value="${p.id}" ${p.id===activityPerson()?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>`;
   const KIND={merito:'Mérito',requerimento:'Requerimento',destaque:'Emenda ou destaque',outro:'Outro'};
-  const shortDate=value=>value?value.slice(8,10)+'/'+value.slice(5,7)+'/'+value.slice(0,4):'';
+  const shortDate=value=>value?esc(value.slice(8,10)+'/'+value.slice(5,7)+'/'+value.slice(0,4)):'';
   function billItem(b){const role=b.proponent?(b.joint?'Proponente, em conjunto':'Proponente'):'Coautoria';return `<li class="activity-item"><div class="activity-meta"><b>${esc(b.type)} ${b.number}/${b.year}</b><span>${role}</span></div><p>${esc(b.summary)}</p><p class="activity-state">${b.norm?`Virou ${esc(b.norm.kind)} ${esc(b.norm.number)}/${b.norm.year}`:esc(b.situation||'Situação não informada')}${b.situationAt?` · situação em ${shortDate(b.situationAt)}`:''}</p><a class="p-link" href="https://www.camara.leg.br/propostas-legislativas/${b.id}" rel="noopener" target="_blank">Ver na Câmara ↗</a></li>`;}
   function voteItem(v){return `<li class="activity-item"><div class="activity-meta"><b>${shortDate(v.date)} · ${esc(v.organ)}</b><span>${KIND[v.kind]||'Outro'}</span></div>${v.matters.length?`<p class="activity-matter">${v.matters.map(esc).join(', ')}</p>`:''}<p>${esc(v.description)}</p><p class="activity-state">Voto registrado: <b>${esc(v.category)}</b></p><a class="p-link" href="https://dadosabertos.camara.leg.br/api/v2/votacoes/${encodeURIComponent(v.id)}" rel="noopener" target="_blank">Ver na fonte ↗</a></li>`;}
   async function hydrateActivity(){
     const id=activityPerson(),person=C.person(id),official=person.officialId,info=window.ClareiaData.activitySummary(official);
     const fill=(selector,html)=>{const el=$(selector);if(el)el.innerHTML=html;};
-    let data;try{data=await activityData(official);}catch{fill('#bills-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');fill('#votes-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');return;}
+    let data;try{data=await activityData(official);}catch{if(activityPerson()!==id)return;fill('#bills-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');fill('#votes-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');return;}
     if(activityPerson()!==id)return;
     if(info?.bills)fill('#bills-list',`<div class="activity-numbers"><div><strong>${number(info.bills.proposed)}</strong><span>como proponente${info.bills.joint?`, ${number(info.bills.joint)} em conjunto`:''}</span></div><div><strong>${number(info.bills.coauthored)}</strong><span>em coautoria</span></div><div><strong>${number(info.bills.norms)}</strong><span>viraram norma</span></div></div><ul class="activity-list">${data.bills.map(billItem).join('')||'<li class="p-small">Nenhum projeto nesta versão.</li>'}</ul>`);
     if(info?.votes)fill('#votes-list',`<div class="activity-numbers">${Object.entries(info.votes).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<div><strong>${number(n)}</strong><span>${esc(c)}</span></div>`).join('')}</div><ul class="activity-list">${data.votes.map(voteItem).join('')||'<li class="p-small">Nenhum voto nesta versão.</li>'}</ul>`);

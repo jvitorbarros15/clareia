@@ -24,9 +24,11 @@ const count=(value:string)=>/^\d{1,4}$/.test(value)?Number(value):null;
 export function classifyVote(description:string):VoteKind{
   const head=description.split(/[,.:]/)[0];
   if(/requerimento/i.test(head))return 'requerimento';
-  if(/^\s*(mantid|suprimid)/i.test(head)||/destaque|destacad/i.test(head)||/\b(sub)?emendas?\b/i.test(head)&&!/substitutiv/i.test(head))return 'destaque';
-  if(/\b(projeto|substitutivo|substitutiva|parecer|reda[çc][ãa]o|medida|mat[ée]ria|proposta)\b/i.test(head))return 'merito';
-  return 'outro';
+  if(/^\s*(mantid|suprimid)/i.test(head)||/destaque|destacad/i.test(head))return 'destaque';
+  if(/subemenda\s+substitutiva/i.test(head))return 'merito';
+  // The first subject named decides: a Proposta de Emenda is merit, an Emenda to a Projeto is not.
+  const subject=/\b((?:sub)?emendas?|projeto|substitutiv[oa]|parecer|reda[çc][ãa]o|medida|mat[ée]ria|proposta)\b/i.exec(head)?.[1].toLowerCase();
+  return !subject?'outro':subject.includes('emenda')?'destaque':'merito';
 }
 export const votesContentId=(r:Pick<VotesReport,'schema'|'year'|'votes'|'ballotsSha256'|'metrics'>)=>hash(canonical({schema:r.schema,year:r.year,votes:r.votes,ballotsSha256:r.ballotsSha256,metrics:r.metrics}));
 export const ballotsHash=(ballots:Ballot[])=>hash(canonical(ballots));
