@@ -73,3 +73,14 @@ test('the audit rereads the dispatch and refuses an invented norm',async()=>{
   assert.deepEqual((await auditBills(report,read)).failures,[]);
   const copy=structuredClone(report);copy.bills[0].norm={kind:'Lei Ordinária',number:'99',year:2025};assert.ok((await auditBills(copy,read)).failures.includes('norm-1'));
 });
+
+test('a dispatch citing two norms stays unresolved in the collector and the audit',async()=>{
+  const text='Transformado na Lei Ordinária 1/2025 e na Lei Ordinária 2/2025.';assert.equal(normFromTramitacoes('PL',said(text)),null);
+  const bills=csv(head,[normBill(1)]),authors=csv(authorHead,[author(1,10,1,1)]),tram=new TextEncoder().encode(JSON.stringify({dados:said(text)}));
+  const file=new Map<string,Uint8Array>([['b',bills],['a',authors],['t',tram]]),source=(url:string,name:string):BillSource=>({url,sha256:hash(file.get(name)!),file:name,bytes:file.get(name)!.length,fetchedAt:'2026-11-09T00:00:00Z',pass:2});
+  const report=billsReport(2025,await deriveBills(2025,bills,authors,async()=>said(text)),[source(billsUrl(2025),'b'),source(billAuthorsUrl(2025),'a'),source(billTramitacoesUrl(1),'t')],'2026-11-09T00:00:00Z');
+  assert.deepEqual((await auditBills(report,async s=>file.get(s.file)!)).failures,[]);assert.equal(report.bills[0].normStatus,'unresolved');
+});
+test('a proposal shared with a non-deputy proponent counts as joint',async()=>{
+  const r=await derive([bill(1)],[author(1,10,1,1),organ(1)]);assert.equal(r.people[0].joint,1);assert.equal(r.bills[0].otherProponents,1);
+});

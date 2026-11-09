@@ -1,4 +1,5 @@
 import {canonical,hash} from './model.ts';
+import {billsContentId} from './bills.ts';
 import type {DB} from './store.ts';
 import type {Bill,BillPerson,BillsReport} from './bills.ts';
 
@@ -13,7 +14,7 @@ function sumPeople(reports:BillsReport[]):BillPerson[]{
 }
 export function buildBillsVersion(pairs:{report:BillsReport;audit:Audit}[],publishedAt:string):BillsVersion{
   if(!pairs.length)throw new Error('Nenhum ano informado');
-  for(const {report,audit} of pairs)if(audit.status!=='passed'||audit.contentSha256!==report.contentSha256)throw new Error(`Proposições de ${report.year} sem auditoria aprovada para esta versão`);
+  for(const {report,audit} of pairs)if(audit.status!=='passed'||audit.contentSha256!==report.contentSha256||billsContentId(report)!==report.contentSha256)throw new Error(`Proposições de ${report.year} sem auditoria aprovada para esta versão`);
   const reports=pairs.map(p=>p.report).sort((a,b)=>a.year-b.year),years=reports.map(r=>r.year);
   if(new Set(years).size!==years.length)throw new Error('Ano repetido');
   if(canonical(reports[0].types)!==canonical([...new Set(reports.flatMap(r=>r.types))]))throw new Error('Tipos divergentes entre os anos');
@@ -53,7 +54,7 @@ export async function auditBillsVersion(db:DB,id:string,reports:BillsReport[]):P
   const tally=new Map<number,[number,number,number,number]>();
   for(const bill of stored){
     if(bill.issues.length)continue;
-    const many=bill.authors.filter(a=>a.proponent).length>1;
+    const many=bill.authors.filter(a=>a.proponent).length+bill.otherProponents>1;
     for(const a of bill.authors){const t=tally.get(a.deputyId)??[0,0,0,0];if(a.proponent){t[0]++;if(many)t[1]++;if(bill.normStatus==='resolved')t[3]++;}else t[2]++;tally.set(a.deputyId,t);}
   }
   const recount=[...tally].sort((a,b)=>a[0]-b[0]).map(([personId,[proposed,joint,coauthored,norms]])=>({id:personId,proposed,joint,coauthored,norms}));

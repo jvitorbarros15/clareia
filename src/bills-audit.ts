@@ -25,7 +25,7 @@ export async function auditBills(report:BillsReport,read:(source:BillSource)=>Pr
     const seen=new Set<string>();
     for(const e of JSON.parse(Buffer.from(bytes).toString()).dados as Record<string,string|null>[])for(const field of ['despacho','descricaoTramitacao']){
       const text=(e[field]??'').toLowerCase(),at=text.indexOf('transformad');if(at<0)continue;
-      for(const kind of ['lei ordinária','lei ordinaria','lei complementar','emenda constitucional']){const p=text.indexOf(kind,at);if(p<0||p-at>20)continue;const tail=text.slice(p+kind.length).replace(/^[\sn.º°o]*/,'').split(/\s/)[0].replace(/[^0-9/.]/g,'').replace(/\.+$/,'');const [n,y]=tail.split('/');if(n&&y&&y.length===4)seen.add(JSON.stringify([kind.replace('ordinaria','ordinária'),n.replace(/\./g,''),Number(y)]));}
+      for(const kind of ['lei ordinária','lei ordinaria','lei complementar','emenda constitucional'])for(let p=text.indexOf(kind,at);p>=0;p=text.indexOf(kind,p+1)){const tail=text.slice(p+kind.length).replace(/^[\sn.º°o]*/,'').split(/\s/)[0].replace(/[^0-9/.]/g,'').replace(/\.+$/,'');const [n,y]=tail.split('/');if(n&&y&&y.length===4&&(p-at<=20||seen.size>0))seen.add(JSON.stringify([kind.replace('ordinaria','ordinária'),n.replace(/\./g,''),Number(y)]));}
     }
     if(seen.size!==1)return null;const [kind,number,year]=JSON.parse([...seen][0]) as [string,string,number];return kind===expectedKind[type]?{kind,number,year}:null;
   };
@@ -47,8 +47,8 @@ export async function auditBills(report:BillsReport,read:(source:BillSource)=>Pr
     if(!isNorm&&bill.norm)failures.push('norm-'+p.id);
     if(norm)resolved++;else if(isNorm)unresolved++;
     if(expected.size){held++;continue;}
-    if(bill.otherAuthors!==rows.length-deputies.length||canonical(bill.authors.map(a=>[a.deputyId,a.proponent]))!==canonical(deputies.map(a=>[Number(a.idDeputadoAutor),a.proponente==='1']).sort((x,y)=>Number(x[0])-Number(y[0]))))failures.push('authors-'+p.id);
-    const many=deputies.filter(a=>a.proponente==='1').length>1;
+    if(bill.otherAuthors!==rows.length-deputies.length||bill.otherProponents!==rows.filter(a=>a.idDeputadoAutor===''&&a.proponente==='1').length||canonical(bill.authors.map(a=>[a.deputyId,a.proponent]))!==canonical(deputies.map(a=>[Number(a.idDeputadoAutor),a.proponente==='1']).sort((x,y)=>Number(x[0])-Number(y[0]))))failures.push('authors-'+p.id);
+    const many=rows.filter(a=>a.proponente==='1').length>1;
     for(const a of deputies){const id=Number(a.idDeputadoAutor),target=a.proponente==='1'?proposed:coauthored,bump=(m:Map<number,number>)=>m.set(id,(m.get(id)??0)+1);bump(target);if(a.proponente==='1'&&many)bump(joint);if(a.proponente==='1'&&norm)bump(norms);}
   }
   if(report.metrics.held!==held)failures.push('held-count');

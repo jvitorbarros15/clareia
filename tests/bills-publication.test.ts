@@ -6,7 +6,7 @@ import {billsContentId} from '../src/bills.ts';
 import type {Bill,BillPerson,BillsReport} from '../src/bills.ts';
 import {assertBillsMatchVersion,auditBillsVersion,buildBillsVersion,readBills,reobserveBillsVersion,storeBillsVersion} from '../src/bills-publication.ts';
 
-const bill=(id:number,year:number,overrides:Partial<Bill>={}):Bill=>({id,type:'PL',number:id,year,presentedAt:`${year}-03-01T10:00`,summary:'Ementa',situation:'Aguardando Parecer',situationAt:null,url:null,authors:[{deputyId:10,order:1,proponent:true}],otherAuthors:0,issues:[],normStatus:'none',norm:null,...overrides});
+const bill=(id:number,year:number,overrides:Partial<Bill>={}):Bill=>({id,type:'PL',number:id,year,presentedAt:`${year}-03-01T10:00`,summary:'Ementa',situation:'Aguardando Parecer',situationAt:null,url:null,authors:[{deputyId:10,order:1,proponent:true}],otherAuthors:0,otherProponents:0,issues:[],normStatus:'none',norm:null,...overrides});
 function report(year:number,bills:Bill[],people:BillPerson[]):BillsReport{
   const metrics={propositions:bills.length,selected:bills.length,held:0,orphanAuthorRows:0,normsResolved:0,normsUnresolved:0},body={schema:'clareia.bills.v1' as const,year,types:['PL','PLP','PEC'],bills,people,metrics};
   return {...body,contentSha256:billsContentId(body),status:'review-required',publicationEligible:false,createdAt:`${year+1}-01-01T00:00:00Z`,sources:[]};
@@ -20,6 +20,7 @@ test('years add up per person and an unaudited or repeated year is refused',()=>
   assert.throws(()=>buildBillsVersion([{report:y25,audit:{status:'failed',contentSha256:y25.contentSha256}}],now),/auditoria/);
   assert.throws(()=>buildBillsVersion([{report:y25,audit:{status:'passed',contentSha256:'x'}}],now),/auditoria/);
   assert.throws(()=>buildBillsVersion([pair(y25),pair(y25)],now),/repetido/);
+  const edited=structuredClone(y25);edited.people[0].proposed=9;assert.throws(()=>buildBillsVersion([pair(edited)],now),/auditoria/);
 });
 test('a stored version stays inactive until approved and the audit recounts from SQL',async()=>{
   const db=await openDB(true);

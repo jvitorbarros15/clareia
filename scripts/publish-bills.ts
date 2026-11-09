@@ -11,6 +11,7 @@ for(let i=0;i<args.length;i++){if(['--dry-run','--approve','--local'].includes(a
 const dryRun=args.includes('--dry-run'),approve=args.includes('--approve'),database=process.env.DATABASE_URL?'DATABASE_URL':'local';
 if(!runs.length)throw new Error('Informe ao menos um --run');
 if(dryRun&&approve)throw new Error('--dry-run e --approve são exclusivos');
+if(args.includes('--local')&&process.env.DATABASE_URL)throw new Error('--local não pode ser usado com DATABASE_URL definida');
 // The scheduled build restores its database from R2, so a local approval never reaches it.
 if(approve&&database==='local'&&!args.includes('--local'))throw new Error('Aprovação sem DATABASE_URL só vale para o banco local: confirme com --local');
 const load=async(run:string,file:string)=>JSON.parse(await fs.readFile(path.resolve('data/private/bills',run,file),'utf8'));
@@ -24,7 +25,7 @@ await withLock(async()=>{
     await storeBillsVersion(db,version);
     const audit=await auditBillsVersion(db,version.id,pairs.map(p=>p.report));
     if(audit.status!=='passed'){await recordDomainAudit(db,version.id,'failed',audit);console.error(JSON.stringify({id:version.id,failures:audit.failures}));process.exitCode=1;}
-    else if(approve){await reobserveBillsVersion(db,version.id);await recordDomainAudit(db,version.id,'passed',audit);}
+    else if(approve){await db.query('BEGIN');try{await reobserveBillsVersion(db,version.id);await recordDomainAudit(db,version.id,'passed',audit);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}}
     console.log(JSON.stringify({...summary,database,stored:true,audit:audit.status,active:(await activePublication(db,'projetos'))?.id===version.id},null,2));
   }finally{await db.close();}
 });
