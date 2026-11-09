@@ -127,7 +127,7 @@ test('offline CLI resumes pinned inputs without network and refuses another hist
   const manifest=await fs.readFile(path.join(legacyRoot,'run.json'));
   const bad=[...args];bad[bad.indexOf('test-history')]='another-history';await assert.rejects(promisify(execFile)(process.execPath,bad,{cwd}));assert.deepEqual(await fs.readFile(path.join(legacyRoot,'run.json')),manifest);
   const report=JSON.parse(await fs.readFile(path.join(legacyRoot,'legacy.json'),'utf8'));assert.deepEqual(report.people.map((p:any)=>p.status),['stable','stable']);
-  await fs.writeFile(path.join(legacyRoot,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('EEXIST'));assert.equal(await fs.readFile(path.join(legacyRoot,'running.lock'),'utf8'),'keep');
+  await fs.writeFile(path.join(legacyRoot,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('Outra tarefa possui'));assert.equal(await fs.readFile(path.join(legacyRoot,'running.lock'),'utf8'),'keep');
 });
 
 test('a period of one or two days has no interior day and stays boundary-only',async t=>{
@@ -152,4 +152,15 @@ test('events conflicting at the same moment end the known party, unlike an all-b
   for(const p of h.people)p.events=[p.events[0],{...p.events[0],dataHora:'2025-06-01T09:00:00',siglaPartido:'PSD'},{...p.events[0],dataHora:'2025-06-01T09:00:00',siglaPartido:'PL'},p.events[1]];
   const temporal=deriveTemporalHistory(h),legacy=structuredClone(base.legacy);legacy.historySha256=hash(canonical(h));
   assert.ok(!compareLegacy(legacy,h,temporal).people[0].partyChanges.some(c=>c.status==='same-day-time-differs'&&c.day==='2025-11-13'));
+});
+
+test('a party change before the window but inside the legislature is compared',async t=>{
+  const r=await setup(t,id=>xml(id,period(),affiliation().replace('13/11/2025','10/08/2024')));
+  assert.ok(r.cross.people[0].partyChanges.some(c=>c.status==='legacy-only-change'&&c.day==='2024-08-10'));
+  assert.equal((await auditLegacy(r.legacy,r.cross,r.h,r.temporal,r.d,r.read)).status,'passed');
+});
+test('full exercise against only a boundary day in the other source is a conflict',async t=>{
+  const r=await setup(t,id=>xml(id,period('01/02/2023','01/07/2025')));const july=r.cross.people[0].months[6];
+  assert.equal(july.legacy,'boundary-only');assert.equal(july.comparison,'potential-conflict');
+  assert.equal((await auditLegacy(r.legacy,r.cross,r.h,r.temporal,r.d,r.read)).status,'passed');
 });

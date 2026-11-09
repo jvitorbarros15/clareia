@@ -8,7 +8,15 @@ export type PeopleCoverage={schema:'clareia.people-coverage.v1';id:string;metric
 
 const REVIEW_CHANGES=new Set(['legacy-only-change','v2-only-change']);
 const monthOf=(day:string)=>day.slice(0,7);
-const contentId=(c:Omit<PeopleCoverage,'id'|'publishedAt'>)=>hash(canonical(c));
+// Only what is published identifies a version, so reprocessing identical sources does not create a new one.
+const contentId=(c:Pick<PeopleCoverage,'schema'|'metric'|'scope'|'rows'>)=>hash(canonical({schema:c.schema,metric:c.metric,scope:c.scope,rows:c.rows}));
+const monthKey=(year:number,month:number)=>`${year}-${String(month).padStart(2,'0')}`;
+// An event filed under another legislature after the last known state can replace it.
+function staleBaseline(person:TemporalReport['people'][number],windowStart:string):boolean{
+  const usable=person.events.filter(e=>e.disposition==='usable'&&e.time!==null&&e.time<=windowStart).sort((a,b)=>a.time!.localeCompare(b.time!));
+  const last=usable.at(-1);if(!last)return false;
+  return person.events.some(e=>e.disposition==='other-legislature'&&e.time!==null&&e.time>last.time!&&e.time<windowStart&&((e.original.siglaPartido??'')!==(last.original.siglaPartido??'')||(e.original.situacao??'')!==(last.original.situacao??'')));
+}
 
 // A month the two official sources disagree on keeps its state but publishes no party or UF as fact.
 export function buildPeopleCoverage(temporal:TemporalReport,crosscheck:CrosscheckReport,audit:{status:string;temporalSha256:string},publishedAt:string):PeopleCoverage{
@@ -19,11 +27,11 @@ export function buildPeopleCoverage(temporal:TemporalReport,crosscheck:Crosschec
   const rows=temporal.people.flatMap(person=>{
     const check=checks.get(person.id);if(!check)throw new Error('Pessoa sem cruzamento de fontes');
     // Once one source reports a change the other lacks, every later month inherits the doubt.
-    const firstDispute=check.partyChanges.filter(c=>REVIEW_CHANGES.has(c.status)).map(c=>monthOf(c.day)).sort()[0]??null;
+    const firstDispute=[...check.partyChanges.filter(c=>REVIEW_CHANGES.has(c.status)).map(c=>monthOf(c.day)),...person.months.filter(m=>m.party.status==='conflict').map(m=>monthKey(m.year,m.month))].sort()[0]??null,stale=staleBaseline(person,temporal.scope.start+'T00:00:00');
     return person.months.map<CoverageRow>(m=>{
-      const key=`${m.year}-${String(m.month).padStart(2,'0')}`,compared=check.months.find(x=>x.year===m.year&&x.month===m.month);
+      const key=monthKey(m.year,m.month),compared=check.months.find(x=>x.year===m.year&&x.month===m.month);
       if(!compared)throw new Error('Competência sem cruzamento de fontes');
-      const uncrossed=m.exercise!=='outside'&&(compared.comparison==='unavailable'||check.partyComparisonStatus==='unavailable'),exerciseReview=compared.comparison==='potential-conflict'||uncrossed,partyReview=exerciseReview||firstDispute!==null&&key>=firstDispute;
+      const uncrossed=m.exercise!=='outside'&&(stale||compared.comparison==='unavailable'||check.partyComparisonStatus==='unavailable'),exerciseReview=compared.comparison==='potential-conflict'||uncrossed,partyReview=exerciseReview||firstDispute!==null&&key>=firstDispute;
       return {personId:person.id,year:m.year,month:m.month,exercise:m.exercise,partyStatus:partyReview?'review':m.party.status,party:partyReview||m.party.status!=='single'?null:m.party.value,partyValues:m.party.status==='changed'&&!partyReview?m.party.values:[],ufStatus:exerciseReview?'review':m.uf.status,uf:exerciseReview||m.uf.status!=='single'?null:m.uf.value,review:partyReview,partialScope:m.partialScope};
     });
   });
@@ -42,7 +50,7 @@ export async function assertCoverageMatchesVersion(db:DB,id:string):Promise<Cove
   return rows;
 }
 // Stored for review only: the site moves only after recordDomainAudit marks this id as passed.
-export async function storePeopleCoverage(db:DB,coverage:PeopleCoverage,reobserve=false):Promise<void>{
+export async function storePeopleCoverage(db:DB,coverage:PeopleCoverage):Promise<void>{
   const {id,publishedAt,rows,...rest}=coverage;
   if(id!==contentId({...rest,rows}))throw new Error('Identificador da cobertura não corresponde ao conteúdo');
   await db.query('BEGIN');
@@ -50,15 +58,15 @@ export async function storePeopleCoverage(db:DB,coverage:PeopleCoverage,reobserv
     const created=await db.query<{id:string}>('INSERT INTO publications(id,domain,body) VALUES($1,$2,$3::jsonb) ON CONFLICT(id) DO NOTHING RETURNING id',[id,'pessoas',JSON.stringify({...rest,id,publishedAt})]);
     if(created.rows[0])for(let start=0;start<rows.length;start+=5000)await db.query(`INSERT INTO people_coverage_v1(publication_id,position,person_id,year,month,record)
       SELECT $1,$2::integer+ord::integer-1,(r->>'personId')::integer,(r->>'year')::integer,(r->>'month')::integer,r FROM jsonb_array_elements($3::jsonb) WITH ORDINALITY AS rows(r,ord)`,[id,start,JSON.stringify(rows.slice(start,start+5000))]);
-    else{
-      if(canonical(await readPeopleCoverage(db,id))!==canonical(rows))throw new Error('Versão já gravada com conteúdo diferente');
-      // The source can return to older content, but only an approval may make it the newest version again.
-      if(reobserve)await db.query(`UPDATE publications SET seq=nextval(pg_get_serial_sequence('publications','seq')) WHERE id=$1`,[id]);
-    }
+    else if(canonical(await readPeopleCoverage(db,id))!==canonical(rows))throw new Error('Versão já gravada com conteúdo diferente');
     const check=await db.query<{n:string}>('SELECT count(*)::text AS n FROM people_coverage_v1 WHERE publication_id=$1',[id]);
     if(Number(check.rows[0].n)!==rows.length)throw new Error('Reconciliação SQL da cobertura falhou');
     await db.query('COMMIT');
   }catch(e){await db.query('ROLLBACK');throw e;}
+}
+// The source can return to older content: only a passing approval makes it the newest version again.
+export async function reobservePeopleCoverage(db:DB,id:string):Promise<void>{
+  await db.query(`UPDATE publications SET seq=nextval(pg_get_serial_sequence('publications','seq')) WHERE id=$1 AND domain='pessoas'`,[id]);
 }
 // Rereads what SQL holds and rederives it from the temporal report by a separate path.
 export async function auditPeopleCoverage(db:DB,id:string,temporal:TemporalReport,crosscheck:CrosscheckReport):Promise<{status:'passed'|'failed';failures:string[];checkedAt:string}>{
@@ -67,9 +75,15 @@ export async function auditPeopleCoverage(db:DB,id:string,temporal:TemporalRepor
   for(const p of temporal.people)for(const m of p.months)months.set(p.id+':'+m.year+':'+m.month,m);
   if(stored.length!==months.size)failures.push('row-count');
   const body=(await db.query<{body:PeopleCoverage}>('SELECT body FROM publications WHERE id=$1',[id])).rows[0]?.body;
-  if(!body||body.temporalSha256!==hash(canonical(temporal))||body.crosscheckSha256!==hash(canonical(crosscheck)))failures.push('version-link');
+  if(!body)failures.push('version-missing');
   if(body){const {id:_id,publishedAt:_p,rows:_r,...rest}=body;if(contentId({...rest,rows:stored})!==id)failures.push('content-id');}
   const exerciseFlag=new Set<string>(),partyFrom=new Map<number,number>(),stamp=(y:number,m:number)=>y*12+m,crossUnavailable=new Set(crosscheck.people.filter(p=>p.partyComparisonStatus==='unavailable').map(p=>p.id));
+  const windowStart=temporal.scope.start+'T00:00:00';
+  for(const p of temporal.people){
+    const baseline=p.events.reduce<typeof p.events[number]|null>((best,e)=>e.disposition==='usable'&&e.time!==null&&e.time<=windowStart&&(!best||e.time>=best.time!)?e:best,null);
+    if(baseline&&p.events.some(e=>e.disposition==='other-legislature'&&e.time!==null&&e.time>baseline.time!&&e.time<windowStart&&(String(e.original.siglaPartido??'')!==String(baseline.original.siglaPartido??'')||String(e.original.situacao??'')!==String(baseline.original.situacao??''))))crossUnavailable.add(p.id);
+    for(const m of p.months)if(m.party.status==='conflict'){const at=stamp(m.year,m.month);partyFrom.set(p.id,Math.min(partyFrom.get(p.id)??at,at));}
+  }
   for(const p of crosscheck.people){
     for(const m of p.months)if(m.comparison==='potential-conflict'||m.comparison==='unavailable')exerciseFlag.add(p.id+':'+m.year+':'+m.month);
     for(const c of p.partyChanges)if(c.status==='legacy-only-change'||c.status==='v2-only-change'){const at=stamp(Number(c.day.slice(0,4)),Number(c.day.slice(5,7)));partyFrom.set(p.id,Math.min(partyFrom.get(p.id)??at,at));}

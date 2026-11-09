@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {canonical,hash} from '../src/model.ts';
 import {openDB} from '../src/store.ts';
 import {activePublication,recordDomainAudit} from '../src/publications.ts';
-import {auditPeopleCoverage,buildPeopleCoverage,readPeopleCoverage,storePeopleCoverage} from '../src/people-publication.ts';
+import {auditPeopleCoverage,buildPeopleCoverage,readPeopleCoverage,reobservePeopleCoverage,storePeopleCoverage} from '../src/people-publication.ts';
 import type {TemporalReport} from '../src/people-temporal.ts';
 import type {CrosscheckReport} from '../src/people-legacy.ts';
 
@@ -56,7 +56,7 @@ test('stored coverage stays inactive until its audit passes, and the audit rerea
     await db.query(`UPDATE people_coverage_v1 SET record=jsonb_set(record,'{party}','"PL"') WHERE publication_id=$1 AND month=1`,[coverage.id]);
     await db.query(`UPDATE people_coverage_v1 SET record=jsonb_set(record,'{partyValues}','["XX"]') WHERE publication_id=$1 AND month=1`,[coverage.id]);assert.ok((await auditPeopleCoverage(db,coverage.id,t,c)).failures.some(f=>f.startsWith('attribution-')));
     await db.query(`UPDATE people_coverage_v1 SET record=jsonb_set(record,'{partyValues}','[]') WHERE publication_id=$1 AND month=1`,[coverage.id]);
-    const otherCross={...c,createdAt:'2030-01-01T00:00:00Z'};assert.ok((await auditPeopleCoverage(db,coverage.id,t,otherCross)).failures.includes('version-link'));
+    const disputed=crosscheck(t,'potential-conflict');assert.equal((await auditPeopleCoverage(db,coverage.id,t,disputed)).status,'failed');
     await recordDomainAudit(db,coverage.id,'passed',{checkedAt:audit.checkedAt});assert.equal((await activePublication(db,'pessoas'))?.id,coverage.id);
   }finally{await db.close();}
 });
@@ -73,7 +73,25 @@ test('coverage seen again becomes the newest version only when approved',async()
     for(const v of [one,two]){await storePeopleCoverage(db,v);await recordDomainAudit(db,v.id,'passed',{checkedAt:published});}
     assert.equal((await activePublication(db,'pessoas'))?.id,two.id);
     await storePeopleCoverage(db,one);await recordDomainAudit(db,two.id,'passed',{checkedAt:published});assert.equal((await activePublication(db,'pessoas'))?.id,two.id,'storing again without approval changes nothing');
-    await storePeopleCoverage(db,one,true);await recordDomainAudit(db,one.id,'passed',{checkedAt:published});
+    await storePeopleCoverage(db,one);await reobservePeopleCoverage(db,one.id);await recordDomainAudit(db,one.id,'passed',{checkedAt:published});
     assert.equal((await activePublication(db,'pessoas'))?.id,one.id);
   }finally{await db.close();}
+});
+
+test('reprocessing identical sources keeps the same coverage id',()=>{
+  const first=temporal(),second={...temporal(),createdAt:'2030-01-01T00:00:00Z',historySha256:hash('other')};
+  assert.equal(buildPeopleCoverage(first,crosscheck(first),passed(first),published).id,buildPeopleCoverage(second,crosscheck(second),passed(second),'2030-01-02T00:00:00Z').id);
+});
+test('a party conflict sends that month and the following ones to review',()=>{
+  const t=temporal();t.people[0].months[0].party={status:'conflict',value:null,values:['PL','PSD'],rows:[0,1]};
+  assert.deepEqual(buildPeopleCoverage(t,crosscheck(t),passed(t),published).rows.map(r=>r.review),[true,true]);
+});
+test('an event of another legislature after the last known state holds the person, unless it agrees',async()=>{
+  const event=(disposition:string,time:string,siglaPartido:string)=>({row:0,precision:'minute',disposition,time,original:{id:1,idLegislatura:disposition==='usable'?57:56,dataHora:time,situacao:'Exercício',condicaoEleitoral:'Titular',siglaPartido,siglaUf:'SP',descricaoStatus:'x'}}) as TemporalReport['people'][number]['events'][number];
+  const held=temporal();held.people[0].events=[event('usable','2023-02-01T12:00:00','PL'),event('other-legislature','2023-03-01T12:00:00','PSD')];
+  const rows=buildPeopleCoverage(held,crosscheck(held),passed(held),published).rows;assert.deepEqual(rows.map(r=>[r.party,r.uf,r.review]),[[null,null,true],[null,null,true]]);
+  const before=temporal();before.people[0].events=[event('other-legislature','2023-01-30T12:00:00','PSD'),event('usable','2023-02-01T12:00:00','PL')];
+  assert.equal(buildPeopleCoverage(before,crosscheck(before),passed(before),published).rows[0].party,'PL');
+  const db=await openDB(true);
+  try{const c=crosscheck(held),v=buildPeopleCoverage(held,c,passed(held),published);await storePeopleCoverage(db,v);assert.equal((await auditPeopleCoverage(db,v.id,held,c)).status,'passed');}finally{await db.close();}
 });

@@ -1,3 +1,4 @@
+import {lock as acquireLock} from '../src/lock.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {canonical,hash} from '../src/model.ts';
@@ -9,7 +10,7 @@ const args=process.argv.slice(2),i=args.indexOf('--run'),runId=i<0?'':args[i+1];
 if(args.includes('--help')){console.log('npm run verify:expenses:intermediate -- --local --run ID\nAuditoria independente das capturas financeiras cifradas, sem publicação.');process.exit(0);}
 for(let n=0;n<args.length;n++){if(args[n]==='--local')continue;if(args[n]==='--run'&&args[n+1]&&!args[n+1].startsWith('--')){n++;continue;}throw Error('Argumento inválido');}
 if(!/^[a-zA-Z0-9-]{1,80}$/.test(runId))throw Error('Execução inválida');
-const root=path.resolve('data/private/expense-intermediate',runId),key=args.includes('--local')?await readLocalPeopleKey():vaultKey(),lock=await fs.open(path.join(root,'running.lock'),'wx',0o600);
+const root=path.resolve('data/private/expense-intermediate',runId),key=args.includes('--local')?await readLocalPeopleKey():vaultKey(),lock=await acquireLock(path.join(root,'running.lock'));
 try{
   const load=async(name:string)=>JSON.parse(await fs.readFile(path.join(root,name),'utf8'));
   const manifest=await load('run.json'),input=await load('input.json'),report=await load('batch.json');
@@ -23,4 +24,4 @@ try{
   await fs.writeFile(path.join(root,'reports',audit.reportSha256+'.audit.json'),JSON.stringify(audit,null,2));await fs.writeFile(path.join(root,'audit.json'),JSON.stringify(audit,null,2));
   console.log(JSON.stringify({audit,coverage:manifest.coverage,records:report.cells.reduce((n:number,c:any)=>n+c.records.length,0),metrics:report.metrics},null,2));if(audit.status!=='passed')process.exitCode=1;
 }catch{console.error('Auditoria financeira recusada; originais preservados e publicação desativada.');process.exitCode=1;}
-finally{await lock.close();await fs.unlink(path.join(root,'running.lock'));}
+finally{await lock();}

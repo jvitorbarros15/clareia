@@ -130,7 +130,7 @@ test('_headers marks data as immutable and manifest as revalidated',()=>setup(as
 
 const coverageVersion=(party:string|null,review=false):PeopleCoverage=>{
   const body={schema:'clareia.people-coverage.v1' as const,metric:'camara.people.monthly-coverage.v1' as const,scope:{legislature:57,start:'2025-01-01',end:'2025-01-31',sampleIds:[1]},temporalSha256:hash('t'),crosscheckSha256:hash('c'),collectedAt:'2026-11-08T12:00:00Z',rows:[1,2].map(personId=>({personId,year:2025,month:1,exercise:'full',partyStatus:review?'review':'single',party,partyValues:[],ufStatus:review?'review':'single',uf:party&&'SP',review,partialScope:false}))};
-  return {...body,id:hash(canonical(body)),publishedAt:'2026-11-08T13:00:00Z'};
+  return {...body,id:hash(canonical({schema:body.schema,metric:body.metric,scope:body.scope,rows:body.rows})),publishedAt:'2026-11-08T13:00:00Z'};
 };
 const summaryInput=(records:Expense[],expectedTotalCents:number)=>{const v=version(records);return {publicationId:v.id,scope:v.scope,people:v.people,records,expectedTotalCents,coverageId:null,coverage:[]};};
 test('the site summary totals match the records in integer cents and carry no record rows',()=>setup(async(db,dist,portraits)=>{
@@ -167,4 +167,11 @@ test('tampered active coverage stops the build before the previous output is del
   await db.query(`UPDATE people_coverage_v1 SET record=jsonb_set(record,'{party}','"XX"') WHERE publication_id=$1`,[known.id]);
   await assert.rejects(buildSite(db,dist,portraits),/difere da versão aprovada/);
   assert.deepEqual(await tree(dist),before);
+}));
+
+test('a build refused by its limits leaves the previous output in place',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  await buildSite(db,dist,portraits);const before=await tree(dist);
+  await fs.writeFile(path.join(portraits,'1.jpg'),Buffer.alloc(11*1024*1024));
+  await assert.rejects(buildSite(db,dist,portraits),/10 MiB/);assert.deepEqual(await tree(dist),before);
 }));

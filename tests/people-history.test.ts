@@ -104,6 +104,6 @@ test('resolver takes the run lock before attempting to read the mutable input ma
   const historyDir=path.join(cwd,'data/private/people-history/locked-run'),keys=path.join(cwd,'data/private/people-discovery');await fs.mkdir(historyDir,{recursive:true});await fs.mkdir(keys,{recursive:true});
   await fs.writeFile(path.join(keys,'local-vault-key'),randomBytes(32));await fs.writeFile(path.join(historyDir,'running.lock'),'keep');
   const script=fileURLToPath(new URL('../scripts/resolve-people-history.ts',import.meta.url));
-  await assert.rejects(promisify(execFile)(process.execPath,['--import',import.meta.resolve('tsx'),script,'--local','--run','locked-run'],{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('EEXIST'));
+  await assert.rejects(promisify(execFile)(process.execPath,['--import',import.meta.resolve('tsx'),script,'--local','--run','locked-run'],{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('Outra tarefa possui'));
   assert.equal(await fs.readFile(path.join(historyDir,'running.lock'),'utf8'),'keep');
 });

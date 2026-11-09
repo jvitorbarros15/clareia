@@ -89,9 +89,10 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
   if(annualStable)for(const c of cells){const passes=results.get(c.personId+':'+c.month)!;if(passes.every(p=>p!==null)&&hash(passes[0]!.map(r=>canonical(r.raw)).sort().join('\n'))===hash(passes[1]!.map(r=>canonical(r.raw)).sort().join('\n')))for(const {raw,row,source} of passes[1]!)equationInputs.push({kind:'api',personId:c.personId,raw:raw as Record<string,any>,source:{url:source.url,sha256:source.sha256,row,fetchedAt:source.fetchedAt}});}
   const equationReview=reviewExpenseEquations(scope,annualStable?equationInputs:[]);
   const multiplicityReview=reviewFlightMultiplicity(scope,annualStable?equationInputs:[]);
+  const annualByCell=new Map<string,typeof secondAnnual.rows>();for(const r of secondAnnual.rows){const key=Number(r.raw.ideCadastro)+':'+Number(r.raw.numMes),list=annualByCell.get(key);if(list)list.push(r);else annualByCell.set(key,[r]);}
   const portalChecks:PortalCheck[]=[],portalCovered=new Set<string>();
   for(const c of cells){
-    const selected=secondAnnual.rows.filter(r=>Number(r.raw.ideCadastro)===c.personId&&Number(r.raw.numMes)===c.month),api=results.get(c.personId+':'+c.month)!;c.annualCount=selected.length;
+    const selected=annualByCell.get(c.personId+':'+c.month)??[],api=results.get(c.personId+':'+c.month)!;c.annualCount=selected.length;
     if(c.reasons.length)continue;c.status='held-review';
     if(!annualStable){c.reasons.push('annual-changed-between-passes');continue;}
     try{

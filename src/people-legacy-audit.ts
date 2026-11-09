@@ -87,7 +87,7 @@ export async function auditLegacy(legacy:LegacyReport,cross:CrosscheckReport,his
         if(begin+86_400_000<right&&finish>left&&begin+86_400_000<finish){if(understood)positive=true;else uncertain=true;rows.push(index);if(finish===Infinity)open=true;}
         else if(begin>=left&&begin<right||finish>=left&&finish<right){edge=true;rows.push(index);if(!understood)uncertain=true;}
       });
-      return {year:m.year,month:m.month,v2Exercise:m.exercise,legacy:!data||uncertain?'unknown':positive?'reported-exercise':edge?'boundary-only':'no-listed-period',periodRows:rows,openEnd:open,comparison:!data||uncertain?'unavailable':positive&&m.exercise==='unknown'?'corroborating-unknown':positive&&m.exercise==='outside'||!positive&&!edge&&['full','partial'].includes(m.exercise)?'potential-conflict':'no-automatic-resolution'};
+      return {year:m.year,month:m.month,v2Exercise:m.exercise,legacy:!data||uncertain?'unknown':positive?'reported-exercise':edge?'boundary-only':'no-listed-period',periodRows:rows,openEnd:open,comparison:!data||uncertain?'unavailable':positive&&m.exercise==='unknown'?'corroborating-unknown':positive&&m.exercise==='outside'||!positive&&!edge&&['full','partial'].includes(m.exercise)||!positive&&edge&&m.exercise==='full'?'potential-conflict':'no-automatic-resolution'};
     });
     if(canonical(months)!==canonical(actual.months))fail('monthly-crosscheck',p.id);
     const transitions:{row:number;time:string;minute:boolean;before:string;after:string}[]=[],groups=new Map<string,typeof v2.events>();
@@ -97,12 +97,12 @@ export async function auditLegacy(legacy:LegacyReport,cross:CrosscheckReport,his
     let before:string|null=null;
     for(const [time,events] of [...groups].sort(([a],[b])=>a.localeCompare(b))){
       events.sort((a,b)=>a.row-b.row);const parties=new Set(events.map(e=>e.original.siglaPartido?.trim()||null)),after=parties.size===1?[...parties][0]:null;
-      if(before&&after&&before!==after&&time.slice(0,10)>=discovery.scope.start&&time.slice(0,10)<=discovery.scope.end)transitions.push({row:events[0].row,time,minute:events.some(e=>e.precision==='minute'),before,after});if(after)before=after;else if(parties.size>1)before=null;
+      if(before&&after&&before!==after&&time.slice(0,10)>=history.legislature.start&&time.slice(0,10)<=discovery.scope.end)transitions.push({row:events[0].row,time,minute:events.some(e=>e.precision==='minute'),before,after});if(after)before=after;else if(parties.size>1)before=null;
     }
     const expected:any[]=[],usedChanges=new Set<number>();
     if(data&&comparable){
       data.affiliations.forEach((a,row)=>{
-        const date=iso(a.dataFiliacaoPartidoPosterior);if(date<discovery.scope.start||date>discovery.scope.end)return;
+        const date=iso(a.dataFiliacaoPartidoPosterior);if(date<history.legislature.start||date>discovery.scope.end)return;
         const candidate=transitions.findIndex((t,i)=>!usedChanges.has(i)&&t.time.startsWith(date+'T')&&t.before===a.siglaPartidoAnterior&&t.after===a.siglaPartidoPosterior);
         if(candidate!==-1)usedChanges.add(candidate);
         expected.push({legacyRow:row,v2Row:candidate===-1?null:transitions[candidate].row,day:date,before:a.siglaPartidoAnterior,after:a.siglaPartidoPosterior,status:candidate===-1?'legacy-only-change':!a.horaFiliacaoPartidoPosterior?'same-day-time-unavailable':transitions[candidate].minute&&a.horaFiliacaoPartidoPosterior.slice(0,5)===transitions[candidate].time.substring(11,16)?'same-day-minute-precision':a.horaFiliacaoPartidoPosterior===transitions[candidate].time.substring(11)?'same-day-and-time':'same-day-time-differs'});

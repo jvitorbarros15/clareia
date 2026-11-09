@@ -92,6 +92,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
       if(next.length){if(verify(next[0].href)!==page+1)throw Error();url=next[0].href;}else{if(final!==null&&final!==page)throw Error();if(final===null&&raw.dados.length===size){const nextUrl=new URL(start);nextUrl.searchParams.set('pagina',String(page+1));url=nextUrl.href;probe=true;}else url=null;}
     }return {rows,pages,count:rows.length};}catch{return {rows:null,pages,count:null};}
   }
+  const annualRowsByCell=new Map<string,typeof second.rows>();for(const r of second.rows){const cell=Number(r.raw.ideCadastro)+':'+Number(r.raw.numMes);annualRowsByCell.set(cell,[...(annualRowsByCell.get(cell)??[]),r]);}
   const expectedKeys=scope.ids.flatMap(id=>scope.months.map(month=>id+':'+month)),actualKeys=report.cells.map(c=>c.personId+':'+c.month);
   if(new Set(actualKeys).size!==actualKeys.length||canonical([...expectedKeys].sort())!==canonical([...actualKeys].sort()))fail('competence-universe');
   const reads=new Map<string,[ReturnType<typeof api>,ReturnType<typeof api>]>(),equationInputs:EquationInput[]=second.rows.map(r=>({kind:'annual',personId:Number(r.raw.ideCadastro),raw:r.raw,source:{url:r.source.url,sha256:second.csvHash,row:r.row,fetchedAt:r.source.fetchedAt}}));
@@ -108,7 +109,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   for(const c of report.cells){
     const coverage=temporal.people.find(p=>p.id===c.personId)?.months.find(m=>m.year===scope.year&&m.month===c.month);
     if(!coverage||c.year!==scope.year||canonical([c.exercise,c.party,c.uf])!==canonical([coverage.exercise,coverage.party,coverage.uf]))fail('temporal-coverage',c);
-    const [one,two]=reads.get(c.personId+':'+c.month)??[api(c.personId,c.month,1),api(c.personId,c.month,2)],annual=second.rows.filter(r=>Number(r.raw.ideCadastro)===c.personId&&Number(r.raw.numMes)===c.month);
+    const [one,two]=reads.get(c.personId+':'+c.month)??[api(c.personId,c.month,1),api(c.personId,c.month,2)],annual=annualRowsByCell.get(c.personId+':'+c.month)??[];
     if(c.annualCount!==annual.length||canonical(c.api)!==canonical([one,two].map(p=>({count:p.count,pages:p.pages}))))fail('source-counts-or-pages',c);
     let reasons:string[]=[],records:Expense[]=[],total:number|null=null,diagnostics:typeof c.diagnostics=null,status:typeof c.status='held-review';
     if(one.rows===null)reasons.push('api-source-failure-pass-1');if(two.rows===null)reasons.push('api-source-failure-pass-2');

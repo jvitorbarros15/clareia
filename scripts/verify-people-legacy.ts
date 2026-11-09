@@ -1,3 +1,4 @@
+import {lock as acquireLock} from '../src/lock.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {canonical,hash} from '../src/model.ts';
@@ -12,7 +13,7 @@ if(args.includes('--help')){console.log('npm run verify:people:legacy -- --local
 for(let n=0;n<args.length;n++){if(args[n]==='--local')continue;if(args[n]==='--run'&&args[n+1]&&!args[n+1].startsWith('--')){n++;continue;}throw Error('Argumento inválido');}
 if(!/^[a-zA-Z0-9-]{1,80}$/.test(runId))throw Error('Execução inválida');
 const root=path.resolve('data/private/people-legacy',runId),key=args.includes('--local')?await readLocalPeopleKey():vaultKey();
-const lock=await fs.open(path.join(root,'running.lock'),'wx',0o600);
+const lock=await acquireLock(path.join(root,'running.lock'));
 try{
   const load=async(file:string)=>JSON.parse(await fs.readFile(path.join(root,file),'utf8'));
   const manifest=await load('run.json'),legacy=await load('legacy.json'),history=await load('input-history.json'),temporal=await load('input-temporal.json'),inputAudit=await load('input-audit.json');
@@ -34,4 +35,4 @@ try{
   const months=cross.people.flatMap(p=>p.months),parties=cross.people.flatMap(p=>p.partyChanges),counts=(rows:any[],field:string)=>rows.reduce<Record<string,number>>((out,row)=>{out[row[field]]=(out[row[field]]||0)+1;return out;},{});
   console.log(JSON.stringify({audit,exerciseComparison:counts(months,'comparison'),partyComparison:counts(parties,'status')},null,2));
 }catch{console.error('Conferência legada recusada; originais preservados e atribuição pública desativada.');process.exitCode=1;}
-finally{await lock.close();await fs.unlink(path.join(root,'running.lock'));}
+finally{await lock();}

@@ -1,3 +1,4 @@
+import {lock as acquireLock} from '../src/lock.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {canonical,hash} from '../src/model.ts';
@@ -13,7 +14,7 @@ for(let n=0;n<args.length;n++){if(args[n]==='--local')continue;if(['--run','--di
 if(!/^[a-zA-Z0-9-]{1,80}$/.test(runId))throw new Error('Identificador inválido');
 const root=path.resolve('data/private/people-history',runId);
 const key=args.includes('--local')?await readLocalPeopleKey():vaultKey();
-const lock=await fs.open(path.join(root,'running.lock'),'wx',0o600);
+const lock=await acquireLock(path.join(root,'running.lock'));
 try{
   const manifest=JSON.parse(await fs.readFile(path.join(root,'run.json'),'utf8'));
   const history=JSON.parse(await fs.readFile(path.join(root,'history.json'),'utf8')) as HistoryReport;
@@ -40,4 +41,4 @@ try{
 }catch{
   // Parser and original data exceptions must not expose source payloads.
   console.error('Resolução não concluída; originais preservados e atribuição pública desativada.');process.exitCode=1;
-}finally{await lock.close();await fs.unlink(path.join(root,'running.lock'));}
+}finally{await lock();}

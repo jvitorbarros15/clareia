@@ -155,7 +155,7 @@ test('financial CLI takes its lock before reading inputs and refuses a different
   const original=JSON.stringify({selectionRun:'original-selection',status:'review-required'});await fs.writeFile(path.join(root,'run.json'),original);
   const script=fileURLToPath(new URL('../scripts/collect-expense-intermediate.ts',import.meta.url)),args=['--import',import.meta.resolve('tsx'),script,'--local','--offline','--run','test-run','--selection-run','another-selection'];
   await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}));assert.equal(await fs.readFile(path.join(root,'run.json'),'utf8'),original);await assert.rejects(fs.stat(path.join(root,'running.lock')),{code:'ENOENT'});
-  await fs.writeFile(path.join(root,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('EEXIST'));assert.equal(await fs.readFile(path.join(root,'running.lock'),'utf8'),'keep');
+  await fs.writeFile(path.join(root,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('Outra tarefa possui'));assert.equal(await fs.readFile(path.join(root,'running.lock'),'utf8'),'keep');
 });
 
 const sigepa=(month:number,overrides:Record<string,unknown>={})=>apiRow(month,{tipoDespesa:'PASSAGEM AÉREA - SIGEPA',codDocumento:'11',numDocumento:'T1',valorDocumento:500,valorLiquido:500,...overrides});

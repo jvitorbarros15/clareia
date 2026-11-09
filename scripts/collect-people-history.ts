@@ -1,3 +1,4 @@
+import {lock as acquireLock} from '../src/lock.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {PeopleCapture} from '../src/people-discovery.ts';
@@ -15,7 +16,7 @@ if(!Number.isInteger(workers)||workers<1||workers>3)throw new Error('Concorrênc
 const key=args.includes('--local')?await readLocalPeopleKey():vaultKey();
 const root=path.resolve('data/private/people-history',runId),manifestFile=path.join(root,'run.json');
 await fs.mkdir(root,{recursive:true});
-const lock=await fs.open(path.join(root,'running.lock'),'wx',0o600);
+const lock=await acquireLock(path.join(root,'running.lock'));
 let manifest:{runId:string;discoveryRun:string;discoverySha256:string;scope:DiscoveryReport['scope'];startedAt:string;status:string};
 try{
   const existing=await fs.readFile(manifestFile,'utf8').catch((error:NodeJS.ErrnoException)=>{if(error.code!=='ENOENT')throw error;return null;});
@@ -39,4 +40,4 @@ try{
     await fs.writeFile(manifestFile,JSON.stringify({...manifest,status:'failed',failedAt:new Date().toISOString()},null,2));
     console.error(`Coleta ${runId} não concluída; originais cifrados preservados. Retome com o mesmo --run.`);process.exitCode=1;
   }
-}finally{await lock.close();await fs.unlink(path.join(root,'running.lock'));}
+}finally{await lock();}

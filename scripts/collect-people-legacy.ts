@@ -1,3 +1,4 @@
+import {lock as acquireLock} from '../src/lock.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {canonical,hash} from '../src/model.ts';
@@ -15,7 +16,7 @@ const discoveryId=value('--discovery-run'),historyId=value('--history-run'),runI
 if([runId,discoveryId,historyId].some(id=>!/^[a-zA-Z0-9-]{1,80}$/.test(id))||!Number.isInteger(workers)||workers<1||workers>3)throw Error('Execução ou concorrência inválida');
 const root=path.resolve('data/private/people-legacy',runId),historyRoot=path.resolve('data/private/people-history',historyId);
 const key=args.includes('--local')?await readLocalPeopleKey():vaultKey();
-await fs.mkdir(root,{recursive:true});const lock=await fs.open(path.join(root,'running.lock'),'wx',0o600);
+await fs.mkdir(root,{recursive:true});const lock=await acquireLock(path.join(root,'running.lock'));
 try{
   const previous=await fs.readFile(path.join(root,'run.json'),'utf8').then(JSON.parse).catch((e:NodeJS.ErrnoException)=>{if(e.code!=='ENOENT')throw e;return null;});
   if(previous&&(previous.historyRun!==historyId||previous.discoveryRun!==discoveryId))throw Error('Outra origem não pode retomar esta execução');
@@ -27,7 +28,7 @@ try{
     temporal=JSON.parse(await fs.readFile(path.join(root,'input-temporal.json'),'utf8'));
     if(hash(canonical(history))!==previous.historySha256||hash(canonical(temporal))!==previous.temporalSha256)throw Error('Entradas preservadas divergiram');
   }else{
-    const inputLock=await fs.open(path.join(historyRoot,'running.lock'),'wx',0o600);
+    const inputLock=await acquireLock(path.join(historyRoot,'running.lock'));
     try{
       history=JSON.parse(await fs.readFile(path.join(historyRoot,'history.json'),'utf8'));
       temporal=JSON.parse(await fs.readFile(path.join(historyRoot,'temporal.json'),'utf8'));
@@ -36,7 +37,7 @@ try{
       await fs.writeFile(path.join(root,'input-history.json'),JSON.stringify(history,null,2));
       await fs.writeFile(path.join(root,'input-temporal.json'),JSON.stringify(temporal,null,2));
       await fs.writeFile(path.join(root,'input-audit.json'),JSON.stringify(audit,null,2));
-    }finally{await inputLock.close();await fs.unlink(path.join(historyRoot,'running.lock'));}
+    }finally{await inputLock();}
   }
   const inputAudit=JSON.parse(await fs.readFile(path.join(root,'input-audit.json'),'utf8'));
   if(inputAudit.schema!=='clareia.people-temporal-audit.v1'||inputAudit.status!=='passed'||inputAudit.historySha256!==hash(canonical(history))||inputAudit.temporalSha256!==hash(canonical(temporal))||inputAudit.discoverySha256!==history.discoverySha256)throw Error('Auditoria preservada diverge');
@@ -59,4 +60,4 @@ try{
     console.error('Coleta XML não concluída; originais cifrados preservados. Retome a mesma execução.');process.exitCode=1;
   }
 }catch{console.error('Execução legada recusada: confira origens, versões, auditoria e locks.');process.exitCode=1;}
-finally{await lock.close();await fs.unlink(path.join(root,'running.lock'));}
+finally{await lock();}

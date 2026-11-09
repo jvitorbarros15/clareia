@@ -1,3 +1,4 @@
+import {lock as acquireLock} from '../src/lock.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomBytes,randomUUID} from 'node:crypto';
@@ -34,7 +35,7 @@ if(args.includes('--local')){
 }else key=vaultKey();
 await fs.mkdir(directory,{recursive:true});
 // Exclusive lock keeps two resumes from mixing captures or overwriting reports.
-const lock=await fs.open(path.join(directory,'running.lock'),'wx',0o600);
+const lock=await acquireLock(path.join(directory,'running.lock'));
 const manifestFile=path.join(directory,'run.json');
 let phase='preparing',startedAt=new Date().toISOString();
 try{
@@ -71,5 +72,5 @@ try{
   console.error(`Descoberta ${runId} falhou; publicação preservada. Consulte failure.json e retome com --run ${runId}.`);
   process.exitCode=1;
 }finally{
-  await lock.close();await fs.unlink(path.join(directory,'running.lock'));
+  await lock();
 }

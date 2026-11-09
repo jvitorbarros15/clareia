@@ -14,7 +14,7 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
   const {publicationId,scope,people,records,expectedTotalCents,coverageId,coverage}=input;
   if(coverageId===null&&coverage.length)throw new Error('Cobertura sem versão aprovada');
   const attribution=new Map(coverage.map(row=>[row.personId+':'+row.year+':'+row.month,row])),byPerson=new Map<number,Expense[]>();
-  for(const r of records){if(!scope.ids.includes(r.personId)||r.year!==scope.year||!scope.months.includes(r.month))throw new Error('Registro fora do recorte do resumo');byPerson.set(r.personId,[...(byPerson.get(r.personId)??[]),r]);}
+  for(const r of records){if(!scope.ids.includes(r.personId)||r.year!==scope.year||!scope.months.includes(r.month))throw new Error('Registro fora do recorte do resumo');const list=byPerson.get(r.personId);if(list)list.push(r);else byPerson.set(r.personId,[r]);}
   const summaries=scope.ids.map<PersonSummary>(id=>{
     const person=people.find(p=>p.id===id);if(!person)throw new Error('Pessoa do recorte sem cadastro');
     const own=byPerson.get(id)??[],categories=[...new Set(own.map(r=>r.category))].sort().map(category=>{const rows=own.filter(r=>r.category===category);return {category,cents:sum(rows),records:rows.length};});

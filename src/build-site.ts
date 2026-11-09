@@ -30,7 +30,9 @@ async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const outside=all.filter(r=>!active.scope.ids.includes(r.personId)).length;
   if(outside)throw new Error(`${outside} registros fora do recorte da versão`);
 }
-export async function buildSite(db:DB,outDir:string,portraitsDir:string):Promise<{publicationId:string;files:number}>{
+export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promise<{publicationId:string;files:number}>{
+  // Everything is built aside: a refusal at any step leaves the previous output in place.
+  const outDir=finalDir+'.building';
   const active=await activePublication(db,'despesas');
   if(!active)throw new Error('Nenhuma versão aprovada para publicar');
   await assertServedIsAudited(db,active);
@@ -40,7 +42,6 @@ export async function buildSite(db:DB,outDir:string,portraitsDir:string):Promise
     if(p)domains[domain]={version:p.id,coverage:p.scope,collectedAt:p.collectedAt,publishedAt:p.publishedAt};
   }
   const publicationId=hash(canonical(Object.values(domains).map(d=>d.version).sort())).slice(0,12),base=`data/${publicationId}`,data=path.join(outDir,'data',publicationId);
-  // Every refusal has to happen before the previous output is deleted.
   const peopleVersion=await activePublication(db,'pessoas');
   const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:await readRecords(db,active.id),expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[]});
   await fs.rm(outDir,{recursive:true,force:true});
@@ -63,5 +64,7 @@ export async function buildSite(db:DB,outDir:string,portraitsDir:string):Promise
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
   checkLimits(files.length,Math.max(...sizes));
+  await fs.rm(finalDir,{recursive:true,force:true});
+  await fs.rename(outDir,finalDir);
   return {publicationId,files:files.length};
 }
