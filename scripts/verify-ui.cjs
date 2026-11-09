@@ -1636,6 +1636,15 @@ check('a test notice and held months are shown when the version declares them', 
   await page.close();
 });
 
+check('the question button uses the Clareia icon', async () => {
+  const page = await at(390);
+  const icon = page.locator('.assistant-launcher img.assistant-spark');
+  assert.equal(await icon.getAttribute('src'), '/icon.svg');
+  assert.ok(await icon.evaluate(i => i.complete && i.naturalWidth > 0), 'icon loaded');
+  assert.doesNotMatch(await text(page.locator('.assistant-launcher')), /✳/);
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;
