@@ -41,5 +41,7 @@ export async function auditVotes(report:VotesReport,ballots:Ballot[],read:(sourc
     total+=n;if(issues.length)held++;
   }
   if(report.metrics.ballots!==total||report.metrics.held!==held)failures.push('totals');
+  const once=new Set<string>(),fromSource:Ballot[]=[];for(const r of rows)if(ids.has(r.idVotacao)&&/^[1-9][0-9]*$/.test(r.deputado_id)&&!once.has(r.idVotacao+':'+r.deputado_id)){once.add(r.idVotacao+':'+r.deputado_id);fromSource.push([r.idVotacao,Number(r.deputado_id),r.voto.trim()]);}
+  fromSource.sort((a,b)=>a[0].localeCompare(b[0])||a[1]-b[1]);if(ballotsHash(fromSource)!==report.ballotsSha256)failures.push('ballots-differ-from-source');
   return {status:failures.length?'failed':'passed',failures,checkedAt:new Date().toISOString(),contentSha256:report.contentSha256};
 }

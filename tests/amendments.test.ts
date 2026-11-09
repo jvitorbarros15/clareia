@@ -39,5 +39,6 @@ test('the audit recounts each measure and catches a changed value',async()=>{
   const csv=latin([row(2024,IND,'10','ANA LÚCIA'),row(2024,'Emenda de Bancada','8100','BANCADA')]),zip=zipSync({'EmendasParlamentares.csv':csv}),source:AmendmentSource={url:AMENDMENTS_URL,sha256:hash(zip),file:'z',bytes:zip.length,fetchedAt:'2026-11-09T00:00:00Z',pass:2};
   const report=amendmentsReport(2023,await deriveAmendments(csv,2023,people),[source],'2026-11-09T00:00:00Z'),read=async()=>zip;
   assert.deepEqual((await auditAmendments(report,read)).failures,[]);
+  const renamed=structuredClone(report);renamed.authors[0].names=['OUTRA'];renamed.contentSha256='';assert.ok((await auditAmendments(renamed,read)).failures.includes('names-10'));
   const copy=structuredClone(report);copy.authors[0].years['2024'].paid=1;assert.ok((await auditAmendments(copy,read)).failures.includes('totals'));
 });

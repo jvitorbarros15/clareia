@@ -54,6 +54,7 @@ test('the audit recounts each category and catches changed tallies, holds and ba
   assert.ok((await edit(r=>{r.votes[0].observed={Sim:2};})).failures.includes('tally-a'));
   assert.ok((await edit(r=>{r.votes[1].issues=[];})).failures.includes('issues-b'));
   assert.ok((await auditVotes(report,[...derived.ballots,['a',9,'Sim']],read)).failures.includes('ballots-hash'));
+  const swapped=votesReport(2025,{...derived,ballots:derived.ballots.map(b=>b[0]==='a'?[b[0],3-b[1],b[2]] as typeof b:b).sort((p,q)=>p[0].localeCompare(q[0])||p[1]-q[1])},report.sources,report.createdAt);assert.ok((await auditVotes(swapped,derived.ballots,read)).failures.includes('ballots-differ-from-source'));
 });
 
 test('a CPF written in official free text is removed before anything is kept',async()=>{

@@ -6,6 +6,7 @@ import {activePublication,publicationAudit,readRecords} from './publications.ts'
 import type {Domain,Publication} from './publications.ts';
 import type {DB} from './store.ts';
 import {csv} from './view.ts';
+import {findCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
@@ -60,7 +61,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
     if(billsVersion||votesVersion){
       const bills=billList.filter(b=>!b.issues.length&&b.authors.some(a=>a.deputyId===id)).map(b=>({id:b.id,type:b.type,number:b.number,year:b.year,summary:b.summary,situation:b.situation,situationAt:b.situationAt,norm:b.norm,proponent:b.authors.find(a=>a.deputyId===id)!.proponent,joint:b.authors.filter(a=>a.proponent).length+b.otherProponents>1})).sort((x,y)=>y.id-x.id);
       const votes=(ballotsOf.get(id)??[]).map(([voteId,,category])=>{const v=voteList.get(voteId)!;return {id:voteId,date:v.date,organ:v.organ,kind:v.kind,description:v.description,matters:v.objects.map((o:{title:string|null})=>o.title).filter(Boolean),category};}).sort((x,y)=>y.date.localeCompare(x.date)||x.id.localeCompare(y.id));
-      await fs.mkdir(path.join(data,'atividade'),{recursive:true});await fs.writeFile(path.join(data,'atividade',id+'.json'),JSON.stringify({bills,votes}));
+      await fs.mkdir(path.join(data,'atividade'),{recursive:true});const activity=JSON.stringify({bills,votes});if(findCpfs(activity,new Set()))throw new Error('Identificador privado na atividade de um deputado');await fs.writeFile(path.join(data,'atividade',id+'.json'),activity);
     }
     if(!records.length){withoutData.push(id);continue;}
     const person=path.join(data,'deputados',String(id));

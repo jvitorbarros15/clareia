@@ -15,13 +15,13 @@ export async function auditAmendments(report:AmendmentsReport,read:(s:AmendmentS
   const bytes=await read(source);if(hash(bytes)!==source.sha256)failures.push('source-hash');
   const rows=parse(Buffer.from(new TextDecoder('latin1').decode(amendmentsCsv(bytes)),'utf8'),{delimiter:';',columns:true,skip_empty_lines:true}) as Record<string,string>[];
   const tally=new Map<string,bigint[]>(),bump=(key:string,r:Record<string,string>)=>{const t=tally.get(key)??Array(7).fill(0n) as bigint[];t[0]++;FIELDS.forEach(([,c],i)=>{t[i+1]+=cents(r[c]);});tally.set(key,t);};
-  let selected=0,individual=0;
+  let selected=0,individual=0;const namesOf=new Map<string,Set<string>>();
   for(const r of rows){
     if(Number(r['Ano da Emenda'])<report.fromYear)continue;selected++;
     const type=r['Tipo de Emenda'],code=r['Código do Autor da Emenda'].trim();
     if(!type.startsWith('Emenda Individual')){bump('x|'+type,r);continue;}
     individual++;
-    if(['','S/I','-99'].includes(code))bump('x|Emenda individual sem autor identificado',r);else bump('a|'+code+'|'+r['Ano da Emenda'],r);
+    if(['','S/I','-99'].includes(code))bump('x|Emenda individual sem autor identificado',r);else {bump('a|'+code+'|'+r['Ano da Emenda'],r);namesOf.set(code,(namesOf.get(code)??new Set()).add(r['Nome do Autor da Emenda'].trim()));}
   }
   if(report.metrics.rows!==rows.length||report.metrics.selected!==selected||report.metrics.individual!==individual)failures.push('row-counts');
   const shown=new Map<string,bigint[]>(),put=(key:string,t:Totals)=>shown.set(key,[BigInt(t.rows),...FIELDS.map(([m])=>BigInt(t[m]))]);
@@ -29,6 +29,7 @@ export async function auditAmendments(report:AmendmentsReport,read:(s:AmendmentS
   for(const [type,t] of Object.entries(report.excluded))put('x|'+type,t);
   const flat=(m:Map<string,bigint[]>)=>canonical([...m].map(([k,v])=>[k,v.map(String)]).sort(([a],[b])=>String(a).localeCompare(String(b))));
   if(flat(tally)!==flat(shown))failures.push('totals');
+  for(const a of report.authors)if(canonical([...(namesOf.get(a.code)??[])].sort())!==canonical(a.names))failures.push('names-'+a.code);
   if(report.links.some(l=>l.status==='proposed'&&l.candidates.length!==1)||report.links.length!==report.authors.length)failures.push('links');
   return {status:failures.length?'failed':'passed',failures,checkedAt:new Date().toISOString(),contentSha256:report.contentSha256};
 }
