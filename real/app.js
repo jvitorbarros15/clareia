@@ -8,7 +8,7 @@
   const initial = new URLSearchParams(location.search);
   const ids = D.dataset().map(p => p.id);
   const totalOf = p => p.records.reduce((n, r) => n + r.amount, 0);
-  const byTotal = () => [...D.dataset()].sort((a, b) => totalOf(b) - totalOf(a));
+  const byTotal = () => D.dataset().filter(p => !p.noExercise).sort((a, b) => totalOf(b) - totalOf(a));
   // Only the parameters present and valid in the URL; a question applies what its words imply for the rest.
   const fromURL = {};
   if (categories.includes(initial.get('categoria')) || initial.get('categoria') === 'Todas') fromURL.category = initial.get('categoria');
@@ -28,7 +28,7 @@
   const norm = value => value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   // Amounts are integer cents from the published version; every exact value shows its cents.
   const money = cents => cents === null ? 'Não informado' : (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/^-/, '−');
-  const compact = cents => Math.abs(cents) >= 100000 ? `${cents < 0 ? '−' : ''}R$\u00a0${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : money(Math.round(cents));
+  const compact = cents => Math.abs(cents) >= 100000000 ? `${cents < 0 ? '−' : ''}R$\u00a0${(Math.abs(cents) / 100000000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${Math.abs(cents) < 200000000 ? 'milhão' : 'milhões'}` : Math.abs(cents) >= 100000 ? `${cents < 0 ? '−' : ''}R$\u00a0${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : money(Math.round(cents));
   const number = value => value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   // Positive categories are the only ones drawn as slices, so they are the base of every percentage on the page.
   const shareBase = groups => groups.reduce((n, g) => n + Math.max(0, g.value), 0);
@@ -49,10 +49,10 @@
     const result = sum(records(p));
     return state.metric === 'mensal' ? result / p.months : result;
   }
-  const formatted = (p, kind = state.tab) => kind === 'projetos' ? pending : compact(value(p, kind));
+  const formatted = (p, kind = state.tab) => kind === 'projetos' ? (p.projects === null ? pending : number(p.projects)) : compact(value(p, kind));
   // The answer ranks expenses even when the Projetos tab is open, where value() has nothing to sort by.
   function ranking(kind = state.tab) {
-    return all().filter(p => state.uf === 'Brasil' || p.uf === state.uf).sort((a, b) => (state.tab === 'menos' ? value(a, kind) - value(b, kind) : value(b, kind) - value(a, kind)) || a.name.localeCompare(b.name, 'pt-BR'));
+    return all().filter(p => !p.noExercise && (state.uf === 'Brasil' || p.uf === state.uf)).sort((a, b) => (state.tab === 'menos' ? value(a, kind) - value(b, kind) : value(b, kind) - value(a, kind)) || a.name.localeCompare(b.name, 'pt-BR'));
   }
   const icon = name => {
     const paths = {
@@ -71,13 +71,6 @@
     return `<span class="photo"><img src="${escape(p.photo)}" alt="Retrato oficial de ${escape(p.name)}" loading="lazy"></span>`;
   }
   const avatar = p => `<span class="avatar">${photo(p)}</span>`;
-  document.addEventListener('load', event => {
-    const img = event.target;
-    if (img.tagName === 'IMG' && img.naturalWidth < 200 && img.closest('.photo') && !img.closest('.avatar')) {
-      img.closest('.photo').classList.add('low-res');
-      img.style.setProperty('--natural', img.naturalWidth);
-    }
-  }, true);
   function syncURL() {
     const url = new URL(location.href);
     url.search = '';

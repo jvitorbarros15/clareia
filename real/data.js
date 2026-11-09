@@ -16,12 +16,15 @@
       return parties.join(' / ');
     };
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    // Zero is only a fact for someone in office: without confirmed exercise there is nothing to compare.
+    const withoutConfirmedExercise = (id, raw) => { if (!summary.coverageId || raw.length) return false; const months = summary.people.find(p => p.id === id)?.months ?? []; return months.length > 0 && months.every(m => !m.exercise || m.exercise === 'unknown' || m.exercise === 'outside'); };
+    if (index.validation.testNotice) { const notice = document.createElement('div'); notice.className = 'test-notice'; notice.setAttribute('role', 'note'); notice.textContent = index.validation.testNotice; document.body.prepend(notice); }
     const people = await Promise.all(index.scope.ids.map(async id => {
       const r = await fetch(`${base}/deputados/${id}/despesas.json`);
       if (!r.ok && r.status !== 404) throw new Error('Versão indisponível. Nenhum valor foi estimado.');
       const raw = r.status === 404 ? [] : await r.json(), info = index.people.find(p => p.id === id) || { name: 'ID ' + id };
       const records = raw.map(x => ({ id: x.id, date: x.date, month: x.month - 1, category: x.category, amount: x.cents, supplier: x.supplier, raw: x }));
-      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, party: partyOfPeriod(id, info.party ?? null), profileFetchedAt: info.profileFetchedAt, months: index.scope.months.length, projects: summary.people.find(p => p.id === id)?.bills?.proposed ?? null, votes: null, records, total: records.reduce((n, x) => n + x.amount, 0) };
+      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, party: partyOfPeriod(id, info.party ?? null), profileFetchedAt: info.profileFetchedAt, months: index.scope.months.length - (index.validation.heldMonths?.[id] ?? 0), noExercise: withoutConfirmedExercise(id, raw), projects: summary.people.find(p => p.id === id)?.bills?.proposed ?? null, votes: null, records, total: records.reduce((n, x) => n + x.amount, 0) };
     }));
     const byCategory = new Map();
     for (const p of people) for (const r of p.records) byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.amount));
