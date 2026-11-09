@@ -187,3 +187,8 @@ test('approved bills reach the summary and an unapproved version does not',()=>s
   built=await buildSite(db,dist,portraits);summary=await json(dist,'data',built.publicationId,'summary.json');
   assert.deepEqual(summary.people.map((p:{bills:unknown})=>p.bills),[{proposed:3,joint:1,coauthored:2,norms:0},{proposed:0,joint:0,coauthored:0,norms:0}]);
 }));
+
+test('approved bills must cover the year shown on the site',()=>{
+  const v=version([record(100,1,0)]),input={publicationId:v.id,scope:v.scope,people:v.people,records:v.records,expectedTotalCents:100,coverageId:null,coverage:[],billsId:'x',bills:[]};
+  assert.throws(()=>buildSiteSummary({...input,billsYears:[2024]}),/não cobrem/);assert.equal(buildSiteSummary({...input,billsYears:[2025]}).billsYears[0],2025);
+});

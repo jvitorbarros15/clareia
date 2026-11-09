@@ -28,12 +28,12 @@ export const billsContentId=(r:Pick<BillsReport,'schema'|'year'|'types'|'bills'|
 // A held bill keeps its evidence and enters no count; signature order is never read as authorship.
 const KINDS:Record<string,string>={PL:'Lei Ordinária',PLP:'Lei Complementar',PEC:'Emenda Constitucional'};
 const NORM_TEXT=/Transformad[oa]\s+(?:n[ao]|em)\s+(Lei Ordin[áa]ria|Lei Complementar|Emenda Constitucional)\s+(?:n[ºo°.]*\s*)?(\d[\d.]*)\/(\d{4})/i;
-const ANOTHER_NORM=/(?:Lei Ordin[áa]ria|Lei Complementar|Emenda Constitucional)\s+(?:n[ºo°.]*\s*)?\d[\d.]*\/\d{4}/i;
+const ANY_NORM=/(Lei Ordin[áa]ria|Lei Complementar|Emenda Constitucional)\s+(?:n[ºo°.]*\s*)?(\d[\d.]*)\/(\d{4})/gi;
 // The norm comes only from the official dispatch text. Anything ambiguous or of an unexpected kind stays unresolved.
-export function normFromTramitacoes(type:string,entries:{despacho?:string|null;descricaoTramitacao?:string|null}[]):BillNorm|null{
-  const found=new Map<string,BillNorm>();
-  for(const e of entries)for(const text of [e.despacho,e.descricaoTramitacao]){const m=text?NORM_TEXT.exec(text):null;if(m){const norm={kind:m[1].replace('Ordinaria','Ordinária'),number:m[2].replace(/\./g,''),year:Number(m[3])};found.set(canonical(norm),norm);if(ANOTHER_NORM.test(text!.slice(m.index+m[0].length)))return null;}}
-  const [norm]=found.values();return found.size===1&&norm.kind===KINDS[type]?norm:null;
+export function normFromTramitacoes(type:string,entries:{despacho?:string|null;descricaoTramitacao?:string|null}[],billYear=0):BillNorm|null{
+  const found=new Map<string,BillNorm>(),cited=new Set<string>();
+  for(const e of entries)for(const text of [e.despacho,e.descricaoTramitacao]){const m=text?NORM_TEXT.exec(text):null;if(m){const norm={kind:m[1].replace('Ordinaria','Ordinária'),number:m[2].replace(/\./g,''),year:Number(m[3])};found.set(canonical(norm),norm);}for(const c of text?.matchAll(ANY_NORM)??[])cited.add(c[1].toLowerCase().replace('ordinaria','ordinária')+'|'+c[2].replace(/\./g,'')+'|'+c[3]);}
+  const [norm]=found.values();return found.size===1&&cited.size===1&&norm.kind===KINDS[type]&&norm.year>=billYear?norm:null;
 }
 export async function deriveBills(year:number,bills:Uint8Array,authors:Uint8Array,tramitacoes?:(id:number)=>Promise<{despacho?:string|null;descricaoTramitacao?:string|null}[]>):Promise<Pick<BillsReport,'bills'|'people'|'metrics'>>{
   const known=new Set<string>(),selected=new Map<number,Bill>(),types=new Set<string>(BILL_TYPES);let propositions=0;
@@ -56,7 +56,7 @@ export async function deriveBills(year:number,bills:Uint8Array,authors:Uint8Arra
     bill.authors.push({deputyId,order:positive(r.ordemAssinatura),proponent:flag});
   });
   const list=[...selected.values()].sort((a,b)=>a.id-b.id),counts=new Map<number,BillPerson>();
-  if(tramitacoes)for(const bill of list)if(bill.normStatus==='unresolved'){bill.norm=normFromTramitacoes(bill.type,await tramitacoes(bill.id));if(bill.norm)bill.normStatus='resolved';}
+  if(tramitacoes)for(const bill of list)if(bill.normStatus==='unresolved'){bill.norm=normFromTramitacoes(bill.type,await tramitacoes(bill.id),bill.year);if(bill.norm)bill.normStatus='resolved';}
   for(const bill of list){
     bill.authors.sort((a,b)=>a.deputyId-b.deputyId);
     if(!withRows.has(bill.id))bill.issues.push('no-author-rows');

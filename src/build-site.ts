@@ -44,7 +44,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
   }
   const publicationId=hash(canonical(Object.values(domains).map(d=>d.version).sort())).slice(0,12),base=`data/${publicationId}`,data=path.join(outDir,'data',publicationId);
   const peopleVersion=await activePublication(db,'pessoas'),billsVersion=await activePublication(db,'projetos');
-  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:await readRecords(db,active.id),expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[]});
+  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:await readRecords(db,active.id),expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[]});
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const withoutData:number[]=[];

@@ -84,3 +84,8 @@ test('a dispatch citing two norms stays unresolved in the collector and the audi
 test('a proposal shared with a non-deputy proponent counts as joint',async()=>{
   const r=await derive([bill(1)],[author(1,10,1,1),organ(1)]);assert.equal(r.people[0].joint,1);assert.equal(r.bills[0].otherProponents,1);
 });
+
+test('a different norm cited in another entry or a norm older than the bill stays unresolved',()=>{
+  assert.equal(normFromTramitacoes('PL',[{despacho:'Transformado na Lei Ordinária 15172/2025'},{despacho:'Retificação: Lei Ordinária 15173/2025'}]),null);
+  assert.equal(normFromTramitacoes('PL',said('Transformado na Lei Ordinária 8666/1993.'),2025),null);
+});
