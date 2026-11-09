@@ -48,8 +48,8 @@ async function published(page) {
 
 const NBSP = ' ';
 const brl = cents => `${cents < 0 ? '−' : ''}R$${NBSP}${(Math.abs(cents) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const brlCompact = cents => Math.abs(cents) >= 100000000
-  ? `${cents < 0 ? '−' : ''}R$${NBSP}${(Math.abs(cents) / 100000000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${Math.abs(cents) < 200000000 ? 'milhão' : 'milhões'}`
+const brlCompact = cents => Math.abs(cents) >= 99995000
+  ? `${cents < 0 ? '−' : ''}R$${NBSP}${(Math.round(Math.abs(cents) / 1000000) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${Math.round(Math.abs(cents) / 1000000) / 100 < 2 ? 'milhão' : 'milhões'}`
   : Math.abs(cents) >= 100000
   ? `${cents < 0 ? '−' : ''}R$${NBSP}${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`
   : brl(cents);
@@ -1560,8 +1560,8 @@ check('approved activity lists bills and votes per deputy, loaded only on demand
 
 check('compact money uses milhões from one million up', async () => {
   const page = await at(1440);
-  const out = await page.evaluate(() => [99999999, 100000000, 150000000, 645249188, -645249188].map(c => window.Clareia.compact(c).replace(/\s+/g, ' ')));
-  assert.deepEqual(out, ['R$ 1.000 mil', 'R$ 1 milhão', 'R$ 1,5 milhão', 'R$ 6,45 milhões', '−R$ 6,45 milhões']);
+  const out = await page.evaluate(() => [99999999, 199600000, 100000000, 150000000, 645249188, -645249188].map(c => window.Clareia.compact(c).replace(/\s+/g, ' ')));
+  assert.deepEqual(out, ['R$ 1 milhão', 'R$ 2 milhões', 'R$ 1 milhão', 'R$ 1,5 milhão', 'R$ 6,45 milhões', '−R$ 6,45 milhões']);
   await page.close();
 });
 

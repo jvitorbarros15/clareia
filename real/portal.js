@@ -30,7 +30,7 @@
   const lab = C.label;
   // catText and scopeText return HTML-safe text: every use is inside innerHTML.
   const catText = category => category === 'Todas' ? 'todas as categorias' : esc(lab(category));
-  const scopePeople = () => C.all().filter(p => C.state.uf === 'Brasil' || p.uf === C.state.uf);
+  const scopePeople = () => C.all().filter(p => !p.noExercise&&(C.state.uf === 'Brasil' || p.uf === C.state.uf));
   const scopeRecords = () => scopePeople().flatMap(p => C.records(p).filter(r => r.month < state.month).map(r => ({...r,person:p.name,idPerson:p.id})));
   const badge = text => `<span class="p-badge">${text}</span>`;
   const editorial = C.model === 'editorial';
@@ -39,7 +39,7 @@
   const label = (n, text) => editorial ? `<p class="p-kicker">${text}</p>` : `<p class="p-kicker"><span>${n}</span> ${text}</p>`;
   const directTitle = {'Um total. Muitas histórias.':'Gastos por categoria','O Brasil, mais perto.':'Representantes por estado','Lado a lado. Sem atalhos.':'Comparar dois representantes','Ideias em movimento.':'Projetos de lei','Como decidiram?':'Votações','Um mandato tem muitas dimensões.':'O que ainda não cobrimos','Acompanhe o que muda.':'Acompanhar'};
   const intro = (n, eyebrow, title, description, extra = '') => `<div class="p-section-intro"><div>${label(n,eyebrow)}<h2>${editorial&&directTitle[title]||title}</h2><p class="p-description">${description}</p></div>${extra}</div>`;
-  const peopleOptions = selected => C.all().map(p=>`<option value="${p.id}" ${selected===p.id?'selected':''}>${esc(p.name)} · ${esc(p.uf)}</option>`).join('');
+  const peopleOptions = selected => C.all().filter(p=>!p.noExercise).map(p=>`<option value="${p.id}" ${selected===p.id?'selected':''}>${esc(p.name)} · ${esc(p.uf)}</option>`).join('');
   function followButton(id, full = false) { const on=state.favorites.has(id); return `<button class="follow-button ${on?'is-following':''}" data-p-follow="${id}" aria-pressed="${on}" aria-label="${on?'Deixar de acompanhar':'Acompanhar'} ${esc(C.person(id).name)}"><svg class="heart" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg>${full ? on?'Acompanhando':'Acompanhar':''}</button>`; }
   function scopeText(period = C.span()) { const n=scopePeople().length; return `Amostra · ${n} ${n===1?'deputado':'deputados'}${C.state.uf==='Brasil'?'':' · '+UF[C.state.uf][0]} · ${period} · ${catText(C.state.category)}`; }
   // The spending panel follows its month slider; everywhere else the period is the published coverage.
@@ -103,7 +103,7 @@
     readout.querySelector('span').textContent = active ? active.dataset.detail : readout.dataset.restDetail;
   }
   // With many months each bar is too narrow for a full value; the exact one stays in the aria-label and the click.
-  const barLabel=cents=>{const sign=cents<0?'−':'',abs=Math.abs(cents);return abs>=100000000?`${sign}${(abs/100000000).toLocaleString('pt-BR',{maximumFractionDigits:1})}<br>mi`:abs>=100000?`${sign}${Math.round(abs/100000)}<br>mil`:`${sign}${Math.round(abs/100)}<br>R$`;};
+  const barLabel=cents=>{const sign=cents<0?'−':'',abs=Math.abs(cents),br=(v,d)=>v.toLocaleString('pt-BR',{maximumFractionDigits:d});if(abs>=99950000)return `${sign}${br(Math.round(abs/10000000)/10,1)}<br>mi`;if(abs>=9995000)return `${sign}${br(Math.round(abs/100000),0)}<br>mil`;if(abs>=99950)return `${sign}${br(Math.round(abs/10000)/10,1)}<br>mil`;return `${sign}${br(Math.round(abs/100),0)}<br>R$`;};
   function spending() {
     const entries=scopeRecords(), total=C.sum(entries);
     const groups=window.ClareiaData.categories.map((name,i)=>({name,color:PALETTE[i%PALETTE.length],value:C.sum(entries.filter(r=>r.category===name))}));
@@ -130,13 +130,13 @@
     const max=Math.max(1,...Object.keys(UF).map(mapValue).filter(v=>v!==null&&v>0));
     // Same packed layout as before; slightly longer steps leave an even gap between tiles.
     return `<svg class="uf-map" viewBox="0 0 410 384" role="group" aria-label="Mapa esquemático das 27 unidades federativas, não geográfico">${Object.entries(UF).map(([uf,[name,c,r]])=>{
-      const x=10+c*28.5,y=10+r*44, available=C.all().some(p=>p.uf===uf), value=mapValue(uf);
+      const x=10+c*28.5,y=10+r*44, available=C.all().some(p=>!p.noExercise&&p.uf===uf), value=mapValue(uf);
       return `<g role="button" tabindex="0" data-p-uf="${uf}" aria-label="${name}${available?' — '+mapFormat(value):' — sem dados nesta amostra'}" aria-pressed="${state.mapUF===uf}" class="uf-tile ${available?'has-data':''} ${available&&value<0?'negative':''} ${available&&value>0&&value/max>.55?'strong':''} ${state.mapUF===uf?'selected':''}" transform="translate(${x} ${y})"><path class="tile-hit" aria-hidden="true" d="M0 12 25 0 50 12 50 40 25 52 0 40Z"/><path style="${available&&value>=0?'fill:var(--accent);fill-opacity:'+(.2+.8*value/max):''}" d="M0 12 25 0 50 12 50 40 25 52 0 40Z"/><text x="25" y="${available?25:31}" text-anchor="middle">${uf}</text>${available?`<text class="tile-value" x="25" y="38" text-anchor="middle">${esc(tileValue(value))}</text>`:''}<title>${name}${available?' · '+mapFormat(value):' · sem dados'}</title></g>`;
     }).join('')}</svg>`;
   }
   const tileValue=v=>compact(v).replace(/R\$\s/,'');
   function mapValue(uf) {
-    const people=C.all().filter(p=>p.uf===uf);
+    const people=C.all().filter(p=>!p.noExercise&&p.uf===uf);
     if(!people.length)return null;
         const total=C.sum(people.flatMap(C.records));
     return state.mapMetric==='average'?total/people.length:total;
@@ -165,7 +165,7 @@
   }
   function atlasDetail() {
     if(!state.mapUF)return `<p class="p-kicker">Brasil</p><h3>Escolha um estado.</h3><p class="p-small">Toque num estado do mapa, ou use a lista, para conhecer os deputados dele nesta amostra. A UF indica o estado de representação, não o local onde a despesa ocorreu.</p>`;
-    const ppl=C.all().filter(p=>p.uf===state.mapUF), total=C.sum(ppl.flatMap(C.records));
+    const ppl=C.all().filter(p=>!p.noExercise&&p.uf===state.mapUF), total=C.sum(ppl.flatMap(C.records));
     return `<p class="p-kicker">${state.mapUF} / ${UF[state.mapUF][0]}</p><h3>${ppl.length?'Conheça quem está no seu recorte.':'Ainda não há dados nesta amostra.'}</h3><p class="p-small">A UF indica o estado de representação. Não é o local onde a despesa ocorreu.</p>
       ${ppl.length?`<div class="atlas-numbers"><div><strong>${ppl.length}</strong><span>${ppl.length===1?'deputado nesta amostra':'deputados nesta amostra'}</span></div><div><strong>${mapFormat(mapValue(state.mapUF))}</strong><span>${state.mapMetric==='projects'?'projetos apresentados':state.mapMetric==='average'?'cota por representante':'cota total'} · ${C.span()}${editorial&&state.mapMetric!=='projects'?' · valor exato':''}</span></div></div><div class="atlas-people">${ppl.map(p=>`<div>${C.avatar(p)}<button data-action="profile" data-id="${p.id}"><b>${esc(p.name)}</b><small>Deputado(a) federal · ${esc(p.uf)}</small></button>${followButton(p.id)}</div>`).join('')}</div><button class="p-primary" data-p="apply-state">Explorar ${UF[state.mapUF][0]} ${icon('arrow')}</button>`:`<div class="map-empty">${icon('database')}<p>Indisponível não significa zero.</p><span>Nenhum deputado desta amostra representa este estado.</span></div>`}`;
   }
@@ -182,7 +182,7 @@
   function directoryCards() {
     const normalize=s=>s.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     const ppl=C.all().filter(p=>normalize(p.name).includes(normalize(state.rosterQuery)));
-    const head=editorial&&ppl.length?`<div class="directory-head" aria-hidden="true"><span>Representante</span><span>Despesas ${C.state.metric==='mensal'?'por mês':'no recorte'}</span><span>Projetos${C.state.metric==='mensal'?' por mês':''}</span><span></span></div>`:'';
+    const head=editorial&&ppl.length?`<div class="directory-head" aria-hidden="true"><span>Representante</span><span>Despesas ${C.state.metric==='mensal'?'por mês':'no recorte'}</span><span>Projetos${C.state.metric==='mensal'&&!window.ClareiaData.billsApproved?' por mês':''}</span><span></span></div>`:'';
     return ppl.length?head+ppl.map(p=>`<article class="directory-card"><div class="directory-person">${C.avatar(p)}<div><h3>${esc(p.name)}</h3><p>${esc(C.context(p))} · ID Câmara ${p.officialId}</p></div>${followButton(p.id)}</div><div class="directory-stats"><button data-action="evidence" data-id="${p.id}" data-kind="gastos">${p.noExercise?`<b class="no-exercise">Sem exercício confirmado em ${C.state.year}</b><small>não entra no ranking de gastos</small>`:`<b>${compact(C.sum(C.records(p))/(C.state.metric==='mensal'?p.months:1))}</b><small>despesas ${C.state.metric==='mensal'?'por mês':'no recorte'}</small>`}</button><button data-action="evidence" data-id="${p.id}" data-kind="projetos"><b>${p.projects===null?C.pending:number(p.projects)}</b><small>${p.projects===null?`projetos ${C.state.metric==='mensal'?'por mês':'apresentados'}`:'projetos como proponente'}</small></button></div><div class="directory-actions"><button data-action="profile" data-id="${p.id}">Abrir perfil →</button><button data-p-add-compare="${p.id}">Comparar +</button></div></article>`).join(''):'<div class="empty-state"><b>Nenhum perfil encontrado.</b><p>A busca consulta os deputados desta versão.</p><button class="outline-button" data-p="clear-directory">Limpar filtros</button></div>';
   }
   function directory() {
@@ -192,9 +192,10 @@
 
   const activityCache=new Map();
   const activityData=id=>{if(!activityCache.has(id))activityCache.set(id,fetch(window.ClareiaData.activityUrl(id)).then(r=>{if(!r.ok)throw new Error();return r.json();}).catch(error=>{activityCache.delete(id);throw error;}));return activityCache.get(id);};
+  const shortDatePlain=value=>value?value.slice(8,10)+'/'+value.slice(5,7)+'/'+value.slice(0,4):'';
   const LIST_STEP=5,listState={bills:{limit:LIST_STEP,query:''},votes:{limit:LIST_STEP,query:''}};let activityShown=null;
   const folded=text=>String(text??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-  const listRows=kind=>{const q=folded(listState[kind].query).trim(),all=activityShown?activityShown[kind]:[];if(!q)return all;return all.filter(x=>folded(kind==='bills'?`${x.type} ${x.number}/${x.year} ${x.summary} ${x.situation} ${x.norm?x.norm.kind+' '+x.norm.number:''}`:`${x.date} ${x.organ} ${KIND[x.kind]} ${x.description} ${x.matters.join(' ')} ${x.category}`).includes(q));};
+  const listRows=kind=>{const q=folded(listState[kind].query).trim(),all=activityShown?activityShown[kind]:[];if(!q)return all;if(kind==='votes'&&all.some(x=>folded(x.category)===q))return all.filter(x=>folded(x.category)===q);return all.filter(x=>folded(kind==='bills'?`${x.type} ${x.number}/${x.year} ${x.summary} ${x.situation||'Situação não informada'} ${x.norm?x.norm.kind+' '+x.norm.number+'/'+x.norm.year:''}`:`${shortDatePlain(x.date)} ${x.organ} ${KIND[x.kind]||'Outro'} ${x.description} ${x.matters.join(' ')}`).includes(q)||kind==='votes'&&folded(x.category)===q);};
   function renderList(kind){const box=$(`#${kind}-rows`);if(!box||!activityShown)return;const rows=listRows(kind),shown=rows.slice(0,listState[kind].limit),noun=kind==='bills'?'projeto':'voto',query=listState[kind].query.trim();box.innerHTML=`<p class="p-small activity-count">Mostrando ${number(shown.length)} de ${number(rows.length)} ${noun}${rows.length===1?'':'s'}</p><ul class="activity-list">${shown.map(kind==='bills'?billItem:voteItem).join('')||`<li class="p-small">${query?'Nada encontrado para essa busca.':`Nenhum ${noun} nesta versão.`}</li>`}</ul>${rows.length>shown.length?`<button class="outline-button activity-more" data-p="activity-more" data-kind="${kind}">Mostrar mais ${Math.min(LIST_STEP,rows.length-shown.length)}</button>`:''}`;}
   const activitySearch=kind=>`<label class="activity-search"><span class="sr-only">Buscar ${kind==='bills'?'projetos':'votações'}</span><input id="activity-search-${kind}" type="search" autocomplete="off" placeholder="${kind==='bills'?'Buscar por número ou assunto':'Buscar por assunto, tipo ou voto'}" value="${esc(listState[kind].query)}"></label>`;
   const activityPerson=()=>state.activity&&C.person(state.activity)?state.activity:C.byTotal()[0].id;
@@ -208,9 +209,10 @@
   async function hydrateActivity(){
     const run=++activityRun,id=activityPerson(),person=C.person(id),official=person.officialId,info=window.ClareiaData.activitySummary(official);
     const fill=(selector,html)=>{const el=$(selector);if(el)el.innerHTML=html;};
-    let data;try{data=await activityData(official);}catch{if(run!==activityRun)return;fill('#bills-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');fill('#votes-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');return;}
+    let data;try{data=await activityData(official);}catch{if(run!==activityRun)return;document.querySelectorAll('#bills-list,#votes-list').forEach(el=>el.removeAttribute('aria-busy'));fill('#bills-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');fill('#votes-list','<p class="p-small">Lista indisponível nesta versão. Nenhum número foi estimado.</p>');return;}
     if(run!==activityRun)return;
     activityShown=data;
+    document.querySelectorAll('#bills-list,#votes-list').forEach(el=>el.removeAttribute('aria-busy'));
     if(info?.bills){fill('#bills-list',`<div class="activity-numbers"><div><strong>${number(info.bills.proposed)}</strong><span>como proponente${info.bills.joint?`, ${number(info.bills.joint)} em conjunto`:''}</span></div><div><strong>${number(info.bills.coauthored)}</strong><span>em coautoria</span></div><div><strong>${number(info.bills.norms)}</strong><span>viraram norma</span></div></div>${activitySearch('bills')}<div id="bills-rows"></div>`);renderList('bills');}
     if(info?.votes){fill('#votes-list',`${info.votesHeld?`<p class="p-small">${number(info.votesHeld)} voto(s) em votações retidas para revisão não entram nos números nem na lista.</p>`:''}<div class="activity-numbers">${Object.entries(info.votes).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<div><strong>${number(n)}</strong><span>${esc(c)}</span></div>`).join('')}</div>${activitySearch('votes')}<div id="votes-rows"></div>`);renderList('votes');}
   }
@@ -233,7 +235,7 @@
 
   function events(id) { const p=C.person(id); return [
     {date:C.span().toUpperCase(),title:'Despesas publicadas',text:`Registros oficiais da cota parlamentar de ${esc(p.name)}, conferidos registro por registro.`,action:'records',value:id},
-    {date:'PRÓXIMA ETAPA',title:'Projetos e votações',text:'Ainda não coletados. Entram quando forem conferidos com a fonte oficial.',action:'profile',value:id}
+    ...(window.ClareiaData.billsApproved&&window.ClareiaData.votesApproved?[]:[{date:'PRÓXIMA ETAPA',title:'Projetos e votações',text:'Ainda não coletados. Entram quando forem conferidos com a fonte oficial.',action:'profile',value:id}])
   ]; }
 
   function timeline() {return events(state.timeline).map((e,i)=>`<button class="timeline-event p-reveal" data-p-event="${e.action}" data-value="${e.value}"><span class="timeline-dot"></span><time>${e.date}</time><div><h3>${e.title}</h3><p>${e.text}</p></div>${ext()}</button>`).join('');}
@@ -403,7 +405,7 @@
     const id=e.target.id,val=e.target.value;
     
     if(id==='map-select'){state.mapUF=val||null;renderPart('atlas',atlas);focusMatch('#map-select');}
-    if(id==='activity-bills'||id==='activity-votes'){state.activity=val;activityShown=null;for(const list of Object.values(listState)){list.limit=LIST_STEP;list.query='';}document.querySelectorAll('#activity-bills,#activity-votes').forEach(select=>{select.value=val;});hydrateActivity();return;}
+    if(id==='activity-bills'||id==='activity-votes'){state.activity=val;activityShown=null;for(const list of Object.values(listState)){list.limit=LIST_STEP;list.query='';}document.querySelectorAll('#activity-bills,#activity-votes').forEach(select=>{select.value=val;});document.querySelectorAll('#bills-list,#votes-list').forEach(el=>el.setAttribute('aria-busy','true'));hydrateActivity();return;}
     if(id==='compare-a'||id==='compare-b'){const k=id==='compare-a'?'a':'b',other=k==='a'?'b':'a';if(state[other]===val)state[other]=state[k];state[k]=val;renderPart('comparacao',comparison);focusMatch('#'+id);if(editorial&&id==='compare-a'){state.voter=val;state.timeline=val;renderPart('votacoes',voteSection);renderPart('acompanhar',following);watchMotion();focusMatch('#compare-a');}}
     if(id==='project-stage'){state.stage=val;renderPart('project-grid',projectCards);watchMotion();}
     if(id==='voter'){state.voter=val;renderPart('vote-grid',voteCards);watchMotion();}
