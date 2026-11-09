@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {BASE,hash,canonical,snapshotId,envelopeSchema,normalize,stableDigest,officialUrl,METRIC,readLimited,RETRY_WAITS,retryWait,sourceError} from './model.ts';
+import {BASE,hash,canonical,snapshotId,envelopeSchema,normalize,stableDigest,officialUrl,METRIC,readLimited,RETRY_WAITS,retryWait,sourceError,UFS} from './model.ts';
 import type {Scope,Person,Page,Snapshot} from './model.ts';
 import { z } from 'zod';
 
@@ -52,7 +52,7 @@ export async function collect(scope:Scope,cache:RunCache):Promise<Snapshot>{
   if(scope.ids.length!==3||new Set(scope.ids).size!==3||scope.months.length!==2||new Set(scope.months).size!==2)throw new Error('Piloto exige três IDs distintos e dois meses distintos');
   if(!Number.isInteger(scope.year)||scope.year<2009||scope.ids.some(id=>!Number.isInteger(id)||id<1)||scope.months.some(m=>!Number.isInteger(m)||m<1||m>12||Date.UTC(scope.year,m,1)>Date.now()))throw new Error('Recorte inválido ou mês não encerrado');
   const people:Person[]=[];
-  for(const id of scope.ids){const url=`${BASE}/deputados/${id}`;const {data,page}=await cache.get(url,0);const profile=z.object({dados:z.object({id:z.number(),ultimoStatus:z.object({nome:z.string(),urlFoto:z.string().nullable()})})}).parse(data);if(profile.dados.id!==id)throw new Error('Identidade oficial divergente');people.push({id,name:profile.dados.ultimoStatus.nome,photo:profile.dados.ultimoStatus.urlFoto?officialUrl(profile.dados.ultimoStatus.urlFoto,'photo'):null,sourceUrl:url,profileFetchedAt:page.fetchedAt});}
+  for(const id of scope.ids){const url=`${BASE}/deputados/${id}`;const {data,page}=await cache.get(url,0);const profile=z.object({dados:z.object({id:z.number(),ultimoStatus:z.object({nome:z.string(),urlFoto:z.string().nullable(),siglaUf:z.string().nullish(),siglaPartido:z.string().nullish(),data:z.string().nullish()})})}).parse(data);if(profile.dados.id!==id)throw new Error('Identidade oficial divergente');const status=profile.dados.ultimoStatus;if(status.siglaUf&&!UFS.has(status.siglaUf))throw new Error(`UF inválida no cadastro oficial de ${id}`);people.push({id,name:status.nome,photo:status.urlFoto?officialUrl(status.urlFoto,'photo'):null,sourceUrl:url,profileFetchedAt:page.fetchedAt,uf:status.siglaUf??null,party:status.siglaPartido?.trim()||null,statusDate:status.data??null});}
   const passes=[];
   for(const pass of [1,2]){
     const rows=[];
