@@ -11,7 +11,11 @@
   const totalOf = p => p.cells.reduce((n, r) => n + r.amount, 0);
   // A month held for review is missing, not zero: a partial total never enters a ranking or a comparison.
   const comparable = p => !p.noExercise && !p.heldMonths?.length;
-  const byTotal = () => (D.dataset().filter(comparable).length >= 2 ? D.dataset().filter(comparable) : [...D.dataset()]).sort((a, b) => totalOf(b) - totalOf(a));
+  // Each total is computed once per sort: summing inside the comparator repeats it thousands of times with hundreds of deputies.
+  const sortedBy = (people, key) => people.map(p => [p, key(p)]).sort((a, b) => b[1] - a[1] || a[0].name.localeCompare(b[0].name, 'pt-BR')).map(([p]) => p);
+  // The published totals never change after load, so the order is computed once.
+  let totalOrder = null;
+  const byTotal = () => [...(totalOrder ??= sortedBy(D.dataset().filter(comparable).length >= 2 ? D.dataset().filter(comparable) : [...D.dataset()], totalOf))];
   // Only the parameters present and valid in the URL; a question applies what its words imply for the rest.
   const fromURL = {};
   if (categories.includes(initial.get('categoria')) || initial.get('categoria') === 'Todas') fromURL.category = initial.get('categoria');
@@ -60,7 +64,7 @@
   const formatted = (p, kind = state.tab) => kind === 'projetos' ? (p.projects === null ? pending : number(p.projects)) : compact(value(p, kind));
   // The answer ranks expenses even when the Projetos tab is open, where value() has nothing to sort by.
   function ranking(kind = state.tab) {
-    return all().filter(p => comparable(p) && (state.uf === 'Brasil' || p.uf === state.uf)).sort((a, b) => (state.tab === 'menos' ? value(a, kind) - value(b, kind) : value(b, kind) - value(a, kind)) || a.name.localeCompare(b.name, 'pt-BR'));
+    return sortedBy(all().filter(p => comparable(p) && (state.uf === 'Brasil' || p.uf === state.uf)), p => state.tab === 'menos' ? -value(p, kind) : value(p, kind));
   }
   const icon = name => {
     const paths = {
