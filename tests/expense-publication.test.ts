@@ -16,7 +16,7 @@ function lot(n:number,ids:number[],cells:any[]):ExpenseLotRun{
   const reportSha256=hash(canonical(report));
   return {runId:'run'+n,manifest:{runId:'run'+n,status:'review-required',reportSha256,proposalSha256,inputSha256:hash(canonical(input))},input:input as any,report,audit:{status:'passed',reportSha256,proposalSha256,checkedAt:'2026-11-09T10:00:00Z',competences:cells.length}};
 }
-const cell=(personId:number,status:string,records:Expense[]=[])=>({personId,year:2025,month:1,status,records,totalCents:status==='complete'||status==='no-expenses-confirmed'?records.reduce((n,r)=>n+r.cents,0):null});
+const cell=(personId:number,status:string,records:Expense[]=[])=>({personId,year:2025,month:1,status,records,reasons:status==='held-review'?['sigepa-unit-unconfirmed']:[],totalCents:status==='complete'||status==='no-expenses-confirmed'?records.reduce((n,r)=>n+r.cents,0):null});
 const lots=()=>[lot(0,[1,2],[cell(1,'complete',[record(1,100,0),record(1,-30,1)]),cell(2,'held-review')]),lot(1,[3],[cell(3,'no-expenses-confirmed')])];
 
 test('all audited lots of one universe become one version with held months counted',()=>{
@@ -25,6 +25,7 @@ test('all audited lots of one universe become one version with held months count
   assert.deepEqual(v.scope.ids,[1,2,3]);
   assert.equal(v.records.length,2);assert.equal(v.validation.totalCents,70);assert.equal(v.validation.independentTotalCents,'70');
   assert.deepEqual(v.validation.heldMonths,{2:1});
+  assert.deepEqual(v.validation.heldCompetences,[{personId:2,month:1,reasons:['sigepa-unit-unconfirmed']}]);
   assert.equal(v.validation.sourceKind,'annual-api-union');
   assert.deepEqual(v.people.map(p=>[p.name,p.uf,p.party]),[['Pessoa 1','SP','X'],['Pessoa 2','SP','X'],['Pessoa 3','SP','X']]);
   assert.equal(v.collectedAt,'2026-11-09T01:00:00Z');
