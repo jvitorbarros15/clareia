@@ -1840,24 +1840,35 @@ check('long lists of deputies show a step at a time with more and less', async (
   await page.close();
 });
 
-check('deputy lists are alphabetical and searchable, and the choice on screen always matches the data', async () => {
+check('deputy lists are alphabetical, complete and searchable through visible suggestions', async () => {
   const page = await at(1440);
-  for (const id of ['compare-a', 'compare-b', 'activity-votes', 'activity-bills']) {
+  const total = await page.evaluate(() => window.Clareia.all().length);
+  for (const id of ['compare-a', 'compare-b']) {
     const names = await page.locator(`#${id} option`).allInnerTexts();
+    assert.equal(names.length, total, `${id} lists every deputy`);
     assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b, 'pt-BR')), `${id} sorted`);
   }
   const options = await page.locator('#compare-a option').evaluateAll(os => os.map(o => ({ value: o.value, text: o.textContent })));
-  const current = await page.locator('#compare-a').inputValue(), target = options.find(o => o.value !== current);
-  await page.locator('#compare-a-filter').fill(target.text.split(' · ')[0].toLowerCase());
+  const current = await page.locator('#compare-a').inputValue(), target = options.find(o => o.value !== current), word = target.text.split(' · ')[0].split(' ')[0].toLowerCase();
+  await page.locator('#compare-a-filter').fill(word);
+  assert.equal(await page.locator('#compare-a-options').isVisible(), true, 'suggestions are visible while typing');
+  assert.equal(await page.locator('#compare-a-filter').getAttribute('aria-expanded'), 'true');
+  assert.equal(await page.locator('#compare-a option').count(), total, 'the select keeps the full list');
+  await page.locator('#compare-a-options [role=option]', { hasText: target.text.split(' · ')[0] }).first().click();
   await page.waitForFunction(v => document.querySelector('#compare-a')?.value === v, target.value);
   assert.match(await text(page.locator('#comparacao')), new RegExp(target.text.split(' · ')[0]), 'comparison follows the chosen deputy');
+  const other = options.find(o => o.value !== target.value && o.value !== current) || options.find(o => o.value !== target.value);
+  await page.locator('#compare-b-filter').fill(other.text.split(' · ')[0].toLowerCase());
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+  await page.waitForFunction(v => document.querySelector('#compare-b')?.value === v, other.value);
   const now = await page.locator('#compare-a').inputValue();
   await page.locator('#compare-a-filter').fill('zzz-ninguem');
+  assert.match(await text(page.locator('#compare-a-options')), /Nenhum deputado encontrado/);
   assert.equal(await page.locator('#compare-a').inputValue(), now, 'no match keeps the current choice');
-  assert.equal(await page.locator('#compare-a option').count(), 1, 'only the current choice stays listed');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#compare-a-options').isVisible(), false, 'Escape closes the suggestions');
   await page.close();
 });
-
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;

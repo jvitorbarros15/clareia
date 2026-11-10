@@ -42,8 +42,8 @@
   const intro = (n, eyebrow, title, description, extra = '') => `<div class="p-section-intro"><div>${label(n,eyebrow)}<h2>${editorial&&directTitle[title]||title}</h2><p class="p-description">${description}</p></div>${extra}</div>`;
   const byName=(a,b)=>a.name.localeCompare(b.name,'pt-BR');
   // A search box beside each list of deputies; the list itself stays a native select.
-  const personFilter=selectId=>`<label class="sr-only" for="${selectId}-filter">Buscar deputado na lista</label><input id="${selectId}-filter" class="person-filter" data-filter="${selectId}" type="search" autocomplete="off" placeholder="Buscar deputado">`;
-  const peopleOptions = selected => C.all().filter(C.comparable).sort(byName).map(p=>`<option value="${p.id}" ${selected===p.id?'selected':''}>${esc(p.name)} · ${esc(p.uf)}</option>`).join('');
+  const personFilter=selectId=>`<div class="person-combo"><label class="sr-only" for="${selectId}-filter">Buscar deputado</label><input id="${selectId}-filter" class="person-filter" data-filter="${selectId}" type="search" autocomplete="off" placeholder="Buscar deputado" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${selectId}-options"><ul id="${selectId}-options" class="person-options" role="listbox" aria-label="Deputados encontrados" hidden></ul></div>`;
+  const peopleOptions = selected => [...C.all()].sort(byName).map(p=>`<option value="${p.id}" ${selected===p.id?'selected':''}>${esc(p.name)} · ${esc(p.uf)}${C.comparable(p)?'':' (fora da comparação)'}</option>`).join('');
   function followButton(id, full = false) { const on=state.favorites.has(id); return `<button class="follow-button ${on?'is-following':''}" data-p-follow="${id}" aria-pressed="${on}" aria-label="${on?'Deixar de acompanhar':'Acompanhar'} ${esc(C.person(id).name)}"><svg class="heart" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg>${full ? on?'Acompanhando':'Acompanhar':''}</button>`; }
   function scopeText(period = C.span()) { const n=scopePeople().length; return `Amostra · ${n} ${n===1?'deputado':'deputados'}${C.state.uf==='Brasil'?'':' · '+UF[C.state.uf][0]} · ${period} · ${catText(C.state.category)}`; }
   // The spending panel follows its month slider; everywhere else the period is the published coverage.
@@ -181,8 +181,11 @@
   }
   function comparison() {
     const a=C.person(state.a),b=C.person(state.b), get=p=>C.sum(C.cells(p))/(C.state.metric==='mensal'?p.months:1), av=get(a),bv=get(b),cmp=C.compareValues(av,bv),an=esc(a.name.split(' ')[0]),bn=esc(b.name.split(' ')[0]);
-    return `${intro('04','Comparação com contexto','Lado a lado. Sem atalhos.','Escolha duas pessoas e compare a mesma métrica, no mesmo período. Abra as evidências antes de tirar conclusões.')}
-      <div class="compare-controls"><div class="person-pick"><label>Primeiro representante<select id="compare-a">${peopleOptions(state.a)}</select></label>${personFilter('compare-a')}</div><button class="swap-button" data-p="swap" aria-label="Inverter representantes">⇄</button><div class="person-pick"><label>Segundo representante<select id="compare-b">${peopleOptions(state.b)}</select></label>${personFilter('compare-b')}</div><div class="p-metric" role="group" aria-label="Comparação total ou por mês"><button data-p-metric="total" aria-pressed="${C.state.metric==='total'}">Total</button><button data-p-metric="mensal" aria-pressed="${C.state.metric==='mensal'}">Por mês</button></div></div>
+    const blocked=[a,b].filter(p=>!C.comparable(p));
+    const head=`${intro('04','Comparação com contexto','Lado a lado. Sem atalhos.','Escolha duas pessoas e compare a mesma métrica, no mesmo período. Abra as evidências antes de tirar conclusões.')}
+      <div class="compare-controls"><div class="person-pick"><label>Primeiro representante<select id="compare-a">${peopleOptions(state.a)}</select></label>${personFilter('compare-a')}</div><button class="swap-button" data-p="swap" aria-label="Inverter representantes">⇄</button><div class="person-pick"><label>Segundo representante<select id="compare-b">${peopleOptions(state.b)}</select></label>${personFilter('compare-b')}</div><div class="p-metric" role="group" aria-label="Comparação total ou por mês"><button data-p-metric="total" aria-pressed="${C.state.metric==='total'}">Total</button><button data-p-metric="mensal" aria-pressed="${C.state.metric==='mensal'}">Por mês</button></div></div>`;
+    if(blocked.length)return head+`<div class="compare-blocked" role="note">${blocked.map(p=>`<p><strong>${esc(p.name)}</strong>: ${p.noExercise?`não tem exercício de mandato confirmado em ${C.state.year}, então não há gastos para comparar.`:C.partialNote(p)}</p>`).join('')}<button class="p-link" data-action="profile" data-id="${blocked[0].id}">Abrir o perfil de ${esc(blocked[0].name.split(' ')[0])} →</button></div>`;
+    return `${head}
       <div class="comparison-board"><div class="compare-person">${C.avatar(a)}<div><p>${a.months} meses no recorte</p><h3>${esc(a.name)}</h3>${followButton(a.id,true)}</div><button data-action="evidence" data-id="${a.id}" data-kind="gastos" class="compare-total">${compact(av)} →</button></div><div class="comparison-center"><span class="vs">×</span>${cmp.equal?`<strong>${cmp.percent===null?money(0):'0%'}</strong><p>Valores iguais</p>`:cmp.percent===null?`<strong>${compact(cmp.diff)}</strong><p>${cmp.more?'a mais':'a menos'} para ${an} do que para ${bn}. ${bn} tem valor ${bv<0?'negativo':'zero'} neste recorte, então não há base para uma porcentagem.</p>`:`<strong>${number(cmp.percent)}%</strong><p>${cmp.more?'a mais':'a menos'} para ${an} do que para ${bn}</p>`}${editorial&&a.months!==b.months&&C.state.metric!=='mensal'?`<p class="tenure-note">Meses no recorte diferentes (${a.months} × ${b.months}). Compare por mês.</p>`:''}<button data-p="compare-evidence">Como chegamos nisso? →</button></div><div class="compare-person second">${C.avatar(b)}<div><p>${b.months} meses no recorte</p><h3>${esc(b.name)}</h3>${followButton(b.id,true)}</div><button data-action="evidence" data-id="${b.id}" data-kind="gastos" class="compare-total">${compact(bv)} →</button></div></div>
       <div class="compare-breakdown">${(()=>{const cats=window.ClareiaData.categories,val=(p,cat)=>C.sum(C.cells(p).filter(r=>r.category===cat))/(C.state.metric==='mensal'?p.months:1),max=Math.max(1,...cats.flatMap(cat=>[Math.abs(val(a,cat)),Math.abs(val(b,cat))]));return cats.map(cat=>{const x=val(a,cat),y=val(b,cat);return `<div class="compare-category"><span>${compact(x)}</span><div class="left-bar"><i style="width:${Math.abs(x)/max*100}%"></i></div><b>${esc(lab(cat))}</b><div class="right-bar"><i style="width:${Math.abs(y)/max*100}%"></i></div><span>${compact(y)}</span></div>`;}).join('')})()}</div><div class="compare-foot"><p>${C.span()} · ${catText(C.state.category)} · ${C.state.metric==='mensal'?'média por mês no recorte':'total de despesas'}${a.months!==b.months?' · tempos em exercício diferentes':''}</p><button class="p-link" data-p="ask-comparison">Investigar esta comparação ${icon('arrow')}</button></div>${linkedExplorer()}`;
   }
@@ -434,14 +437,30 @@
     renderPart('directory-grid',directoryCards);
     (more?document.querySelectorAll('#directory-grid .directory-card')[before]?.querySelector('button'):$('[data-action=roster-more]'))?.focus({preventScroll:more});
   });
-  // The current choice always stays listed, so the select never shows a name other than the data on screen.
+  // Suggestions come from the full list in the select; choosing one sets the select, so every existing handler runs unchanged.
   function filterPeople(input){
-    const select=$('#'+input.dataset.filter);if(!select)return;
-    const all=select._people??=[...select.options].map(o=>({value:o.value,text:o.text})),current=select.value,q=folded(input.value).trim();
-    const found=q?all.filter(o=>folded(o.text).includes(q)):all,shown=found.some(o=>o.value===current)||!current?found:[all.find(o=>o.value===current),...found];
-    select.innerHTML=shown.map(o=>`<option value="${esc(o.value)}" ${o.value===current?'selected':''}>${esc(o.text)}</option>`).join('');
-    if(found.length===1&&found[0].value!==current){select.value=found[0].value;select.dispatchEvent(new Event('change',{bubbles:true}));}
+    const select=$('#'+input.dataset.filter),list=$('#'+input.dataset.filter+'-options');if(!select||!list)return;
+    const q=folded(input.value).trim(),found=q?[...select.options].filter(o=>folded(o.text).includes(q)):[];
+    list.innerHTML=found.slice(0,50).map((o,i)=>`<li id="${list.id}-${i}" role="option" data-value="${esc(o.value)}" aria-selected="false">${esc(o.text)}</li>`).join('')||(q?'<li class="person-none" aria-disabled="true">Nenhum deputado encontrado</li>':'');
+    list.hidden=!q;input.setAttribute('aria-expanded',String(!!q));input.removeAttribute('aria-activedescendant');
   }
+  function pickPerson(input,value){
+    const select=$('#'+input.dataset.filter);if(!select||!value)return;
+    const list=$('#'+input.dataset.filter+'-options');if(list)list.hidden=true;input.setAttribute('aria-expanded','false');
+    if(select.value!==value){select.value=value;select.dispatchEvent(new Event('change',{bubbles:true}));}
+  }
+  document.addEventListener('keydown',e=>{
+    const input=e.target.closest?.('.person-filter');if(!input)return;
+    const list=$('#'+input.dataset.filter+'-options'),items=list?[...list.querySelectorAll('[role=option]')]:[];
+    if(e.key==='Escape'){if(list&&!list.hidden){list.hidden=true;input.setAttribute('aria-expanded','false');e.preventDefault();}return;}
+    if(!items.length)return;
+    const at=items.findIndex(li=>li.getAttribute('aria-selected')==='true');
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const next=e.key==='ArrowDown'?Math.min(items.length-1,at+1):Math.max(0,at-1);items.forEach((li,i)=>li.setAttribute('aria-selected',String(i===next)));input.setAttribute('aria-activedescendant',items[next].id);items[next].scrollIntoView({block:'nearest'});}
+    if(e.key==='Enter'){e.preventDefault();pickPerson(input,(items[at]||items[0]).dataset.value);}
+  });
+  // mousedown keeps the focus in the box until the choice is made.
+  document.addEventListener('mousedown',e=>{const li=e.target.closest?.('.person-options [role=option]');if(!li)return;e.preventDefault();pickPerson($('#'+li.closest('.person-options').id.replace(/-options$/,'')+'-filter'),li.dataset.value);});
+  document.addEventListener('focusout',e=>{const input=e.target.closest?.('.person-filter');if(!input)return;setTimeout(()=>{const list=$('#'+input.dataset.filter+'-options');if(list&&document.activeElement!==input){list.hidden=true;input.setAttribute('aria-expanded','false');}},120);});
   document.addEventListener('input',e=>{
     if(e.target.classList.contains('person-filter')){filterPeople(e.target);return;}
     if(e.target.id==='supplier-search'){state.supplierQuery=e.target.value;state.supplierLimit=8;updateSpending();return;}

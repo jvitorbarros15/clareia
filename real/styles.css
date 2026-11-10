@@ -959,4 +959,12 @@ img.assistant-spark{width:24px;height:24px;border-radius:6px;flex:none}
 .list-more .outline-button{min-height:44px}
 .person-pick{display:flex;flex-direction:column;gap:8px;min-width:0}
 .person-filter{width:100%;min-height:40px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
-.activity-person~.person-filter{max-width:384px}
+.activity-person~.person-combo{max-width:384px}
+.compare-controls .person-pick select{width:100%}
+.person-combo{position:relative}
+.person-options{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 4px);max-height:280px;overflow:auto;margin:0;padding:4px;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0 / .12)}
+.person-options li{padding:8px 10px;border-radius:6px;cursor:pointer;font-size:14px}
+.person-options li[aria-selected=true],.person-options li:hover{background:var(--line)}
+.person-options .person-none{cursor:default;color:var(--muted)}
+.compare-blocked{display:flex;flex-direction:column;gap:12px;padding:24px;border:1px solid var(--line);border-radius:8px}
+.activity-person select{min-width:0;flex:0 1 auto}

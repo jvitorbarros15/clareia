@@ -53,7 +53,7 @@
   const cells = p => p.cells.filter(inCategory);
   const span = () => { const c = D.coverage; return `${monthNames[c[0]]}–${monthNames[c.at(-1)]} ${state.year}`; };
   const pending = 'Ainda não coletado';
-  const partialNote = p => `Total parcial: ${p.heldMonths.length === 1 ? `${monthNames[p.heldMonths[0]]} está em revisão` : `${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
+  const partialNote = p => `Total parcial: ${p.heldMonths.length === 1 ? `${months[p.heldMonths[0]].toLowerCase()} de ${state.year} está em revisão` : `${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
   // Party is the Câmara's current status at collection time, not a historical attribution.
   const context = p => [p.uf, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
   function value(p, kind = state.tab) {
