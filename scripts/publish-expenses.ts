@@ -3,7 +3,7 @@ import path from 'node:path';
 import {withLock} from '../src/lock.ts';
 import {buildExpenseVersion} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
-import {activePublication,publishDomain,readPublication,recordDomainAudit} from '../src/publications.ts';
+import {activePublication,publishDomain,readPublication,recordDomainAudit,reobservePublication} from '../src/publications.ts';
 import {snapshotId} from '../src/model.ts';
 import {openDB} from '../src/store.ts';
 
@@ -26,7 +26,8 @@ if(dryRun){console.log(JSON.stringify({...summary,stored:false},null,2));process
 await withLock(async()=>{
   const db=await openDB();
   try{
-    await publishDomain(db,'despesas',version);
+    // Storing never changes which version is newest: an older version prepared for review must not come back on a later audit.
+    await publishDomain(db,'despesas',version,{reobserve:false});
     // Re-read what the database now holds; the lot audits already re-derived every competence from the sealed originals.
     const stored=await readPublication(db,version.id),failures:string[]=[];
     if(!stored)failures.push('not-stored');
@@ -37,7 +38,7 @@ await withLock(async()=>{
     }
     const report={checkedAt:new Date().toISOString(),status:failures.length?'failed':'passed',failures,lots:lots.length,competences:lots.reduce((n,l)=>n+l.audit.competences,0),selected:version.records.length,groupsCompared:lots.reduce((n,l)=>n+l.audit.competences,0)};
     if(failures.length){await recordDomainAudit(db,version.id,'failed',report);console.error(JSON.stringify({id:version.id,failures}));process.exitCode=1;}
-    else if(approve)await recordDomainAudit(db,version.id,'passed',report);
+    else if(approve){await db.query('BEGIN');try{await reobservePublication(db,version.id);await recordDomainAudit(db,version.id,'passed',report);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}}
     console.log(JSON.stringify({...summary,database,stored:true,audit:report.status,active:(await activePublication(db,'despesas'))?.id===version.id},null,2));
   }finally{await db.close();}
 });

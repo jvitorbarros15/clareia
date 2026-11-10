@@ -24,7 +24,7 @@ async function refreshActive(db:DB,domain:string):Promise<void>{
 }
 const domainOf=async(db:DB,id:string)=>(await db.query<{domain:string}>('SELECT domain FROM publications WHERE id=$1',[id])).rows[0]?.domain;
 
-export async function publishDomain(db:DB,domain:Domain,snapshot:Snapshot):Promise<void>{
+export async function publishDomain(db:DB,domain:Domain,snapshot:Snapshot,options:{reobserve?:boolean}={}):Promise<void>{
   if(snapshot.id!==snapshotId(snapshot))throw new Error('Identificador da versão não corresponde ao conteúdo; publicação recusada');
   await db.query('BEGIN');
   try{
@@ -35,7 +35,7 @@ export async function publishDomain(db:DB,domain:Domain,snapshot:Snapshot):Promi
       const stored=await db.query<Row>('SELECT domain,body FROM publications WHERE id=$1',[snapshot.id]);
       if(snapshotId({...stored.rows[0].body,records:await readRecords(db,snapshot.id)})!==snapshot.id)throw new Error('Versão já publicada com o mesmo identificador e conteúdo diferente; publicação recusada');
       // The source can go back to older content: seeing it again makes it the newest observation.
-      await db.query(`UPDATE publications SET seq=nextval(pg_get_serial_sequence('publications','seq')) WHERE id=$1`,[snapshot.id]);
+      if(options.reobserve!==false)await db.query(`UPDATE publications SET seq=nextval(pg_get_serial_sequence('publications','seq')) WHERE id=$1`,[snapshot.id]);
     }
     const check=await db.query<{count:string;total:string}>('SELECT count(*)::text AS count, coalesce(sum(amount_cents),0)::text AS total FROM expenses_v2 WHERE publication_id=$1',[snapshot.id]);
     if(Number(check.rows[0].count)!==records.length||check.rows[0].total!==snapshot.validation.independentTotalCents)throw new Error('Reconciliação SQL independente falhou');
@@ -45,6 +45,10 @@ export async function publishDomain(db:DB,domain:Domain,snapshot:Snapshot):Promi
     }
     await db.query('COMMIT');
   }catch(e){await db.query('ROLLBACK');throw e;}
+}
+// Makes a stored version the newest observation; callers do it only together with an explicit approval.
+export async function reobservePublication(db:DB,id:string):Promise<void>{
+  await db.query(`UPDATE publications SET seq=nextval(pg_get_serial_sequence('publications','seq')) WHERE id=$1`,[id]);
 }
 export async function recordDomainAudit(db:DB,id:string,status:'passed'|'failed',report:AuditDetails):Promise<void>{
   await db.query('INSERT INTO publication_audits VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(publication_id) DO UPDATE SET status=excluded.status, checked_at=excluded.checked_at, report=excluded.report',[id,status,report.checkedAt,JSON.stringify(report)]);

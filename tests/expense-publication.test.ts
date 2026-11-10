@@ -57,3 +57,19 @@ test('a held cell carrying records or a complete total that disagrees is refused
 test('a history other than the one used in the collection is refused',()=>{
   assert.throws(()=>buildExpenseVersion(lots(),{people:[]} as any,'t'),/Histórico/);
 });
+
+test('storing an older version without approval never makes it active again after a later audit',async()=>{
+  const {openDB}=await import('../src/store.ts'),{activePublication,publishDomain,recordDomainAudit,reobservePublication}=await import('../src/publications.ts');
+  const snap=(cents:number)=>{const records=[record(1,cents,0)],body={metric:'m',scope:{year:2025,months:[1],ids:[1],legislature:57},people:[{id:1,name:'P',photo:null,sourceUrl:'https://x',profileFetchedAt:'2026-01-01T00:00:00Z'}],records,collectedAt:'2026-01-01T00:00:00Z',publishedAt:'2026-01-01T00:00:00Z',pages:[],validation:{stablePasses:2,recordCount:1,totalCents:cents,independentTotalCents:String(cents),duplicatePolicy:'x',limitations:[]}};return {...body,id:snapshotId(body)};};
+  const db=await openDB(true),ok={checkedAt:'2026-01-01T00:00:00Z'};
+  try{
+    const a=snap(100),b=snap(200);
+    await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',ok);
+    await publishDomain(db,'despesas',b);await recordDomainAudit(db,b.id,'passed',ok);
+    await publishDomain(db,'despesas',a,{reobserve:false});
+    await recordDomainAudit(db,b.id,'passed',ok);
+    assert.equal((await activePublication(db,'despesas'))?.id,b.id);
+    await reobservePublication(db,a.id);await recordDomainAudit(db,a.id,'passed',ok);
+    assert.equal((await activePublication(db,'despesas'))?.id,a.id,'an explicit approval does make it newest');
+  }finally{await db.close();}
+});
