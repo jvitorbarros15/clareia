@@ -111,14 +111,15 @@ const runners:Record<ToolName,Runner>={
   async rank_spending(pub,a){
     const ctx=context(pub,{...a,uf:a.uf});if(isFail(ctx))return {...ctx,tool:'rank_spending'};
     const monthly=a.metric==='monthly';
-    let excludedNoExercise=0,excludedHeld=0;
+    let excludedNoExercise=0,excludedHeld=0,includedHeld=0;
     const rows:{p:Person;cents:number;records:number;served:number}[]=[];
     for(const p of pub.people){
       if(ctx.scope.uf&&p.uf!==ctx.scope.uf)continue;
       if(noExerciseIn(pub,p,ctx)){excludedNoExercise++;continue;}
       const served=monthsServedIn(pub,p,ctx);
-      if(served===null){excludedHeld++;continue;}
-      rows.push({p,served,...sumCells(p.cells,ctx.filter)});
+      if(served===null&&monthly){excludedHeld++;continue;}
+      if(served===null)includedHeld++;
+      rows.push({p,served:served??p.servedMonths,...sumCells(p.cells,ctx.filter)});
     }
     const sign=a.order==='asc'?1:-1;
     rows.sort((x,y)=>{
@@ -127,7 +128,7 @@ const runners:Record<ToolName,Runner>={
     });
     const n=lim(a.limit,5,10);
     return {ok:true,tool:'rank_spending',scope:ctx.scope,data:{
-      metric:a.metric,order:a.order,considered:rows.length,excludedNoExercise,excludedHeld,
+      metric:a.metric,order:a.order,considered:rows.length,excludedNoExercise,excludedHeld,includedHeld,
       consideredTotalCents:rows.reduce((s,r)=>s+r.cents,0),
       rows:rows.slice(0,n).map((r,i)=>({rank:i+1,...personRef(r.p),cents:r.cents,valueCents:monthly?divRound(r.cents,r.served):r.cents,records:r.records,monthsServed:r.served}))
     }};
