@@ -83,6 +83,15 @@ test('a month range excludes people whose held month makes the average unknowabl
   assert.equal(joao.cents,total(103,{from:3,to:6}));
 });
 
+test('a month range keeps held-month people in totals and says the total may be incomplete',async()=>{
+  const p=await pub();
+  const o=ok(await runTool(p,'rank_spending',{metric:'total',order:'desc',category:null,uf:null,months:{from:3,to:6},limit:10}));
+  const held=o.data.rows.find((r:any)=>r.id===108);
+  assert.equal(held.cents,total(108,{from:3,to:6}));
+  assert.equal(o.data.includedHeld,1);
+  assert.match(toText(renderOutput(p,o)),/mês retido para revisão, sem valor publicado; o total desse recorte pode estar incompleto/);
+});
+
 test('compare_spending keeps direction, percent over the second value and drops percent for a non-positive base',async()=>{
   const p=await pub();
   const o=ok(await runTool(p,'compare_spending',{a:101,b:102,metric:'total',category:null,months:null}));

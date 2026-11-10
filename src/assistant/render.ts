@@ -72,6 +72,7 @@ export function renderOutput(pub:Publication,out:ToolOutput):Rendered{
       if(monthly)lines.push('Média por mês: total no recorte dividido pelos meses de exercício publicados.');
       if(d.excludedNoExercise)lines.push(`Não entram ${integer(d.excludedNoExercise)} ${plural(d.excludedNoExercise,'deputado sem exercício confirmado','deputados sem exercício confirmado')} em ${s.year}.`);
       if(d.excludedHeld)lines.push(`Não entram ${integer(d.excludedHeld)} ${plural(d.excludedHeld,'deputado','deputados')} com mês retido para revisão, cuja média no período não pode ser calculada.`);
+      if(d.includedHeld)lines.push(`${integer(d.includedHeld)} ${plural(d.includedHeld,'deputado tem','deputados têm')} mês retido para revisão, sem valor publicado; o total desse recorte pode estar incompleto.`);
       lines.push(RANKING_NOTE,NOT_IRREGULARITY);
       return answer([{action:'methodology'},...d.rows.slice(0,3).map((r:any)=>({action:'evidence' as const,id:r.id,kind:'gastos' as const}))]);
     }

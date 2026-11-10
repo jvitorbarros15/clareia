@@ -39,7 +39,9 @@
     "migrate:snapshot": "tsx scripts/migrate-snapshot.ts",
     "db:state": "tsx scripts/db-state.ts",
     "backup:data": "tsx scripts/backup-data.ts",
-    "scan:cpf": "tsx scripts/scan-cpf.ts"
+    "scan:cpf": "tsx scripts/scan-cpf.ts",
+    "eval:lume": "tsx scripts/lume-eval.ts",
+    "gold:lume": "tsx scripts/lume-gold-expected.ts"
   },
   "engines": {
     "node": ">=22"

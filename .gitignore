@@ -24,3 +24,4 @@ for agents/
 docs/superpowers/plans/
 build/
 .wrangler/
+output/lume-eval/

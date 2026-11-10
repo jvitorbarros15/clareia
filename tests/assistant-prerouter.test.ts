@@ -44,5 +44,5 @@ test('ambiguity asks back instead of guessing',async()=>{
 
 test('questions about other domains or without a recognised intent go to the planner (null)',async()=>{
   const p=await pub();
-  for(const q of ['Quem mais apresentou projetos?','Como a Tabata votou?','Maiores fornecedores','Qual a capital da França?','oi','','Qual partido gastou mais?'])assert.equal(preroute(p,q),null,q);
+  for(const q of ['Quem mais apresentou projetos?','Como a Tabata votou?','Maiores fornecedores','Qual a capital da França?','oi','','Qual partido gastou mais?','Quem vai ganhar a Copa do Mundo?','Quanto Posto Beta recebeu de Tabata?','Como o João votou?'])assert.equal(preroute(p,q),null,q);
 });
