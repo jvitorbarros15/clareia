@@ -1840,6 +1840,24 @@ check('long lists of deputies show a step at a time with more and less', async (
   await page.close();
 });
 
+check('deputy lists are alphabetical and searchable, and the choice on screen always matches the data', async () => {
+  const page = await at(1440);
+  for (const id of ['compare-a', 'compare-b', 'activity-votes', 'activity-bills']) {
+    const names = await page.locator(`#${id} option`).allInnerTexts();
+    assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b, 'pt-BR')), `${id} sorted`);
+  }
+  const options = await page.locator('#compare-a option').evaluateAll(os => os.map(o => ({ value: o.value, text: o.textContent })));
+  const current = await page.locator('#compare-a').inputValue(), target = options.find(o => o.value !== current);
+  await page.locator('#compare-a-filter').fill(target.text.split(' · ')[0].toLowerCase());
+  await page.waitForFunction(v => document.querySelector('#compare-a')?.value === v, target.value);
+  assert.match(await text(page.locator('#comparacao')), new RegExp(target.text.split(' · ')[0]), 'comparison follows the chosen deputy');
+  const now = await page.locator('#compare-a').inputValue();
+  await page.locator('#compare-a-filter').fill('zzz-ninguem');
+  assert.equal(await page.locator('#compare-a').inputValue(), now, 'no match keeps the current choice');
+  assert.equal(await page.locator('#compare-a option').count(), 1, 'only the current choice stays listed');
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;
