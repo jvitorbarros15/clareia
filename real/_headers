@@ -2,6 +2,8 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()
 
 /data/*
   Cache-Control: public, max-age=31536000, immutable
@@ -19,6 +21,12 @@
   Cache-Control: max-age=0, must-revalidate
 
 /app.js
+  Cache-Control: max-age=0, must-revalidate
+
+/portal.js
+  Cache-Control: max-age=0, must-revalidate
+
+/data.js
   Cache-Control: max-age=0, must-revalidate
 
 /view.js
