@@ -53,6 +53,13 @@ test('a corroborated reported installment retains its net and evidence instead o
   r.report.cells[0].records[0].financialBasis='balanced-document-split';assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='financial-records-coverage-or-union'));
   r.report.equationDecisions[0].annualKeys[0]=hash('wrong evidence');assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='equation-review-evidence'));
 });
+test('API nulls for document id, lot, installment and glosa pair with the annual blanks and are audited independently',async t=>{
+  const category='PASSAGEM AÉREA - MISSÃO OFICIAL',line=`1;2025;1;57;${category};-10.21;10.21;;;Empresa;11222333000181;;N1;2025-01-02T00:00:00;;0`;
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([line]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{tipoDespesa:category,codDocumento:null,codLote:null,parcela:null,valorGlosa:null,valorDocumento:10.21,valorLiquido:-10.21})],links:[]}:undefined);
+  const cell=r.report.cells[0];assert.equal(cell.status,'complete');assert.equal(cell.totalCents,-1021);assert.equal(cell.records.length,1);assert.equal(cell.records[0].origin,'both');assert.equal(cell.records[0].disallowedCents,null);
+  const bad=await setup(t,url=>url.endsWith('.zip')?annual([line]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{tipoDespesa:category,codDocumento:null,codLote:null,parcela:null,valorGlosa:null,valorDocumento:10.21,valorLiquido:null})],links:[]}:undefined).catch(e=>e);
+  assert.ok(bad instanceof Error||bad.report.cells[0].status==='held-review');
+});
 test('over-budget installments retain both affected months and cannot produce a partial approved total',async t=>{
   for(const net of [60,100]){
     const line=(month:number)=>annualLine(1,month,'COMBUSTÍVEIS','100.00').replace(';100.00;100.00;0;',`;${net}.00;100.00;0;`).replace(/;0$/,`;${month}`);

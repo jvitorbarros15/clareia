@@ -22,20 +22,21 @@ function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:s
   const r=row.raw,annual=kind==='annual',year=Number(annual?r.numAno:r.ano),month=Number(annual?r.numMes:r.mes);
   if(!r||year!==scope.year||!scope.months.includes(month)||annual&&(Number(r.ideCadastro)!==id||Number(r.codLegislatura)!==scope.legislature))throw Error();
   if(!annual){
-    for(const key of ['ano','mes','codLote','codTipoDocumento','parcela'])if(!Number.isInteger(r[key]))throw Error();
+    for(const key of ['ano','mes','codTipoDocumento'])if(!Number.isInteger(r[key]))throw Error();
+    for(const key of ['codLote','parcela'])if(r[key]!==null&&!Number.isInteger(r[key]))throw Error();
     for(const key of ['numDocumento','tipoDespesa','tipoDocumento','nomeFornecedor'])if(typeof r[key]!=='string')throw Error();
-    if(!r.tipoDespesa||typeof r.codDocumento!=='string'&&!Number.isInteger(r.codDocumento)||r.numRessarcimento!==null&&!['string','number'].includes(typeof r.numRessarcimento))throw Error();
+    if(!r.tipoDespesa||r.codDocumento!==null&&typeof r.codDocumento!=='string'&&!Number.isInteger(r.codDocumento)||r.numRessarcimento!==null&&!['string','number'].includes(typeof r.numRessarcimento))throw Error();
     for(const key of ['cnpjCpfFornecedor','dataDocumento','urlDocumento'])if(r[key]!==null&&typeof r[key]!=='string')throw Error();
-    for(const key of ['valorLiquido','valorDocumento','valorGlosa'])if(typeof r[key]!=='number'||!Number.isFinite(r[key]))throw Error();
+    for(const key of ['valorLiquido','valorDocumento','valorGlosa'])if(!(key==='valorGlosa'&&r[key]===null)&&(typeof r[key]!=='number'||!Number.isFinite(r[key])))throw Error();
   }
   const category=annual?r.txtDescricao:r.tipoDespesa;if(typeof category!=='string'||!category.trim())throw Error();
-  const money=(field:string)=>annual&&!r[field]?.trim()?null:amount(r[field]);
+  const money=(field:string)=>annual&&!r[field]?.trim()||!annual&&field==='valorGlosa'&&r[field]===null?null:amount(r[field]);
   const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis)throw Error();
   const identity=String((annual?r.txtCNPJCPF:r.cnpjCpfFornecedor)||'').replace(/\D/g,''),verified=verifiedCnpj(identity),privatePerson=identity.length===11;
   const name=String((annual?r.txtFornecedor:r.nomeFornecedor)||'Fornecedor não informado').replace(/(?<![\d./-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
   let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(!privatePerson&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
   const occurrence=hash(canonical({personId:id,raw:r}));
-  return {id:occurrence,personId:id,year,month,category,supplier:privatePerson?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,documentId:annual?r.ideDocumento||'Não informado':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
+  return {id:occurrence,personId:id,year,month,category,supplier:privatePerson?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
 }
 // This verifier reads sources and independently projects records, paginates,
 // parses money and pairs occurrences. It does not import collection, financial

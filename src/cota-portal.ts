@@ -65,6 +65,7 @@ function apiRow(raw:unknown,scope:PortalScope):PortalRow{
   const r=expenseSchema.parse(raw),provider=(r.cnpjCpfFornecedor||'').replace(/\D/g,''),d=r.dataDocumento?.slice(0,10)||'';
   if(r.ano!==scope.year||r.mes!==scope.month||r.tipoDespesa!=='PASSAGEM AÉREA - SIGEPA'||![11,14].includes(provider.length)||!/^\d{4}-\d{2}-\d{2}$/.test(d))throw Error('Registro API incompatível com a cota');
   date(d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4));
+  if(r.valorGlosa===null||r.codDocumento==='')throw Error('Registro API sem glosa ou documento não confirma a cota');
   const face=cents(r.valorDocumento),deductions=cents(r.valorGlosa),net=cents(r.valorLiquido);if(face-deductions!==net)throw Error('Equação SIGEPA não confirmada');
   return {position:0,documentHash:hash(r.codDocumento),numberHash:hash(r.numDocumento),providerHash:hash(provider),date:d,face,deductions,net};
 }
