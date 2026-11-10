@@ -202,7 +202,7 @@
     if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); $('#answer-slot').before(chip); }
     const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric === 'mensal';
     chip.hidden = !narrowed;
-    const scope = [state.uf === 'Brasil' ? null : state.uf, state.category === 'Todas' ? null : label(state.category), state.metric === 'mensal' ? 'por mês' : null].filter(Boolean).join(' · ');
+    const scope = [state.uf === 'Brasil' ? null : state.uf, state.category === 'Todas' ? null : label(state.category), state.metric === 'mensal' ? 'Por mês' : null].filter(Boolean).join(' · ');
     chip.innerHTML = narrowed ? `<span>Filtrando: ${escape(scope)}</span><button type="button" data-action="reset" aria-label="Limpar filtros"><span aria-hidden="true">✕</span> Limpar</button>` : '';
     const dock = $('#dock-filter');
     if (dock) { dock.hidden = !narrowed; dock.innerHTML = narrowed ? `<span>${escape(scope)}</span><span aria-hidden="true">✕</span>` : ''; dock.setAttribute('aria-label', `Filtro ativo: ${scope}. Limpar filtros`); }
