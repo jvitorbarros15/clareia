@@ -1893,6 +1893,24 @@ check('views opened inside the dialog can go back step by step to the profile', 
   await page.close();
 });
 
+check('rankings need the minimum months of exercise and the average divides by months of exercise only', async () => {
+  let short;
+  const page = await at(1440, { before: async p => {
+    const manifest = await (await p.request.get(`${base}/manifest.json`)).json(), ids = (await (await p.request.get(`${base}/${manifest.base}/index.json`)).json()).scope.ids; short = ids[0];
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.coverageId = 'c'; for (const q of s.people) q.months.forEach((m, i) => { m.exercise = q.id === short && i > 0 && !m.records ? 'outside' : 'full'; m.partyStatus = 'single'; m.party = 'X'; }); await route.fulfill({ response: res, json: s }); });
+  } });
+  const info = await page.evaluate(id => { const C = window.Clareia, p = C.person(String(id)); return { min: C.MIN_MONTHS, exercised: p.exercisedMonths, months: p.months, ranked: C.ranking('gastos').some(x => x.officialId === id), few: C.fewMonths(p), coverage: window.ClareiaData.coverage.length }; }, short);
+  assert.equal(info.min, Math.min(6, info.coverage));
+  if (info.exercised < info.min) {
+    assert.equal(info.few, true); assert.equal(info.ranked, false, 'too few months stays out of the ranking');
+    assert.equal(info.months, Math.max(1, info.exercised), 'the average divides by months of exercise');
+    const card = page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${short}"]`) }).first();
+    assert.match(await text(card), /exerceu \d+ de \d+ meses · fora do ranking/);
+  }
+  assert.match(await text(page.locator('.ranking-context')), /pelo menos \d+ meses/);
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;

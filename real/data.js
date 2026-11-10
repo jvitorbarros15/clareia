@@ -20,13 +20,17 @@
     // Zero is only a fact for someone in office: without confirmed exercise there is nothing to compare.
     const withoutConfirmedExercise = (id, records) => { if (!summary.coverageId || records) return false; const months = summary.people.find(p => p.id === id)?.months ?? []; return months.length > 0 && months.every(m => !m.exercise || ['unknown', 'outside', 'conflict'].includes(m.exercise)); };
     // Without an approved coverage every published month counts; with one, months outside the mandate do not.
-    const servedMonths = id => { const months = summary.coverageId ? summary.people.find(p => p.id === id)?.months : null; const served = months ? months.filter(m => m.exercise !== 'outside').length : index.scope.months.length; return Math.max(1, served - (index.validation.heldMonths?.[id] ?? 0)); };
+    // A month of exercise is a full or partial month, or any month with an expense: a spent month always enters the divisor of the average.
+    const exercised = m => m.exercise === 'full' || m.exercise === 'partial' || m.records > 0;
+    const monthsOf = id => summary.coverageId ? summary.people.find(p => p.id === id)?.months ?? [] : null;
+    const exercisedMonths = id => { const months = monthsOf(id); return months ? months.filter(exercised).length : index.scope.months.length; };
+    const servedMonths = id => { const months = monthsOf(id); return Math.max(1, months ? months.filter(m => exercised(m) && !m.held).length : index.scope.months.length - (index.validation.heldMonths?.[id] ?? 0)); };
     if (index.validation.testNotice) { const notice = document.createElement('div'); notice.className = 'test-notice'; notice.setAttribute('role', 'note'); notice.textContent = index.validation.testNotice; document.body.prepend(notice); }
     // Totals per month, category and supplier: individual records are fetched only when someone opens a list.
     const people = index.scope.ids.map(id => {
       const info = index.people.find(p => p.id === id) || { name: 'ID ' + id }, own = summary.people.find(p => p.id === id);
       const cells = (suppliers.people[id] ?? []).map(([month, category, supplier, cents, count]) => ({ month: month - 1, category: suppliers.categories[category], supplier: suppliers.suppliers[supplier], amount: cents, count }));
-      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, party: partyOfPeriod(id, info.party ?? null), profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), noExercise: withoutConfirmedExercise(id, own?.records ?? 0), heldMonths: (own?.months ?? []).filter(m => m.held).map(m => m.month - 1), projects: own?.bills?.proposed ?? null, votes: null, cells, total: own?.cents ?? 0 };
+      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, party: partyOfPeriod(id, info.party ?? null), profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), exercisedMonths: exercisedMonths(id), noExercise: withoutConfirmedExercise(id, own?.records ?? 0), heldMonths: (own?.months ?? []).filter(m => m.held).map(m => m.month - 1), projects: own?.bills?.proposed ?? null, votes: null, cells, total: own?.cents ?? 0 };
     });
     const byCategory = new Map();
     for (const p of people) for (const r of p.cells) byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.amount));
