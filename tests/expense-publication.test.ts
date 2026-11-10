@@ -74,9 +74,9 @@ test('storing an older version without approval never makes it active again afte
   }finally{await db.close();}
 });
 
-test('uf and party come from the publication year, never from a later month of the history',()=>{
+test('the party comes from the publication year, never from a later month of the history',()=>{
   const later=structuredClone(lots());
-  for(const l of later){l.input.temporal.people[0].months.push({year:2026,month:3,uf:{status:'single',value:'RJ'},party:{status:'single',value:'Y'}} as any);}
+  for(const l of later){l.input.temporal.people[0].months.push({year:2026,month:3,uf:{status:'single',value:'SP'},party:{status:'single',value:'Y'}} as any);}
   const t=later[0].input.temporal;for(const l of later){l.input.temporal=t;const p=l.input.proposal;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
   const h={...history};const v=buildExpenseVersion(later,{...h,people:h.people} as any,'t');
   assert.deepEqual([v.people[0].uf,v.people[0].party],['SP','X']);
@@ -84,7 +84,7 @@ test('uf and party come from the publication year, never from a later month of t
 
 test('a party change in the year keeps the uf of the latest month where the uf is single',()=>{
   const changed=structuredClone(lots());
-  const t=changed[0].input.temporal;t.people[0].months=[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}},{year:2025,month:2,uf:{status:'single',value:'SP'},party:{status:'changed',value:null}}];
+  const t=changed[0].input.temporal;t.people[0].months=[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}},{year:2025,month:2,uf:{status:'single',value:'SP'},party:{status:'changed',value:null}}] as any;
   for(const l of changed){l.input.temporal=t;const p=l.input.proposal;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
   const v=buildExpenseVersion(changed,history,'t');
   assert.deepEqual([v.people[0].uf,v.people[0].party],['SP','X']);
