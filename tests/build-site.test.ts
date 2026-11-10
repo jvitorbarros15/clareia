@@ -125,6 +125,10 @@ test('_headers marks data as immutable and manifest as revalidated',()=>setup(as
   assert.match(headers,/\/data\/\*\s+Cache-Control: public, max-age=31536000, immutable/);
   assert.match(headers,/\/manifest\.json\s+Cache-Control: max-age=0, must-revalidate/);
   assert.match(headers,/Content-Security-Policy: default-src 'self'/);
+  assert.match(headers,/Strict-Transport-Security: max-age=31536000; includeSubDomains\r?\n/);
+  assert.doesNotMatch(headers,/preload/);
+  assert.match(headers,/Permissions-Policy: camera=\(\), microphone=\(\), geolocation=\(\), payment=\(\), usb=\(\), interest-cohort=\(\)/);
+  for(const file of ['app.js','portal.js','data.js','view.js','styles.css'])assert.match(headers,new RegExp(`\\n/${file.replace('.','\\.')}\\s+Cache-Control: max-age=0, must-revalidate`));
   for(const file of ['index.html','app.js','view.js','styles.css'])await fs.access(path.join(dist,file));
 }));
 
