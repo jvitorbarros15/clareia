@@ -28,8 +28,32 @@ test('r2Store get returns null on 404 and throws on other errors',async t=>{
   const status={value:404};
   t.mock.method(globalThis,'fetch',async()=>new Response('x',{status:status.value}));
   assert.equal(await r2Store(env).get('nada'),null);
-  status.value=500;
-  await assert.rejects(r2Store(env).get('nada'),/500/);
+  status.value=403;
+  await assert.rejects(r2Store(env).get('nada'),/403/);
+});
+const noWait=async()=>{};
+test('r2Store retries network errors, 5xx and 429 and then succeeds',async()=>{
+  const outcomes:(Response|Error)[]=[new Error('socket'),new Response('x',{status:503}),new Response('x',{status:429}),new Response('ok',{status:200})];
+  let calls=0;
+  const store=r2Store(env,{sleep:noWait,fetch:async()=>{calls++;const next=outcomes.shift() as Response|Error;if(next instanceof Error)throw next;return next;}});
+  assert.deepEqual(await store.get('a'),new TextEncoder().encode('ok'));
+  assert.equal(calls,4);
+});
+test('r2Store gives up after 5 attempts and does not retry other 4xx',async()=>{
+  let calls=0;
+  await assert.rejects(r2Store(env,{sleep:noWait,fetch:async()=>{calls++;return new Response('x',{status:500});}}).put('a',new Uint8Array([1])),/500/);
+  assert.equal(calls,5);
+  calls=0;
+  await assert.rejects(r2Store(env,{sleep:noWait,fetch:async()=>{calls++;return new Response('x',{status:403});}}).put('a',new Uint8Array([1])),/403/);
+  assert.equal(calls,1);
+  calls=0;
+  await assert.rejects(r2Store(env,{sleep:noWait,fetch:async()=>{calls++;throw new Error('socket');}}).get('a'),/socket/);
+  assert.equal(calls,5);
+});
+test('r2Store gives each attempt a timeout signal',async()=>{
+  let signal:AbortSignal|undefined;
+  await r2Store(env,{fetch:async(input)=>{signal=(input as Request).signal;return new Response(null,{status:200});}}).put('a',new Uint8Array([1]));
+  assert.ok(signal);
 });
 test('r2Store list follows continuation tokens',async t=>{
   const pages=['<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>n1</NextContinuationToken><Key>a/1</Key></ListBucketResult>','<ListBucketResult><IsTruncated>false</IsTruncated><Key>a/2</Key></ListBucketResult>'];
