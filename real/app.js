@@ -271,8 +271,24 @@
     closeSuggestions(); refresh();
     if (scroll) $('#answer-slot').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'nearest' });
   }
+  // Views opened from inside the dialog keep a trail back; anything opened from the page starts a new one.
+  let dialogTrail = [], dialogView = null, navigating = false;
+  function openView(render) {
+    if ($('#detail').open && dialogView) dialogTrail.push(dialogView); else dialogTrail = [];
+    dialogView = { render, title: '' };
+    navigating = true;
+    try { return render(); } finally { navigating = false; }
+  }
+  function goBack() {
+    const previous = dialogTrail.pop(); if (!previous) return;
+    dialogView = previous; navigating = true;
+    try { return previous.render(); } finally { navigating = false; }
+  }
   function showDialog(title, html, resetScroll = true) {
     const dialog = $('#detail');
+    if (!navigating) { dialogTrail = []; dialogView = null; } else if (dialogView) dialogView.title = title;
+    const back = dialogTrail.at(-1);
+    if (back && !html.includes('data-action="back-to-list"')) html = `<button type="button" class="text-button dialog-back" data-action="dialog-back">← Voltar: ${escape(back.title)}</button>` + html;
     if (!dialog.open) dialogTrigger = document.activeElement;
     dialog.classList.remove('records-wide');
     $('#detail-title').textContent = title; $('#detail-body').innerHTML = html;
@@ -345,17 +361,19 @@
   // While a file loads the dialog says so. A late result is dropped if a newer request started or another dialog replaced the note.
   async function withRecords(people, render) {
     const run = ++recordRun, waiting = people.some(p => !recordsReady.has(p.officialId)), stillWanted = () => run === recordRun && (!waiting || Boolean($('#detail').open && $('#detail .records-loading')));
+    // The trail belongs to the view that asked for the records, even though they arrive later.
+    const nav = navigating, later = fn => { navigating = nav; try { fn(); } finally { navigating = false; } };
     if (waiting) showDialog('Registros oficiais', '<p class="records-note records-loading" role="status">Carregando registros oficiais…</p>');
     let lists;
     try { lists = await Promise.all(people.map(loadRecords)); }
-    catch { if (stillWanted()) showDialog('Registros oficiais', '<p class="records-note" role="alert">Registros indisponíveis agora. Nenhum valor foi estimado.</p>'); return; }
-    if (stillWanted()) render(lists);
+    catch { if (stillWanted()) later(() => showDialog('Registros oficiais', '<p class="records-note" role="alert">Registros indisponíveis agora. Nenhum valor foi estimado.</p>')); return; }
+    if (stillWanted()) later(() => render(lists));
   }
   function recordTable(p, month) {
     rememberList(() => recordTable(p, month));
     return withRecords([p], ([list]) => {
     const items = list.filter(r => inCategory(r) && (month === undefined || r.month === month)).sort(byRecordOrder);
-    showDialog(`Registros de ${first(p)}`, `<p class="records-note">${month === undefined ? span() : `${monthNames[month]} ${state.year}`} • ${state.category === 'Todas' ? 'Todas as categorias' : `${escape(label(state.category))} (Nome na fonte: ${escape(state.category)})`} • ${items.length} registros oficiais.</p><div class="calculation-result">${money(sum(items))}<small>Soma exata dos registros abaixo</small></div><div class="action-row"><button class="outline-button" data-action="download" data-id="${p.id}" ${month === undefined ? '' : `data-month="${month}"`}>Baixar CSV</button><button class="outline-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Voltar ao cálculo</button></div>${recordListHTML(`Registros de ${escape(p.name)}`, items.map(r => recordRow(p, r)), sum(items))}${sourceNote()}`);
+    showDialog(`Registros de ${first(p)}`, `<p class="records-note">${month === undefined ? span() : `${monthNames[month]} ${state.year}`} • ${state.category === 'Todas' ? 'Todas as categorias' : `${escape(label(state.category))} (Nome na fonte: ${escape(state.category)})`} • ${items.length} registros oficiais.</p><div class="calculation-result">${money(sum(items))}<small>Soma exata dos registros abaixo</small></div><div class="action-row"><button class="outline-button" data-action="download" data-id="${p.id}" ${month === undefined ? '' : `data-month="${month}"`}>Baixar CSV</button>${dialogTrail.length ? '' : `<button class="outline-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Voltar ao cálculo</button>`}</div>${recordListHTML(`Registros de ${escape(p.name)}`, items.map(r => recordRow(p, r)), sum(items))}${sourceNote()}`);
     $('#detail').classList.add('records-wide');
     });
   }
@@ -400,14 +418,15 @@
     const id = target.dataset.id, action = target.dataset.action;
     if (action === 'close') closeDialog();
     else if (action === 'feature') feature(id);
-    else if (action === 'evidence') evidence(id, { kind: target.dataset.kind });
+    else if (action === 'evidence') openView(() => evidence(id, { kind: target.dataset.kind }));
+    else if (action === 'dialog-back') goBack();
     else if (action === 'answer-evidence' && state.answer?.ids?.length) evidence(state.answer.ids[0], { kind: state.answer.kind, compare: state.answer.type === 'compare' ? state.answer.ids[1] : null });
     else if (action === 'bars-more' || action === 'bars-less') { const before = state.barLimit; state.barLimit = action === 'bars-more' ? before + BAR_STEP : BAR_STEP; $('#comparison').outerHTML = barSection(); (action === 'bars-more' ? document.querySelectorAll('#bar-chart .bar-row')[before] : document.querySelector('[data-action=bars-more]'))?.focus({ preventScroll: action === 'bars-more' }); }
-    else if (action === 'records') recordTable(person(id));
-    else if (action === 'back-to-list') backToList(id, target.dataset.record);
-    else if (action === 'record') recordDetail(person(id), target.dataset.record);
-    else if (action === 'month') recordTable(person(id), Number(target.dataset.month));
-    else if (action === 'profile') profile(id);
+    else if (action === 'records') openView(() => recordTable(person(id)));
+    else if (action === 'back-to-list') { const previous = dialogTrail.pop(); if (previous) dialogView = previous; navigating = Boolean(previous); try { backToList(id, target.dataset.record); } finally { navigating = false; } }
+    else if (action === 'record') openView(() => recordDetail(person(id), target.dataset.record));
+    else if (action === 'month') openView(() => recordTable(person(id), Number(target.dataset.month)));
+    else if (action === 'profile') openView(() => profile(id));
     else if (action === 'methodology') methodology();
     else if (action === 'focus-search') { $('#query').focus(); $('#query').scrollIntoView({ block: 'center' }); }
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog(); ask(`Compare ${person(id).name} e ${peer.name}`); }
@@ -424,7 +443,7 @@
     if (event.target.id === 'query' && event.key === 'ArrowDown') { event.preventDefault(); $('#suggestions button')?.focus(); }
   });
   $('#detail').addEventListener('click', event => { if (event.target === $('#detail')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right) closeDialog(); } });
-  $('#detail').addEventListener('close', () => { const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
+  $('#detail').addEventListener('close', () => { dialogTrail = []; dialogView = null; const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
   layout();
   markTab(false);
   scopeChip();

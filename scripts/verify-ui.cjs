@@ -654,7 +654,7 @@ check('record detail spacing and buttons', async () => {
   assert.ok(info.gap >= 8 - 0.5 && info.gap <= 8.5, `gap before the notice is ${info.gap}px: ${info.notice}`);
   assert.ok(buttons.every(b => !b.line.includes('underline')), `underlined button: ${JSON.stringify(buttons.filter(b => b.line.includes('underline')))}`);
   const secondary = buttons.filter(b => !b.primary);
-  assert.ok(secondary.length >= 3, 'secondary buttons found');
+  assert.ok(secondary.length >= 2, 'secondary buttons found');
   assert.equal(new Set(secondary.map(b => [b.bg, b.border, b.color, b.radius].join('|'))).size, 1, `one secondary button style: ${JSON.stringify(secondary)}`);
   await page.close();
 });
@@ -1813,7 +1813,10 @@ check('a slow record file never fills a later request for another deputy', async
 check('a deputy with a held month shows a partial total outside rankings, and one fully held shows no zero', async () => {
   let partial, held;
   const page = await at(1440, { before: async p => {
-    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); const ids = s.people.map(q => q.id); partial = ids[0]; held = ids.at(-1); for (const q of s.people) for (const m of q.months) { m.held = (q.id === partial && m.month === s.scope.months[0]) || q.id === held; if (q.id === held) { m.exercise = 'full'; m.cents = 0; m.records = 0; } } const h = s.people.find(q => q.id === held); Object.assign(h, { cents: 0, records: 0 }); await route.fulfill({ response: res, json: s }); });
+    // Both files are fetched together, so the ids are fixed before either stub runs.
+    const manifest = await (await p.request.get(`${base}/manifest.json`)).json(), scope = (await (await p.request.get(`${base}/${manifest.base}/index.json`)).json()).scope.ids;
+    partial = scope[0]; held = scope.at(-1);
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); for (const q of s.people) for (const m of q.months) { m.held = (q.id === partial && m.month === s.scope.months[0]) || q.id === held; if (q.id === held) { m.exercise = 'full'; m.cents = 0; m.records = 0; } } const h = s.people.find(q => q.id === held); Object.assign(h, { cents: 0, records: 0 }); await route.fulfill({ response: res, json: s }); });
     await p.route('**/fornecedores.json', async route => { const res = await route.fetch(), f = await res.json(); f.people[held] = []; await route.fulfill({ response: res, json: f }); });
   } });
   const ranked = await page.evaluate(() => window.Clareia.ranking('gastos').map(p => p.officialId));
@@ -1869,6 +1872,27 @@ check('deputy lists are alphabetical, complete and searchable through visible su
   assert.equal(await page.locator('#compare-a-options').isVisible(), false, 'Escape closes the suggestions');
   await page.close();
 });
+check('views opened inside the dialog can go back step by step to the profile', async () => {
+  const page = await at(1440);
+  const title = () => text(page.locator('#detail-title'));
+  const back = async () => (await page.locator('#detail .dialog-back').count()) ? text(page.locator('#detail .dialog-back')) : null;
+  const id = (await peopleOf(page))[0];
+  await page.evaluate(id => { const b = document.createElement('button'); b.dataset.action = 'profile'; b.dataset.id = id; b.id = 'probe-profile'; document.body.append(b); }, id);
+  const openProfile = () => page.evaluate(() => document.querySelector('#probe-profile').click());
+  await openProfile();
+  assert.equal(await title(), 'Perfil do representante'); assert.equal(await back(), null, 'a view opened from the page has no way back');
+  await page.locator('#detail [data-action=evidence][data-kind=gastos]').first().click();
+  assert.equal(await back(), '← Voltar: Perfil do representante');
+  await page.locator('#detail [data-action=records]').first().click(); await recordsShown(page);
+  assert.equal(await back(), '← Voltar: Como chegamos nisso?');
+  assert.equal(await page.locator('#detail', { hasText: 'Voltar ao cálculo' }).count(), 0, 'no second back button');
+  await page.locator('#detail .dialog-back').click(); assert.equal(await title(), 'Como chegamos nisso?');
+  await page.locator('#detail .dialog-back').click(); assert.equal(await title(), 'Perfil do representante'); assert.equal(await back(), null);
+  await page.keyboard.press('Escape'); await openProfile();
+  assert.equal(await back(), null, 'closing the dialog clears the trail');
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;
