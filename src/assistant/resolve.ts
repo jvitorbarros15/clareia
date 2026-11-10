@@ -51,13 +51,14 @@ export interface Mention{text:string;status:'one'|'many'|'fuzzy'|'mismatch';cand
 
 export function findMentions(pub:Publication,question:string,uf:string|null=null):Mention[]{
   const {tokens}=index(pub);
-  const rawWords=question.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const found=[...question.matchAll(/[\p{L}\p{N}]+/gu)],rawWords=found.map(m=>m[0]);
+  const breaksBefore=new Set(found.map((m,k)=>k>0&&/[^\s\p{L}\p{N}]/u.test(question.slice(found[k-1].index!+found[k-1][0].length,m.index))?k:-1));
   const words=rawWords.map(w=>normalize(w)),mentions:Mention[]=[];
   const isNameWord=(w:string)=>w.length>=3&&tokens.has(w)&&!QUESTION_WORDS.has(w);
   let i=0;
   while(i<words.length){
     if(!isNameWord(words[i])){i++;continue;}
-    let j=i;while(j<words.length&&isNameWord(words[j]))j++;
+    let j=i;while(j<words.length&&isNameWord(words[j])&&(j===i||!breaksBefore.has(j)))j++;
     const segment=words.slice(i,j),candidates=best(pub,segment,uf);
     const adjacent=[i-1,j].filter(k=>k>0&&k<words.length);
     const stray=adjacent.some(k=>/^\p{Lu}/u.test(rawWords[k])&&words[k].length>=3&&!tokens.has(words[k])&&!QUESTION_WORDS.has(words[k])&&!NAME_STOPWORDS.has(words[k])&&!/^\d/.test(words[k]));
