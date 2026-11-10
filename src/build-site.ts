@@ -8,7 +8,7 @@ import type {DB} from './store.ts';
 import {csv} from './view.ts';
 import {findCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
-import {buildSiteSummary} from './site-summary.ts';
+import {buildSiteSummary,buildSupplierSummary} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
 
@@ -50,12 +50,14 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
   const billList=billsVersion?await readBills(db,billsVersion.id):[],voteList=votesVersion?new Map((await readVotes(db,votesVersion.id)).map(v=>[v.id,v])):new Map();
   const ballotsOf=new Map<number,Awaited<ReturnType<typeof readBallots>>>(),voteTotals=new Map<number,Record<string,number>>(),votesHeld=new Map<number,number>();
   if(votesVersion)for(const id of active.scope.ids){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
-  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:await readRecords(db,active.id),expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld});
+  const allRecords=await readRecords(db,active.id);
+  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:allRecords,expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld});
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const withoutData:number[]=[];
+  const recordsOf=new Map<number,typeof allRecords>();for(const r of allRecords){const list=recordsOf.get(r.personId);if(list)list.push(r);else recordsOf.set(r.personId,[r]);}
   for(const id of active.scope.ids){
-    const records=await readRecords(db,active.id,id);
+    const records=recordsOf.get(id)??[];
     await fs.copyFile(path.join(portraitsDir,`${id}.jpg`),path.join(data,'portraits',`${id}.jpg`)).catch(()=>{});
     // Loaded by the page only when someone opens the section, and never joined to expenses.
     if(billsVersion||votesVersion){
@@ -69,7 +71,11 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
     await fs.writeFile(path.join(person,'despesas.json'),JSON.stringify(records));
     await fs.writeFile(path.join(person,'despesas.csv'),csv(records));
   }
-  await fs.writeFile(path.join(data,'summary.json'),JSON.stringify(summary));
+  // The cells exist for the supplier cross-check; the page reads the finer supplier rows, so they are not published twice.
+  await fs.writeFile(path.join(data,'summary.json'),JSON.stringify({...summary,people:summary.people.map(({cells:_cells,...person})=>person)}));
+  // Supplier names are already redacted for private persons; the scan refuses any that slipped through.
+  const suppliers=JSON.stringify(buildSupplierSummary(summary,allRecords));if(findCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
+  await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
   await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,audit:await publicationAudit(db,active.id)}));
   await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base,domains}));

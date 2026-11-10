@@ -12,7 +12,7 @@ import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {storePeopleCoverage} from '../src/people-publication.ts';
 import type {PeopleCoverage} from '../src/people-publication.ts';
-import {buildSiteSummary} from '../src/site-summary.ts';
+import {assertSuppliersMatchSummary,buildSiteSummary,buildSupplierSummary} from '../src/site-summary.ts';
 import {canonical,hash} from '../src/model.ts';
 
 function record(cents:number,personId:number,index:number):Expense{
@@ -159,6 +159,37 @@ test('a summary that disagrees with the approved total or leaves the scope is re
   assert.throws(()=>buildSiteSummary(summaryInput([record(100,1,0)],101)),/total aprovado/);
   assert.throws(()=>buildSiteSummary(summaryInput([{...record(100,1,0),month:2}],100)),/recorte/);
 });
+test('monthly cells and supplier rows add up to each person and carry no record rows',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0),record(250,1,1),{...record(-30,1,2),supplier:'Outro'},{...record(70,1,3),category:'ALFA'}]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const {publicationId}=await buildSite(db,dist,portraits),base=path.join(dist,'data',publicationId),summary=await json(base,'summary.json'),suppliers=await json(base,'fornecedores.json');
+  assert.deepEqual(summary.categories,['ALFA','TEST']);
+  assert.equal('cells' in summary.people[0],false);
+  const built=buildSiteSummary(summaryInput(a.records,a.validation.totalCents));
+  assert.deepEqual(built.people[0].cells,[[1,0,70,1],[1,1,320,3]]);
+  assert.deepEqual(built.people[1].cells,[]);
+  assert.deepEqual(suppliers.suppliers,['Fornecedor','Outro']);
+  assert.deepEqual(suppliers.people['1'],[[1,0,0,70,1],[1,1,0,350,2],[1,1,1,-30,1]]);
+  assert.deepEqual(suppliers.people['2'],[]);
+  assert.equal(suppliers.publicationId,a.id);
+  assert.equal(JSON.stringify(suppliers).includes('r1-0'),false);
+}));
+test('supplier rows that disagree with the monthly cells are refused',()=>{
+  const records=[record(100,1,0),{...record(50,1,1),supplier:'Outro'}],summary=buildSiteSummary(summaryInput(records,150)),good=buildSupplierSummary(summary,records);
+  const tampered=structuredClone(good);tampered.people['1'][0][3]+=1;
+  assert.throws(()=>assertSuppliersMatchSummary(summary,tampered),/divergem das células/);
+  const counted=structuredClone(good);counted.people['1'][1][4]+=1;
+  assert.throws(()=>assertSuppliersMatchSummary(summary,counted),/divergem das células/);
+  const missing=structuredClone(good);delete missing.people['2'];
+  assert.throws(()=>assertSuppliersMatchSummary(summary,missing),/pessoas do resumo/);
+  assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,publicationId:'x'}),/outra versão/);
+});
+test('a private supplier keeps its label in the supplier file',()=>setup(async(db,dist,portraits)=>{
+  const a=version([{...record(100,1,0),supplier:'Fornecedor pessoa física'}]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const {publicationId}=await buildSite(db,dist,portraits);
+  assert.deepEqual((await json(dist,'data',publicationId,'fornecedores.json')).suppliers,['Fornecedor pessoa física']);
+}));
 
 test('tampered active coverage stops the build before the previous output is deleted',()=>setup(async(db,dist,portraits)=>{
   const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);

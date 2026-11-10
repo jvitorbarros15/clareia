@@ -16,6 +16,7 @@ try{
     assert.equal(text(await page.locator('#detail .calculation-result').innerText()).split(' no período')[0],money(p.cents),`evidence total ${p.name}`);
     assert.match(await page.locator('#detail-body').innerText(),new RegExp(`${p.count} registros oficiais`));
     await page.locator('#detail [data-action=records]').click();
+    await page.waitForFunction(()=>document.querySelector('#detail').open&&!document.querySelector('#detail .records-loading'));
     assert.equal(await page.locator('#detail .record-row').count(),p.count,`record rows ${p.name}`);
     assert.equal(text(await page.locator('#detail .record-list-total').innerText()),money(p.cents),`record table total ${p.name}`);
     const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#detail [data-action=download]').click()]);

@@ -7,7 +7,7 @@
   const model = 'editorial';
   const initial = new URLSearchParams(location.search);
   const ids = D.dataset().map(p => p.id);
-  const totalOf = p => p.records.reduce((n, r) => n + r.amount, 0);
+  const totalOf = p => p.cells.reduce((n, r) => n + r.amount, 0);
   const byTotal = () => (D.dataset().filter(p => !p.noExercise).length >= 2 ? D.dataset().filter(p => !p.noExercise) : [...D.dataset()]).sort((a, b) => totalOf(b) - totalOf(a));
   // Only the parameters present and valid in the URL; a question applies what its words imply for the rest.
   const fromURL = {};
@@ -35,20 +35,22 @@
   // Positive categories are the only ones drawn as slices, so they are the base of every percentage on the page.
   const shareBase = groups => groups.reduce((n, g) => n + Math.max(0, g.value), 0);
   const share = (value, base) => `${(base > 0 ? value / base * 100 : 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-  const sum = records => records.reduce((total, record) => total + record.amount, 0);
+  const sum = rows => rows.reduce((total, row) => total + row.amount, 0);
+  const count = cells => cells.reduce((n, cell) => n + cell.count, 0);
   // A percentage needs a positive base; with a zero or negative base only the difference is meaningful. Direction always comes from a > b.
   const compareValues = (a, b) => ({ equal: a === b, more: a > b, diff: Math.abs(a - b), percent: b > 0 ? Math.abs(a - b) / b * 100 : null });
   const all = () => D.dataset();
   const person = id => all().find(p => p.id === id);
   const first = p => p.name.split(' ')[0];
-  const records = p => p.records.filter(r => state.category === 'Todas' || r.category === state.category);
+  const inCategory = r => state.category === 'Todas' || r.category === state.category;
+  const cells = p => p.cells.filter(inCategory);
   const span = () => { const c = D.coverage; return `${monthNames[c[0]]}–${monthNames[c.at(-1)]} ${state.year}`; };
   const pending = 'Ainda não coletado';
   // Party is the Câmara's current status at collection time, not a historical attribution.
   const context = p => [p.uf, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
   function value(p, kind = state.tab) {
     if (kind === 'projetos') return null;
-    const result = sum(records(p));
+    const result = sum(cells(p));
     return state.metric === 'mensal' ? result / p.months : result;
   }
   const formatted = (p, kind = state.tab) => kind === 'projetos' ? (p.projects === null ? pending : number(p.projects)) : compact(value(p, kind));
@@ -152,7 +154,7 @@
   }
   function layout() {
     document.body.dataset.model = model;
-    const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗</button></div></div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured))}</div>${handwrittenNote()}<div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section><div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
+    const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗︎</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗︎</button></div></div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured))}</div>${handwrittenNote()}<div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section><div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
     $('#app').innerHTML = `<div class="site">${header()}<main id="main">${main}</main><footer class="footer"></footer></div>`;
   }
   function editorialFeature() {
@@ -271,10 +273,10 @@
   const union = () => index.validation.sourceKind === 'annual-api-union';
   const sourceNote = () => `<div class="fixture-note">Dados oficiais da Câmara dos Deputados, versão ${escape(index.snapshotId.slice(0, 12))}. Verificações automáticas não são auditoria do gasto; revisão humana ampla ainda pende.</div>`;
   function sourceBlock(p) {
-    return `<section class="detail-section"><div class="source-block">${icon('database')}<div><h3>Fonte oficial</h3><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dados da cota parlamentar (CEAP) ↗</a><p>${union() ? 'Arquivo anual CEAP e API da Câmara, combinados porque nenhum está completo sozinho.' : 'Arquivo anual CEAP da Câmara.'} Cada registro leva ao arquivo de origem.</p></div></div></section>${sourceNote()}`;
+    return `<section class="detail-section"><div class="source-block">${icon('database')}<div><h3>Fonte oficial</h3><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dados da cota parlamentar (CEAP) ↗︎</a><p>${union() ? 'Arquivo anual CEAP e API da Câmara, combinados porque nenhum está completo sozinho.' : 'Arquivo anual CEAP da Câmara.'} Cada registro leva ao arquivo de origem.</p></div></div></section>${sourceNote()}`;
   }
   function categoryBreakdown(p) {
-    const list = categories.map(category => ({ category, total: sum(p.records.filter(r => r.category === category)) })).filter(item => item.total !== 0).sort((x, y) => y.total - x.total);
+    const list = categories.map(category => ({ category, total: sum(p.cells.filter(r => r.category === category)) })).filter(item => item.total !== 0).sort((x, y) => y.total - x.total);
     const max = Math.max(1, ...list.map(item => Math.abs(item.total)));
     return `<section class="detail-section"><h3>Despesas de ${escape(first(p))}</h3>${list.map(item => `<div class="category-row"><div class="category-head"><span>${escape(label(item.category))}</span><strong>${money(item.total)}</strong></div><small class="source-name">Nome na fonte: ${escape(item.category)}</small><span class="track"><i style="width:${Math.abs(item.total) / max * 100}%;opacity:.7"></i></span></div>`).join('')}<p class="context">Total do período: ${money(totalOf(p))}. ${state.category !== 'Todas' ? `O recorte atual usa apenas ${escape(label(state.category))}.` : ''}</p></section>`;
   }
@@ -283,8 +285,8 @@
     const p = person(id), kind = options.kind || state.tab, comparison = options.compare ? person(options.compare) : null;
     if (kind === 'projetos' && window.ClareiaData.billsApproved) { showDialog('Projetos de lei', `<p>A autoria e a situação de cada proposta estão na seção de atividade.</p>${sourceNote()}`); return; }
     if (kind === 'projetos') { showDialog('Projetos de lei', `<p class="records-note">Projetos de lei ainda não foram coletados nesta versão.</p><p>A próxima etapa inclui PL, PLP e PEC, separando autoria principal de coautoria. Nenhum número é mostrado antes da conferência.</p>${sourceNote()}`); return; }
-    const amount = value(p, 'gastos'), total = sum(records(p));
-    let formula = state.metric === 'mensal' ? `${money(total)} ÷ ${p.months} meses no recorte` : `Soma de ${records(p).length} registros = ${money(total)}`;
+    const amount = value(p, 'gastos'), total = sum(cells(p));
+    let formula = state.metric === 'mensal' ? `${money(total)} ÷ ${p.months} meses no recorte` : `Soma de ${count(cells(p))} registros = ${money(total)}`;
     let result = money(amount), resultCaption = state.metric === 'mensal' ? 'por mês no recorte' : 'no período';
     if (comparison) {
       const b = value(comparison, 'gastos'), c = compareValues(amount, b);
@@ -300,7 +302,7 @@
     }
     showDialog('Como chegamos nisso?', `<p class="dialog-subtitle">${comparison ? 'A comparação, passo a passo' : 'O cálculo, passo a passo'}</p>
       <section class="evidence-step"><span class="step-number">1</span><div><h3>O que estamos comparando</h3><p>Despesas da cota parlamentar (valor líquido) • ${span()}</p><p>${escape(p.name)}${comparison ? ` × ${escape(comparison.name)}` : ''}</p></div></section>
-      <section class="evidence-step"><span class="step-number">2</span><div><h3>Quais registros entram</h3><p>${records(p).length} registros oficiais${comparison ? ` + ${records(comparison).length} de ${escape(comparison.name)}` : ''}, ${union() ? 'do arquivo anual e da API da Câmara' : 'do arquivo anual da Câmara'}. ${state.category !== 'Todas' ? `Categoria: ${escape(label(state.category))}.` : ''}</p><p>Identidade ligada ao ID oficial da Câmara ${p.officialId}${comparison ? ` e ${comparison.officialId}` : ''}. Cada valor foi convertido em centavos antes da soma.</p></div></section>
+      <section class="evidence-step"><span class="step-number">2</span><div><h3>Quais registros entram</h3><p>${count(cells(p))} registros oficiais${comparison ? ` + ${count(cells(comparison))} de ${escape(comparison.name)}` : ''}, ${union() ? 'do arquivo anual e da API da Câmara' : 'do arquivo anual da Câmara'}. ${state.category !== 'Todas' ? `Categoria: ${escape(label(state.category))}.` : ''}</p><p>Identidade ligada ao ID oficial da Câmara ${p.officialId}${comparison ? ` e ${comparison.officialId}` : ''}. Cada valor foi convertido em centavos antes da soma.</p></div></section>
       <section class="evidence-step"><span class="step-number">3</span><div><h3>Como calculamos</h3><p>${formula}</p><div class="calculation-result">${result}<small>${resultCaption}</small></div><div class="action-row"><button class="outline-button primary" data-action="records" data-id="${p.id}">Ver registros</button></div></div></section>
       ${categoryBreakdown(p)}${sourceBlock(p)}`);
   }
@@ -316,29 +318,50 @@
   const recordListHTML = (caption, rows, total) => `<table class="record-list"><caption class="sr-only">${caption}</caption><thead><tr><th>Competência / documento</th><th>Fornecedor / categoria</th><th>Valor líquido</th><th><span class="sr-only">Ação</span></th></tr></thead><tbody>${rows.join('') || '<tr><td colspan="4">Nenhum registro neste recorte. Isso não afirma ausência de despesas fora da cobertura.</td></tr>'}</tbody><tfoot><tr><th colspan="2">Total</th><td><strong class="record-list-total">${money(total)}</strong></td><td>${rows.length} itens</td></tr></tfoot></table>`;
   // The record detail goes back to whichever list opened it, with the same rows and filter.
   const rememberList = reopen => { listOrigin = reopen; };
-  function backToList(personId, recordId) {
-    (listOrigin || (() => recordTable(person(personId))))();
+  async function backToList(personId, recordId) {
+    await (listOrigin || (() => recordTable(person(personId))))();
     const row = [...document.querySelectorAll('#detail .record-row')].find(tr => tr.dataset.record === recordId);
     row?.querySelector('button')?.focus();
   }
+  // Totals come from the summary; a deputy's records file is fetched only when one of their lists is opened.
+  const recordCache = new Map(), recordsReady = new Set();
+  let recordRun = 0;
+  function loadRecords(p) {
+    const id = p.officialId;
+    if (!recordCache.has(id)) recordCache.set(id, fetch(D.recordsUrl(id)).then(r => { if (r.status === 404) return []; if (!r.ok) throw new Error(); return r.json(); }).then(raw => { recordsReady.add(id); return raw.map(x => ({ id: x.id, date: x.date, month: x.month - 1, category: x.category, amount: x.cents, supplier: x.supplier, raw: x })); }).catch(error => { recordCache.delete(id); throw error; }));
+    return recordCache.get(id);
+  }
+  // While a file loads the dialog says so. A late result is dropped if a newer request started or another dialog replaced the note.
+  async function withRecords(people, render) {
+    const run = ++recordRun, waiting = people.some(p => !recordsReady.has(p.officialId)), stillWanted = () => run === recordRun && (!waiting || Boolean($('#detail').open && $('#detail .records-loading')));
+    if (waiting) showDialog('Registros oficiais', '<p class="records-note records-loading" role="status">Carregando registros oficiais…</p>');
+    let lists;
+    try { lists = await Promise.all(people.map(loadRecords)); }
+    catch { if (stillWanted()) showDialog('Registros oficiais', '<p class="records-note" role="alert">Registros indisponíveis agora. Nenhum valor foi estimado.</p>'); return; }
+    if (stillWanted()) render(lists);
+  }
   function recordTable(p, month) {
     rememberList(() => recordTable(p, month));
-    const items = records(p).filter(r => month === undefined || r.month === month).sort(byRecordOrder);
+    return withRecords([p], ([list]) => {
+    const items = list.filter(r => inCategory(r) && (month === undefined || r.month === month)).sort(byRecordOrder);
     showDialog(`Registros de ${first(p)}`, `<p class="records-note">${month === undefined ? span() : `${monthNames[month]} ${state.year}`} • ${state.category === 'Todas' ? 'Todas as categorias' : `${escape(label(state.category))} (Nome na fonte: ${escape(state.category)})`} • ${items.length} registros oficiais.</p><div class="calculation-result">${money(sum(items))}<small>Soma exata dos registros abaixo</small></div><div class="action-row"><button class="outline-button" data-action="download" data-id="${p.id}" ${month === undefined ? '' : `data-month="${month}"`}>Baixar CSV</button><button class="outline-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Voltar ao cálculo</button></div>${recordListHTML(`Registros de ${escape(p.name)}`, items.map(r => recordRow(p, r)), sum(items))}${sourceNote()}`);
     $('#detail').classList.add('records-wide');
+    });
   }
   function recordDetail(p, id) {
-    const rec = p.records.find(x => x.id === id); if (!rec) return;
+    return withRecords([p], ([list]) => {
+    const rec = list.find(x => x.id === id); if (!rec) { showDialog('Registros oficiais', '<p class="records-note" role="alert">Registro não encontrado nesta versão. Nenhum valor foi estimado.</p>'); return; }
     const r = rec.raw, api = r.origin === 'api';
-    showDialog('O registro por trás do valor', `<p class="records-note">${escape(p.name)} · ${months[r.month - 1]} / ${r.year}</p><h3>${escape(r.supplier)}</h3><p>${escape(label(r.category))}</p><p class="context">Nome na fonte: ${escape(r.category)}</p>${r.origin ? `<p class="context">Fonte: ${originLabel(r)}</p>` : ''}${r.documentCents !== null && r.disallowedCents !== null && r.documentCents - r.disallowedCents === r.cents ? `<div class="formula"><span>Documento <b>${money(r.documentCents)}</b></span><span>− Glosa <b>${money(r.disallowedCents)}</b></span><span>= Líquido <b>${money(r.cents)}</b></span></div>` : `<div class="formula" data-equation="none"><span>Valor do documento <b>${money(r.documentCents)}</b></span><span>Glosa <b>${money(r.disallowedCents)}</b></span><span>Valor líquido <b>${money(r.cents)}</b></span></div><p class="context">A fonte não informa todos os campos da conta documento − glosa. O valor líquido é o publicado pela Câmara, sem recálculo.${r.cents < 0 ? ' Valor negativo: ajuste registrado na origem.' : ''}</p>`}<p>${docLabel(r)} · número ${escape(r.documentNumber)}<br>${noDocument(r) ? '<span class="context">Cobrança interna de telefonia da Câmara. O "0" é o identificador de documento publicado na fonte, não um valor: o valor do lançamento é o líquido acima.</span><br>' : ''}Emissão informada: ${day(r.date)}</p><div class="action-row"><a class="outline-button primary" href="${escape(r.source.url)}" target="_blank" rel="noopener noreferrer">${api ? 'Abrir consulta oficial da API' : 'Baixar arquivo oficial'} ↗</a>${r.receipt ? `<a class="outline-button" href="${escape(r.receipt)}" target="_blank" rel="noopener noreferrer">Comprovante informado ↗</a>` : '<span class="context">Comprovante não informado na fonte.</span>'}</div><p class="context">O link do comprovante foi informado pela Câmara; sua disponibilidade e autenticidade não foram auditadas pelo Clareia.</p><details><summary>Rastreabilidade deste item</summary><dl class="trace"><dt>Coleta</dt><dd>${date(r.source.fetchedAt)} (Brasília)</dd><dt>${api ? 'Posição na página da API (base zero)' : 'Posição no CSV, sem cabeçalho (base zero)'}</dt><dd>${r.source.row}</dd><dt>${api ? 'SHA-256 da página preservada' : 'SHA-256 do CSV preservado'}</dt><dd><code>${r.source.sha256}</code></dd><dt>ID desta ocorrência</dt><dd><code>${escape(r.id)}</code></dd></dl></details><button class="text-button" data-action="back-to-list" data-id="${p.id}" data-record="${escape(id)}">← Voltar aos registros</button>`);
+    showDialog('O registro por trás do valor', `<p class="records-note">${escape(p.name)} · ${months[r.month - 1]} / ${r.year}</p><h3>${escape(r.supplier)}</h3><p>${escape(label(r.category))}</p><p class="context">Nome na fonte: ${escape(r.category)}</p>${r.origin ? `<p class="context">Fonte: ${originLabel(r)}</p>` : ''}${r.documentCents !== null && r.disallowedCents !== null && r.documentCents - r.disallowedCents === r.cents ? `<div class="formula"><span>Documento <b>${money(r.documentCents)}</b></span><span>− Glosa <b>${money(r.disallowedCents)}</b></span><span>= Líquido <b>${money(r.cents)}</b></span></div>` : `<div class="formula" data-equation="none"><span>Valor do documento <b>${money(r.documentCents)}</b></span><span>Glosa <b>${money(r.disallowedCents)}</b></span><span>Valor líquido <b>${money(r.cents)}</b></span></div><p class="context">A fonte não informa todos os campos da conta documento − glosa. O valor líquido é o publicado pela Câmara, sem recálculo.${r.cents < 0 ? ' Valor negativo: ajuste registrado na origem.' : ''}</p>`}<p>${docLabel(r)} · número ${escape(r.documentNumber)}<br>${noDocument(r) ? '<span class="context">Cobrança interna de telefonia da Câmara. O "0" é o identificador de documento publicado na fonte, não um valor: o valor do lançamento é o líquido acima.</span><br>' : ''}Emissão informada: ${day(r.date)}</p><div class="action-row"><a class="outline-button primary" href="${escape(r.source.url)}" target="_blank" rel="noopener noreferrer">${api ? 'Abrir consulta oficial da API' : 'Baixar arquivo oficial'} ↗︎</a>${r.receipt ? `<a class="outline-button" href="${escape(r.receipt)}" target="_blank" rel="noopener noreferrer">Comprovante informado ↗︎</a>` : '<span class="context">Comprovante não informado na fonte.</span>'}</div><p class="context">O link do comprovante foi informado pela Câmara; sua disponibilidade e autenticidade não foram auditadas pelo Clareia.</p><details><summary>Rastreabilidade deste item</summary><dl class="trace"><dt>Coleta</dt><dd>${date(r.source.fetchedAt)} (Brasília)</dd><dt>${api ? 'Posição na página da API (base zero)' : 'Posição no CSV, sem cabeçalho (base zero)'}</dt><dd>${r.source.row}</dd><dt>${api ? 'SHA-256 da página preservada' : 'SHA-256 do CSV preservado'}</dt><dd><code>${r.source.sha256}</code></dd><dt>ID desta ocorrência</dt><dd><code>${escape(r.id)}</code></dd></dl></details><button class="text-button" data-action="back-to-list" data-id="${p.id}" data-record="${escape(id)}">← Voltar aos registros</button>`);
+    });
   }
   function profile(id) {
     const p = person(id), peer = byTotal().find(other => other.id !== id);
-    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : `${money(value(p, 'gastos'))} ↗`}</strong></button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗</a>` : ''}</div>${sourceNote()}`);
+    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : `${money(value(p, 'gastos'))} ↗︎`}</strong></button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`);
   }
   function methodology() {
     const v = index.validation, audit = index.audit, compare = v.apiComparison;
-    showDialog('Fontes e metodologia', `<div class="text-content"><h3>O que somamos</h3><p>O valor líquido publicado pela Câmara, por competência financeira: o campo <code>vlrLiquido</code> do arquivo anual CEAP${union() ? ' e, nos registros que só a API traz, o <code>valorLiquido</code> da API' : ''}. Salário, gabinete e emendas não entram nesta conta.</p><h3>O que conferimos</h3><p>Duas capturas de cada fonte, identidade pelo ID oficial e contas em centavos, reconciliadas com uma segunda soma e com o banco.${audit ? ` Releitura independente do arquivo anual: <b>${audit.status === 'passed' ? 'sem divergências' : 'divergência encontrada'}</b> (${audit.selected} linhas, ${audit.groupsCompared} grupos pessoa/mês/categoria, ${date(audit.checkedAt)}).` : ''}</p>${compare?.paired !== undefined ? `<p>${compare.paired} registros (${money(compare.originCents.both)}) estão nas duas fontes, ${compare.missingInApi} (${money(compare.originCents.annual)}) só no arquivo anual e ${compare.extraInApi} (${money(compare.originCents.api)}) só na API.</p>` : compare?.missingInApi ? `<p>O arquivo anual contém ${compare.annualRecords} lançamentos; a API retornou ${compare.apiRecords}. Os ${compare.missingInApi} adicionais estão incluídos.</p>` : ''}<h3>O que não concluímos</h3><p>Gasto maior não demonstra irregularidade. O recorte não mede qualidade do mandato nem faz nova subtração de restituições. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'.</p><h3>Limites desta versão</h3><ul>${v.limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul><h3>Versão</h3><dl class="trace"><dt>Versão</dt><dd><code>${escape(index.snapshotId)}</code></dd><dt>Métrica</dt><dd><code>${escape(index.metric)}</code></dd><dt>Coleta</dt><dd>${date(index.collectedAt)} (Brasília)</dd><dt>Publicação</dt><dd>${date(index.publishedAt)} (Brasília)</dd></dl><p><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dicionário oficial da CEAP ↗</a> · <a href="https://dadosabertos.camara.leg.br/swagger/api.html" target="_blank" rel="noopener noreferrer">Documentação da API ↗</a></p></div>`);
+    showDialog('Fontes e metodologia', `<div class="text-content"><h3>O que somamos</h3><p>O valor líquido publicado pela Câmara, por competência financeira: o campo <code>vlrLiquido</code> do arquivo anual CEAP${union() ? ' e, nos registros que só a API traz, o <code>valorLiquido</code> da API' : ''}. Salário, gabinete e emendas não entram nesta conta.</p><h3>O que conferimos</h3><p>Duas capturas de cada fonte, identidade pelo ID oficial e contas em centavos, reconciliadas com uma segunda soma e com o banco.${audit ? ` Releitura independente do arquivo anual: <b>${audit.status === 'passed' ? 'sem divergências' : 'divergência encontrada'}</b> (${audit.selected} linhas, ${audit.groupsCompared} grupos pessoa/mês/categoria, ${date(audit.checkedAt)}).` : ''}</p>${compare?.paired !== undefined ? `<p>${compare.paired} registros (${money(compare.originCents.both)}) estão nas duas fontes, ${compare.missingInApi} (${money(compare.originCents.annual)}) só no arquivo anual e ${compare.extraInApi} (${money(compare.originCents.api)}) só na API.</p>` : compare?.missingInApi ? `<p>O arquivo anual contém ${compare.annualRecords} lançamentos; a API retornou ${compare.apiRecords}. Os ${compare.missingInApi} adicionais estão incluídos.</p>` : ''}<h3>O que não concluímos</h3><p>Gasto maior não demonstra irregularidade. O recorte não mede qualidade do mandato nem faz nova subtração de restituições. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'.</p><h3>Limites desta versão</h3><ul>${v.limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul><h3>Versão</h3><dl class="trace"><dt>Versão</dt><dd><code>${escape(index.snapshotId)}</code></dd><dt>Métrica</dt><dd><code>${escape(index.metric)}</code></dd><dt>Coleta</dt><dd>${date(index.collectedAt)} (Brasília)</dd><dt>Publicação</dt><dd>${date(index.publishedAt)} (Brasília)</dd></dl><p><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dicionário oficial da CEAP ↗︎</a> · <a href="https://dadosabertos.camara.leg.br/swagger/api.html" target="_blank" rel="noopener noreferrer">Documentação da API ↗︎</a></p></div>`);
   }
   function toast(text) { const el = $('#toast'); el.textContent = text; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2800); }
   async function shareLink() {
@@ -348,12 +371,11 @@
   }
   function closeSuggestions() { $('#suggestions').hidden = true; $('#query').setAttribute('aria-expanded', 'false'); }
   function exportCSV(id, month) {
-    const p = person(id), items = records(p).filter(r => month === undefined || month === r.month);
-    const whole = month === undefined && state.category === 'Todas';
-    const a = document.createElement('a');
-    a.href = whole ? `${base}/deputados/${p.officialId}/despesas.csv` : URL.createObjectURL(new Blob([ClareiaView.csv(items.map(r => r.raw))], { type: 'text/csv;charset=utf-8' }));
-    a.download = `clareia-${index.snapshotId.slice(0, 12)}-${p.officialId}${month === undefined ? '' : '-' + (month + 1)}.csv`;
-    a.click(); if (!whole) setTimeout(() => URL.revokeObjectURL(a.href), 1000); toast(`CSV com ${items.length} registros oficiais preparado.`);
+    const p = person(id), whole = month === undefined && state.category === 'Todas';
+    const save = (href, n) => { const a = document.createElement('a'); a.href = href; a.download = `clareia-${index.snapshotId.slice(0, 12)}-${p.officialId}${month === undefined ? '' : '-' + (month + 1)}.csv`; a.click(); toast(`CSV com ${n} registros oficiais preparado.`); };
+    if (whole) { save(`${base}/deputados/${p.officialId}/despesas.csv`, count(p.cells)); return; }
+    const keep = r => inCategory(r) && (month === undefined || month === r.month);
+    loadRecords(p).then(list => { const items = list.filter(keep), href = URL.createObjectURL(new Blob([ClareiaView.csv(items.map(r => r.raw))], { type: 'text/csv;charset=utf-8' })); save(href, items.length); setTimeout(() => URL.revokeObjectURL(href), 1000); }, () => toast('Registros indisponíveis agora. Nenhum valor foi estimado.'));
   }
   function closeDialog() { $('#detail').close(); if (dialogTrigger?.isConnected) dialogTrigger.focus({ preventScroll: true }); }
   document.addEventListener('click', event => {
@@ -395,7 +417,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { logo, label, context, model, state, all, person, records, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
+  window.Clareia = { logo, label, context, model, state, all, person, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false, fromURL);
 })();
