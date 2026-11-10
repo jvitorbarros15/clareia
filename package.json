@@ -14,6 +14,7 @@
     "collect:amendments": "tsx scripts/collect-amendments.ts",
     "publish:votes": "tsx scripts/publish-votes.ts",
     "publish:amendments": "tsx scripts/publish-amendments.ts",
+    "publish:expenses": "tsx scripts/publish-expenses.ts",
     "collect:votes": "tsx scripts/collect-votes.ts",
     "collect:bills": "tsx scripts/collect-bills.ts",
     "publish:people": "tsx scripts/publish-people-coverage.ts",
