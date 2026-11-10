@@ -53,6 +53,13 @@ export function parsePortal(bytes:Uint8Array,scope:PortalScope,despesa='998'):Po
   }
   if(total===null||!rows.length||rows.reduce((sum,r)=>sum+BigInt(r.net),0n)!==BigInt(total))throw Error('Linhas e total da cota não fecham');return {rows,total};
 }
+// The portal answers an empty category with HTTP 500 and the table skeleton: no row and a blank total. An error page has no table at all.
+export function portalCategoryEmpty(bytes:Uint8Array):boolean{
+  const nodes=portalNodes(portalDom(bytes)),tables=nodes.filter(n=>n.tagName==='table'&&(portalAttr(n,'class')||'').split(/\s/).includes('tabela-2'));
+  if(tables.length!==1)return false;
+  const cells=portalNodes(tables[0]).filter(n=>n.tagName==='td'),total=cells.filter(n=>portalAttr(n,'id')==='totalFinalAnalitico');
+  return total.length===1&&portalText(total[0])===''&&!cells.some(n=>/^analitico\d+$/.test(portalAttr(n,'id')||''));
+}
 export function portalSignature(snapshot:PortalSnapshot):string{return hash(canonical({total:snapshot.total,rows:snapshot.rows.map(({position:_position,...r})=>canonical(r)).sort()}));}
 function apiRow(raw:unknown,scope:PortalScope):PortalRow{
   const r=expenseSchema.parse(raw),provider=(r.cnpjCpfFornecedor||'').replace(/\D/g,''),d=r.dataDocumento?.slice(0,10)||'';
