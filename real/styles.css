@@ -971,3 +971,5 @@ img.assistant-spark{width:24px;height:24px;border-radius:6px;flex:none}
 body[data-model=editorial] .directory-stats small.held-tag{position:static;width:auto;height:auto;overflow:visible;clip:auto;white-space:normal;display:block;margin-top:4px;font-size:12px;color:var(--muted)}
 .dialog-back{display:inline-block;margin:0 0 16px;font-size:14px}
 #atlas .list-more{margin-bottom:20px}
+.compare-controls .person-pick{flex:1 1 0;min-width:0}
+.compare-controls .p-metric{flex:none}
