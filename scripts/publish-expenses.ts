@@ -36,7 +36,7 @@ await withLock(async()=>{
       if(stored.records.length!==version.validation.recordCount)failures.push('record-count');
       if(String(stored.records.reduce((n,r)=>n+BigInt(r.cents),0n))!==version.validation.independentTotalCents)failures.push('total');
     }
-    const report={checkedAt:new Date().toISOString(),status:failures.length?'failed':'passed',failures,lots:lots.length,competences:lots.reduce((n,l)=>n+l.audit.competences,0),selected:version.records.length,groupsCompared:lots.reduce((n,l)=>n+l.audit.competences,0)};
+    const report={checkedAt:new Date().toISOString(),status:failures.length?'failed':'passed',failures,lots:lots.length,competences:lots.reduce((n,l)=>n+l.audit.competences,0),selected:version.records.length};
     if(failures.length){await recordDomainAudit(db,version.id,'failed',report);console.error(JSON.stringify({id:version.id,failures}));process.exitCode=1;}
     else if(approve){await db.query('BEGIN');try{await reobservePublication(db,version.id);await recordDomainAudit(db,version.id,'passed',report);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}}
     console.log(JSON.stringify({...summary,database,stored:true,audit:report.status,active:(await activePublication(db,'despesas'))?.id===version.id},null,2));

@@ -31,8 +31,9 @@ const pause=()=>new Promise(r=>setTimeout(r,700));
 const db=await openDB();let version;
 try{const active=await activePublication(db,'despesas');if(!active)throw Error('Nenhuma versão de despesas ativa');version=await readPublication(db,active.id);}finally{await db.close();}
 if(!version)throw Error('Versão ativa ilegível');
-const held=new Set((version.validation.heldCompetences??[]).map(c=>c.personId+':'+c.month)),withRecords=new Set(version.records.map(r=>r.personId+':'+r.month));
-const candidates=version.scope.ids.flatMap(personId=>version.scope.months.filter(month=>!held.has(personId+':'+month)&&withRecords.has(personId+':'+month)).map(month=>({personId,month})));
+// Months published without expenses are drawn too: a wrong zero is the error that matters most.
+const held=new Set((version.validation.heldCompetences??[]).map(c=>c.personId+':'+c.month));
+const candidates=version.scope.ids.flatMap(personId=>version.scope.months.filter(month=>!held.has(personId+':'+month)).map(month=>({personId,month})));
 const sample=drawCompetences(candidates,seed,size),ids=[...new Set(sample.map(c=>c.personId))];
 const tmp=path.join(root,'download.tmp');
 const zip=await get(annualUrl(version.scope.year),tmp);if(zip.status!==200)throw Error('Arquivo anual indisponível');
@@ -52,7 +53,7 @@ for(const competence of sample){
   console.log(`${result.personId}/${String(result.month).padStart(2,'0')}: ${result.status} (nosso ${result.oursCents}, portal ${result.portalCents})`);
 }
 const count=(s:string)=>comparisons.filter(c=>c.status===s).length;
-const report={schema:'clareia.expense-portal-sample.v1',checkedAt:new Date().toISOString(),versionId:version.id,seed,size,candidates:candidates.length,sample,comparisons,summary:{matched:count('matched'),mismatch:count('mismatch'),unavailable:count('portal-unavailable')},note:'Compara o total líquido mensal publicado com a soma das categorias do portal analítico da cota. Competências retidas e meses sem registro ficam fora do sorteio.'};
+const report={schema:'clareia.expense-portal-sample.v1',checkedAt:new Date().toISOString(),versionId:version.id,seed,size,candidates:candidates.length,sample,comparisons,summary:{matched:count('matched'),mismatch:count('mismatch'),unavailable:count('portal-unavailable')},note:'Compara o total líquido mensal publicado com a soma das categorias do portal analítico da cota. Competências retidas ficam fora do sorteio; meses publicados sem despesa entram.'};
 await fs.writeFile(path.join(root,'report.json'),JSON.stringify(report,null,2));
 console.log(JSON.stringify({versionId:version.id,...report.summary,candidates:candidates.length},null,2));
 if(report.summary.mismatch||report.summary.unavailable)process.exitCode=1;

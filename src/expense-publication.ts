@@ -36,7 +36,7 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   const people:Person[]=ids.map(id=>{
     const h=history.people.find(p=>p.id===id),t=temporal.people.find(p=>p.id===id);
     if(!h?.profile||!t)throw Error(`Cadastro ausente para ${id}`);
-    const last=[...t.months].reverse().find(m=>m.uf.status==='single'&&m.party.status==='single');
+    const last=[...t.months].reverse().find(m=>m.year===first.year&&m.uf.status==='single'&&m.party.status==='single');
     return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf:last?.uf.value??null,party:last?.party.value??null};
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
