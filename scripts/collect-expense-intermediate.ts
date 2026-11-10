@@ -6,12 +6,15 @@ import {PeopleCapture} from '../src/people-discovery.ts';
 import {readAuditedPeopleDiscovery,readLocalPeopleKey} from '../src/people-history.ts';
 import {proposeIntermediate} from '../src/people-intermediate.ts';
 import {collectExpenseBatch} from '../src/expense-intermediate.ts';
+import {LOT_SIZE,lotProposal} from '../src/expense-lots.ts';
 import {vaultKey} from '../src/vault.ts';
 
 const args=process.argv.slice(2),value=(flag:string)=>{const i=args.indexOf(flag);return i<0?'':args[i+1];};
-if(args.includes('--help')){console.log('npm run collect:expenses:intermediate -- --local --selection-run ID --run ID [--offline] [--portal] [--workers 1|2|3]\nCaptura financeira intermediária cifrada, sem publicação. --portal confere o relatório oficial SIGEPA e permanece ativo nas retomadas. --offline não consulta a rede.');process.exit(0);}
-for(let i=0;i<args.length;i++){if(['--local','--offline','--portal'].includes(args[i]))continue;if(['--selection-run','--run','--workers'].includes(args[i])&&args[i+1]&&!args[i+1].startsWith('--')){i++;continue;}throw Error('Argumento inválido');}
-const runId=value('--run'),selectionId=value('--selection-run'),workers=Number(value('--workers')||'2');
+if(args.includes('--help')){console.log('npm run collect:expenses:intermediate -- --local --selection-run ID --run ID [--lot N [--lot-size 50]] [--offline] [--portal] [--workers 1|2|3]\n--lot coleta um lote do universo de 2025 (todos com exercício ou despesa no ano) em vez da amostra intermediária.\nCaptura financeira intermediária cifrada, sem publicação. --portal confere o relatório oficial SIGEPA e permanece ativo nas retomadas. --offline não consulta a rede.');process.exit(0);}
+for(let i=0;i<args.length;i++){if(['--local','--offline','--portal'].includes(args[i]))continue;if(['--selection-run','--run','--workers','--lot','--lot-size'].includes(args[i])&&args[i+1]&&!args[i+1].startsWith('--')){i++;continue;}throw Error('Argumento inválido');}
+const runId=value('--run'),selectionId=value('--selection-run'),workers=Number(value('--workers')||'2'),lotMode=args.includes('--lot'),lot=Number(value('--lot')),lotSize=Number(value('--lot-size')||String(LOT_SIZE));
+if(lotMode&&(!/^\d+$/.test(value('--lot'))||!Number.isInteger(lotSize)))throw Error('Lote inválido');
+if(!lotMode&&args.includes('--lot-size'))throw Error('--lot-size exige --lot');
 if([runId,selectionId].some(id=>!/^[a-zA-Z0-9-]{1,80}$/.test(id))||!Number.isInteger(workers)||workers<1||workers>3)throw Error('Execução inválida');
 const root=path.resolve('data/private/expense-intermediate',runId),selectionRoot=path.resolve('data/private/people-legacy',selectionId),key=args.includes('--local')?await readLocalPeopleKey():vaultKey();
 await fs.mkdir(root,{recursive:true});const lock=await acquireLock(path.join(root,'running.lock'));
@@ -19,16 +22,18 @@ try{
   const previous=await fs.readFile(path.join(root,'run.json'),'utf8').then(JSON.parse).catch((e:NodeJS.ErrnoException)=>{if(e.code!=='ENOENT')throw e;return null;});
   if(previous&&previous.selectionRun!==selectionId)throw Error('Outra seleção não pode retomar esta execução');
   let input:any;
-  if(previous){input=JSON.parse(await fs.readFile(path.join(root,'input.json'),'utf8'));if(hash(canonical(input))!==previous.inputSha256)throw Error('Entrada preservada diverge');}
+  if(previous){input=JSON.parse(await fs.readFile(path.join(root,'input.json'),'utf8'));if(hash(canonical(input))!==previous.inputSha256)throw Error('Entrada preservada diverge');if((input.schema==='clareia.expense-lot-input.v1')!==lotMode||lotMode&&(input.proposal.lot!==lot||input.proposal.lotSize!==lotSize))throw Error('Outro lote não pode retomar esta execução');}
   else{
     const selectionLock=await acquireLock(path.join(selectionRoot,'running.lock'));
     try{
       const load=async(file:string)=>JSON.parse(await fs.readFile(path.join(selectionRoot,file),'utf8'));
-      const manifest=await load('run.json'),legacy=await load('legacy.json'),cross=await load('crosscheck.json'),audit=await load('crosscheck-audit.json'),history=await load('input-history.json'),temporal=await load('input-temporal.json'),proposal=await load('intermediate-proposal.json');
+      const manifest=await load('run.json'),legacy=await load('legacy.json'),cross=await load('crosscheck.json'),audit=await load('crosscheck-audit.json'),history=await load('input-history.json'),temporal=await load('input-temporal.json');
       if(audit.schema!=='clareia.people-legacy-audit.v1'||audit.status!=='passed'||audit.legacySha256!==hash(canonical(legacy))||audit.crosscheckSha256!==hash(canonical(cross))||audit.historySha256!==hash(canonical(history))||audit.temporalSha256!==hash(canonical(temporal))||audit.discoverySha256!==history.discoverySha256)throw Error('Cruzamento sem auditoria correspondente');
       const discovery=await readAuditedPeopleDiscovery(manifest.discoveryRun,audit.discoverySha256);
-      if(canonical(proposeIntermediate(discovery,history,temporal,legacy,cross))!==canonical(proposal)||proposal.people.length<12||proposal.people.length>20||proposal.unmetCriteria.length)throw Error('Seleção intermediária incompleta ou divergente');
-      input={schema:'clareia.expense-intermediate-input.v1',selectionRun:selectionId,proposal,temporal,originAudit:audit};
+      let proposal:any;
+      if(lotMode)proposal=lotProposal(temporal,cross,discovery,2025,lot,lotSize);
+      else{proposal=await load('intermediate-proposal.json');if(canonical(proposeIntermediate(discovery,history,temporal,legacy,cross))!==canonical(proposal)||proposal.people.length<12||proposal.people.length>20||proposal.unmetCriteria.length)throw Error('Seleção intermediária incompleta ou divergente');}
+      input={schema:lotMode?'clareia.expense-lot-input.v1':'clareia.expense-intermediate-input.v1',selectionRun:selectionId,proposal,temporal,originAudit:audit};
       const priorInput=await fs.readFile(path.join(root,'input.json'),'utf8').catch((e:NodeJS.ErrnoException)=>{if(e.code!=='ENOENT')throw e;return null;});
       if(priorInput&&canonical(JSON.parse(priorInput))!==canonical(input))throw Error('Entrada órfã diferente; revisar sem sobrescrever');
       if(!priorInput)await fs.writeFile(path.join(root,'input.json'),JSON.stringify(input,null,2),{flag:'wx',mode:0o600});
