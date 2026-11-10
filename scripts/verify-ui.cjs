@@ -1828,6 +1828,18 @@ check('a deputy with a held month shows a partial total outside rankings, and on
   await page.close();
 });
 
+check('long lists of deputies show a step at a time with more and less', async () => {
+  const page = await at(1440);
+  const html = (...a) => page.evaluate(a => window.Clareia.listMore(...a), a);
+  assert.equal(await html(8, 10, 10, 'bars', 'deputados'), '', 'no controls when everything fits');
+  const first = await html(25, 10, 10, 'bars', 'deputados');
+  assert.match(first, /Mostrando 10 de 25 deputados/); assert.match(first, /Mostrar mais 10/); assert.doesNotMatch(first, /Mostrar menos/);
+  const last = await html(25, 30, 10, 'bars', 'deputados');
+  assert.match(last, /Mostrando 25 de 25/); assert.doesNotMatch(last, /Mostrar mais/); assert.match(last, /Mostrar menos/);
+  assert.match(await html(25, 20, 10, 'roster', 'deputados'), /Mostrar mais 5/);
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;

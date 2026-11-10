@@ -12,8 +12,9 @@
   const PALETTE = ['#1d7a6e','#c2731a','#3b5bdb','#8a4f7d','#5d6470','#7a9a2e','#b5443c','#2f8fb0','#a8741a','#6a4fb3','#9a9a9a','#d4a72c'];
   const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
   const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { C.toast('O navegador não permitiu salvar. A seleção continua disponível nesta visita.'); } };
+  const ROSTER_STEP=12;
   const state = {
-    highlightCategory: null, supplierLimit: 8, supplierQuery: '', month: COVER, mapUF: null, mapMetric: 'total', from: 1, to: COVERAGE.length, a: C.byTotal()[0].id, b: C.byTotal()[1].id, topic: 'Todos', stage: 'Todos', projectQuery: '', voter: C.byTotal()[0].id, timeline: C.byTotal()[0].id, rosterQuery: '', rosterUF:'Todos', rosterParty:'Todos',
+    highlightCategory: null, rosterLimit: ROSTER_STEP, supplierLimit: 8, supplierQuery: '', month: COVER, mapUF: null, mapMetric: 'total', from: 1, to: COVERAGE.length, a: C.byTotal()[0].id, b: C.byTotal()[1].id, topic: 'Todos', stage: 'Todos', projectQuery: '', voter: C.byTotal()[0].id, timeline: C.byTotal()[0].id, rosterQuery: '', rosterUF:'Todos', rosterParty:'Todos',
     favorites: new Set((Array.isArray(read('clareia-favorites', [])) ? read('clareia-favorites', []) : []).filter(id => C.person(id))),
     projects: new Set((Array.isArray(read('clareia-projects', [])) ? read('clareia-projects', []) : []).filter(id => ['01', '02', '03', '04'].includes(id))),
     motion: !reduced.matches
@@ -184,9 +185,9 @@
   }
   function directoryCards() {
     const normalize=s=>s.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-    const ppl=C.all().filter(p=>normalize(p.name).includes(normalize(state.rosterQuery)));
+    const ppl=C.all().filter(p=>normalize(p.name).includes(normalize(state.rosterQuery))),shown=ppl.slice(0,state.rosterLimit);
     const head=editorial&&ppl.length?`<div class="directory-head" aria-hidden="true"><span>Representante</span><span>Despesas ${C.state.metric==='mensal'?'por mês':'no recorte'}</span><span>Projetos${C.state.metric==='mensal'&&!window.ClareiaData.billsApproved?' por mês':''}</span><span></span></div>`:'';
-    return ppl.length?head+ppl.map(p=>`<article class="directory-card"><div class="directory-person">${C.avatar(p)}<div><h3>${esc(p.name)}</h3><p>${esc(C.context(p))} · ID Câmara ${p.officialId}</p></div>${followButton(p.id)}</div><div class="directory-stats"><button data-action="evidence" data-id="${p.id}" data-kind="gastos">${p.noExercise?`<b class="no-exercise">Sem exercício confirmado em ${C.state.year}</b><small>não entra no ranking de gastos</small>`:p.heldMonths?.length&&!p.cells.length?`<b class="no-exercise">Em revisão</b><small>${p.heldMonths.length===1?'1 mês':p.heldMonths.length+' meses'} aguardando conferência</small>`:`<b>${compact(C.sum(C.cells(p))/(C.state.metric==='mensal'?p.months:1))}</b><small>${p.heldMonths?.length?`parcial · ${p.heldMonths.length===1?'1 mês':p.heldMonths.length+' meses'} em revisão`:`despesas ${C.state.metric==='mensal'?'por mês':'no recorte'}`}</small>`}</button><button data-action="evidence" data-id="${p.id}" data-kind="projetos"><b>${p.projects===null?C.pending:number(p.projects)}</b><small>${p.projects===null?`projetos ${C.state.metric==='mensal'?'por mês':'apresentados'}`:'projetos como proponente'}</small></button></div><div class="directory-actions"><button data-action="profile" data-id="${p.id}">Abrir perfil →</button>${C.comparable(p)?`<button data-p-add-compare="${p.id}">Comparar +</button>`:''}</div></article>`).join(''):'<div class="empty-state"><b>Nenhum perfil encontrado.</b><p>A busca consulta os deputados desta versão.</p><button class="outline-button" data-p="clear-directory">Limpar filtros</button></div>';
+    return ppl.length?head+shown.map(p=>`<article class="directory-card"><div class="directory-person">${C.avatar(p)}<div><h3>${esc(p.name)}</h3><p>${esc(C.context(p))} · ID Câmara ${p.officialId}</p></div>${followButton(p.id)}</div><div class="directory-stats"><button data-action="evidence" data-id="${p.id}" data-kind="gastos">${p.noExercise?`<b class="no-exercise">Sem exercício confirmado em ${C.state.year}</b><small>não entra no ranking de gastos</small>`:p.heldMonths?.length&&!p.cells.length?`<b class="no-exercise">Em revisão</b><small>${p.heldMonths.length===1?'1 mês':p.heldMonths.length+' meses'} aguardando conferência</small>`:`<b>${compact(C.sum(C.cells(p))/(C.state.metric==='mensal'?p.months:1))}</b><small>${p.heldMonths?.length?`parcial · ${p.heldMonths.length===1?'1 mês':p.heldMonths.length+' meses'} em revisão`:`despesas ${C.state.metric==='mensal'?'por mês':'no recorte'}`}</small>`}</button><button data-action="evidence" data-id="${p.id}" data-kind="projetos"><b>${p.projects===null?C.pending:number(p.projects)}</b><small>${p.projects===null?`projetos ${C.state.metric==='mensal'?'por mês':'apresentados'}`:'projetos como proponente'}</small></button></div><div class="directory-actions"><button data-action="profile" data-id="${p.id}">Abrir perfil →</button>${C.comparable(p)?`<button data-p-add-compare="${p.id}">Comparar +</button>`:''}</div></article>`).join('')+C.listMore(ppl.length,state.rosterLimit,ROSTER_STEP,'roster','deputados'):'<div class="empty-state"><b>Nenhum perfil encontrado.</b><p>A busca consulta os deputados desta versão.</p><button class="outline-button" data-p="clear-directory">Limpar filtros</button></div>';
   }
   function directory() {
     return `<div class="directory-heading"><h3>Encontre um representante</h3><span>${C.all().length} deputados · ${C.span()}</span></div><div class="directory-controls"><label><span class="sr-only">Nome do representante</span><input id="roster-query" placeholder="Buscar por nome" value="${esc(state.rosterQuery)}"></label></div><div class="directory-grid" id="directory-grid" aria-live="polite">${directoryCards()}</div>`;
@@ -424,6 +425,12 @@
       case 'reset-saved':state.favorites.clear();state.projects.clear();save('clareia-favorites',[]);save('clareia-projects',[]);updateAll();updateFollowCount();C.toast('Favoritos locais apagados.');break;
     }
   });
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('[data-action=roster-more],[data-action=roster-less]');if(!b)return;
+    const before=state.rosterLimit,more=b.dataset.action==='roster-more';state.rosterLimit=more?before+ROSTER_STEP:ROSTER_STEP;
+    renderPart('directory-grid',directoryCards);
+    (more?document.querySelectorAll('#directory-grid .directory-card')[before]?.querySelector('button'):$('[data-action=roster-more]'))?.focus({preventScroll:more});
+  });
   document.addEventListener('input',e=>{
     if(e.target.id==='supplier-search'){state.supplierQuery=e.target.value;state.supplierLimit=8;updateSpending();return;}
     if(e.target.id==='evidence-search'&&evidence){evidence.query=e.target.value;evidence.limit=EVIDENCE_STEP;renderEvidencePeople();return;}
@@ -431,7 +438,7 @@
     if(e.target.id==='linked-from'||e.target.id==='linked-to'){const isFrom=e.target.id==='linked-from';state[isFrom?'from':'to']=+e.target.value;if(state.from>state.to)state[isFrom?'to':'from']=+e.target.value;$('#linked-from').value=state.from;$('#linked-to').value=state.to;$('#linked-from-label').textContent=months[COVERAGE[state.from-1]];$('#linked-to-label').textContent=months[COVERAGE[state.to-1]];$('#linked-result').innerHTML=linkedChart();fitChartHits();}
     if(e.target.id==='spend-range'){state.month=+e.target.value;updateSpending();}
     if(e.target.id==='project-search'){state.projectQuery=e.target.value;renderPart('project-grid',projectCards);watchMotion();}
-    if(e.target.id==='roster-query'){state.rosterQuery=e.target.value;renderPart('directory-grid',directoryCards);}
+    if(e.target.id==='roster-query'){state.rosterQuery=e.target.value;state.rosterLimit=ROSTER_STEP;renderPart('directory-grid',directoryCards);}
   });
   document.addEventListener('change',e=>{
     const id=e.target.id,val=e.target.value;

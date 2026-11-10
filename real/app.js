@@ -5,6 +5,7 @@
   const logo = '<svg class="logo-mark" viewBox="0 0 128.83 30" role="img" aria-label="Clareia"><path d="M13.4 20.79 19.07 21.44Q18.6 23.21 17.53 24.5Q16.46 25.8 14.8 26.52Q13.14 27.24 10.58 27.24Q8.1 27.24 6.45 26.77Q4.8 26.31 3.62 25.28Q2.43 24.25 1.76 22.86Q1.08 21.46 1.08 19.16Q1.08 16.76 1.9 15.17Q2.5 13.99 3.54 13.06Q4.58 12.13 5.68 11.68Q7.43 10.96 10.15 10.96Q13.96 10.96 15.96 12.32Q17.96 13.69 18.76 16.31L13.15 17.06Q12.89 16.06 12.19 15.55Q11.5 15.05 10.33 15.05Q8.85 15.05 7.93 16.11Q7.02 17.17 7.02 19.33Q7.02 21.25 7.92 22.24Q8.83 23.24 10.24 23.24Q11.41 23.24 12.21 22.64Q13.01 22.04 13.4 20.79ZM20.52 5.4H26.49V26.87H20.52ZM34.24 16.35 28.54 15.75Q28.86 14.26 29.47 13.4Q30.08 12.54 31.22 11.91Q32.04 11.46 33.47 11.21Q34.91 10.96 36.58 10.96Q39.26 10.96 40.89 11.26Q42.51 11.56 43.6 12.51Q44.36 13.17 44.8 14.38Q45.24 15.59 45.24 16.69V23.56Q45.24 24.66 45.38 25.28Q45.52 25.9 45.98 26.87H40.39Q40.05 26.27 39.95 25.95Q39.85 25.64 39.74 24.97Q38.57 26.09 37.42 26.58Q35.83 27.22 33.74 27.22Q30.96 27.22 29.51 25.93Q28.07 24.64 28.07 22.75Q28.07 20.98 29.11 19.84Q30.15 18.7 32.95 18.14Q36.3 17.47 37.3 17.19Q38.29 16.92 39.41 16.48Q39.41 15.39 38.95 14.95Q38.5 14.51 37.36 14.51Q35.89 14.51 35.16 14.98Q34.59 15.34 34.24 16.35ZM39.41 19.49Q38.18 19.93 36.84 20.26Q35.03 20.75 34.54 21.22Q34.05 21.7 34.05 22.31Q34.05 23.02 34.54 23.46Q35.03 23.91 35.98 23.91Q36.98 23.91 37.83 23.43Q38.69 22.94 39.05 22.25Q39.41 21.55 39.41 20.44ZM47.37 11.31H52.95V13.86Q53.76 12.21 54.61 11.58Q55.47 10.96 56.73 10.96Q58.05 10.96 59.62 11.78L57.77 16.03Q56.72 15.59 56.1 15.59Q54.93 15.59 54.28 16.56Q53.36 17.92 53.36 21.66V26.87H47.37ZM76.4 20.57H64.44Q64.61 22.01 65.22 22.71Q66.08 23.72 67.48 23.72Q68.36 23.72 69.15 23.28Q69.63 23 70.19 22.3L76.06 22.84Q74.71 25.19 72.81 26.2Q70.9 27.22 67.34 27.22Q64.25 27.22 62.48 26.35Q60.71 25.48 59.54 23.58Q58.38 21.68 58.38 19.12Q58.38 15.47 60.72 13.22Q63.05 10.96 67.17 10.96Q70.51 10.96 72.44 11.97Q74.38 12.98 75.39 14.9Q76.4 16.82 76.4 19.9ZM70.33 17.71Q70.16 15.99 69.4 15.24Q68.65 14.49 67.42 14.49Q66 14.49 65.15 15.62Q64.61 16.32 64.46 17.71ZM77.86 5.4H83.82V9.45H77.86ZM77.86 11.31H83.82V26.87H77.86ZM91.56 16.35 85.86 15.75Q86.19 14.26 86.79 13.4Q87.4 12.54 88.54 11.91Q89.36 11.46 90.8 11.21Q92.24 10.96 93.91 10.96Q96.59 10.96 98.21 11.26Q99.84 11.56 100.92 12.51Q101.68 13.17 102.12 14.38Q102.56 15.59 102.56 16.69V23.56Q102.56 24.66 102.7 25.28Q102.84 25.9 103.31 26.87H97.71Q97.38 26.27 97.27 25.95Q97.17 25.64 97.07 24.97Q95.9 26.09 94.74 26.58Q93.16 27.22 91.06 27.22Q88.28 27.22 86.84 25.93Q85.39 24.64 85.39 22.75Q85.39 20.98 86.43 19.84Q87.47 18.7 90.27 18.14Q93.63 17.47 94.62 17.19Q95.62 16.92 96.73 16.48Q96.73 15.39 96.28 14.95Q95.82 14.51 94.68 14.51Q93.22 14.51 92.48 14.98Q91.91 15.34 91.56 16.35ZM96.73 19.49Q95.5 19.93 94.17 20.26Q92.35 20.75 91.87 21.22Q91.37 21.7 91.37 22.31Q91.37 23.02 91.86 23.46Q92.35 23.91 93.3 23.91Q94.3 23.91 95.16 23.43Q96.01 22.94 96.37 22.25Q96.73 21.55 96.73 20.44Z"/><path class="brand-rays" d="M108.83 8 111.83 3M113.83 13l8-3M114.83 19l9 2M109.83 23l4 5"/></svg>';
   const { categories, monthNames, index, base, label } = D;
   const model = 'editorial';
+  const BAR_STEP = 10;
   const initial = new URLSearchParams(location.search);
   const ids = D.dataset().map(p => p.id);
   const totalOf = p => p.cells.reduce((n, r) => n + r.amount, 0);
@@ -21,7 +22,7 @@
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
-    tab: fromURL.tab ?? 'gastos',
+    tab: fromURL.tab ?? 'gastos', barLimit: BAR_STEP,
     query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && comparable(D.dataset().find(p => p.id === initial.get('destaque'))) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
   let dialogTrigger = null, toastTimer, listOrigin = null;
@@ -118,10 +119,12 @@
   function rankNote() {
     return state.tab === 'projetos' ? 'Projetos apresentados não equivalem a leis aprovadas.' : 'Amostra técnica de três deputados, não é ranking nacional. Cota parlamentar é a verba mensal para despesas do mandato, como passagens, combustível e divulgação. Gasto maior não significa irregularidade.';
   }
+  // Long lists grow in steps; only the visible rows are drawn.
+  const listMore = (total, limit, step, kind, noun) => total <= step ? '' : `<div class="list-more"><p class="list-count">Mostrando ${Math.min(limit, total)} de ${total} ${noun}</p>${total > limit ? `<button class="outline-button" data-action="${kind}-more">Mostrar mais ${Math.min(step, total - limit)}</button>` : ''}${limit > step ? `<button class="outline-button" data-action="${kind}-less">Mostrar menos</button>` : ''}</div>`;
   function barSection() {
     if (state.tab === 'projetos') return '';
     const ranked = ranking(), max = Math.max(1, ...ranked.map(p => Math.abs(value(p))));
-    return `<section class="bar-section" id="comparison"><h2>Comparativo de gastos · ${span()}</h2><div class="bar-chart" id="bar-chart">${ranked.map((p, i) => `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${money(value(p))}: ver cálculo" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${Math.abs(value(p)) / max * 100}%"></i></span><span class="bar-value">${money(value(p))}</span></button>`).join('')}</div></section>`;
+    return `<section class="bar-section" id="comparison"><h2>Comparativo de gastos · ${span()}</h2><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${money(value(p))}: ver cálculo" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${Math.abs(value(p)) / max * 100}%"></i></span><span class="bar-value">${money(value(p))}</span></button>`).join('')}</div>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'deputados')}</section>`;
   }
   function editorialFollowUp() {
     if (state.tab === 'projetos') return '';
@@ -395,6 +398,7 @@
     else if (action === 'feature') feature(id);
     else if (action === 'evidence') evidence(id, { kind: target.dataset.kind });
     else if (action === 'answer-evidence' && state.answer?.ids?.length) evidence(state.answer.ids[0], { kind: state.answer.kind, compare: state.answer.type === 'compare' ? state.answer.ids[1] : null });
+    else if (action === 'bars-more' || action === 'bars-less') { const before = state.barLimit; state.barLimit = action === 'bars-more' ? before + BAR_STEP : BAR_STEP; $('#comparison').outerHTML = barSection(); (action === 'bars-more' ? document.querySelectorAll('#bar-chart .bar-row')[before] : document.querySelector('[data-action=bars-more]'))?.focus({ preventScroll: action === 'bars-more' }); }
     else if (action === 'records') recordTable(person(id));
     else if (action === 'back-to-list') backToList(id, target.dataset.record);
     else if (action === 'record') recordDetail(person(id), target.dataset.record);
@@ -421,7 +425,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
+  window.Clareia = { listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false, fromURL);
 })();
