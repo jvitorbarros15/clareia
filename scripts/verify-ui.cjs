@@ -25,6 +25,12 @@ async function at(width, { height = 900, reducedMotion = 'no-preference', search
 
 // Records are fetched when a list opens: wait until the loading note has been replaced.
 const recordsShown = page => page.waitForFunction(() => document.querySelector('#detail').open && !document.querySelector('#detail .records-loading'));
+// A Panorama list with several deputies opens on the per-deputy table; this opens its first deputy.
+async function firstEvidencePerson(page) {
+  await page.waitForSelector('#detail[open] .record-row, #detail[open] [data-p-evidence-person]');
+  if (await page.locator('#detail [data-p-evidence-person]').count()) await page.locator('#detail [data-p-evidence-person]').first().click();
+  await page.waitForSelector('#detail[open] .record-row');
+}
 async function openRecords(page, personId) {
   await page.locator(`.bar-row[data-id="${personId}"]`).click();
   await page.waitForSelector('#detail[open]');
@@ -577,7 +583,9 @@ check('panorama dialog reuses the record rows', async () => {
   const page = await at(1440);
   const data = await published(page);
   await page.locator('[data-p-summary=expenses]').click();
-  await recordsShown(page);
+  await page.waitForSelector('#detail[open] [data-p-evidence-person]');
+  const expected = Number((await page.locator('#evidence-people tbody tr').first().locator('td').nth(1).innerText()).replace(/\D/g, ''));
+  await firstEvidencePerson(page);
   const info = await page.evaluate(() => {
     const d = document.querySelector('#detail');
     const rows = [...d.querySelectorAll('.record-row')].map(r => ({
@@ -587,7 +595,8 @@ check('panorama dialog reuses the record rows', async () => {
     }));
     return { rows, note: d.querySelector('.records-note').textContent.trim(), text: d.innerText, months: window.ClareiaData.monthNames };
   });
-  assert.equal(info.rows.length, data.people.reduce((n, p) => n + p.records.length, 0), 'one row per published record');
+  assert.equal(info.rows.length, expected, 'one row per record counted for that deputy');
+  assert.ok(data.people.some(p => p.records.length === expected), 'count matches a published file');
   assert.ok(info.rows.every(r => r.supplier && r.meta && r.go), 'supplier, category/document line and Conferir on every row');
   assert.ok(!info.rows.some(r => r.hasId), 'no record id as visible text');
   assert.doesNotMatch(info.text, /[0-9a-f]{24,}/i, 'no hash in the dialog text');
@@ -1297,9 +1306,11 @@ check('supplier expansion, evidence links and the slider keep the highlight and 
   await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
   const pressed = () => page.locator('.donut-legend [aria-pressed=true]').count();
   await page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click();
-  await page.locator('[data-p=all-suppliers]').click();
-  assert.equal(await pressed(), 1, 'highlight kept after Ver todos');
-  assert.equal(await page.evaluate(() => document.activeElement.dataset.p), 'all-suppliers', 'focus stays on the toggle');
+  if (await page.locator('[data-p=more-suppliers]').count()) {
+    await page.locator('[data-p=more-suppliers]').click();
+    assert.equal(await pressed(), 1, 'highlight kept after Mostrar mais');
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('#despesas .supplier-list > button')].indexOf(document.activeElement)), 8, 'focus on the first new supplier');
+  }
   for (const selector of ['.donut-caption [data-p=spend-evidence]', '.spend-details > [data-p=spend-evidence]']) {
     await page.locator(selector).click();
     await page.waitForSelector('#detail[open]');
@@ -1528,12 +1539,12 @@ check('Voltar aos registros returns to the list the reader came from', async () 
   const closeDetail = page => page.locator('#detail .close-button').click();
   const page = await at(1440);
   await page.locator('[data-p-summary=expenses]').click();
-  await page.waitForSelector('#detail[open] .record-row');
+  await firstEvidencePerson(page);
   await roundTrip(page, 'panorama');
   await closeDetail(page);
   await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
   await page.locator('.supplier-list [data-p-supplier]').first().click();
-  await page.waitForSelector('#detail[open] .record-row');
+  await firstEvidencePerson(page);
   await roundTrip(page, 'supplier');
   await closeDetail(page);
   await page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click();
@@ -1742,6 +1753,48 @@ check('suppliers inside a category are listed from the largest total', async () 
   const cents = values.map(v => Number(v.replace(/[^\d,−-]/g, '').replace(',', '').replace('−', '-')));
   assert.ok(cents.length > 1, 'more than one supplier');
   assert.ok(cents.every((c, i) => i === 0 || cents[i - 1] >= c), `not descending: ${values.join(', ')}`);
+  await page.close();
+});
+
+check('the supplier list grows ten at a time and can be searched', async () => {
+  const page = await at(1440);
+  const items = () => page.locator('#despesas .supplier-list > button').count();
+  assert.equal(await items(), 8);
+  const total = Number((await text(page.locator('[data-p=more-suppliers]'))).match(/de ([\d.]+) fornecedores/)[1].replace(/\./g, ''));
+  await page.locator('[data-p=more-suppliers]').click();
+  assert.equal(await items(), Math.min(18, total));
+  await page.locator('[data-p=fewer-suppliers]').click();
+  assert.equal(await items(), 8);
+  const name = await page.locator('#despesas .supplier-list [data-p-supplier]').nth(3).getAttribute('data-p-supplier');
+  await page.locator('#supplier-search').fill(name.slice(0, 6).toLowerCase());
+  const names = await page.locator('#despesas .supplier-list [data-p-supplier]').evaluateAll(bs => bs.map(b => b.dataset.pSupplier));
+  assert.ok(names.includes(name) && names.every(n => n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(name.slice(0, 6).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())), 'search filters by name');
+  await page.locator('#supplier-search').fill('zzzz-nenhum');
+  assert.match(await text(page.locator('#despesas .supplier-list')), /Nenhum fornecedor encontrado/);
+  await page.close();
+});
+
+check('the Panorama records dialog lists deputies from the totals and fetches one file per opened deputy', async () => {
+  const page = await at(1440), urls = [];
+  page.on('request', r => urls.push(r.url()));
+  await page.locator('[data-p-summary=expenses]').click();
+  await page.waitForSelector('#detail[open] [data-p-evidence-person]');
+  const people = await page.evaluate(() => window.ClareiaData.dataset().filter(p => p.cells.length).length);
+  assert.equal(await page.locator('#evidence-people tbody tr').count(), Math.min(10, people));
+  while (await page.locator('[data-p=evidence-more]').count()) await page.locator('[data-p=evidence-more]').click();
+  assert.equal(await page.locator('#evidence-people tbody tr').count(), people);
+  const cents = s => Number(s.replace(/[^\d,−-]/g, '').replace(',', '').replace('−', '-'));
+  const sum = (await page.locator('#evidence-people tbody td:nth-child(3)').allInnerTexts()).reduce((n, s) => n + cents(s), 0);
+  assert.equal(sum, cents((await text(page.locator('#detail .calculation-result'))).split(' Soma')[0]), 'rows add up to the total');
+  assert.equal(urls.filter(u => u.includes('/despesas.json')).length, 0, 'no record file for the table');
+  const first = await page.locator('#detail [data-p-evidence-person]').first().innerText();
+  await page.locator('#evidence-search').fill(first.split(' ')[0]);
+  assert.ok((await page.locator('#evidence-people tbody tr').count()) >= 1);
+  await page.locator('#detail [data-p-evidence-person]').first().click();
+  await page.waitForSelector('#detail[open] .record-row');
+  assert.equal(urls.filter(u => u.includes('/despesas.json')).length, 1, 'only the opened deputy');
+  await page.locator('#detail [data-p=evidence-back]').click();
+  assert.equal(await page.locator('#evidence-search').inputValue(), first.split(' ')[0], 'Voltar keeps the search');
   await page.close();
 });
 

@@ -949,3 +949,4 @@ body .uf-tile.negative.selected path:not(.tile-hit){stroke:var(--ink);stroke-wid
 img.assistant-spark{width:24px;height:24px;border-radius:6px;flex:none}
 /* iOS clips glyphs of this script font at each animated letter box: the T and f lost their crossbars. Spaces keep their fixed width. */
 @media (hover:none) and (pointer:coarse){.handwritten-letter:not(.handwritten-space){padding:.3em .3em;margin:-.3em -.3em}}
+.supplier-search{margin-top:16px}

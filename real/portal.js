@@ -13,7 +13,7 @@
   const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
   const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { C.toast('O navegador não permitiu salvar. A seleção continua disponível nesta visita.'); } };
   const state = {
-    highlightCategory: null, month: COVER, mapUF: null, mapMetric: 'total', from: 1, to: COVERAGE.length, a: C.byTotal()[0].id, b: C.byTotal()[1].id, topic: 'Todos', stage: 'Todos', projectQuery: '', voter: C.byTotal()[0].id, timeline: C.byTotal()[0].id, rosterQuery: '', rosterUF:'Todos', rosterParty:'Todos',
+    highlightCategory: null, supplierLimit: 8, supplierQuery: '', month: COVER, mapUF: null, mapMetric: 'total', from: 1, to: COVERAGE.length, a: C.byTotal()[0].id, b: C.byTotal()[1].id, topic: 'Todos', stage: 'Todos', projectQuery: '', voter: C.byTotal()[0].id, timeline: C.byTotal()[0].id, rosterQuery: '', rosterUF:'Todos', rosterParty:'Todos',
     favorites: new Set((Array.isArray(read('clareia-favorites', [])) ? read('clareia-favorites', []) : []).filter(id => C.person(id))),
     projects: new Set((Array.isArray(read('clareia-projects', [])) ? read('clareia-projects', []) : []).filter(id => ['01', '02', '03', '04'].includes(id))),
     motion: !reduced.matches
@@ -104,6 +104,7 @@
   }
   // With many months each bar is too narrow for a full value; the exact one stays in the aria-label and the click.
   const barLabel=cents=>{const sign=cents<0?'−':'',abs=Math.abs(cents),br=(v,d)=>v.toLocaleString('pt-BR',{maximumFractionDigits:d});if(abs>=99950000)return `${sign}${br(Math.round(abs/10000000)/10,1)}<br>mi`;if(abs>=9995000)return `${sign}${br(Math.round(abs/100000),0)}<br>mil`;if(abs>=99950)return `${sign}${br(Math.round(abs/10000)/10,1)}<br>mil`;return `${sign}${br(Math.round(abs/100),0)}<br>R$`;};
+  const SUPPLIER_STEP=10;
   function spending() {
     const entries=scopeRecords(), total=C.sum(entries);
     const groups=window.ClareiaData.categories.map((name,i)=>({name,color:PALETTE[i%PALETTE.length],value:C.sum(entries.filter(r=>r.category===name))}));
@@ -118,11 +119,13 @@
     const monthPart=i=>C.sum(monthRows[i].filter(r=>r.category===highlighted));
     // One row per supplier inside each category: a category total is never shown next to a single supplier's name.
     const suppliers=groups.filter(g=>!out(g)).flatMap(g=>{const rows=entries.filter(r=>r.category===g.name);return [...new Set(rows.map(r=>r.supplier))].map(name=>({name,category:g.name,value:C.sum(rows.filter(r=>r.supplier===name))})).sort((a,b)=>b.value-a.value);});
+    // Long lists grow ten at a time and can be searched; nothing beyond the visible rows is rendered.
+    const supplierQuery=folded(state.supplierQuery).trim(),found=supplierQuery?suppliers.filter(s=>folded(s.name).includes(supplierQuery)):suppliers,shownSuppliers=found.slice(0,state.supplierLimit);
     return `${intro('02','Siga o dinheiro','Um total. Muitas histórias.','Arraste o período e veja de que é feita a conta. Cada categoria leva aos registros que a compõem.',badge('Cota parlamentar'))}
       <div class="spending-grid"><div class="p-panel donut-panel"><div class="donut-caption"><span>Composição das despesas</span><button data-p="spend-evidence" aria-label="Como calculamos as despesas">${editorial?'Como chegamos nisso? →':icon('info')}</button></div>${donutChart(groups,total,highlighted)}<div class="donut-legend">${groups.map(g=>`<button ${editorial ? `data-p-highlight="${esc(g.name)}" data-label="${esc(lab(g.name))}" data-detail="${esc(money(g.value))} · ${g.value < 0 ? 'ajuste negativo' : `${C.share(g.value, positiveTotal)} ${shareLabel}`}" aria-pressed="${highlighted===g.name}" tabindex="${g.name===rovingName?0:-1}" ${out(g)?'disabled':''}` : `data-p-category="${esc(g.name)}"`} style="--cat:${g.color}" class="${highlighted && highlighted!==g.name?'category-muted':''}"><span><i></i><span class="legend-name">${esc(lab(g.name))}${g.value<0?`<em>ajuste de ${money(g.value)}, fora das fatias</em>`:''}</span></span>${out(g)?'<strong class="is-out">fora do filtro</strong><small></small>':`<strong>${compact(g.value)}</strong><small>${g.value < 0 ? 'ajuste' : C.share(g.value, positiveTotal)}</small>`}</button>`).join('')}</div></div>
       <div class="spend-details">${COVERAGE.length<3?`<div class="range-heading"><h3>Por mês · ${periodText()}</h3></div>`:`<div class="range-heading"><h3>Explore o ano</h3><output for="spend-range">${rangeText()}</output></div><label class="sr-only" for="spend-range">Último mês incluído nas despesas</label><input id="spend-range" class="month-range" type="range" min="${COVERAGE[0]+1}" max="${COVER}" value="${state.month}" aria-valuetext="${rangeValueText()}"><div class="month-markers">${COVERAGE.map(i=>`<span>${months[i]}</span>`).join('')}</div>`}
       <div class="${COVERAGE.length>6?'many ':''}p-mini-bars" style="--cols:${COVERAGE.length}">${COVERAGE.map(i=>{const m=months[i],value=monthTotals[i];return `<button data-p-month="${i+1}" class="${i<state.month?'included':''}" aria-label="Incluir até ${m}: ${money(value)} no mês${highlighted?', sendo '+money(monthPart(i))+' em '+esc(highlighted):''}"><strong class="bar-value" aria-hidden="true" style="--height:${Math.max(2,value/maxMonth*100)}%">${COVERAGE.length>6?barLabel(value):compact(value)}</strong><span style="--height:${Math.max(2,value/maxMonth*100)}%;${highlighted?'background:var(--line)':''}">${highlighted?`<i class="category-bar-part" style="height:${value?monthPart(i)/value*100:0}%;background:${groups.find(g=>g.name===highlighted).color}"></i>`:''}</span><small aria-hidden="true">${m}</small></button>`;}).join('')}</div>
-      ${editorial?`<div class="category-focus" aria-live="polite">${highlighted?`<p><strong>${esc(lab(highlighted))}</strong>: ${compact(groups.find(g=>g.name===highlighted).value)} · ${groups.find(g=>g.name===highlighted).value<0?'ajuste negativo, fora das fatias.':`${C.share(groups.find(g=>g.name===highlighted).value, positiveTotal)} das despesas positivas (${periodText()}).`}</p><p class="p-small">A cor destaca a parcela da categoria. O total e a escala permanecem iguais.</p><button class="p-link" data-p-drill="${esc(highlighted)}">Ver fornecedores de ${esc(lab(highlighted))} →</button><button class="category-clear" data-p="clear-highlight">Limpar destaque</button>`:''}</div>`:''}<h3 class="supplier-heading">Fornecedores das despesas</h3><p class="p-small">Fornecedores nos registros oficiais selecionados. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'.</p><div class="supplier-list">${(state.allSuppliers?suppliers:suppliers.slice(0,8)).map((s,i)=>`<button data-p-supplier="${esc(s.name)}" data-category="${esc(s.category)}" class="${highlighted && highlighted!==s.category?'category-muted':''}" ${highlighted===s.category?'data-highlighted="true"':''}><span class="supplier-index">${String(i+1).padStart(2,'0')}</span><span>${esc(s.name)}<small>${esc(lab(s.category))}</small></span><b>${compact(s.value)}</b>${ext()}</button>`).join('')||'<p class="p-small">Sem registros neste recorte.</p>'}</div>${suppliers.length>8?`<button class="p-link" data-p="all-suppliers">${state.allSuppliers?'Mostrar só os 8 maiores':`Ver todos os ${suppliers.length} fornecedores`} →</button>`:''}<button class="p-link" data-p="spend-evidence">Como chegamos nisso? ${ext()}</button><p class="p-small spend-scope">${scopeText(periodText())} · não inclui salários, gabinete ou emendas.</p></div></div>`;
+      ${editorial?`<div class="category-focus" aria-live="polite">${highlighted?`<p><strong>${esc(lab(highlighted))}</strong>: ${compact(groups.find(g=>g.name===highlighted).value)} · ${groups.find(g=>g.name===highlighted).value<0?'ajuste negativo, fora das fatias.':`${C.share(groups.find(g=>g.name===highlighted).value, positiveTotal)} das despesas positivas (${periodText()}).`}</p><p class="p-small">A cor destaca a parcela da categoria. O total e a escala permanecem iguais.</p><button class="p-link" data-p-drill="${esc(highlighted)}">Ver fornecedores de ${esc(lab(highlighted))} →</button><button class="category-clear" data-p="clear-highlight">Limpar destaque</button>`:''}</div>`:''}<h3 class="supplier-heading">Fornecedores das despesas</h3><p class="p-small">Fornecedores nos registros oficiais selecionados. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'.</p><label class="activity-search supplier-search"><span class="sr-only">Buscar fornecedor</span><input id="supplier-search" type="search" autocomplete="off" placeholder="Buscar fornecedor" value="${esc(state.supplierQuery)}"></label><div class="supplier-list">${shownSuppliers.map((s,i)=>`<button data-p-supplier="${esc(s.name)}" data-category="${esc(s.category)}" class="${highlighted && highlighted!==s.category?'category-muted':''}" ${highlighted===s.category?'data-highlighted="true"':''}><span class="supplier-index">${String(i+1).padStart(2,'0')}</span><span>${esc(s.name)}<small>${esc(lab(s.category))}</small></span><b>${compact(s.value)}</b>${ext()}</button>`).join('')||`<p class="p-small">${supplierQuery?'Nenhum fornecedor encontrado para essa busca.':'Sem registros neste recorte.'}</p>`}</div><div class="supplier-more">${found.length>shownSuppliers.length?`<button class="p-link" data-p="more-suppliers">Mostrar mais ${Math.min(SUPPLIER_STEP,found.length-shownSuppliers.length)} de ${number(found.length)} fornecedores →</button>`:''}${state.supplierLimit>8&&shownSuppliers.length>8?'<button class="p-link" data-p="fewer-suppliers">Mostrar só os 8 maiores</button>':''}</div><button class="p-link" data-p="spend-evidence">Como chegamos nisso? ${ext()}</button><p class="p-small spend-scope">${scopeText(periodText())} · não inclui salários, gabinete ou emendas.</p></div></div>`;
   }
   // Packed hex grid: c counts half-tile steps so rows interlock; neighbours sit roughly where they are on the map.
   function tileMap() {
@@ -304,8 +307,7 @@
   function updateSpending() {
     // Keep the actual range input mounted so dragging retains pointer capture.
     const temp=document.createElement('div');temp.innerHTML=spending();
-    for(const selector of ['.donut-panel','.p-mini-bars','.supplier-list', ...(editorial?['.category-focus']:[])]) $('#despesas '+selector).innerHTML=temp.querySelector(selector).innerHTML;
-    $('#despesas [data-p="all-suppliers"]')?.remove();$('#despesas .supplier-list').insertAdjacentHTML('afterend',temp.querySelector('[data-p="all-suppliers"]')?.outerHTML||'');
+    for(const selector of ['.donut-panel','.p-mini-bars','.supplier-list','.supplier-more', ...(editorial?['.category-focus']:[])]) $('#despesas '+selector).innerHTML=temp.querySelector(selector).innerHTML;
     $('#despesas .spend-scope').textContent=temp.querySelector('.spend-scope').textContent;
     $('#despesas output')&&($('#despesas output').textContent=rangeText());
     $('#spend-range')?.setAttribute('aria-valuetext',rangeValueText());
@@ -324,16 +326,35 @@
   }
   function updateSaved() { renderPart('acompanhar',following);updateFollowCount();document.querySelectorAll('[data-p-follow]').forEach(b=>{const on=state.favorites.has(b.dataset.pFollow);b.setAttribute('aria-pressed',on);b.classList.toggle('is-following',on);if(b.classList.contains('follow-button')){const full=b.textContent.trim().length>2;b.innerHTML=`<svg class="heart" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg>${full?on?'Acompanhando':'Acompanhar':''}`;b.setAttribute('aria-label',`${on?'Deixar de acompanhar':'Acompanhar'} ${C.person(b.dataset.pFollow).name}`);}});watchMotion(); }
   function focusMatch(selector) { $(selector)?.focus({preventScroll:true}); }
-  function expenseEvidence(category, supplier) {
-    const month=state.month;
-    C.rememberList(()=>{const before=state.month;state.month=month;const shown=expenseEvidence(category,supplier);state.month=before;return shown;});
-    // Only the deputies with matching totals are fetched; the filter and period are fixed before the files arrive.
-    const match=r=>r.month<month&&(!category||r.category===category)&&(!supplier||r.supplier===supplier),people=scopePeople().filter(p=>C.cells(p).some(match)),keepCategory=C.state.category;
-    const scope=[scopeText(periodText()),category?esc(lab(category)):''].filter(Boolean).join(' · ');
-    return C.withRecords(people,lists=>{
-    const items=lists.flatMap((list,i)=>list.filter(r=>match(r)&&(keepCategory==='Todas'||r.category===keepCategory)).map(r=>({...r,person:people[i].name,idPerson:people[i].id}))).sort(C.byRecordOrder), total=C.sum(items);
-    C.showDialog(category?lab(category):'Como chegamos nisso?',`<p class="dialog-subtitle">Despesas da amostra, registro por registro.</p><p class="records-note">${scope}</p>${category?`<p class="records-note">Nome na fonte: ${esc(category)}</p>`:''}<div class="calculation-result">${money(total)}<small>Soma de ${items.length} registros oficiais</small></div>${C.recordListHTML('Registros das despesas da amostra',items.map(r=>C.recordRow(C.person(r.idPerson),r,true)),total)}<p class="fixture-note">Salários, gabinete e emendas não entram nesta soma.</p>`);
-    $('#detail').classList.add('records-wide');
+  // The dialog starts from the summary totals, one row per deputy; a deputy's records file is fetched only when that row is opened.
+  const EVIDENCE_STEP=10;
+  let evidence=null;
+  const atMonth=(month,fn)=>{const before=state.month;state.month=month;try{return fn();}finally{state.month=before;}};
+  function expenseEvidence(category,supplier,month=state.month,keep=false) {
+    return atMonth(month,()=>{
+      const keepCategory=C.state.category,match=r=>r.month<month&&(!category||r.category===category)&&(!supplier||r.supplier===supplier);
+      const rows=scopePeople().map(p=>{const cells=C.cells(p).filter(match);return {p,count:C.count(cells),total:C.sum(cells)};}).filter(x=>x.count).sort((a,b)=>b.total-a.total||a.p.name.localeCompare(b.p.name,'pt-BR'));
+      const same=keep&&evidence&&evidence.category===category&&evidence.supplier===supplier&&evidence.month===month;
+      evidence={category,supplier,month,match,keepCategory,rows,scope:[scopeText(periodText()),category?esc(lab(category)):''].filter(Boolean).join(' · '),title:category?lab(category):'Como chegamos nisso?',source:category?`<p class="records-note">Nome na fonte: ${esc(category)}</p>`:'',query:same?evidence.query:'',limit:same?evidence.limit:EVIDENCE_STEP};
+      if(rows.length===1)return personEvidence(rows[0].p.id);
+      C.rememberList(()=>expenseEvidence(category,supplier,month,true));
+      const total=rows.reduce((n,x)=>n+x.total,0),count=rows.reduce((n,x)=>n+x.count,0);
+      C.showDialog(evidence.title,`<p class="dialog-subtitle">Despesas da amostra, deputado por deputado.</p><p class="records-note">${evidence.scope}</p>${evidence.source}<div class="calculation-result">${money(total)}<small>Soma de ${number(count)} registros oficiais de ${number(rows.length)} deputados</small></div><label class="activity-search"><span class="sr-only">Buscar deputado</span><input id="evidence-search" type="search" autocomplete="off" placeholder="Buscar deputado" value="${esc(evidence.query)}"></label><div id="evidence-people"></div><p class="fixture-note">Salários, gabinete e emendas não entram nesta soma.</p>`);
+      renderEvidencePeople();
+    });
+  }
+  function renderEvidencePeople() {
+    const box=$('#evidence-people');if(!box||!evidence)return;
+    const q=folded(evidence.query).trim(),list=q?evidence.rows.filter(x=>folded(x.p.name).includes(q)):evidence.rows,shown=list.slice(0,evidence.limit);
+    box.innerHTML=`<p class="p-small activity-count">Mostrando ${number(shown.length)} de ${number(list.length)} deputado${list.length===1?'':'s'}</p><table class="data-table evidence-people"><thead><tr><th>Deputado(a)</th><th>Registros</th><th>Valor líquido</th></tr></thead><tbody>${shown.map(x=>`<tr><td><button class="text-button" data-p-evidence-person="${x.p.id}">${esc(x.p.name)} →</button></td><td>${number(x.count)}</td><td>${money(x.total)}</td></tr>`).join('')||`<tr><td colspan="3">${q?'Nenhum deputado encontrado para essa busca.':'Nenhum registro neste recorte.'}</td></tr>`}</tbody></table>${list.length>shown.length?`<button class="outline-button activity-more" data-p="evidence-more">Mostrar mais ${Math.min(EVIDENCE_STEP,list.length-shown.length)}</button>`:''}`;
+  }
+  function personEvidence(id) {
+    const view=evidence,p=view.rows.find(x=>x.p.id===id).p;
+    C.rememberList(()=>{evidence=view;return personEvidence(id);});
+    return C.withRecords([p],([list])=>{
+      const items=list.filter(r=>view.match(r)&&(view.keepCategory==='Todas'||r.category===view.keepCategory)).sort(C.byRecordOrder),total=C.sum(items);
+      C.showDialog(view.title,`<p class="dialog-subtitle">${esc(p.name)}, registro por registro.</p><p class="records-note">${view.scope}</p>${view.source}<div class="calculation-result">${money(total)}<small>Soma de ${items.length} registros oficiais</small></div>${view.rows.length>1?'<button class="text-button" data-p="evidence-back">← Voltar a todos os deputados</button>':''}${C.recordListHTML('Registros das despesas da amostra',items.map(r=>C.recordRow(p,r,true)),total)}<p class="fixture-note">Salários, gabinete e emendas não entram nesta soma.</p>`);
+      $('#detail').classList.add('records-wide');
     });
   }
   function supplierDetail(category) {
@@ -348,7 +369,7 @@
   function dossier() { C.showDialog('Ainda não coletado','<p>Eleições, patrimônio e emendas ainda não foram coletados e conferidos.</p>'); }
 
   function summary(key) {
-    if(key==='expenses'||key==='records'){const before=state.month;state.month=12;expenseEvidence();state.month=before;return;}
+    if(key==='expenses'||key==='records'){expenseEvidence(undefined,undefined,12);return;}
     const ppl=scopePeople();
     C.showDialog('Como chegamos nisso?',`<p class="records-note">${scopeText()} · contagem dos deputados desta versão</p><table class="data-table"><thead><tr><th>Deputado(a)</th><th>ID Câmara</th></tr></thead><tbody>${ppl.map(p=>`<tr><td>${esc(p.name)}</td><td>${esc(p.officialId)}</td></tr>`).join('')}</tbody><tfoot><tr><th>Total</th><td>${ppl.length}</td></tr></tfoot></table><p class="fixture-note">Não há avaliação de qualidade do mandato.</p>`);
   }
@@ -359,8 +380,9 @@
   document.addEventListener('clareia:reset',()=>{state.month=COVER;state.highlightCategory=null;state.mapUF=null;state.mapMetric='total';state.from=1;state.to=COVERAGE.length;});
   document.addEventListener('clareia:change',updateAll);
   document.addEventListener('click',e=>{
-    const b=e.target.closest('[data-p-highlight],[data-p],[data-p-follow],[data-p-uf],[data-p-category],[data-p-supplier],[data-p-drill],[data-p-month],[data-p-metric],[data-p-topic],[data-p-project],[data-p-project-save],[data-p-vote],[data-p-dossier],[data-p-event],[data-p-summary],[data-p-ask],[data-p-add-compare]');if(!b)return;
+    const b=e.target.closest('[data-p-highlight],[data-p],[data-p-follow],[data-p-uf],[data-p-category],[data-p-supplier],[data-p-evidence-person],[data-p-drill],[data-p-month],[data-p-metric],[data-p-topic],[data-p-project],[data-p-project-save],[data-p-vote],[data-p-dossier],[data-p-event],[data-p-summary],[data-p-ask],[data-p-add-compare]');if(!b)return;
     if(b.dataset.pHighlight){const slice=b.hasAttribute('data-donut-slice');state.highlightCategory=state.highlightCategory===b.dataset.pHighlight?null:b.dataset.pHighlight;updateSpending();focusMatch(`${slice?'[data-donut-slice]':'.donut-legend button'}[data-p-highlight="${CSS.escape(b.dataset.pHighlight)}"]`);previewDonut(null);return;}
+    if(b.dataset.pEvidencePerson){personEvidence(b.dataset.pEvidencePerson);return;}
     if(b.dataset.pSupplier){expenseEvidence(b.dataset.category,b.dataset.pSupplier);return;}
     if(b.dataset.pDrill){supplierDetail(b.dataset.pDrill);return;}
     if(b.dataset.pAddCompare){state.a=b.dataset.pAddCompare;if(state.b===state.a)state.b=C.byTotal().find(p=>p.id!==state.a).id;renderPart('comparacao',comparison);if(editorial){C.toast(`${C.person(state.a).name.split(' ')[0]} entrou na comparação, ao lado de ${C.person(state.b).name.split(' ')[0]}.`);const h=$('#comparacao h2');if(h){h.tabIndex=-1;h.focus({preventScroll:true});}}$('#comparacao').scrollIntoView({behavior:state.motion?'smooth':'instant',block:'start'});return;}
@@ -378,7 +400,10 @@
     if(b.dataset.pAsk){runAsk(b.dataset.pAsk);return;}
     if(b.dataset.pEvent){const kind=b.dataset.pEvent,id=b.dataset.value;if(kind==='vote')voteDetail(id);else if(kind==='project')projectDetail(id);else if(kind==='records')C.recordTable(C.person(id));else C.profile(id);return;}
     switch(b.dataset.p){
-            case 'all-suppliers':state.allSuppliers=!state.allSuppliers;updateSpending();focusMatch('[data-p="all-suppliers"]');break;
+            case 'more-suppliers':{const before=state.supplierLimit;state.supplierLimit+=SUPPLIER_STEP;updateSpending();focusMatch(`#despesas .supplier-list > button:nth-child(${before+1})`);break;}
+            case 'fewer-suppliers':state.supplierLimit=8;updateSpending();focusMatch('#supplier-search');break;
+            case 'evidence-more':{const before=evidence.limit;evidence.limit+=EVIDENCE_STEP;renderEvidencePeople();($(`#evidence-people tbody tr:nth-child(${before+1}) button`)||$('[data-p=evidence-more]'))?.focus();break;}
+            case 'evidence-back':expenseEvidence(evidence.category,evidence.supplier,evidence.month,true);break;
       case 'clear-highlight':state.highlightCategory=null;updateSpending();focusMatch('.donut-legend button:not(:disabled)');break;
       case 'spend-evidence':expenseEvidence();break;
       case 'map-evidence':C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.span()} · ${state.mapMetric==='projects'?'autoria principal':catText(C.state.category)}</p><p>UF de representação, não destino da despesa. Média por representante = soma das despesas dividida pelo número de perfis da UF; não ajusta tempo em exercício.</p><table class="data-table"><thead><tr><th>UF</th><th>Perfis</th><th>Valor</th></tr></thead><tbody>${Object.entries(UF).filter(([uf])=>C.all().some(p=>!p.noExercise&&p.uf===uf)).map(([uf,[name]])=>`<tr><td>${uf} / ${name}</td><td>${C.all().filter(p=>!p.noExercise).filter(p=>p.uf===uf).length}</td><td>${mapFormat(mapValue(uf))}</td></tr>`).join('')}</tbody></table><p class="fixture-note">UF de representação conforme o cadastro da Câmara. UFs sem deputados nesta amostra aparecem como indisponíveis; indisponível não significa zero.</p>`);break;
@@ -399,6 +424,8 @@
     }
   });
   document.addEventListener('input',e=>{
+    if(e.target.id==='supplier-search'){state.supplierQuery=e.target.value;state.supplierLimit=8;updateSpending();return;}
+    if(e.target.id==='evidence-search'&&evidence){evidence.query=e.target.value;evidence.limit=EVIDENCE_STEP;renderEvidencePeople();return;}
     const search=/^activity-search-(bills|votes)$/.exec(e.target.id||'');if(search){listState[search[1]].query=e.target.value;listState[search[1]].limit=LIST_STEP;renderList(search[1]);return;}
     if(e.target.id==='linked-from'||e.target.id==='linked-to'){const isFrom=e.target.id==='linked-from';state[isFrom?'from':'to']=+e.target.value;if(state.from>state.to)state[isFrom?'to':'from']=+e.target.value;$('#linked-from').value=state.from;$('#linked-to').value=state.to;$('#linked-from-label').textContent=months[COVERAGE[state.from-1]];$('#linked-to-label').textContent=months[COVERAGE[state.to-1]];$('#linked-result').innerHTML=linkedChart();fitChartHits();}
     if(e.target.id==='spend-range'){state.month=+e.target.value;updateSpending();}
@@ -427,7 +454,7 @@
   document.addEventListener('click', e => {
     if (!state.highlightCategory) return;
     // The click may already have replaced its own target (dialog body, supplier list), so test the path fixed at dispatch time.
-    if (e.composedPath().some(node => node instanceof Element && node.matches('.interactive-donut,.donut-legend,.donut-caption,.p-mini-bars,.category-focus,.supplier-list,#detail,[data-p=all-suppliers],[data-p=spend-evidence],#spend-range'))) return;
+    if (e.composedPath().some(node => node instanceof Element && node.matches('.interactive-donut,.donut-legend,.donut-caption,.p-mini-bars,.category-focus,.supplier-list,#detail,.supplier-more,.supplier-search,[data-p=spend-evidence],#spend-range'))) return;
     state.highlightCategory = null;
     updateSpending();
     previewDonut(null);
