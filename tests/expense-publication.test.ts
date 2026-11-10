@@ -76,7 +76,7 @@ test('storing an older version without approval never makes it active again afte
 
 test('uf and party come from the publication year, never from a later month of the history',()=>{
   const later=structuredClone(lots());
-  for(const l of later){l.input.temporal.people[0].months.push({year:2026,month:3,uf:{status:'single',value:'RJ'},party:{status:'single',value:'Y'}});}
+  for(const l of later){l.input.temporal.people[0].months.push({year:2026,month:3,uf:{status:'single',value:'RJ'},party:{status:'single',value:'Y'}} as any);}
   const t=later[0].input.temporal;for(const l of later){l.input.temporal=t;const p=l.input.proposal;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
   const h={...history};const v=buildExpenseVersion(later,{...h,people:h.people} as any,'t');
   assert.deepEqual([v.people[0].uf,v.people[0].party],['SP','X']);
