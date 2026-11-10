@@ -65,6 +65,13 @@ function unmatched(annual:Expense[],api:Expense[]){
   const pool=new Map<string,Expense[]>();for(const r of api)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
   const left:Expense[]=[];for(const r of annual){const list=pool.get(key(r));if(list?.length)list.shift();else left.push(r);}return {annualOnly:groups(left),apiOnly:groups([...pool.values()].flat())};
 }
+// Names the fields holding a private identifier, never the value, so the record can be reviewed without exposing it.
+export function privatePaths(value:unknown,known:Set<string>,at='report'):string[]{
+  if(typeof value==='string')return findCpfs(JSON.stringify(value),known)?[at]:[];
+  if(Array.isArray(value))return value.flatMap((v,i)=>privatePaths(v,known,`${at}[${i}]`));
+  if(value&&typeof value==='object')return Object.entries(value).flatMap(([k,v])=>privatePaths(v,known,`${at}.${k}`));
+  return [];
+}
 export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,proposalSha256:string,one:PeopleCapture,two:PeopleCapture,options:{workers?:number;portal?:boolean;wait?:(ms:number)=>Promise<void>;progress?:(pass:number,done:number,total:number)=>void}={}):Promise<ExpenseBatch>{
   validateExpenseScope(scope);const start=Date.now(),workers=options.workers??2,known=new Set<string>();
   if(!Number.isInteger(workers)||workers<1||workers>3||!/^[a-f0-9]{64}$/.test(proposalSha256)||scope.legislature!==temporal.scope.legislature||scope.ids.some(id=>!temporal.people.some(p=>p.id===id))||temporal.scope.start>`${scope.year}-01-01`||temporal.scope.end<`${scope.year}-12-31`)throw Error('Entradas financeiras incompatíveis');
@@ -121,7 +128,8 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
       apiRecords=api[1]!.map(({raw,source:ref,row})=>{const source={url:ref.url,sha256:ref.sha256,row,fetchedAt:ref.fetchedAt};return normalize(raw,c.personId,scope,source,equationReview.permissions.get(equationKey({kind:'api',personId:c.personId,source})));});
     }catch{c.reasons.push('financial-normalization-failed');continue;}
     c.diagnostics=unmatched(annual,apiRecords);
-    try{c.records=unionRecords(annual,apiRecords).records;}catch{c.reasons.push('unreconciled-source-occurrences');continue;}
+    // Some receipts are numbered with the supplier's CPF: the number is hidden, the original stays sealed.
+    try{c.records=unionRecords(annual,apiRecords).records.map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));}catch{c.reasons.push('unreconciled-source-occurrences');continue;}
     if(c.records.length&&c.exercise==='outside'){c.records=[];c.reasons.push('expense-outside-exercise');continue;}
     const sum=c.records.reduce((n,r)=>n+BigInt(r.cents),0n);if(sum>BigInt(Number.MAX_SAFE_INTEGER)||sum<BigInt(Number.MIN_SAFE_INTEGER))throw Error('Total financeiro fora do limite');
     c.totalCents=Number(sum);c.status=c.records.length?'complete':'no-expenses-confirmed';
@@ -130,5 +138,5 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
   const complete=cells.every(c=>c.status==='complete'||c.status==='no-expenses-confirmed'),sum=cells.reduce((n,c)=>n+BigInt(c.totalCents??0),0n);if(sum>BigInt(Number.MAX_SAFE_INTEGER)||sum<BigInt(Number.MIN_SAFE_INTEGER))throw Error('Total financeiro fora do limite');
   const stats=[one.stats,two.stats],report:ExpenseBatch={schema:'clareia.expense-intermediate.v1',equationRule:'camara.ceap.correlated-net.v2',equationDecisions:equationReview.decisions,equationHolds:equationReview.holds,multiplicityRule:'camara.ceap.sigepa-preserve-hold.v2',multiplicityDecisions:multiplicityReview.decisions,portalRule:'camara.ceap.sigepa-portal-ledger.v1',portalRequested:options.portal===true,portalChecks,contentSha256:'',scope,peopleVersion:hash(canonical(temporal)),proposalSha256,createdAt:new Date().toISOString(),status:'review-required',publicationEligible:false,annual:[firstAnnual,secondAnnual].map(a=>({source:a.source,csvSha256:a.csvSha256,scanned:a.scanned})) as ExpenseBatch['annual'],cells,sources,totalCents:complete?Number(sum):null,metrics:{elapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,sourceBytes:sources.reduce((n,s)=>n+s.bytes,0),requests:stats.reduce((n,s)=>n+s.requests,0),retries:stats.reduce((n,s)=>n+s.retries,0),cacheHits:stats.reduce((n,s)=>n+s.cacheHits,0),downloadedBytes:stats.reduce((n,s)=>n+s.downloadedBytes,0)}};
   report.contentSha256=expenseBatchContentId(report);
-  if(findCpfs(JSON.stringify(report),known))throw Error('Identificador privado no relatório financeiro');return report;
+  if(findCpfs(JSON.stringify(report),known))throw Error(`Identificador privado no relatório financeiro em ${privatePaths(report,known).slice(0,5).join(', ')}`);return report;
 }

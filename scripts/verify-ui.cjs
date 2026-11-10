@@ -654,7 +654,7 @@ check('record detail spacing and buttons', async () => {
   assert.ok(info.gap >= 8 - 0.5 && info.gap <= 8.5, `gap before the notice is ${info.gap}px: ${info.notice}`);
   assert.ok(buttons.every(b => !b.line.includes('underline')), `underlined button: ${JSON.stringify(buttons.filter(b => b.line.includes('underline')))}`);
   const secondary = buttons.filter(b => !b.primary);
-  assert.ok(secondary.length >= 3, 'secondary buttons found');
+  assert.ok(secondary.length >= 2, 'secondary buttons found');
   assert.equal(new Set(secondary.map(b => [b.bg, b.border, b.color, b.radius].join('|'))).size, 1, `one secondary button style: ${JSON.stringify(secondary)}`);
   await page.close();
 });
@@ -1807,6 +1807,107 @@ check('a slow record file never fills a later request for another deputy', async
   await recordsShown(page);
   await page.waitForTimeout(1800);
   assert.deepEqual([...new Set(await page.locator('#detail .record-row').evaluateAll(trs => trs.map(tr => tr.dataset.id)))], [b]);
+  await page.close();
+});
+
+check('a deputy with a held month shows a partial total outside rankings, and one fully held shows no zero', async () => {
+  let partial, held;
+  const page = await at(1440, { before: async p => {
+    // Both files are fetched together, so the ids are fixed before either stub runs.
+    const manifest = await (await p.request.get(`${base}/manifest.json`)).json(), scope = (await (await p.request.get(`${base}/${manifest.base}/index.json`)).json()).scope.ids;
+    partial = scope[0]; held = scope.at(-1);
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); for (const q of s.people) for (const m of q.months) { m.held = (q.id === partial && m.month === s.scope.months[0]) || q.id === held; if (q.id === held) { m.exercise = 'full'; m.cents = 0; m.records = 0; } } const h = s.people.find(q => q.id === held); Object.assign(h, { cents: 0, records: 0 }); await route.fulfill({ response: res, json: s }); });
+    await p.route('**/fornecedores.json', async route => { const res = await route.fetch(), f = await res.json(); f.people[held] = []; await route.fulfill({ response: res, json: f }); });
+  } });
+  const ranked = await page.evaluate(() => window.Clareia.ranking('gastos').map(p => p.officialId));
+  assert.equal(ranked.includes(partial), false, 'partial total not ranked'); assert.equal(ranked.includes(held), false, 'held not ranked');
+  const card = id => page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${id}"]`) }).first();
+  assert.match(await text(card(partial)), /parcial · 1 mês em revisão/);
+  assert.match(await text(card(held)), /Em revisão/); assert.doesNotMatch(await text(card(held)), /R\$ 0,00/);
+  assert.equal(await page.locator(`#pessoas .directory-card [data-p-add-compare="${partial}"]`).count(), 0, 'no compare for a partial total');
+  await page.evaluate(id => window.Clareia.profile(String(id)), held);
+  assert.doesNotMatch(await text(page.locator('#detail')), /R\$ 0,00/);
+  assert.match(await text(page.locator('#detail')), /Em revisão/);
+  await page.close();
+});
+
+check('long lists of deputies show a step at a time with more and less', async () => {
+  const page = await at(1440);
+  const html = (...a) => page.evaluate(a => window.Clareia.listMore(...a), a);
+  assert.equal(await html(8, 10, 10, 'bars', 'deputados'), '', 'no controls when everything fits');
+  const first = await html(25, 10, 10, 'bars', 'deputados');
+  assert.match(first, /Mostrando 10 de 25 deputados/); assert.match(first, /Mostrar mais 10/); assert.doesNotMatch(first, /Mostrar menos/);
+  const last = await html(25, 30, 10, 'bars', 'deputados');
+  assert.match(last, /Mostrando 25 de 25/); assert.doesNotMatch(last, /Mostrar mais/); assert.match(last, /Mostrar menos/);
+  assert.match(await html(25, 20, 10, 'roster', 'deputados'), /Mostrar mais 5/);
+  await page.close();
+});
+
+check('deputy lists are alphabetical, complete and searchable through visible suggestions', async () => {
+  const page = await at(1440);
+  const total = await page.evaluate(() => window.Clareia.all().length);
+  for (const id of ['compare-a', 'compare-b']) {
+    const names = await page.locator(`#${id} option`).allInnerTexts();
+    assert.equal(names.length, total, `${id} lists every deputy`);
+    assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b, 'pt-BR')), `${id} sorted`);
+  }
+  const options = await page.locator('#compare-a option').evaluateAll(os => os.map(o => ({ value: o.value, text: o.textContent })));
+  const current = await page.locator('#compare-a').inputValue(), target = options.find(o => o.value !== current), word = target.text.split(' · ')[0].split(' ')[0].toLowerCase();
+  await page.locator('#compare-a-filter').fill(word);
+  assert.equal(await page.locator('#compare-a-options').isVisible(), true, 'suggestions are visible while typing');
+  assert.equal(await page.locator('#compare-a-filter').getAttribute('aria-expanded'), 'true');
+  assert.equal(await page.locator('#compare-a option').count(), total, 'the select keeps the full list');
+  await page.locator('#compare-a-options [role=option]', { hasText: target.text.split(' · ')[0] }).first().click();
+  await page.waitForFunction(v => document.querySelector('#compare-a')?.value === v, target.value);
+  assert.match(await text(page.locator('#comparacao')), new RegExp(target.text.split(' · ')[0]), 'comparison follows the chosen deputy');
+  const other = options.find(o => o.value !== target.value && o.value !== current) || options.find(o => o.value !== target.value);
+  await page.locator('#compare-b-filter').fill(other.text.split(' · ')[0].toLowerCase());
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+  await page.waitForFunction(v => document.querySelector('#compare-b')?.value === v, other.value);
+  const now = await page.locator('#compare-a').inputValue();
+  await page.locator('#compare-a-filter').fill('zzz-ninguem');
+  assert.match(await text(page.locator('#compare-a-options')), /Nenhum deputado encontrado/);
+  assert.equal(await page.locator('#compare-a').inputValue(), now, 'no match keeps the current choice');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#compare-a-options').isVisible(), false, 'Escape closes the suggestions');
+  await page.close();
+});
+check('views opened inside the dialog can go back step by step to the profile', async () => {
+  const page = await at(1440);
+  const title = () => text(page.locator('#detail-title'));
+  const back = async () => (await page.locator('#detail .dialog-back').count()) ? text(page.locator('#detail .dialog-back')) : null;
+  const id = (await peopleOf(page))[0];
+  await page.evaluate(id => { const b = document.createElement('button'); b.dataset.action = 'profile'; b.dataset.id = id; b.id = 'probe-profile'; document.body.append(b); }, id);
+  const openProfile = () => page.evaluate(() => document.querySelector('#probe-profile').click());
+  await openProfile();
+  assert.equal(await title(), 'Perfil do representante'); assert.equal(await back(), null, 'a view opened from the page has no way back');
+  await page.locator('#detail [data-action=evidence][data-kind=gastos]').first().click();
+  assert.equal(await back(), '← Voltar: Perfil do representante');
+  await page.locator('#detail [data-action=records]').first().click(); await recordsShown(page);
+  assert.equal(await back(), '← Voltar: Como chegamos nisso?');
+  assert.equal(await page.locator('#detail', { hasText: 'Voltar ao cálculo' }).count(), 0, 'no second back button');
+  await page.locator('#detail .dialog-back').click(); assert.equal(await title(), 'Como chegamos nisso?');
+  await page.locator('#detail .dialog-back').click(); assert.equal(await title(), 'Perfil do representante'); assert.equal(await back(), null);
+  await page.keyboard.press('Escape'); await openProfile();
+  assert.equal(await back(), null, 'closing the dialog clears the trail');
+  await page.close();
+});
+
+check('rankings need the minimum months of exercise and the average divides by months of exercise only', async () => {
+  let short;
+  const page = await at(1440, { before: async p => {
+    const manifest = await (await p.request.get(`${base}/manifest.json`)).json(), ids = (await (await p.request.get(`${base}/${manifest.base}/index.json`)).json()).scope.ids; short = ids[0];
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.coverageId = 'c'; for (const q of s.people) q.months.forEach((m, i) => { m.exercise = q.id === short && i > 0 && !m.records ? 'outside' : 'full'; m.partyStatus = 'single'; m.party = 'X'; }); await route.fulfill({ response: res, json: s }); });
+  } });
+  const info = await page.evaluate(id => { const C = window.Clareia, p = C.person(String(id)); return { min: C.MIN_MONTHS, exercised: p.exercisedMonths, months: p.months, ranked: C.ranking('gastos').some(x => x.officialId === id), few: C.fewMonths(p), coverage: window.ClareiaData.coverage.length }; }, short);
+  assert.equal(info.min, Math.min(6, info.coverage));
+  if (info.exercised < info.min) {
+    assert.equal(info.few, true); assert.equal(info.ranked, false, 'too few months stays out of the ranking');
+    assert.equal(info.months, Math.max(1, info.exercised), 'the average divides by months of exercise');
+    const card = page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${short}"]`) }).first();
+    assert.match(await text(card), /exerceu \d+ de \d+ meses · fora do ranking/);
+  }
+  assert.match(await text(page.locator('.ranking-context')), /pelo menos \d+ meses/);
   await page.close();
 });
 

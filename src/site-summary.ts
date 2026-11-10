@@ -2,7 +2,7 @@ import type {Expense,Person,Scope} from './model.ts';
 import type {CoverageRow} from './people-publication.ts';
 import type {BillPerson} from './bills.ts';
 
-export type MonthSummary={month:number;cents:number;records:number;exercise:string|null;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean;partialScope:boolean};
+export type MonthSummary={month:number;cents:number;records:number;exercise:string|null;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean;partialScope:boolean;held:boolean};
 // [month, category index, cents, records]
 export type Cell=[number,number,number,number];
 // [month, category index, supplier index, cents, records]
@@ -25,11 +25,11 @@ function cellsOf(rows:Expense[],categoryIndex:Map<string,number>):Cell[]{
 
 // Party and UF come only from an approved monthly coverage. Without one they stay
 // unavailable: the current registration must never be applied to a past expense.
-export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:Person[];records:Expense[];expectedTotalCents:number;coverageId:string|null;coverage:CoverageRow[];billsId?:string|null;billsYears?:number[];bills?:BillPerson[];votesId?:string|null;votesYears?:number[];votes?:Map<number,Record<string,number>>;votesHeld?:Map<number,number>}):SiteSummary{
+export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:Person[];records:Expense[];expectedTotalCents:number;coverageId:string|null;coverage:CoverageRow[];billsId?:string|null;billsYears?:number[];bills?:BillPerson[];votesId?:string|null;votesYears?:number[];votes?:Map<number,Record<string,number>>;votesHeld?:Map<number,number>;held?:{personId:number;month:number}[]}):SiteSummary{
   const {publicationId,scope,people,records,expectedTotalCents,coverageId,coverage}=input,billsId=input.billsId??null,billsOf=new Map((input.bills??[]).map(b=>[b.id,b]));
   if(billsId!==null&&!input.billsYears?.includes(scope.year))throw new Error('Proposições aprovadas não cobrem o ano do site');
   if(coverageId===null&&coverage.length)throw new Error('Cobertura sem versão aprovada');
-  const attribution=new Map(coverage.map(row=>[row.personId+':'+row.year+':'+row.month,row])),byPerson=new Map<number,Expense[]>();
+  const heldKeys=new Set((input.held??[]).map(h=>h.personId+':'+h.month)),attribution=new Map(coverage.map(row=>[row.personId+':'+row.year+':'+row.month,row])),byPerson=new Map<number,Expense[]>();
   for(const r of records){if(!scope.ids.includes(r.personId)||r.year!==scope.year||!scope.months.includes(r.month))throw new Error('Registro fora do recorte do resumo');const list=byPerson.get(r.personId);if(list)list.push(r);else byPerson.set(r.personId,[r]);}
   const categoryList=sorted(records.map(r=>r.category)),categoryIndex=new Map(categoryList.map((c,i)=>[c,i]));
   const summaries=scope.ids.map<PersonSummary>(id=>{
@@ -37,7 +37,8 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
     const own=byPerson.get(id)??[],categories=[...new Set(own.map(r=>r.category))].sort().map(category=>{const rows=own.filter(r=>r.category===category);return {category,cents:sum(rows),records:rows.length};});
     const months=[...scope.months].sort((a,b)=>a-b).map<MonthSummary>(month=>{
       const rows=own.filter(r=>r.month===month),row=attribution.get(id+':'+scope.year+':'+month);
-      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,review:row?.review??false,partialScope:row?.partialScope??false};
+      if(heldKeys.has(id+':'+month)&&rows.length)throw new Error('Competência retida com registros');
+      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,review:row?.review??false,partialScope:row?.partialScope??false,held:heldKeys.has(id+':'+month)};
     });
     // With an approved version, a deputy absent from it has zero counted bills; without one the count is unknown.
     const counted=billsOf.get(id);

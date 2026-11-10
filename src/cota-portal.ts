@@ -7,7 +7,9 @@ export type PortalScope={personId:number;portalId:number;year:number;month:numbe
 export type PortalRow={position:number;documentHash:string;numberHash:string;providerHash:string;date:string;face:number;deductions:number|null;net:number};
 export type PortalSnapshot={rows:PortalRow[];total:number};
 export type PortalCheck={personId:number;year:number;month:number;portalId:number|null;status:'unavailable'|'changed'|'mismatch'|'matched';sources:ExpenseSource[];count:number|null;totalCents:number|null;signatureSha256:string|null};
-export const portalUrl=(s:PortalScope)=>`https://www.camara.leg.br/cota-parlamentar/analitico?nuDeputadoId=${s.portalId}&dataInicio=${s.month}%2F${s.year}&dataFim=${s.month}%2F${s.year}&despesa=998&nomeHospede=&nomePassageiro=&nomeFornecedor=&cnpjFornecedor=&numDocumento=&sguf=`;
+// Category codes of the portal form; 'todas' lists every category of the month, each row linking to its own code.
+export const PORTAL_CATEGORIES=new Set(['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','40','119','120','121','122','123','137','145','996','998','999']);
+export const portalUrl=(s:PortalScope,despesa='998')=>`https://www.camara.leg.br/cota-parlamentar/analitico?nuDeputadoId=${s.portalId}&dataInicio=${s.month}%2F${s.year}&dataFim=${s.month}%2F${s.year}&despesa=${despesa}&nomeHospede=&nomePassageiro=&nomeFornecedor=&cnpjFornecedor=&numDocumento=&sguf=`;
 // Syntax infrastructure only. It does not execute HTML, scripts or fetch assets.
 export function portalDom(bytes:Uint8Array):any{
   if(bytes.length>12_000_000)throw Error('HTML da cota acima do limite');
@@ -32,7 +34,7 @@ function date(value:string):string{
   const m=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);if(!m)throw Error('Data da cota inválida');const iso=`${m[3]}-${m[2]}-${m[1]}`,d=new Date(iso+'T00:00:00Z');if(Number.isNaN(d.valueOf())||d.toISOString().slice(0,10)!==iso)throw Error('Data da cota inválida');return iso;
 }
 const headers=['Fornecedor','Data de emissão','Número do documento','Valor','Detalhe','Nome','CNPJ / CPF','Despesa','Deduções','Reembolso'];
-export function parsePortal(bytes:Uint8Array,scope:PortalScope):PortalSnapshot{
+export function parsePortal(bytes:Uint8Array,scope:PortalScope,despesa='998'):PortalSnapshot{
   const nodes=portalNodes(portalDom(bytes)),tables=nodes.filter(n=>n.tagName==='table'&&(portalAttr(n,'class')||'').split(/\s/).includes('tabela-2'));
   if(tables.length!==1)throw Error('Tabela analítica da cota ausente ou ambígua');
   const tableNodes=portalNodes(tables[0]);if(tableNodes.filter(n=>n.tagName==='table').length!==1||canonical(tableNodes.filter(n=>n.tagName==='th').map(portalText))!==canonical(headers))throw Error('Contrato da tabela da cota mudou');
@@ -43,19 +45,27 @@ export function parsePortal(bytes:Uint8Array,scope:PortalScope):PortalSnapshot{
     if(id==='totalFinalAnalitico'){if(total!==null||portalText(td[0])!=='Total')throw Error('Total da cota ambíguo');total=portalMoney(portalText(td[6]));continue;}
     if(id!==`analitico${rows.length}`||total!==null)throw Error('Sequência da cota inválida');
     const links=portalNodes(td[7]).filter(n=>n.tagName==='a');if(links.length!==1)throw Error('Referência da cota ambígua');
-    const link=new URL(portalAttr(links[0],'href')||'',portalUrl(scope)),params=link.searchParams;
-    if(link.origin!=='https://www.camara.leg.br'||link.pathname!=='/cota-parlamentar/documento'||link.username||link.password||link.hash||[...params.keys()].sort().join(',')!=='cnpjFornecedor,despesa,idDocumento,idDocumentoFiscal,nuDeputadoId,numAno,numMes'||params.get('nuDeputadoId')!==String(scope.portalId)||params.get('numAno')!==String(scope.year)||params.get('numMes')!==String(scope.month)||params.get('despesa')!=='998')throw Error('Identidade ou competência da cota diverge');
+    const link=new URL(portalAttr(links[0],'href')||'',portalUrl(scope,despesa)),params=link.searchParams;
+    if(link.origin!=='https://www.camara.leg.br'||link.pathname!=='/cota-parlamentar/documento'||link.username||link.password||link.hash||[...params.keys()].sort().join(',')!=='cnpjFornecedor,despesa,idDocumento,idDocumentoFiscal,nuDeputadoId,numAno,numMes'||params.get('nuDeputadoId')!==String(scope.portalId)||params.get('numAno')!==String(scope.year)||params.get('numMes')!==String(scope.month)||(despesa==='todas'?!PORTAL_CATEGORIES.has(params.get('despesa')??''):params.get('despesa')!==despesa))throw Error('Identidade ou competência da cota diverge');
     const provider=portalText(td[1]).replace(/\D/g,''),number=portalText(td[3]),fiscal=params.get('idDocumentoFiscal')||'';
     if(![11,14].includes(provider.length)||params.get('cnpjFornecedor')?.replace(/\D/g,'')!==provider||params.get('idDocumento')!==number||! /^(?:\d{1,18}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(fiscal))throw Error('Documento ou fornecedor da cota diverge');
     const deduction=portalText(td[5]);rows.push({position:rows.length,documentHash:hash(fiscal),numberHash:hash(number),providerHash:hash(provider),date:date(portalText(td[2])),face:portalMoney(portalText(td[4])),deductions:deduction?portalMoney(deduction):null,net:portalMoney(portalText(td[6]))});
   }
   if(total===null||!rows.length||rows.reduce((sum,r)=>sum+BigInt(r.net),0n)!==BigInt(total))throw Error('Linhas e total da cota não fecham');return {rows,total};
 }
+// The portal answers an empty category with HTTP 500 and the table skeleton: no row and a blank total. An error page has no table at all.
+export function portalCategoryEmpty(bytes:Uint8Array):boolean{
+  const nodes=portalNodes(portalDom(bytes)),tables=nodes.filter(n=>n.tagName==='table'&&(portalAttr(n,'class')||'').split(/\s/).includes('tabela-2'));
+  if(tables.length!==1)return false;
+  const cells=portalNodes(tables[0]).filter(n=>n.tagName==='td'),total=cells.filter(n=>portalAttr(n,'id')==='totalFinalAnalitico');
+  return total.length===1&&portalText(total[0])===''&&!cells.some(n=>/^analitico\d+$/.test(portalAttr(n,'id')||''));
+}
 export function portalSignature(snapshot:PortalSnapshot):string{return hash(canonical({total:snapshot.total,rows:snapshot.rows.map(({position:_position,...r})=>canonical(r)).sort()}));}
 function apiRow(raw:unknown,scope:PortalScope):PortalRow{
   const r=expenseSchema.parse(raw),provider=(r.cnpjCpfFornecedor||'').replace(/\D/g,''),d=r.dataDocumento?.slice(0,10)||'';
   if(r.ano!==scope.year||r.mes!==scope.month||r.tipoDespesa!=='PASSAGEM AÉREA - SIGEPA'||![11,14].includes(provider.length)||!/^\d{4}-\d{2}-\d{2}$/.test(d))throw Error('Registro API incompatível com a cota');
   date(d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4));
+  if(r.valorGlosa===null||r.codDocumento==='')throw Error('Registro API sem glosa ou documento não confirma a cota');
   const face=cents(r.valorDocumento),deductions=cents(r.valorGlosa),net=cents(r.valorLiquido);if(face-deductions!==net)throw Error('Equação SIGEPA não confirmada');
   return {position:0,documentHash:hash(r.codDocumento),numberHash:hash(r.numDocumento),providerHash:hash(provider),date:d,face,deductions,net};
 }

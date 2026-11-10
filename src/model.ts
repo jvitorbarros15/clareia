@@ -53,12 +53,12 @@ export function cents(value: number | string): number {
 }
 export const expenseSchema=z.object({
   ano:z.number().int(),mes:z.number().int().min(1).max(12),
-  codDocumento:z.union([z.number().int(),z.string()]).transform(String),
-  codLote:z.number().int(),codTipoDocumento:z.number().int(),parcela:z.number().int(),
+  codDocumento:z.union([z.number().int(),z.string()]).nullable().transform(v=>v===null?'':String(v)),
+  codLote:z.number().int().nullable(),codTipoDocumento:z.number().int(),parcela:z.number().int().nullable(),
   numDocumento:z.string(),numRessarcimento:z.union([z.string(),z.number()]).nullable(),
   tipoDespesa:z.string().min(1),tipoDocumento:z.string(),nomeFornecedor:z.string(),
   cnpjCpfFornecedor:z.string().nullable(),dataDocumento:z.string().nullable(),urlDocumento:z.string().nullable(),
-  valorDocumento:z.number(),valorGlosa:z.number(),valorLiquido:z.number()
+  valorDocumento:z.number(),valorGlosa:z.number().nullable(),valorLiquido:z.number()
 }).passthrough();
 export const envelopeSchema=z.object({dados:z.array(z.unknown()),links:z.array(z.object({rel:z.string(),href:z.string()}))});
 export type Scope={year:number;months:number[];ids:number[];legislature:number};
@@ -69,7 +69,7 @@ export type SourceRef={url:string;sha256:string;row:number;fetchedAt:string};
 export type FinancialBasis='reported-installment'|'balanced-document-split';
 export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey:string;supplierVerified:boolean;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis};
 export type Page={url:string;sha256:string;file:string;fetchedAt:string;pass:number;count:number|null};
-export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[]}};
+export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
 
 export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|null {
   try {const u=new URL(input);if(u.protocol!=='https:'&&u.protocol!=='http:')return null;
@@ -82,13 +82,13 @@ export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|n
 export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceRef,basis?:FinancialBasis):Expense {
   const r=expenseSchema.parse(raw);
   if(!scope.ids.includes(personId)||r.ano!==scope.year||!scope.months.includes(r.mes))throw new Error('Registro fora do recorte contratado');
-  const net=cents(r.valorLiquido),face=cents(r.valorDocumento),glosa=cents(r.valorGlosa);
-  if(face-glosa!==net&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
+  const net=cents(r.valorLiquido),face=cents(r.valorDocumento),glosa=r.valorGlosa===null?null:cents(r.valorGlosa);
+  if(glosa!==null&&face-glosa!==net&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
   const supplierId=(r.cnpjCpfFornecedor||'').replace(/\D/g,'');
   // Only validated CNPJ businesses are grouped across records. CPF/missing IDs remain separate.
   const verified=validCnpj(supplierId),supplier=publicSupplier(r.nomeFornecedor,supplierId);
   const occurrence=hash(canonical({personId,raw}));
-  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
+  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:r.codLote===null?'':String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }
 export function validCnpj(id:string):boolean {
   if(!/^\d{14}$/.test(id)||/^(\d)\1+$/.test(id))return false;

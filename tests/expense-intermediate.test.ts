@@ -53,6 +53,13 @@ test('a corroborated reported installment retains its net and evidence instead o
   r.report.cells[0].records[0].financialBasis='balanced-document-split';assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='financial-records-coverage-or-union'));
   r.report.equationDecisions[0].annualKeys[0]=hash('wrong evidence');assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='equation-review-evidence'));
 });
+test('API nulls for document id, lot, installment and glosa pair with the annual blanks and are audited independently',async t=>{
+  const category='PASSAGEM AÉREA - MISSÃO OFICIAL',line=`1;2025;1;57;${category};-10.21;10.21;;;Empresa;11222333000181;;N1;2025-01-02T00:00:00;;0`;
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([line]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{tipoDespesa:category,codDocumento:null,codLote:null,parcela:null,valorGlosa:null,valorDocumento:10.21,valorLiquido:-10.21})],links:[]}:undefined);
+  const cell=r.report.cells[0];assert.equal(cell.status,'complete');assert.equal(cell.totalCents,-1021);assert.equal(cell.records.length,1);assert.equal(cell.records[0].origin,'both');assert.equal(cell.records[0].disallowedCents,null);
+  const bad=await setup(t,url=>url.endsWith('.zip')?annual([line]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{tipoDespesa:category,codDocumento:null,codLote:null,parcela:null,valorGlosa:null,valorDocumento:10.21,valorLiquido:null})],links:[]}:undefined).catch(e=>e);
+  assert.ok(bad instanceof Error||bad.report.cells[0].status==='held-review');
+});
 test('over-budget installments retain both affected months and cannot produce a partial approved total',async t=>{
   for(const net of [60,100]){
     const line=(month:number)=>annualLine(1,month,'COMBUSTÍVEIS','100.00').replace(';100.00;100.00;0;',`;${net}.00;100.00;0;`).replace(/;0$/,`;${month}`);
@@ -139,8 +146,11 @@ test('independent financial audit rejects altered cents, false empty status, mis
 test('retired equation and SIGEPA policies are refused even if their content hash is recomputed',async t=>{
   const r=await setup(t);Object.assign(r.report,{equationRule:'camara.ceap.correlated-net.v1',multiplicityRule:'camara.ceap.sigepa-annual-routes.v1'});r.report.contentSha256=expenseBatchContentId(r.report);const audit=await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read);assert.equal(audit.status,'failed');for(const code of ['equation-review-evidence','multiplicity-review-evidence'])assert.ok(audit.failures.some(f=>f.code===code));
 });
-test('known private identifiers cannot be written even in allowed document fields',async t=>{
-  await assert.rejects(setup(t,url=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{numDocumento:'12345678901',cnpjCpfFornecedor:'12345678901'})],links:[]}:url.endsWith('.zip')?annual([annualLine().replace(';N1;',';12345678901;').replace('11222333000181','12345678901')]):undefined),/Identificador privado/);
+test('a document numbered with a known private identifier is hidden, never written',async t=>{
+  const r=await setup(t,url=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{numDocumento:'12345678901',cnpjCpfFornecedor:'12345678901'})],links:[]}:url.endsWith('.zip')?annual([annualLine().replace(';N1;',';12345678901;').replace('11222333000181','12345678901')]):undefined);
+  const records=r.report.cells.flatMap(c=>c.records);
+  assert.ok(records.some(x=>x.documentNumber==='[CPF omitido]'));
+  assert.equal(JSON.stringify(r.report).includes('12345678901'),false);
 });
 test('malformed annual competences for a selected identity cannot disappear through filtering and create false empty months',async t=>{
   await assert.rejects(setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,0)]):undefined),/Identidade ou competência anual inválida/);

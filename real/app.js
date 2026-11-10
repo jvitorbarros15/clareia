@@ -5,10 +5,20 @@
   const logo = '<svg class="logo-mark" viewBox="0 0 128.83 30" role="img" aria-label="Clareia"><path d="M13.4 20.79 19.07 21.44Q18.6 23.21 17.53 24.5Q16.46 25.8 14.8 26.52Q13.14 27.24 10.58 27.24Q8.1 27.24 6.45 26.77Q4.8 26.31 3.62 25.28Q2.43 24.25 1.76 22.86Q1.08 21.46 1.08 19.16Q1.08 16.76 1.9 15.17Q2.5 13.99 3.54 13.06Q4.58 12.13 5.68 11.68Q7.43 10.96 10.15 10.96Q13.96 10.96 15.96 12.32Q17.96 13.69 18.76 16.31L13.15 17.06Q12.89 16.06 12.19 15.55Q11.5 15.05 10.33 15.05Q8.85 15.05 7.93 16.11Q7.02 17.17 7.02 19.33Q7.02 21.25 7.92 22.24Q8.83 23.24 10.24 23.24Q11.41 23.24 12.21 22.64Q13.01 22.04 13.4 20.79ZM20.52 5.4H26.49V26.87H20.52ZM34.24 16.35 28.54 15.75Q28.86 14.26 29.47 13.4Q30.08 12.54 31.22 11.91Q32.04 11.46 33.47 11.21Q34.91 10.96 36.58 10.96Q39.26 10.96 40.89 11.26Q42.51 11.56 43.6 12.51Q44.36 13.17 44.8 14.38Q45.24 15.59 45.24 16.69V23.56Q45.24 24.66 45.38 25.28Q45.52 25.9 45.98 26.87H40.39Q40.05 26.27 39.95 25.95Q39.85 25.64 39.74 24.97Q38.57 26.09 37.42 26.58Q35.83 27.22 33.74 27.22Q30.96 27.22 29.51 25.93Q28.07 24.64 28.07 22.75Q28.07 20.98 29.11 19.84Q30.15 18.7 32.95 18.14Q36.3 17.47 37.3 17.19Q38.29 16.92 39.41 16.48Q39.41 15.39 38.95 14.95Q38.5 14.51 37.36 14.51Q35.89 14.51 35.16 14.98Q34.59 15.34 34.24 16.35ZM39.41 19.49Q38.18 19.93 36.84 20.26Q35.03 20.75 34.54 21.22Q34.05 21.7 34.05 22.31Q34.05 23.02 34.54 23.46Q35.03 23.91 35.98 23.91Q36.98 23.91 37.83 23.43Q38.69 22.94 39.05 22.25Q39.41 21.55 39.41 20.44ZM47.37 11.31H52.95V13.86Q53.76 12.21 54.61 11.58Q55.47 10.96 56.73 10.96Q58.05 10.96 59.62 11.78L57.77 16.03Q56.72 15.59 56.1 15.59Q54.93 15.59 54.28 16.56Q53.36 17.92 53.36 21.66V26.87H47.37ZM76.4 20.57H64.44Q64.61 22.01 65.22 22.71Q66.08 23.72 67.48 23.72Q68.36 23.72 69.15 23.28Q69.63 23 70.19 22.3L76.06 22.84Q74.71 25.19 72.81 26.2Q70.9 27.22 67.34 27.22Q64.25 27.22 62.48 26.35Q60.71 25.48 59.54 23.58Q58.38 21.68 58.38 19.12Q58.38 15.47 60.72 13.22Q63.05 10.96 67.17 10.96Q70.51 10.96 72.44 11.97Q74.38 12.98 75.39 14.9Q76.4 16.82 76.4 19.9ZM70.33 17.71Q70.16 15.99 69.4 15.24Q68.65 14.49 67.42 14.49Q66 14.49 65.15 15.62Q64.61 16.32 64.46 17.71ZM77.86 5.4H83.82V9.45H77.86ZM77.86 11.31H83.82V26.87H77.86ZM91.56 16.35 85.86 15.75Q86.19 14.26 86.79 13.4Q87.4 12.54 88.54 11.91Q89.36 11.46 90.8 11.21Q92.24 10.96 93.91 10.96Q96.59 10.96 98.21 11.26Q99.84 11.56 100.92 12.51Q101.68 13.17 102.12 14.38Q102.56 15.59 102.56 16.69V23.56Q102.56 24.66 102.7 25.28Q102.84 25.9 103.31 26.87H97.71Q97.38 26.27 97.27 25.95Q97.17 25.64 97.07 24.97Q95.9 26.09 94.74 26.58Q93.16 27.22 91.06 27.22Q88.28 27.22 86.84 25.93Q85.39 24.64 85.39 22.75Q85.39 20.98 86.43 19.84Q87.47 18.7 90.27 18.14Q93.63 17.47 94.62 17.19Q95.62 16.92 96.73 16.48Q96.73 15.39 96.28 14.95Q95.82 14.51 94.68 14.51Q93.22 14.51 92.48 14.98Q91.91 15.34 91.56 16.35ZM96.73 19.49Q95.5 19.93 94.17 20.26Q92.35 20.75 91.87 21.22Q91.37 21.7 91.37 22.31Q91.37 23.02 91.86 23.46Q92.35 23.91 93.3 23.91Q94.3 23.91 95.16 23.43Q96.01 22.94 96.37 22.25Q96.73 21.55 96.73 20.44Z"/><path class="brand-rays" d="M108.83 8 111.83 3M113.83 13l8-3M114.83 19l9 2M109.83 23l4 5"/></svg>';
   const { categories, monthNames, index, base, label } = D;
   const model = 'editorial';
+  const BAR_STEP = 10;
   const initial = new URLSearchParams(location.search);
   const ids = D.dataset().map(p => p.id);
   const totalOf = p => p.cells.reduce((n, r) => n + r.amount, 0);
-  const byTotal = () => (D.dataset().filter(p => !p.noExercise).length >= 2 ? D.dataset().filter(p => !p.noExercise) : [...D.dataset()]).sort((a, b) => totalOf(b) - totalOf(a));
+  // A month held for review is missing, not zero: a partial total never enters a ranking or a comparison.
+  // Rankings and comparisons need at least six months of exercise (or the whole period when it is shorter).
+  const MIN_MONTHS = Math.min(6, D.coverage.length);
+  const fewMonths = p => (p.exercisedMonths ?? D.coverage.length) < MIN_MONTHS;
+  const comparable = p => !p.noExercise && !p.heldMonths?.length && !fewMonths(p);
+  // Each total is computed once per sort: summing inside the comparator repeats it thousands of times with hundreds of deputies.
+  const sortedBy = (people, key) => people.map(p => [p, key(p)]).sort((a, b) => b[1] - a[1] || a[0].name.localeCompare(b[0].name, 'pt-BR')).map(([p]) => p);
+  // The published totals never change after load, so the order is computed once.
+  let totalOrder = null;
+  const byTotal = () => [...(totalOrder ??= sortedBy(D.dataset().filter(comparable).length >= 2 ? D.dataset().filter(comparable) : [...D.dataset()], totalOf))];
   // Only the parameters present and valid in the URL; a question applies what its words imply for the rest.
   const fromURL = {};
   if (categories.includes(initial.get('categoria')) || initial.get('categoria') === 'Todas') fromURL.category = initial.get('categoria');
@@ -19,8 +29,8 @@
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
-    tab: fromURL.tab ?? 'gastos',
-    query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && !D.dataset().find(p => p.id === initial.get('destaque'))?.noExercise ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
+    tab: fromURL.tab ?? 'gastos', barLimit: BAR_STEP,
+    query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && comparable(D.dataset().find(p => p.id === initial.get('destaque'))) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
   let dialogTrigger = null, toastTimer, listOrigin = null;
   const $ = selector => document.querySelector(selector);
@@ -46,6 +56,8 @@
   const cells = p => p.cells.filter(inCategory);
   const span = () => { const c = D.coverage; return `${monthNames[c[0]]}–${monthNames[c.at(-1)]} ${state.year}`; };
   const pending = 'Ainda não coletado';
+  const exclusionNote = p => p.heldMonths?.length ? partialNote(p) : fewMonths(p) ? `Exerceu o mandato em ${p.exercisedMonths} de ${D.coverage.length} meses do recorte. Rankings e comparações incluem quem exerceu pelo menos ${MIN_MONTHS} meses.` : '';
+  const partialNote = p => `Total parcial: ${p.heldMonths.length === 1 ? `${months[p.heldMonths[0]].toLowerCase()} de ${state.year} está em revisão` : `${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
   // Party is the Câmara's current status at collection time, not a historical attribution.
   const context = p => [p.uf, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
   function value(p, kind = state.tab) {
@@ -56,7 +68,7 @@
   const formatted = (p, kind = state.tab) => kind === 'projetos' ? (p.projects === null ? pending : number(p.projects)) : compact(value(p, kind));
   // The answer ranks expenses even when the Projetos tab is open, where value() has nothing to sort by.
   function ranking(kind = state.tab) {
-    return all().filter(p => !p.noExercise && (state.uf === 'Brasil' || p.uf === state.uf)).sort((a, b) => (state.tab === 'menos' ? value(a, kind) - value(b, kind) : value(b, kind) - value(a, kind)) || a.name.localeCompare(b.name, 'pt-BR'));
+    return sortedBy(all().filter(p => comparable(p) && (state.uf === 'Brasil' || p.uf === state.uf)), p => state.tab === 'menos' ? -value(p, kind) : value(p, kind));
   }
   const icon = name => {
     const paths = {
@@ -113,12 +125,14 @@
       <p class="card-caption">${caption(p)}</p><button class="editorial-proof" data-action="evidence" data-id="${p.id}">Como chegamos nisso? →</button></div></article>`).join('');
   }
   function rankNote() {
-    return state.tab === 'projetos' ? 'Projetos apresentados não equivalem a leis aprovadas.' : 'Amostra técnica de três deputados, não é ranking nacional. Cota parlamentar é a verba mensal para despesas do mandato, como passagens, combustível e divulgação. Gasto maior não significa irregularidade.';
+    return state.tab === 'projetos' ? 'Projetos apresentados não equivalem a leis aprovadas.' : `Inclui quem exerceu o mandato em pelo menos ${MIN_MONTHS} meses do recorte, sem meses em revisão: ${ranking('gastos').length} de ${all().filter(p => state.uf === 'Brasil' || p.uf === state.uf).length} deputados${state.uf === 'Brasil' ? '' : ` de ${escape(state.uf)}`}. Cota parlamentar é a verba mensal para despesas do mandato, como passagens, combustível e divulgação. Gasto maior não significa irregularidade.`;
   }
+  // Long lists grow in steps; only the visible rows are drawn.
+  const listMore = (total, limit, step, kind, noun) => total <= step ? '' : `<div class="list-more"><p class="list-count">Mostrando ${Math.min(limit, total)} de ${total} ${noun}</p>${total > limit ? `<button class="outline-button" data-action="${kind}-more">Mostrar mais ${Math.min(step, total - limit)}</button>` : ''}${limit > step ? `<button class="outline-button" data-action="${kind}-less">Mostrar menos</button>` : ''}</div>`;
   function barSection() {
     if (state.tab === 'projetos') return '';
     const ranked = ranking(), max = Math.max(1, ...ranked.map(p => Math.abs(value(p))));
-    return `<section class="bar-section" id="comparison"><h2>Comparativo de gastos · ${span()}</h2><div class="bar-chart" id="bar-chart">${ranked.map((p, i) => `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${money(value(p))}: ver cálculo" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${Math.abs(value(p)) / max * 100}%"></i></span><span class="bar-value">${money(value(p))}</span></button>`).join('')}</div></section>`;
+    return `<section class="bar-section" id="comparison"><h2>Comparativo de gastos · ${span()}</h2><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${money(value(p))}: ver cálculo" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${Math.abs(value(p)) / max * 100}%"></i></span><span class="bar-value">${money(value(p))}</span></button>`).join('')}</div>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'deputados')}</section>`;
   }
   function editorialFollowUp() {
     if (state.tab === 'projetos') return '';
@@ -132,8 +146,12 @@
     if (!state.answer) return '';
     const answer = state.answer;
     if (answer.type === 'message') return `<section class="answer" aria-label="Resposta da investigação"><p class="eyebrow">Busca por regras locais · sem IA conectada</p><div class="answer-message"><h3>${escape(answer.title)}</h3><p>${escape(answer.message)}</p><div class="answer-next"><span>Tente:</span>${examples().slice(0, 2).map(q => `<button type="button" class="outline-button" data-question="${escape(q)}">${escape(q)}</button>`).join('')}</div></div></section>`;
-    const ppl = answer.ids.map(person).filter(p => p && !p.noExercise);
-    if (!ppl.length || ppl.length < answer.ids.length && answer.ids.length === 2) return `<section class="answer"><p class="eyebrow">Resultado da investigação</p><p>Nenhum deputado com exercício confirmado neste recorte.</p></section>`;
+    const ppl = answer.ids.map(person).filter(p => p && comparable(p));
+    if (!ppl.length || ppl.length < answer.ids.length && answer.ids.length === 2) {
+      const left = answer.ids.map(person).filter(p => p && !comparable(p));
+      const why = left.map(p => `<p><strong>${escape(p.name)}</strong>: ${p.noExercise ? `não tem exercício de mandato confirmado em ${state.year}, então não há gastos para comparar.` : escape(exclusionNote(p))}</p>`).join('');
+      return `<section class="answer"><p class="eyebrow">Resultado da investigação</p>${why || '<p>Nenhum deputado com exercício confirmado neste recorte.</p>'}</section>`;
+    }
     const max = Math.max(1, ...ppl.map(p => Math.abs(value(p, answer.kind))));
     let summary = '';
     if (answer.type === 'compare') {
@@ -184,7 +202,7 @@
     if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); $('#answer-slot').before(chip); }
     const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric === 'mensal';
     chip.hidden = !narrowed;
-    const scope = [state.uf === 'Brasil' ? null : state.uf, state.category === 'Todas' ? null : label(state.category), state.metric === 'mensal' ? 'por mês' : null].filter(Boolean).join(' · ');
+    const scope = [state.uf === 'Brasil' ? null : state.uf, state.category === 'Todas' ? null : label(state.category), state.metric === 'mensal' ? 'Por mês' : null].filter(Boolean).join(' · ');
     chip.innerHTML = narrowed ? `<span>Filtrando: ${escape(scope)}</span><button type="button" data-action="reset" aria-label="Limpar filtros"><span aria-hidden="true">✕</span> Limpar</button>` : '';
     const dock = $('#dock-filter');
     if (dock) { dock.hidden = !narrowed; dock.innerHTML = narrowed ? `<span>${escape(scope)}</span><span aria-hidden="true">✕</span>` : ''; dock.setAttribute('aria-label', `Filtro ativo: ${scope}. Limpar filtros`); }
@@ -261,8 +279,24 @@
     closeSuggestions(); refresh();
     if (scroll) $('#answer-slot').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'nearest' });
   }
+  // Views opened from inside the dialog keep a trail back; anything opened from the page starts a new one.
+  let dialogTrail = [], dialogView = null, navigating = false;
+  function openView(render) {
+    if ($('#detail').open && dialogView) dialogTrail.push(dialogView); else dialogTrail = [];
+    dialogView = { render, title: '' };
+    navigating = true;
+    try { return render(); } finally { navigating = false; }
+  }
+  function goBack() {
+    const previous = dialogTrail.pop(); if (!previous) return;
+    dialogView = previous; navigating = true;
+    try { return previous.render(); } finally { navigating = false; }
+  }
   function showDialog(title, html, resetScroll = true) {
     const dialog = $('#detail');
+    if (!navigating) { dialogTrail = []; dialogView = null; } else if (dialogView) dialogView.title = title;
+    const back = dialogTrail.at(-1);
+    if (back && !html.includes('data-action="back-to-list"')) html = `<button type="button" class="text-button dialog-back" data-action="dialog-back">← Voltar: ${escape(back.title)}</button>` + html;
     if (!dialog.open) dialogTrigger = document.activeElement;
     dialog.classList.remove('records-wide');
     $('#detail-title').textContent = title; $('#detail-body').innerHTML = html;
@@ -302,6 +336,7 @@
     }
     showDialog('Como chegamos nisso?', `<p class="dialog-subtitle">${comparison ? 'A comparação, passo a passo' : 'O cálculo, passo a passo'}</p>
       <section class="evidence-step"><span class="step-number">1</span><div><h3>O que estamos comparando</h3><p>Despesas da cota parlamentar (valor líquido) • ${span()}</p><p>${escape(p.name)}${comparison ? ` × ${escape(comparison.name)}` : ''}</p></div></section>
+      ${exclusionNote(p) ? `<p class="records-note held-note" role="note">${exclusionNote(p)}</p>` : ''}
       <section class="evidence-step"><span class="step-number">2</span><div><h3>Quais registros entram</h3><p>${count(cells(p))} registros oficiais${comparison ? ` + ${count(cells(comparison))} de ${escape(comparison.name)}` : ''}, ${union() ? 'do arquivo anual e da API da Câmara' : 'do arquivo anual da Câmara'}. ${state.category !== 'Todas' ? `Categoria: ${escape(label(state.category))}.` : ''}</p><p>Identidade ligada ao ID oficial da Câmara ${p.officialId}${comparison ? ` e ${comparison.officialId}` : ''}. Cada valor foi convertido em centavos antes da soma.</p></div></section>
       <section class="evidence-step"><span class="step-number">3</span><div><h3>Como calculamos</h3><p>${formula}</p><div class="calculation-result">${result}<small>${resultCaption}</small></div><div class="action-row"><button class="outline-button primary" data-action="records" data-id="${p.id}">Ver registros</button></div></div></section>
       ${categoryBreakdown(p)}${sourceBlock(p)}`);
@@ -334,17 +369,19 @@
   // While a file loads the dialog says so. A late result is dropped if a newer request started or another dialog replaced the note.
   async function withRecords(people, render) {
     const run = ++recordRun, waiting = people.some(p => !recordsReady.has(p.officialId)), stillWanted = () => run === recordRun && (!waiting || Boolean($('#detail').open && $('#detail .records-loading')));
+    // The trail belongs to the view that asked for the records, even though they arrive later.
+    const nav = navigating, later = fn => { navigating = nav; try { fn(); } finally { navigating = false; } };
     if (waiting) showDialog('Registros oficiais', '<p class="records-note records-loading" role="status">Carregando registros oficiais…</p>');
     let lists;
     try { lists = await Promise.all(people.map(loadRecords)); }
-    catch { if (stillWanted()) showDialog('Registros oficiais', '<p class="records-note" role="alert">Registros indisponíveis agora. Nenhum valor foi estimado.</p>'); return; }
-    if (stillWanted()) render(lists);
+    catch { if (stillWanted()) later(() => showDialog('Registros oficiais', '<p class="records-note" role="alert">Registros indisponíveis agora. Nenhum valor foi estimado.</p>')); return; }
+    if (stillWanted()) later(() => render(lists));
   }
   function recordTable(p, month) {
     rememberList(() => recordTable(p, month));
     return withRecords([p], ([list]) => {
     const items = list.filter(r => inCategory(r) && (month === undefined || r.month === month)).sort(byRecordOrder);
-    showDialog(`Registros de ${first(p)}`, `<p class="records-note">${month === undefined ? span() : `${monthNames[month]} ${state.year}`} • ${state.category === 'Todas' ? 'Todas as categorias' : `${escape(label(state.category))} (Nome na fonte: ${escape(state.category)})`} • ${items.length} registros oficiais.</p><div class="calculation-result">${money(sum(items))}<small>Soma exata dos registros abaixo</small></div><div class="action-row"><button class="outline-button" data-action="download" data-id="${p.id}" ${month === undefined ? '' : `data-month="${month}"`}>Baixar CSV</button><button class="outline-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Voltar ao cálculo</button></div>${recordListHTML(`Registros de ${escape(p.name)}`, items.map(r => recordRow(p, r)), sum(items))}${sourceNote()}`);
+    showDialog(`Registros de ${first(p)}`, `<p class="records-note">${month === undefined ? span() : `${monthNames[month]} ${state.year}`} • ${state.category === 'Todas' ? 'Todas as categorias' : `${escape(label(state.category))} (Nome na fonte: ${escape(state.category)})`} • ${items.length} registros oficiais.</p><div class="calculation-result">${money(sum(items))}<small>Soma exata dos registros abaixo</small></div><div class="action-row"><button class="outline-button" data-action="download" data-id="${p.id}" ${month === undefined ? '' : `data-month="${month}"`}>Baixar CSV</button>${dialogTrail.length ? '' : `<button class="outline-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Voltar ao cálculo</button>`}</div>${recordListHTML(`Registros de ${escape(p.name)}`, items.map(r => recordRow(p, r)), sum(items))}${sourceNote()}`);
     $('#detail').classList.add('records-wide');
     });
   }
@@ -356,12 +393,12 @@
     });
   }
   function profile(id) {
-    const p = person(id), peer = byTotal().find(other => other.id !== id);
-    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : `${money(value(p, 'gastos'))} ↗︎`}</strong></button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`);
+    const p = person(id), peer = comparable(p) ? byTotal().find(other => other.id !== id) : null;
+    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${!p.noExercise && exclusionNote(p) ? `<small class="held-note">${exclusionNote(p)}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`);
   }
   function methodology() {
     const v = index.validation, audit = index.audit, compare = v.apiComparison;
-    showDialog('Fontes e metodologia', `<div class="text-content"><h3>O que somamos</h3><p>O valor líquido publicado pela Câmara, por competência financeira: o campo <code>vlrLiquido</code> do arquivo anual CEAP${union() ? ' e, nos registros que só a API traz, o <code>valorLiquido</code> da API' : ''}. Salário, gabinete e emendas não entram nesta conta.</p><h3>O que conferimos</h3><p>Duas capturas de cada fonte, identidade pelo ID oficial e contas em centavos, reconciliadas com uma segunda soma e com o banco.${audit ? ` Releitura independente do arquivo anual: <b>${audit.status === 'passed' ? 'sem divergências' : 'divergência encontrada'}</b> (${audit.selected} linhas, ${audit.groupsCompared} grupos pessoa/mês/categoria, ${date(audit.checkedAt)}).` : ''}</p>${compare?.paired !== undefined ? `<p>${compare.paired} registros (${money(compare.originCents.both)}) estão nas duas fontes, ${compare.missingInApi} (${money(compare.originCents.annual)}) só no arquivo anual e ${compare.extraInApi} (${money(compare.originCents.api)}) só na API.</p>` : compare?.missingInApi ? `<p>O arquivo anual contém ${compare.annualRecords} lançamentos; a API retornou ${compare.apiRecords}. Os ${compare.missingInApi} adicionais estão incluídos.</p>` : ''}<h3>O que não concluímos</h3><p>Gasto maior não demonstra irregularidade. O recorte não mede qualidade do mandato nem faz nova subtração de restituições. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'.</p><h3>Limites desta versão</h3><ul>${v.limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul><h3>Versão</h3><dl class="trace"><dt>Versão</dt><dd><code>${escape(index.snapshotId)}</code></dd><dt>Métrica</dt><dd><code>${escape(index.metric)}</code></dd><dt>Coleta</dt><dd>${date(index.collectedAt)} (Brasília)</dd><dt>Publicação</dt><dd>${date(index.publishedAt)} (Brasília)</dd></dl><p><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dicionário oficial da CEAP ↗︎</a> · <a href="https://dadosabertos.camara.leg.br/swagger/api.html" target="_blank" rel="noopener noreferrer">Documentação da API ↗︎</a></p></div>`);
+    showDialog('Fontes e metodologia', `<div class="text-content"><h3>O que somamos</h3><p>O valor líquido publicado pela Câmara, por competência financeira: o campo <code>vlrLiquido</code> do arquivo anual CEAP${union() ? ' e, nos registros que só a API traz, o <code>valorLiquido</code> da API' : ''}. Salário, gabinete e emendas não entram nesta conta.</p><h3>O que conferimos</h3><p>Duas capturas de cada fonte, identidade pelo ID oficial e contas em centavos, reconciliadas com uma segunda soma e com o banco.${audit ? ` Releitura independente do arquivo anual: <b>${audit.status === 'passed' ? 'sem divergências' : 'divergência encontrada'}</b> (${audit.selected} linhas, ${audit.groupsCompared !== undefined ? `${audit.groupsCompared} grupos pessoa/mês/categoria` : `${audit.competences} competências deputado/mês`}, ${date(audit.checkedAt)}).` : ''}</p>${compare?.paired !== undefined ? `<p>${compare.paired} registros (${money(compare.originCents.both)}) estão nas duas fontes, ${compare.missingInApi} (${money(compare.originCents.annual)}) só no arquivo anual e ${compare.extraInApi} (${money(compare.originCents.api)}) só na API.</p>` : compare?.missingInApi ? `<p>O arquivo anual contém ${compare.annualRecords} lançamentos; a API retornou ${compare.apiRecords}. Os ${compare.missingInApi} adicionais estão incluídos.</p>` : ''}<h3>O que não concluímos</h3><p>Gasto maior não demonstra irregularidade. O recorte não mede qualidade do mandato nem faz nova subtração de restituições. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'.</p><h3>Limites desta versão</h3><ul>${v.limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul><h3>Versão</h3><dl class="trace"><dt>Versão</dt><dd><code>${escape(index.snapshotId)}</code></dd><dt>Métrica</dt><dd><code>${escape(index.metric)}</code></dd><dt>Coleta</dt><dd>${date(index.collectedAt)} (Brasília)</dd><dt>Publicação</dt><dd>${date(index.publishedAt)} (Brasília)</dd></dl><p><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dicionário oficial da CEAP ↗︎</a> · <a href="https://dadosabertos.camara.leg.br/swagger/api.html" target="_blank" rel="noopener noreferrer">Documentação da API ↗︎</a></p></div>`);
   }
   function toast(text) { const el = $('#toast'); el.textContent = text; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2800); }
   async function shareLink() {
@@ -389,13 +426,15 @@
     const id = target.dataset.id, action = target.dataset.action;
     if (action === 'close') closeDialog();
     else if (action === 'feature') feature(id);
-    else if (action === 'evidence') evidence(id, { kind: target.dataset.kind });
+    else if (action === 'evidence') openView(() => evidence(id, { kind: target.dataset.kind }));
+    else if (action === 'dialog-back') goBack();
     else if (action === 'answer-evidence' && state.answer?.ids?.length) evidence(state.answer.ids[0], { kind: state.answer.kind, compare: state.answer.type === 'compare' ? state.answer.ids[1] : null });
-    else if (action === 'records') recordTable(person(id));
-    else if (action === 'back-to-list') backToList(id, target.dataset.record);
-    else if (action === 'record') recordDetail(person(id), target.dataset.record);
-    else if (action === 'month') recordTable(person(id), Number(target.dataset.month));
-    else if (action === 'profile') profile(id);
+    else if (action === 'bars-more' || action === 'bars-less') { const before = state.barLimit; state.barLimit = action === 'bars-more' ? before + BAR_STEP : BAR_STEP; $('#comparison').outerHTML = barSection(); (action === 'bars-more' ? document.querySelectorAll('#bar-chart .bar-row')[before] : document.querySelector('[data-action=bars-more]'))?.focus({ preventScroll: action === 'bars-more' }); }
+    else if (action === 'records') openView(() => recordTable(person(id)));
+    else if (action === 'back-to-list') { const previous = dialogTrail.pop(); if (previous) dialogView = previous; navigating = Boolean(previous); try { backToList(id, target.dataset.record); } finally { navigating = false; } }
+    else if (action === 'record') openView(() => recordDetail(person(id), target.dataset.record));
+    else if (action === 'month') openView(() => recordTable(person(id), Number(target.dataset.month)));
+    else if (action === 'profile') openView(() => profile(id));
     else if (action === 'methodology') methodology();
     else if (action === 'focus-search') { $('#query').focus(); $('#query').scrollIntoView({ block: 'center' }); }
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog(); ask(`Compare ${person(id).name} e ${peer.name}`); }
@@ -412,12 +451,12 @@
     if (event.target.id === 'query' && event.key === 'ArrowDown') { event.preventDefault(); $('#suggestions button')?.focus(); }
   });
   $('#detail').addEventListener('click', event => { if (event.target === $('#detail')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right) closeDialog(); } });
-  $('#detail').addEventListener('close', () => { const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
+  $('#detail').addEventListener('close', () => { dialogTrail = []; dialogView = null; const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
   layout();
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { logo, label, context, model, state, all, person, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
+  window.Clareia = { exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false, fromURL);
 })();

@@ -54,6 +54,14 @@ test('schema, financial equation and scope failures block records',()=>{
   assert.throws(()=>normalize({...expense(),valorLiquido:undefined},1,scope,source));
   assert.throws(()=>normalize(expense(),999,scope,source));
 });
+test('API nulls for document id, lot, installment and glosa read as absent values, never as zero',()=>{
+  const row=normalize({...expense(),codDocumento:null,codLote:null,parcela:null,valorGlosa:null,valorDocumento:61.9,valorLiquido:-61.9},1,scope,source);
+  assert.equal(row.documentId,'');assert.equal(row.lot,'');assert.equal(row.disallowedCents,null);assert.equal(row.documentCents,6190);assert.equal(row.cents,-6190);
+  assert.throws(()=>normalize({...expense(),valorLiquido:null},1,scope,source));
+  assert.throws(()=>normalize({...expense(),valorDocumento:null},1,scope,source));
+  assert.throws(()=>normalize({...expense(),valorGlosa:1.5},1,scope,source));
+  assert.throws(()=>normalize({...expense(),codTipoDocumento:null},1,scope,source));
+});
 test('same document with distinct events is preserved; ambiguous identical rows are rejected',()=>{
   const a={personId:1,raw:expense()},b={personId:1,raw:{...expense(),codLote:2}};
   assert.doesNotThrow(()=>stableDigest([a,b]));assert.throws(()=>stableDigest([a,a]),/idênticas/);

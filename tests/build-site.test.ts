@@ -159,6 +159,11 @@ test('a summary that disagrees with the approved total or leaves the scope is re
   assert.throws(()=>buildSiteSummary(summaryInput([record(100,1,0)],101)),/total aprovado/);
   assert.throws(()=>buildSiteSummary(summaryInput([{...record(100,1,0),month:2}],100)),/recorte/);
 });
+test('a held competence reaches the summary as held, never as a confirmed zero, and cannot carry records',()=>{
+  const records=[record(100,1,0)],s=buildSiteSummary({...summaryInput(records,100),held:[{personId:2,month:1}]});
+  assert.deepEqual(s.people.map((p:{months:{held:boolean;cents:number}[]})=>[p.months[0].held,p.months[0].cents]),[[false,100],[true,0]]);
+  assert.throws(()=>buildSiteSummary({...summaryInput(records,100),held:[{personId:1,month:1}]}),/retida com registros/);
+});
 test('monthly cells and supplier rows add up to each person and carry no record rows',()=>setup(async(db,dist,portraits)=>{
   const a=version([record(100,1,0),record(250,1,1),{...record(-30,1,2),supplier:'Outro'},{...record(70,1,3),category:'ALFA'}]);
   await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
