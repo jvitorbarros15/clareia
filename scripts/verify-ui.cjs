@@ -1798,6 +1798,18 @@ check('the Panorama records dialog lists deputies from the totals and fetches on
   await page.close();
 });
 
+check('a slow record file never fills a later request for another deputy', async () => {
+  let slow;
+  const page = await at(1440, { before: p => p.route('**/deputados/*/despesas.json', async route => { if (slow && route.request().url().includes('/' + slow + '/')) await new Promise(r => setTimeout(r, 1500)); await route.continue(); }) });
+  const [a, b] = await page.evaluate(() => window.Clareia.all().filter(p => p.cells.length).slice(0, 2).map(p => p.id));
+  slow = b;
+  await page.evaluate(([a, b]) => { window.Clareia.recordTable(window.Clareia.person(a)); window.Clareia.recordTable(window.Clareia.person(b)); }, [a, b]);
+  await recordsShown(page);
+  await page.waitForTimeout(1800);
+  assert.deepEqual([...new Set(await page.locator('#detail .record-row').evaluateAll(trs => trs.map(tr => tr.dataset.id)))], [b]);
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;

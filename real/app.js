@@ -325,14 +325,15 @@
   }
   // Totals come from the summary; a deputy's records file is fetched only when one of their lists is opened.
   const recordCache = new Map(), recordsReady = new Set();
+  let recordRun = 0;
   function loadRecords(p) {
     const id = p.officialId;
     if (!recordCache.has(id)) recordCache.set(id, fetch(D.recordsUrl(id)).then(r => { if (r.status === 404) return []; if (!r.ok) throw new Error(); return r.json(); }).then(raw => { recordsReady.add(id); return raw.map(x => ({ id: x.id, date: x.date, month: x.month - 1, category: x.category, amount: x.cents, supplier: x.supplier, raw: x })); }).catch(error => { recordCache.delete(id); throw error; }));
     return recordCache.get(id);
   }
-  // While a file loads the dialog says so; if another dialog replaced that note, the late result is dropped.
+  // While a file loads the dialog says so. A late result is dropped if a newer request started or another dialog replaced the note.
   async function withRecords(people, render) {
-    const waiting = people.some(p => !recordsReady.has(p.officialId)), stillWanted = () => !waiting || Boolean($('#detail').open && $('#detail .records-loading'));
+    const run = ++recordRun, waiting = people.some(p => !recordsReady.has(p.officialId)), stillWanted = () => run === recordRun && (!waiting || Boolean($('#detail').open && $('#detail .records-loading')));
     if (waiting) showDialog('Registros oficiais', '<p class="records-note records-loading" role="status">Carregando registros oficiais…</p>');
     let lists;
     try { lists = await Promise.all(people.map(loadRecords)); }
@@ -349,7 +350,7 @@
   }
   function recordDetail(p, id) {
     return withRecords([p], ([list]) => {
-    const rec = list.find(x => x.id === id); if (!rec) return;
+    const rec = list.find(x => x.id === id); if (!rec) { showDialog('Registros oficiais', '<p class="records-note" role="alert">Registro não encontrado nesta versão. Nenhum valor foi estimado.</p>'); return; }
     const r = rec.raw, api = r.origin === 'api';
     showDialog('O registro por trás do valor', `<p class="records-note">${escape(p.name)} · ${months[r.month - 1]} / ${r.year}</p><h3>${escape(r.supplier)}</h3><p>${escape(label(r.category))}</p><p class="context">Nome na fonte: ${escape(r.category)}</p>${r.origin ? `<p class="context">Fonte: ${originLabel(r)}</p>` : ''}${r.documentCents !== null && r.disallowedCents !== null && r.documentCents - r.disallowedCents === r.cents ? `<div class="formula"><span>Documento <b>${money(r.documentCents)}</b></span><span>− Glosa <b>${money(r.disallowedCents)}</b></span><span>= Líquido <b>${money(r.cents)}</b></span></div>` : `<div class="formula" data-equation="none"><span>Valor do documento <b>${money(r.documentCents)}</b></span><span>Glosa <b>${money(r.disallowedCents)}</b></span><span>Valor líquido <b>${money(r.cents)}</b></span></div><p class="context">A fonte não informa todos os campos da conta documento − glosa. O valor líquido é o publicado pela Câmara, sem recálculo.${r.cents < 0 ? ' Valor negativo: ajuste registrado na origem.' : ''}</p>`}<p>${docLabel(r)} · número ${escape(r.documentNumber)}<br>${noDocument(r) ? '<span class="context">Cobrança interna de telefonia da Câmara. O "0" é o identificador de documento publicado na fonte, não um valor: o valor do lançamento é o líquido acima.</span><br>' : ''}Emissão informada: ${day(r.date)}</p><div class="action-row"><a class="outline-button primary" href="${escape(r.source.url)}" target="_blank" rel="noopener noreferrer">${api ? 'Abrir consulta oficial da API' : 'Baixar arquivo oficial'} ↗︎</a>${r.receipt ? `<a class="outline-button" href="${escape(r.receipt)}" target="_blank" rel="noopener noreferrer">Comprovante informado ↗︎</a>` : '<span class="context">Comprovante não informado na fonte.</span>'}</div><p class="context">O link do comprovante foi informado pela Câmara; sua disponibilidade e autenticidade não foram auditadas pelo Clareia.</p><details><summary>Rastreabilidade deste item</summary><dl class="trace"><dt>Coleta</dt><dd>${date(r.source.fetchedAt)} (Brasília)</dd><dt>${api ? 'Posição na página da API (base zero)' : 'Posição no CSV, sem cabeçalho (base zero)'}</dt><dd>${r.source.row}</dd><dt>${api ? 'SHA-256 da página preservada' : 'SHA-256 do CSV preservado'}</dt><dd><code>${r.source.sha256}</code></dd><dt>ID desta ocorrência</dt><dd><code>${escape(r.id)}</code></dd></dl></details><button class="text-button" data-action="back-to-list" data-id="${p.id}" data-record="${escape(id)}">← Voltar aos registros</button>`);
     });

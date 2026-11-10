@@ -164,8 +164,10 @@ test('monthly cells and supplier rows add up to each person and carry no record 
   await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
   const {publicationId}=await buildSite(db,dist,portraits),base=path.join(dist,'data',publicationId),summary=await json(base,'summary.json'),suppliers=await json(base,'fornecedores.json');
   assert.deepEqual(summary.categories,['ALFA','TEST']);
-  assert.deepEqual(summary.people[0].cells,[[1,0,70,1],[1,1,320,3]]);
-  assert.deepEqual(summary.people[1].cells,[]);
+  assert.equal('cells' in summary.people[0],false);
+  const built=buildSiteSummary(summaryInput(a.records,a.validation.totalCents));
+  assert.deepEqual(built.people[0].cells,[[1,0,70,1],[1,1,320,3]]);
+  assert.deepEqual(built.people[1].cells,[]);
   assert.deepEqual(suppliers.suppliers,['Fornecedor','Outro']);
   assert.deepEqual(suppliers.people['1'],[[1,0,0,70,1],[1,1,0,350,2],[1,1,1,-30,1]]);
   assert.deepEqual(suppliers.people['2'],[]);

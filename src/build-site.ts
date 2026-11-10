@@ -55,8 +55,9 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const withoutData:number[]=[];
+  const recordsOf=new Map<number,typeof allRecords>();for(const r of allRecords){const list=recordsOf.get(r.personId);if(list)list.push(r);else recordsOf.set(r.personId,[r]);}
   for(const id of active.scope.ids){
-    const records=await readRecords(db,active.id,id);
+    const records=recordsOf.get(id)??[];
     await fs.copyFile(path.join(portraitsDir,`${id}.jpg`),path.join(data,'portraits',`${id}.jpg`)).catch(()=>{});
     // Loaded by the page only when someone opens the section, and never joined to expenses.
     if(billsVersion||votesVersion){
@@ -70,7 +71,8 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
     await fs.writeFile(path.join(person,'despesas.json'),JSON.stringify(records));
     await fs.writeFile(path.join(person,'despesas.csv'),csv(records));
   }
-  await fs.writeFile(path.join(data,'summary.json'),JSON.stringify(summary));
+  // The cells exist for the supplier cross-check; the page reads the finer supplier rows, so they are not published twice.
+  await fs.writeFile(path.join(data,'summary.json'),JSON.stringify({...summary,people:summary.people.map(({cells:_cells,...person})=>person)}));
   // Supplier names are already redacted for private persons; the scan refuses any that slipped through.
   const suppliers=JSON.stringify(buildSupplierSummary(summary,allRecords));if(findCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
   await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
