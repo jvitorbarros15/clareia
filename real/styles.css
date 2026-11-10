@@ -951,3 +951,5 @@ img.assistant-spark{width:24px;height:24px;border-radius:6px;flex:none}
 @media (hover:none) and (pointer:coarse){.handwritten-letter:not(.handwritten-space){padding:.3em .3em;margin:-.3em -.3em}}
 .supplier-search{margin-top:16px}
 .supplier-more{display:flex;flex-wrap:wrap;column-gap:24px}
+/* Phone: the portrait keeps its own 3:4 shape, so the head and chin are never cropped by a wide frame. */
+@media (max-width:560px){body[data-model=editorial] .hero-portrait{aspect-ratio:auto;height:auto}body[data-model=editorial] .hero-portrait .photo{width:min(72%,300px);height:auto;max-height:none;aspect-ratio:3/4;margin:0 auto}}
