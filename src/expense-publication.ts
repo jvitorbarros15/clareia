@@ -36,8 +36,9 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   const people:Person[]=ids.map(id=>{
     const h=history.people.find(p=>p.id===id),t=temporal.people.find(p=>p.id===id);
     if(!h?.profile||!t)throw Error(`Cadastro ausente para ${id}`);
-    const last=[...t.months].reverse().find(m=>m.year===first.year&&m.uf.status==='single'&&m.party.status==='single');
-    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf:last?.uf.value??null,party:last?.party.value??null};
+    // Each from the latest month of the publication year where it is single: a party change must not erase the UF.
+    const year=[...t.months].reverse().filter(m=>m.year===first.year),uf=year.find(m=>m.uf.status==='single')?.uf.value??null,party=year.find(m=>m.party.status==='single')?.party.value??null;
+    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,party};
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
   const body={metric:'camara.ceap.valor-liquido-uniao-fontes.v1',scope:{year:first.year,months:first.months,ids,legislature:temporal.scope.legislature},people,records,collectedAt,publishedAt:now,pages:[],
