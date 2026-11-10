@@ -10,10 +10,11 @@ export type Skipped={count:number;examples:string[]};
 export type BackupResult={files:number;uploaded:number;alreadyStored:number;bytesUploaded:number;manifest:string;skipped:Skipped};
 export type VerifyResult={manifest:string;files:number;objects:number;missing:string[]};
 const SKIPPED=new Set(['worktrees','node_modules']),LOCKS=new Set(['running.lock','pilot.lock']);
-const WORKERS=8,EXAMPLES=5,MAX_FILE=4*1024**3,POSTMASTER='local/postgres/postmaster.pid';
+const WORKERS=8,EXAMPLES=5,MAX_FILE=2*1024**3,POSTMASTER='local/postgres/postmaster.pid';
 const sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 const objectName=(key:Buffer,digest:string)=>createHmac('sha256',key).update(digest).digest('hex');
 
+const unsafe=(file:string)=>file.split('/').some(part=>part===''||part==='.'||part==='..')||/[\\:]/.test(file);
 async function scan(root:string){
   const files:string[]=[],emptyDirs:string[]=[],locks:string[]=[],skipped:Skipped={count:0,examples:[]};
   const skip=(file:string)=>{skipped.count++;if(skipped.examples.length<EXAMPLES)skipped.examples.push(file);};
@@ -53,12 +54,14 @@ async function readManifest(store:ObjectStore,prefix:string,key:Buffer,at?:strin
 export async function backupTree(store:ObjectStore,root:string,prefix:string,key:Buffer):Promise<BackupResult>{
   const {files,emptyDirs,locks,skipped}=await scan(root);
   const busy=[...locks,...files.filter(file=>file===POSTMASTER)];
-  if(busy.length)throw new Error(`O banco ou uma tarefa parece estar em uso (${busy.join(', ')}). Feche o processo e tente de novo.`);
+  if(busy.length)throw new Error(`O banco ou uma tarefa parece estar em uso (${busy.join(', ')}). Feche o processo e tente de novo. O ${POSTMASTER} pode ser um resto de queda: abra e feche o banco uma vez para limpá-lo.`);
+  const bad=[...files,...emptyDirs].find(unsafe);
+  if(bad)throw new Error(`Nome que a restauração recusaria (contém ":" ou "\\"): ${bad}`);
   const objects=`${prefix}objects/`,known=new Set((await store.list(objects)).map(name=>name.slice(objects.length)));
   const entries=new Map<string,Entry>(),result={files:files.length,uploaded:0,alreadyStored:0,bytesUploaded:0};
   await pool(files,async file=>{
     const full=path.join(root,...file.split('/'));
-    if((await fs.stat(full)).size>MAX_FILE)throw new Error(`Arquivo maior que 4 GB: ${file}`);
+    if((await fs.stat(full)).size>MAX_FILE)throw new Error(`Arquivo maior que 2 GB: ${file}`);
     const plain=await fs.readFile(full),digest=sha(plain),object=objectName(key,digest);
     entries.set(file,{sha256:digest,size:plain.length,object});
     if(known.has(object)){result.alreadyStored++;return;}
@@ -73,7 +76,6 @@ export async function backupTree(store:ObjectStore,root:string,prefix:string,key
   await store.put(manifest,seal(Buffer.from(JSON.stringify(body)),key));
   return {...result,manifest,skipped};
 }
-const unsafe=(file:string)=>file.split('/').some(part=>part===''||part==='.'||part==='..')||/[\\:]/.test(file);
 export async function restoreTree(store:ObjectStore,prefix:string,target:string,key:Buffer,at?:string):Promise<number>{
   const existing=await fs.readdir(target).catch((error:NodeJS.ErrnoException)=>{if(error.code==='ENOENT')return [];throw error;});
   if(existing.length)throw new Error(`A pasta de destino não está vazia: ${target}`);

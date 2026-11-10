@@ -177,7 +177,7 @@ test('backup refuses while a database or task is running',async()=>{
   for(const file of ['local/postgres/postmaster.pid','pilot.lock','runs/x/running.lock']){
     const store=memoryStore(),root=await sample();
     await write(root,file,'1');
-    await assert.rejects(backupTree(store,root,prefix,key),/em uso/);
+    await assert.rejects(backupTree(store,root,prefix,key),file.endsWith('.pid')?/em uso.*resto de queda.*abra e feche o banco/:/em uso/);
     assert.deepEqual(await store.list(''),[]);
   }
 });
@@ -226,8 +226,16 @@ test('verify passes, then fails after an object is deleted from the store',async
   await assert.rejects(verifyBackup(memoryStore(),prefix,key),/Nenhuma cópia/);
 });
 
-test('a single file over 4 GB is refused',async()=>{
+test('a single file over 2 GB is refused',async()=>{
   const root=await temp(),big=path.join(root,'grande.bin');
-  await fs.writeFile(big,'');await fs.truncate(big,4*1024**3+1);
-  await assert.rejects(backupTree(memoryStore(),root,prefix,key),/maior que 4 GB.*grande\.bin/);
+  await fs.writeFile(big,'');await fs.truncate(big,2*1024**3+1);
+  await assert.rejects(backupTree(memoryStore(),root,prefix,key),/maior que 2 GB.*grande\.bin/);
+});
+
+test('backup refuses names that restore would reject, before uploading',async t=>{
+  if(process.platform==='win32'){t.skip('o Windows não aceita ":" nem "\\" em nomes');return;}
+  const root=await sample(),store=memoryStore();
+  await write(root,'lot/a:b.txt','x');
+  await assert.rejects(backupTree(store,root,prefix,key),/Nome que a restauração recusaria.*a:b\.txt/);
+  assert.deepEqual(await store.list(''),[]);
 });
