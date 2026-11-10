@@ -32,12 +32,15 @@
     "unlock": "tsx scripts/unlock.ts",
     "migrate:snapshot": "tsx scripts/migrate-snapshot.ts",
     "db:state": "tsx scripts/db-state.ts",
-    "scan:cpf": "tsx scripts/scan-cpf.ts"
+    "scan:cpf": "tsx scripts/scan-cpf.ts",
+    "eval:lume": "tsx scripts/lume-eval.ts",
+    "gold:lume": "tsx scripts/lume-gold-expected.ts"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.7.0",
     "@electric-sql/pglite": "^0.5.14",
     "aws4fetch": "^1.0.20",
     "csv-parse": "^7.0.3",
