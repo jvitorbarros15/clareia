@@ -139,8 +139,11 @@ test('independent financial audit rejects altered cents, false empty status, mis
 test('retired equation and SIGEPA policies are refused even if their content hash is recomputed',async t=>{
   const r=await setup(t);Object.assign(r.report,{equationRule:'camara.ceap.correlated-net.v1',multiplicityRule:'camara.ceap.sigepa-annual-routes.v1'});r.report.contentSha256=expenseBatchContentId(r.report);const audit=await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read);assert.equal(audit.status,'failed');for(const code of ['equation-review-evidence','multiplicity-review-evidence'])assert.ok(audit.failures.some(f=>f.code===code));
 });
-test('known private identifiers cannot be written even in allowed document fields',async t=>{
-  await assert.rejects(setup(t,url=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{numDocumento:'12345678901',cnpjCpfFornecedor:'12345678901'})],links:[]}:url.endsWith('.zip')?annual([annualLine().replace(';N1;',';12345678901;').replace('11222333000181','12345678901')]):undefined),/Identificador privado/);
+test('a document numbered with a known private identifier is hidden, never written',async t=>{
+  const r=await setup(t,url=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{numDocumento:'12345678901',cnpjCpfFornecedor:'12345678901'})],links:[]}:url.endsWith('.zip')?annual([annualLine().replace(';N1;',';12345678901;').replace('11222333000181','12345678901')]):undefined);
+  const records=r.report.cells.flatMap(c=>c.records);
+  assert.ok(records.some(x=>x.documentNumber==='[CPF omitido]'));
+  assert.equal(JSON.stringify(r.report).includes('12345678901'),false);
 });
 test('malformed annual competences for a selected identity cannot disappear through filtering and create false empty months',async t=>{
   await assert.rejects(setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,0)]):undefined),/Identidade ou competência anual inválida/);

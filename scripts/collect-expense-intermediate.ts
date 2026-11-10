@@ -53,6 +53,6 @@ try{
     const coverage=report.cells.reduce<Record<string,number>>((out,c)=>{out[c.status]=(out[c.status]||0)+1;return out;},{});
     await fs.writeFile(path.join(root,'run.json'),JSON.stringify({...manifest,status:'review-required',finishedAt:new Date().toISOString(),reportSha256:version,contentSha256:report.contentSha256,coverage,metrics:report.metrics,firstAttempt:firstAttempt??{reportSha256:version,metrics:report.metrics}},null,2));
     console.log(JSON.stringify({runId,people:scope.ids.length,coverage,metrics:report.metrics,publicationEligible:false},null,2));
-  }catch{await fs.writeFile(path.join(root,'run.json'),JSON.stringify({...manifest,status:'failed'},null,2));console.error('Carga intermediária não concluída; originais cifrados preservados. Retome a mesma execução.');process.exitCode=1;}
+  }catch(error){await fs.writeFile(path.join(root,'run.json'),JSON.stringify({...manifest,status:'failed'},null,2));console.error('Carga intermediária não concluída; originais cifrados preservados. Retome a mesma execução.',(error as Error).message);process.exitCode=1;}
 }catch{console.error('Execução financeira recusada; confira seleção, auditorias, versões e locks.');process.exitCode=1;}
 finally{await lock();}

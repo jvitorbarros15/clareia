@@ -144,7 +144,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
           const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right)};
           if(matches.some(({a,b})=>blank(a.documentNumber)!==blank(b.documentNumber)||(a.date?.slice(0,10)||null)!==(b.date?.slice(0,10)||null)||(a.lot||'')!==(b.lot||''))||left.some(r=>!['TELEFONIA','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA'].includes(r.category))||right.some(r=>r.category!=='PASSAGEM AÉREA - SIGEPA'))reasons=['unreconciled-source-occurrences'];
           else{
-            records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))];
+            records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))].map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));
             total=Number(records.reduce((n,r)=>n+BigInt(r.cents),0n));if(!Number.isSafeInteger(total))throw Error('Total independente fora da precisão segura');status=records.length?'complete':'no-expenses-confirmed';
             if(records.length&&c.exercise==='outside'){records=[];total=null;status='held-review';reasons=['expense-outside-exercise'];}
           }
