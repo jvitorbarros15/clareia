@@ -338,7 +338,7 @@
   }
   function supplierDetail(category) {
     const rows=scopeRecords().filter(r=>r.category===category);
-    const names=[...new Set(rows.map(r=>r.supplier))];
+    const totalOf=name=>C.sum(rows.filter(r=>r.supplier===name)),names=[...new Set(rows.map(r=>r.supplier))].sort((a,b)=>totalOf(b)-totalOf(a)||a.localeCompare(b,'pt-BR'));
     C.showDialog('Da categoria ao fornecedor',`<p class="records-note">${esc(lab(category))} · ${scopeText(periodText())}</p><p class="records-note">Nome na fonte: ${esc(category)}</p><div class="calculation-result">${money(C.sum(rows))}<small>Soma dos registros da categoria selecionada</small></div><div class="supplier-list">${names.map(name=>`<button data-p-supplier="${esc(name)}" data-category="${esc(category)}"><span>${esc(name)}<small>${C.count(rows.filter(r=>r.supplier===name))} registros oficiais</small></span><b>${money(C.sum(rows.filter(r=>r.supplier===name)))}</b>↗</button>`).join('')||'<p>Sem registros neste recorte.</p>'}</div><p class="fixture-note">Clique no fornecedor para abrir os registros. Na produção, o vínculo dependerá do identificador oficial; nomes parecidos não bastam.</p>`);
   }
   function projectDetail() {}

@@ -1733,6 +1733,18 @@ check('a failed record file shows a notice and no number', async () => {
   await page.close();
 });
 
+check('suppliers inside a category are listed from the largest total', async () => {
+  const page = await at(1440);
+  await page.locator('#despesas .donut-legend [data-p-highlight]').first().click();
+  await page.locator('#despesas [data-p-drill]').click();
+  await page.waitForSelector('#detail[open]');
+  const values = await page.locator('#detail [data-p-supplier] b').allInnerTexts();
+  const cents = values.map(v => Number(v.replace(/[^\d,−-]/g, '').replace(',', '').replace('−', '-')));
+  assert.ok(cents.length > 1, 'more than one supplier');
+  assert.ok(cents.every((c, i) => i === 0 || cents[i - 1] >= c), `not descending: ${values.join(', ')}`);
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;
