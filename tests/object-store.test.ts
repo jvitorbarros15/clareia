@@ -39,16 +39,16 @@ test('r2Store retries network errors, 5xx and 429 and then succeeds',async()=>{
   assert.deepEqual(await store.get('a'),new TextEncoder().encode('ok'));
   assert.equal(calls,4);
 });
-test('r2Store gives up after 5 attempts and does not retry other 4xx',async()=>{
+test('r2Store gives up after 7 attempts and does not retry other 4xx',async()=>{
   let calls=0;
   await assert.rejects(r2Store(env,{sleep:noWait,fetch:async()=>{calls++;return new Response('x',{status:500});}}).put('a',new Uint8Array([1])),/500/);
-  assert.equal(calls,5);
+  assert.equal(calls,7);
   calls=0;
   await assert.rejects(r2Store(env,{sleep:noWait,fetch:async()=>{calls++;return new Response('x',{status:403});}}).put('a',new Uint8Array([1])),/403/);
   assert.equal(calls,1);
   calls=0;
   await assert.rejects(r2Store(env,{sleep:noWait,fetch:async()=>{calls++;throw new Error('socket');}}).get('a'),/socket/);
-  assert.equal(calls,5);
+  assert.equal(calls,7);
 });
 test('r2Store gives each attempt a timeout signal',async()=>{
   let signal:AbortSignal|undefined;
@@ -61,4 +61,28 @@ test('r2Store list follows continuation tokens',async t=>{
   t.mock.method(globalThis,'fetch',async(input:Request)=>{urls.push(input.url);return new Response(pages.shift());});
   assert.deepEqual(await r2Store(env).list('a/'),['a/1','a/2']);
   assert.match(urls[1],/continuation-token=n1/);
+});
+test('r2Store sends the base64 MD5 of the body on PUT',async()=>{
+  let md5:string|null=null;
+  await r2Store(env,{fetch:async input=>{md5=(input as Request).headers.get('content-md5');return new Response(null,{status:200});}}).put('a',new TextEncoder().encode('hello'));
+  assert.equal(md5,'XUFAKrxLKna5cZ2REBfFkg==');
+});
+test('r2Store retries a GET whose body fails midway',async()=>{
+  const broken=new Response(new ReadableStream({start(controller){controller.error(new Error('reset'));}}),{status:200});
+  const outcomes=[broken,new Response('ok',{status:200})];let calls=0;
+  const store=r2Store(env,{sleep:noWait,fetch:async()=>{calls++;return outcomes.shift() as Response;}});
+  assert.deepEqual(await store.get('a'),new TextEncoder().encode('ok'));
+  assert.equal(calls,2);
+});
+test('r2Store backs off with full jitter up to a cap',async()=>{
+  const waits:number[]=[];
+  await assert.rejects(r2Store(env,{sleep:async ms=>{waits.push(ms);},fetch:async()=>new Response('x',{status:503})}).get('a'),/503/);
+  assert.equal(waits.length,6);
+  waits.forEach((ms,i)=>assert.ok(ms>=0&&ms<=Math.min(30000,500*2**i)));
+});
+test('r2Store scales the timeout with the upload size',async()=>{
+  const timers:number[]=[],real=globalThis.setTimeout;
+  globalThis.setTimeout=((fn:()=>void,ms:number)=>{timers.push(ms);return real(fn,ms);}) as typeof setTimeout;
+  try{await r2Store(env,{fetch:async()=>new Response(null,{status:200})}).put('a',new Uint8Array(10_000_000));}finally{globalThis.setTimeout=real;}
+  assert.ok(timers.includes(120000+100000));
 });
