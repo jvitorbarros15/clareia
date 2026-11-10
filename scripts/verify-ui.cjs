@@ -1810,6 +1810,24 @@ check('a slow record file never fills a later request for another deputy', async
   await page.close();
 });
 
+check('a deputy with a held month shows a partial total outside rankings, and one fully held shows no zero', async () => {
+  let partial, held;
+  const page = await at(1440, { before: async p => {
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); const ids = s.people.map(q => q.id); partial = ids[0]; held = ids.at(-1); for (const q of s.people) for (const m of q.months) { m.held = (q.id === partial && m.month === s.scope.months[0]) || q.id === held; if (q.id === held) { m.exercise = 'full'; m.cents = 0; m.records = 0; } } const h = s.people.find(q => q.id === held); Object.assign(h, { cents: 0, records: 0 }); await route.fulfill({ response: res, json: s }); });
+    await p.route('**/fornecedores.json', async route => { const res = await route.fetch(), f = await res.json(); f.people[held] = []; await route.fulfill({ response: res, json: f }); });
+  } });
+  const ranked = await page.evaluate(() => window.Clareia.ranking('gastos').map(p => p.officialId));
+  assert.equal(ranked.includes(partial), false, 'partial total not ranked'); assert.equal(ranked.includes(held), false, 'held not ranked');
+  const card = id => page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${id}"]`) }).first();
+  assert.match(await text(card(partial)), /parcial · 1 mês em revisão/);
+  assert.match(await text(card(held)), /Em revisão/); assert.doesNotMatch(await text(card(held)), /R\$ 0,00/);
+  assert.equal(await page.locator(`#pessoas .directory-card [data-p-add-compare="${partial}"]`).count(), 0, 'no compare for a partial total');
+  await page.evaluate(id => window.Clareia.profile(String(id)), held);
+  assert.doesNotMatch(await text(page.locator('#detail')), /R\$ 0,00/);
+  assert.match(await text(page.locator('#detail')), /Em revisão/);
+  await page.close();
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;

@@ -26,7 +26,7 @@
     const people = index.scope.ids.map(id => {
       const info = index.people.find(p => p.id === id) || { name: 'ID ' + id }, own = summary.people.find(p => p.id === id);
       const cells = (suppliers.people[id] ?? []).map(([month, category, supplier, cents, count]) => ({ month: month - 1, category: suppliers.categories[category], supplier: suppliers.suppliers[supplier], amount: cents, count }));
-      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, party: partyOfPeriod(id, info.party ?? null), profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), noExercise: withoutConfirmedExercise(id, own?.records ?? 0), projects: own?.bills?.proposed ?? null, votes: null, cells, total: own?.cents ?? 0 };
+      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, party: partyOfPeriod(id, info.party ?? null), profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), noExercise: withoutConfirmedExercise(id, own?.records ?? 0), heldMonths: (own?.months ?? []).filter(m => m.held).map(m => m.month - 1), projects: own?.bills?.proposed ?? null, votes: null, cells, total: own?.cents ?? 0 };
     });
     const byCategory = new Map();
     for (const p of people) for (const r of p.cells) byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.amount));

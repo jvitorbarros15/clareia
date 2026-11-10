@@ -8,7 +8,9 @@
   const initial = new URLSearchParams(location.search);
   const ids = D.dataset().map(p => p.id);
   const totalOf = p => p.cells.reduce((n, r) => n + r.amount, 0);
-  const byTotal = () => (D.dataset().filter(p => !p.noExercise).length >= 2 ? D.dataset().filter(p => !p.noExercise) : [...D.dataset()]).sort((a, b) => totalOf(b) - totalOf(a));
+  // A month held for review is missing, not zero: a partial total never enters a ranking or a comparison.
+  const comparable = p => !p.noExercise && !p.heldMonths?.length;
+  const byTotal = () => (D.dataset().filter(comparable).length >= 2 ? D.dataset().filter(comparable) : [...D.dataset()]).sort((a, b) => totalOf(b) - totalOf(a));
   // Only the parameters present and valid in the URL; a question applies what its words imply for the rest.
   const fromURL = {};
   if (categories.includes(initial.get('categoria')) || initial.get('categoria') === 'Todas') fromURL.category = initial.get('categoria');
@@ -20,7 +22,7 @@
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
     tab: fromURL.tab ?? 'gastos',
-    query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && !D.dataset().find(p => p.id === initial.get('destaque'))?.noExercise ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
+    query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && comparable(D.dataset().find(p => p.id === initial.get('destaque'))) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
   let dialogTrigger = null, toastTimer, listOrigin = null;
   const $ = selector => document.querySelector(selector);
@@ -46,6 +48,7 @@
   const cells = p => p.cells.filter(inCategory);
   const span = () => { const c = D.coverage; return `${monthNames[c[0]]}–${monthNames[c.at(-1)]} ${state.year}`; };
   const pending = 'Ainda não coletado';
+  const partialNote = p => `Total parcial: ${p.heldMonths.length === 1 ? `${monthNames[p.heldMonths[0]]} está em revisão` : `${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
   // Party is the Câmara's current status at collection time, not a historical attribution.
   const context = p => [p.uf, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
   function value(p, kind = state.tab) {
@@ -56,7 +59,7 @@
   const formatted = (p, kind = state.tab) => kind === 'projetos' ? (p.projects === null ? pending : number(p.projects)) : compact(value(p, kind));
   // The answer ranks expenses even when the Projetos tab is open, where value() has nothing to sort by.
   function ranking(kind = state.tab) {
-    return all().filter(p => !p.noExercise && (state.uf === 'Brasil' || p.uf === state.uf)).sort((a, b) => (state.tab === 'menos' ? value(a, kind) - value(b, kind) : value(b, kind) - value(a, kind)) || a.name.localeCompare(b.name, 'pt-BR'));
+    return all().filter(p => comparable(p) && (state.uf === 'Brasil' || p.uf === state.uf)).sort((a, b) => (state.tab === 'menos' ? value(a, kind) - value(b, kind) : value(b, kind) - value(a, kind)) || a.name.localeCompare(b.name, 'pt-BR'));
   }
   const icon = name => {
     const paths = {
@@ -302,6 +305,7 @@
     }
     showDialog('Como chegamos nisso?', `<p class="dialog-subtitle">${comparison ? 'A comparação, passo a passo' : 'O cálculo, passo a passo'}</p>
       <section class="evidence-step"><span class="step-number">1</span><div><h3>O que estamos comparando</h3><p>Despesas da cota parlamentar (valor líquido) • ${span()}</p><p>${escape(p.name)}${comparison ? ` × ${escape(comparison.name)}` : ''}</p></div></section>
+      ${p.heldMonths?.length ? `<p class="records-note held-note" role="note">${partialNote(p)}</p>` : ''}
       <section class="evidence-step"><span class="step-number">2</span><div><h3>Quais registros entram</h3><p>${count(cells(p))} registros oficiais${comparison ? ` + ${count(cells(comparison))} de ${escape(comparison.name)}` : ''}, ${union() ? 'do arquivo anual e da API da Câmara' : 'do arquivo anual da Câmara'}. ${state.category !== 'Todas' ? `Categoria: ${escape(label(state.category))}.` : ''}</p><p>Identidade ligada ao ID oficial da Câmara ${p.officialId}${comparison ? ` e ${comparison.officialId}` : ''}. Cada valor foi convertido em centavos antes da soma.</p></div></section>
       <section class="evidence-step"><span class="step-number">3</span><div><h3>Como calculamos</h3><p>${formula}</p><div class="calculation-result">${result}<small>${resultCaption}</small></div><div class="action-row"><button class="outline-button primary" data-action="records" data-id="${p.id}">Ver registros</button></div></div></section>
       ${categoryBreakdown(p)}${sourceBlock(p)}`);
@@ -357,7 +361,7 @@
   }
   function profile(id) {
     const p = person(id), peer = byTotal().find(other => other.id !== id);
-    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : `${money(value(p, 'gastos'))} ↗︎`}</strong></button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`);
+    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${p.heldMonths?.length ? `<small class="held-note">${partialNote(p)}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`);
   }
   function methodology() {
     const v = index.validation, audit = index.audit, compare = v.apiComparison;
@@ -417,7 +421,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { logo, label, context, model, state, all, person, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
+  window.Clareia = { logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false, fromURL);
 })();
