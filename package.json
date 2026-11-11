@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "build:site": "tsx scripts/build-site.ts",
+    "deploy:test": "tsx scripts/deploy-test.ts",
+    "build:full": "tsx --max-old-space-size=8192 scripts/build-full-site.ts",
+    "fetch:portraits": "tsx scripts/fetch-portraits.ts",
     "collect": "tsx src/collect.ts",
     "discover:people": "tsx scripts/discover-people.ts",
     "collect:people": "tsx scripts/collect-people-history.ts",

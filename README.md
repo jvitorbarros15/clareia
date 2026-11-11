@@ -133,6 +133,17 @@ npm run verify:ui
 
 Os testes de navegador conferem valores contra os arquivos publicados, navegação até os registros, exportação e comportamento da interface em diferentes larguras. Relatórios e capturas de tela ficam em `output/qa/`, fora do Git.
 
+## Site completo e publicação de teste
+
+As execuções auditadas (histórico, 12 lotes de despesas, projetos, votações e cobertura) ficam listadas em `config/full-site.json`. `npm run build:full` monta o site completo num banco em memória: cada domínio só é aprovado com a auditoria real da própria execução e qualquer auditoria ausente ou reprovada interrompe a montagem. Os caminhos partem de `--data-root` (padrão `data`):
+
+```sh
+npm run fetch:portraits -- --out <fotos>
+npm run build:full -- --out <saida> --portraits <fotos> [--noindex] [--dry-run]
+```
+
+`npm run deploy:test -- --portraits <fotos>` encadeia build em `build/site`, `scan:cpf`, `verify:browser` (amostra de 30 deputados; `node scripts/verify-real.cjs --all` confere todos) e `wrangler deploy`. Qualquer falha interrompe a cadeia, e sem `--yes` nada é publicado (`--dry-run` simula o deploy). `--verify-ui` acrescenta `verify:ui`, escrito para o piloto de 3 deputados. O Worker em `worker/index.ts` roda só para `/data/*` e marca como `no-store` qualquer resposta de erro, para que um 404 não fique em cache como arquivo imutável.
+
 ## Arquitetura
 
 O processamento acontece antes da publicação. A navegação pelo site gerado não precisa consultar um banco ou a API da Câmara a cada visita.
