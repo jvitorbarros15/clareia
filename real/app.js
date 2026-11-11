@@ -60,6 +60,7 @@
   const partialNote = p => `Total parcial: ${p.heldMonths.length === 1 ? `${months[p.heldMonths[0]].toLowerCase()} de ${state.year} está em revisão` : `${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
   // Party is the Câmara's current status at collection time, not a historical attribution.
   const context = p => [p.uf, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
+  const cardContext = p => p.partyInReview ? [p.uf, p.lastConfirmedParty && `${p.lastConfirmedParty} (último confirmado)`].filter(Boolean).join(' · ') || 'Deputado(a) federal' : context(p);
   function value(p, kind = state.tab) {
     if (kind === 'projetos') return null;
     const result = sum(cells(p));
@@ -101,7 +102,7 @@
       <label class="sr-only" for="query">Pergunte sobre os dados</label>
       <input id="query" name="q" value="${escape(state.query)}" placeholder="O que você quer investigar?" maxlength="300" aria-controls="suggestions" aria-expanded="false">
       <button class="search-submit" type="submit" aria-label="Investigar pergunta">${icon('arrow')}</button>
-      </form><div id="suggestions" class="suggestions" hidden><p>Experimente nesta amostra</p>${examples().map(q => `<button type="button" data-question="${escape(q)}">${escape(q)} ${icon('arrow')}</button>`).join('')}</div></div>`;
+      </form><div id="suggestions" class="suggestions" hidden><p>Experimente estas perguntas</p>${examples().map(q => `<button type="button" data-question="${escape(q)}">${escape(q)} ${icon('arrow')}</button>`).join('')}</div></div>`;
   }
   function header() {
     return `<header class="site-header"><a class="logo" href="/" aria-label="Clareia, início">${logo}</a>
@@ -121,7 +122,7 @@
     if (state.tab === 'projetos') return `<div class="empty-state"><b>Projetos de lei ainda não foram coletados.</b><p>A próxima etapa inclui PL, PLP e PEC da Câmara, separando autoria principal de coautoria. Nenhum número é mostrado antes da conferência.</p><button class="outline-button" data-tab="gastos">Ver gastos</button></div>`;
     return ranking().slice(0, 3).map((p, i) => `<article class="rank-card editorial-card" data-person="${p.id}">
       <button class="portrait-button" data-action="profile" data-id="${p.id}" aria-label="Abrir perfil de ${escape(p.name)}">${photo(p)}<span class="rank-number">0${i + 1}</span></button>
-      <div class="card-info"><h3 class="person-name">${escape(p.name)}</h3><p class="editorial-person-context">${escape(context(p))}</p><button class="value-button" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}: ${money(value(p))}. Como chegamos nisso?">${formatted(p)}</button>
+      <div class="card-info"><h3 class="person-name">${escape(p.name)}</h3><p class="editorial-person-context">${escape(cardContext(p))}</p><button class="value-button" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}: ${money(value(p))}. Como chegamos nisso?">${formatted(p)}</button>
       <p class="card-caption">${caption(p)}</p><button class="editorial-proof" data-action="evidence" data-id="${p.id}">Como chegamos nisso? →</button></div></article>`).join('');
   }
   function rankNote() {
@@ -140,7 +141,7 @@
     return `<div class="editorial-follow-up"><span>Continue investigando</span><button type="button" data-metric="${monthly ? 'total' : 'mensal'}">${monthly ? 'E se compararmos o total do período?' : 'A ordem muda quando comparamos por mês?'} →</button></div>`;
   }
   function rankingSection() {
-    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados da amostra</h2>${tabs()}<div class="editorial-controls"><div class="selects"><span class="real-year">${span()}</span></div>${metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
+    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados de ${state.year}</h2>${tabs()}<div class="editorial-controls"><div class="selects"><span class="real-year">${span()}</span></div>${metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
   }
   function answerHTML() {
     if (!state.answer) return '';
@@ -157,7 +158,7 @@
     if (answer.type === 'compare') {
       const a = value(ppl[0], answer.kind), b = value(ppl[1], answer.kind), c = compareValues(a, b), x = escape(first(ppl[0])), y = escape(first(ppl[1]));
       summary = c.equal ? `${x} e ${y} têm o mesmo valor no recorte.` : c.percent === null ? `${x} registrou ${money(c.diff)} ${c.more ? 'a mais' : 'a menos'} em despesas no período do que ${y}. Sem percentual: o valor de ${y} é ${b < 0 ? 'negativo' : 'zero'}, então não há base para uma porcentagem.` : `${x} registrou ${number(c.percent)}% ${c.more ? 'mais' : 'menos'} despesas no período.`;
-    } else summary = `${escape(ppl[0].name)} ${answer.type !== 'rank' ? 'nesta amostra' : state.tab === 'menos' ? 'tem o menor valor deste recorte' : 'lidera este recorte'}.`;
+    } else summary = `${escape(ppl[0].name)} ${answer.type !== 'rank' ? 'neste recorte' : state.tab === 'menos' ? 'tem o menor valor deste recorte' : 'lidera este recorte'}.`;
     const unit = state.category === 'Todas' ? 'Cota parlamentar' : label(state.category);
     return `<section class="answer" aria-label="Resultado da investigação"><p class="eyebrow">Resultado da investigação</p><div class="answer-bars">${ppl.map(p => `<div class="answer-row">${avatar(p)}<b>${escape(p.name)}</b><strong>${money(value(p, answer.kind))}</strong><span class="track"><i style="width:${Math.abs(value(p, answer.kind)) / max * 100}%"></i></span></div>`).join('')}</div><div class="answer-bottom"><div><p class="answer-summary">${summary}</p><p class="context">${escape(unit)} • ${span()}${state.metric === 'mensal' ? ' • média mensal' : ''}</p></div><div class="answer-actions"><button class="outline-button primary" data-action="answer-evidence">Como chegamos nisso? ${icon('external')}</button><button class="outline-button" data-action="share">${icon('share')} Compartilhar</button></div></div></section>`;
   }
@@ -170,9 +171,20 @@
     }).join('')}</span>`).join('');
     return `<p class="editorial-handwritten"><span class="sr-only">Todo número tem uma fonte.</span><span aria-hidden="true">${letters}</span></p>`;
   }
+  function universe() {
+    const everyone = all(), withData = everyone.filter(p => !p.noExercise), compared = everyone.filter(comparable);
+    const step = (n, text, note) => `<li class="universe-step"><strong>${n}</strong><span>${text}</span>${note ? `<small>${note}</small>` : ''}</li>`;
+    const noun = n => n === 1 ? 'deputado' : 'deputados';
+    const lostData = everyone.length - withData.length, lostCompared = withData.length - compared.length;
+    return `<section class="universe" id="universo" aria-labelledby="universe-title"><h2 id="universe-title" class="universe-title">Quem entra nas comparações</h2><ol class="universe-steps">${
+      step(everyone.length, `${noun(everyone.length)} com mandato em ${state.year}`, '')}${
+      step(withData.length, 'com exercício confirmado ou despesas publicadas', lostData ? `${lostData} sem exercício confirmado nem despesa publicada.` : '')}${
+      step(compared.length, `comparáveis: ao menos ${MIN_MONTHS} meses de exercício, sem mês em revisão`, lostCompared ? `${lostCompared} com menos meses de exercício ou algum mês em revisão.` : '')
+    }</ol><button type="button" class="text-button" data-action="methodology">Como chegamos nisso? →</button></section>`;
+  }
   function layout() {
     document.body.dataset.model = model;
-    const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗︎</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗︎</button></div></div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured))}</div>${handwrittenNote()}<div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section><div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
+    const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗︎</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗︎</button></div></div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured))}</div>${handwrittenNote()}<div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section>${universe()}<div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
     $('#app').innerHTML = `<div class="site">${header()}<main id="main">${main}</main><footer class="footer"></footer></div>`;
   }
   function editorialFeature() {
@@ -257,9 +269,9 @@
     else if (/projet|propost|votou|votaram|votac|reforma|corrup|roub|honest|melhor|pior|patrimon|emenda|salario|president|senador|partido/.test(q)) message = ['Não temos esse dado publicado', window.ClareiaData.billsApproved || window.ClareiaData.votesApproved ? 'A busca responde só sobre despesas da cota parlamentar. Projetos e votações aprovados ficam nas seções de atividade; o que não está lá ainda não foi conferido.' : 'Esta versão cobre só as despesas da cota parlamentar. Projetos, votações, patrimônio e emendas ainda não foram coletados e conferidos.'];
     if (!message) {
       const matches = all().filter(p => p.name.split(' ').some(word => word.length > 2 && new RegExp(`\\b${norm(word)}\\b`).test(q)));
-      if (matches.length === 1 && /compar|\bmais que\b|\bmenos que\b|\bversus\b/.test(q)) message = ['Qual é o outro representante?', `Nesta amostra, você pode comparar ${all().map(p => p.name).join(', ')}.`];
+      if (matches.length === 1 && /compar|\bmais que\b|\bmenos que\b|\bversus\b/.test(q)) message = ['Qual é o outro representante?', `Neste recorte, você pode comparar ${all().map(p => p.name).join(', ')}.`];
       else if (matches.length > 2) message = ['Escolha duas pessoas para comparar', `Experimente: “${examples()[0]}”.`];
-      else if (!matches.length && !/\bquem\b|maiores gastos|menores gastos|^(gastos|despesas)$/.test(q)) message = ['Vamos delimitar a investigação', `Não identifiquei uma pergunta compatível ou uma pessoa da amostra. Experimente “${examples()[0]}” ou “Quem mais gastou por mês?”. A busca usa regras locais, sem IA conectada.`];
+      else if (!matches.length && !/\bquem\b|maiores gastos|menores gastos|^(gastos|despesas)$/.test(q)) message = ['Vamos delimitar a investigação', `Não identifiquei uma pergunta compatível ou uma pessoa deste recorte. Experimente “${examples()[0]}” ou “Quem mais gastou por mês?”. A busca usa regras locais, sem IA conectada.`];
       else {
         Object.assign(state, { metric: /por mes|mensal|media/.test(q) ? 'mensal' : 'total', category: categoryFor(q) || 'Todas', tab: /quem.*menos|menor gasto/.test(q) ? 'menos' : 'gastos' }, fixed);
         if (matches.length === 2) {
