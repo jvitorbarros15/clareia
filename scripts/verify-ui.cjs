@@ -37,10 +37,10 @@ async function firstEvidencePerson(page) {
 // The ranking shows ten bars at a time: press "Mostrar mais" until the deputy's row is there.
 async function revealBar(page, personId) {
   const row = page.locator(`.bar-row[data-id="${personId}"]`), more = page.locator('#comparison [data-action=bars-more]');
-  while (!await row.count() && await more.count()) await more.click();
   // A deputy whose ceiling is not confirmed has no % and is only in the ranking in reais.
   const reais = page.locator('.measure-toggle [data-measure=valor]');
-  if (!await row.count() && await reais.count()) { await reais.click(); while (!await row.count() && await more.count()) await more.click(); }
+  if (await reais.count() && !await page.evaluate(id => window.Clareia.ranking().some(p => p.officialId === id), personId)) await reais.click();
+  while (!await row.count() && await more.count()) await more.click();
   assert.equal(await row.count(), 1, `deputy ${personId} is in the ranking`);
 }
 // The directory also grows in steps; its name filter finds one card.
@@ -2155,7 +2155,7 @@ check('default ranking orders by % of the ceiling, shows reais beside it, the ca
     const bars = await page.locator('#comparison .bar-row').evaluateAll(els => els.map(el => [el.querySelector('.bar-name').textContent, el.querySelector('.bar-value').firstChild.textContent.trim(), el.querySelector('.bar-money').textContent, parseFloat(el.querySelector('.track i').style.width)]));
     assert.equal(bars.length, 10);
     bars.forEach((b, i) => { assert.equal(b[0], list[i].name, `${tab} bar ${i + 1}`); assert.equal(b[1], pct1(list[i].tenths)); assert.equal(clean(b[2]), reais(list[i].num)); });
-    const value = b => Number(b[1].replace(',', '.').replace('%', '')), top = Math.max(100, ...bars.map(value));
+    const value = b => Number(b[1].replace(',', '.').replace('%', '')), top = Math.max(100, ...exp.rows.map(r => Number(r.tenths) / 10));
     bars.forEach(b => assert.ok(Math.abs(b[3] - value(b) / top * 100) < 0.2, `bar length is the %: ${b[1]} ${b[3]}`));
   }
   const note = await text(page.locator('.ranking-context'));
@@ -2184,7 +2184,7 @@ check('% evidence dialog shows the counted months, both sums, the division and t
   const body = await text(page.locator('#detail-body'));
   assert.ok(body.includes(`${reais(target.num)} ÷ ${reais(target.den)} × 100`), 'the division is written out');
   assert.ok(body.includes(pct1(target.tenths)), 'the result is the ranked %');
-  assert.match(body, new RegExp(`${target.excluded.length} meses? excluídos?|Nenhum mês excluído`));
+  assert.match(body, new RegExp(`${target.excluded.length} (meses|mês) excluídos?|Nenhum mês excluído`));
   for (const m of target.excluded) assert.ok(body.includes(m.exercise === 'partial' ? 'mês parcial' : 'mês em revisão'), 'the reason of each excluded month');
   assert.ok(body.includes('Ato da Mesa nº 270/2023'), 'cites the act');
   assert.equal(await page.locator('#detail [data-action=methodology]').count(), 1);
