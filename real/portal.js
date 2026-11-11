@@ -45,7 +45,7 @@
   const personFilter=selectId=>`<div class="person-combo"><label class="sr-only" for="${selectId}-filter">Buscar deputado</label><input id="${selectId}-filter" class="person-filter" data-filter="${selectId}" type="search" autocomplete="off" placeholder="Buscar deputado" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${selectId}-options"><ul id="${selectId}-options" class="person-options" role="listbox" aria-label="Deputados encontrados" hidden></ul></div>`;
   const peopleOptions = (selected,comparing=true) => [...C.all()].sort(byName).map(p=>`<option value="${p.id}" ${selected===p.id?'selected':''}>${esc(p.name)} · ${esc(p.uf)}${comparing&&!C.comparable(p)?' (fora da comparação)':''}</option>`).join('');
   function followButton(id, full = false) { const on=state.favorites.has(id); return `<button class="follow-button ${on?'is-following':''}" data-p-follow="${id}" aria-pressed="${on}" aria-label="${on?'Deixar de acompanhar':'Acompanhar'} ${esc(C.person(id).name)}"><svg class="heart" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg>${full ? on?'Acompanhando':'Acompanhar':''}</button>`; }
-  function scopeText(period = C.span()) { const n=scopePeople().length; return `${n}${n===1?'deputado':'deputados'}${C.state.uf==='Brasil'?'':' · '+UF[C.state.uf][0]} · ${period} · ${catText(C.state.category)}`; }
+  function scopeText(period = C.span()) { const n=scopePeople().length; return `${n} ${n===1?'deputado':'deputados'}${C.state.uf==='Brasil'?'':' · '+UF[C.state.uf][0]} · ${period} · ${catText(C.state.category)}`; }
   // The spending panel follows its month slider; everywhere else the period is the published coverage.
   // The slider moves over calendar months starting at the first covered month (the published coverage is contiguous).
   const rangeText = () => `${months[COVERAGE[0]]} → ${months[state.month-1]}`;
@@ -317,7 +317,7 @@
       for(const o of pts){
         if(o===p)continue;
         const dx=o.x-p.x,dy=o.y-p.y;
-        if(Math.max(Math.abs(dx),Math.abs(dy))>=44)continue;
+        if(Math.max(Math.abs(dx),Math.abs(dy))>=22)continue;
         if(Math.abs(dx)>=Math.abs(dy))room[dx>=0?'r':'l']=Math.min(room[dx>=0?'r':'l'],Math.abs(dx));
         else room[dy>=0?'b':'t']=Math.min(room[dy>=0?'b':'t'],Math.abs(dy));
       }

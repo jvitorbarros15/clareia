@@ -24,7 +24,8 @@
   if (categories.includes(initial.get('categoria')) || initial.get('categoria') === 'Todas') fromURL.category = initial.get('categoria');
   if (['total', 'mensal'].includes(initial.get('metrica'))) fromURL.metric = initial.get('metrica');
   if (['gastos', 'menos', 'projetos'].includes(initial.get('aba'))) fromURL.tab = initial.get('aba');
-  if (D.dataset().some(p => !p.noExercise && p.uf === initial.get('uf'))) fromURL.uf = initial.get('uf');
+  const urlUf = initial.get('uf');
+  if (urlUf && D.dataset().some(p => !p.noExercise && p.uf === urlUf)) fromURL.uf = urlUf;
   const state = {
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
