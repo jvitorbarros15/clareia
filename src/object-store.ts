@@ -41,6 +41,16 @@ export function r2Store(env:NodeJS.ProcessEnv,options:R2Options={}):ObjectStore{
       await sleep(Math.random()*Math.min(BACKOFF_CAP_MS,BACKOFF_MS*2**(attempt-1)));
     }
   };
+  const listKeys=async(prefix:string)=>{
+    const keys:string[]=[];let token:string|undefined;
+    do{
+      const query=new URLSearchParams({'list-type':'2',prefix});if(token)query.set('continuation-token',token);
+      const xml=await call(`${base}?${query}`,undefined,0,response=>response.text()) as string;
+      keys.push(...[...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map(m=>m[1]));
+      token=/<IsTruncated>true<\/IsTruncated>/.test(xml)?/<NextContinuationToken>([^<]*)</.exec(xml)?.[1]:undefined;
+    }while(token);
+    return keys;
+  };
   const md5=(body:Uint8Array)=>createHash('md5').update(body).digest('base64');
   const send=(url:string,body:Uint8Array)=>call(url,{method:'PUT',body:body as BodyInit,headers:{'content-md5':md5(body)}},body.length,async response=>response.headers.get('etag'));
   return {
@@ -59,22 +69,17 @@ export function r2Store(env:NodeJS.ProcessEnv,options:R2Options={}):ObjectStore{
           parts.push(etag);
         }
         const xml=`<CompleteMultipartUpload>${parts.map((etag,i)=>`<Part><PartNumber>${i+1}</PartNumber><ETag>${etag}</ETag></Part>`).join('')}</CompleteMultipartUpload>`;
-        const done=await call(at(''),{method:'POST',body:xml},xml.length,response=>response.text()) as string;
-        if(!/<CompleteMultipartUploadResult/.test(done))throw new Error(`R2 não concluiu o envio em partes: ${key}`);
-      }catch(error){await call(at(''),{method:'DELETE'},0,async()=>undefined).catch(()=>undefined);throw error;}
+        // A 200 can still carry an error in its body, so that case goes back into the retry loop.
+        try{await call(at(''),{method:'POST',body:xml},xml.length,async response=>{if(!/<CompleteMultipartUploadResult/.test(await response.text()))throw new Error(`R2 não concluiu o envio em partes: ${key}`);});}
+        catch(error){if((await listKeys(key)).includes(key))return;throw error;}
+      }catch(error){
+        await (options.fetch??fetch)(await client.sign(at(''),{method:'DELETE',signal:AbortSignal.timeout(30000)})).catch(()=>undefined);
+        throw error;
+      }
     },
     get:async key=>call(objectUrl(key),undefined,null,async response=>new Uint8Array(await response.arrayBuffer()),true),
     delete:async key=>{await call(objectUrl(key),{method:'DELETE'},0,async()=>undefined);},
-    list:async prefix=>{
-      const keys:string[]=[];let token:string|undefined;
-      do{
-        const query=new URLSearchParams({'list-type':'2',prefix});if(token)query.set('continuation-token',token);
-        const xml=await call(`${base}?${query}`,undefined,0,response=>response.text()) as string;
-        keys.push(...[...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map(m=>m[1]));
-        token=/<IsTruncated>true<\/IsTruncated>/.test(xml)?/<NextContinuationToken>([^<]*)</.exec(xml)?.[1]:undefined;
-      }while(token);
-      return keys;
-    }
+    list:listKeys
   };
 }
 export const storeFromEnv=(env:NodeJS.ProcessEnv=process.env):ObjectStore|null=>env.R2_BUCKET?r2Store(env):null;

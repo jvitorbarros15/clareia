@@ -104,14 +104,38 @@ test('r2Store aborts a multipart upload when a part fails',async()=>{
   }}).put('big',new Uint8Array(16*1024**2+1)),/403/);
   assert.deepEqual(methods,['POST','PUT','DELETE']);
 });
-test('r2Store fails a multipart upload whose completion reports an error',async()=>{
-  await assert.rejects(r2Store(env,{fetch:async input=>{
+test('r2Store sends the exact bytes of each part',async()=>{
+  const parts:Uint8Array[]=[],body=new Uint8Array(16*1024**2+300).map((_,i)=>(i*7)%256);
+  await r2Store(env,{fetch:async input=>{
+    const r=input as Request;
+    if(r.url.endsWith('?uploads'))return new Response('<UploadId>u</UploadId>');
+    if(r.method==='PUT'){parts.push(new Uint8Array(await r.arrayBuffer()));return new Response(null,{status:200,headers:{etag:'"e"'}});}
+    return new Response('<CompleteMultipartUploadResult/>');
+  }}).put('big',body);
+  assert.deepEqual(new Uint8Array(Buffer.concat(parts)),body);
+});
+test('r2Store treats a lost completion response as success when the object exists',async()=>{
+  const methods:string[]=[];
+  await r2Store(env,{sleep:noWait,fetch:async input=>{
+    const r=input as Request;methods.push(r.method);
+    if(r.url.endsWith('?uploads'))return new Response('<UploadId>u</UploadId>');
+    if(r.method==='PUT')return new Response(null,{status:200,headers:{etag:'"e"'}});
+    if(r.method==='POST')return new Response('x',{status:404});
+    return new Response('<ListBucketResult><IsTruncated>false</IsTruncated><Key>big</Key></ListBucketResult>');
+  }}).put('big',new Uint8Array(16*1024**2+1));
+  assert.deepEqual(methods,['POST','PUT','PUT','POST','GET']);
+});
+test('r2Store fails a multipart upload whose completion keeps reporting an error',async()=>{
+  let completes=0;
+  await assert.rejects(r2Store(env,{sleep:noWait,fetch:async input=>{
     const r=input as Request;
     if(r.url.endsWith('?uploads'))return new Response('<UploadId>u</UploadId>');
     if(r.method==='PUT')return new Response(null,{status:200,headers:{etag:'"e"'}});
-    if(r.method==='POST')return new Response('<Error><Code>InternalError</Code></Error>');
+    if(r.method==='POST'){completes++;return new Response('<Error><Code>InternalError</Code></Error>');}
+    if(r.method==='GET')return new Response('<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>');
     return new Response(null,{status:204});
   }}).put('big',new Uint8Array(16*1024**2+1)),/não concluiu/);
+  assert.equal(completes,7);
 });
 test('r2Store scales the timeout with the upload size',async()=>{
   const timers:number[]=[],real=globalThis.setTimeout;
