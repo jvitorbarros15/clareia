@@ -37,7 +37,7 @@ export function r2Store(env:NodeJS.ProcessEnv,options:R2Options={}):ObjectStore{
         if(response.status<500&&response.status!==429){fatal=failure as Error;throw fatal;}
       }catch(error){if(error===fatal)throw error;failure=error;}
       finally{clearTimeout(timer);}
-      if(attempt===ATTEMPTS)throw failure;
+      if(attempt===ATTEMPTS)throw new Error(`R2 falhou após ${ATTEMPTS} tentativas: ${init?.method??'GET'} ${url.split('?')[0]}: ${failure instanceof Error?failure.message:String(failure)}`,{cause:failure});
       await sleep(Math.random()*Math.min(BACKOFF_CAP_MS,BACKOFF_MS*2**(attempt-1)));
     }
   };
@@ -49,7 +49,7 @@ export function r2Store(env:NodeJS.ProcessEnv,options:R2Options={}):ObjectStore{
       const keys:string[]=[];let token:string|undefined;
       do{
         const query=new URLSearchParams({'list-type':'2',prefix});if(token)query.set('continuation-token',token);
-        const xml=await call(`${base}?${query}`,undefined,null,response=>response.text()) as string;
+        const xml=await call(`${base}?${query}`,undefined,0,response=>response.text()) as string;
         keys.push(...[...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map(m=>m[1]));
         token=/<IsTruncated>true<\/IsTruncated>/.test(xml)?/<NextContinuationToken>([^<]*)</.exec(xml)?.[1]:undefined;
       }while(token);

@@ -61,7 +61,7 @@ export async function backupTree(store:ObjectStore,root:string,prefix:string,key
   const entries=new Map<string,Entry>(),result={files:files.length,uploaded:0,alreadyStored:0,bytesUploaded:0};
   await pool(files,async file=>{
     const full=path.join(root,...file.split('/'));
-    if((await fs.stat(full)).size>MAX_FILE)throw new Error(`Arquivo maior que 2 GB: ${file}`);
+    if((await fs.stat(full)).size>=MAX_FILE)throw new Error(`Arquivo maior que 2 GB: ${file}`);
     const plain=await fs.readFile(full),digest=sha(plain),object=objectName(key,digest);
     entries.set(file,{sha256:digest,size:plain.length,object});
     if(known.has(object)){result.alreadyStored++;return;}
