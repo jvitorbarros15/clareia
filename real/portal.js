@@ -317,7 +317,7 @@
       for(const o of pts){
         if(o===p)continue;
         const dx=o.x-p.x,dy=o.y-p.y;
-        if(Math.max(Math.abs(dx),Math.abs(dy))>=44)continue;
+        if(Math.max(Math.abs(dx),Math.abs(dy))>=22)continue;
         if(Math.abs(dx)>=Math.abs(dy))room[dx>=0?'r':'l']=Math.min(room[dx>=0?'r':'l'],Math.abs(dx));
         else room[dy>=0?'b':'t']=Math.min(room[dy>=0?'b':'t'],Math.abs(dy));
       }

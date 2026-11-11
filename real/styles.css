@@ -856,7 +856,10 @@ body .uf-tile path.tile-hit{fill:transparent!important;stroke:transparent!import
 .linked-lines{overflow:visible}
 .chart-point:focus .chart-dot{stroke:var(--ink);stroke-width:3}
 .p-mini-bars{grid-template-columns:repeat(var(--cols,12),minmax(0,84px));justify-content:start}
-.p-mini-bars button{position:relative}
+.p-mini-bars button{position:relative;width:100%}
+.p-mini-bars button::after{content:"";position:absolute;inset:0 -4px}
+.p-mini-bars button:first-child::after{left:-12px}
+.p-mini-bars button:last-child::after{right:-12px}
 .p-mini-bars button>span{width:34px}
 .p-mini-bars .bar-value{position:absolute;left:50%;bottom:calc(24px + var(--height)*.8);transform:translateX(-50%);font:600 12px/1.2 var(--sans);font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink);pointer-events:none}
 @media(max-width:560px){.p-mini-bars button>span{width:22px}}
