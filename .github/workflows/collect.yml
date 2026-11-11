@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 60
     services:
       postgres:
-        image: postgres:17
+        image: postgres@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f # postgres:17
         env:
           POSTGRES_PASSWORD: clareia
         ports: ['5432:5432']
