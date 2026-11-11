@@ -10,6 +10,8 @@ import {findCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary,buildSupplierSummary} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
+import {deputiesOf,resolveOptions,writePrerendered} from './prerender.ts';
+import type {SiteOptions} from './prerender.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
 
 const DOMAINS:Domain[]=['pessoas','despesas','votacoes','projetos','eleicoes','emendas'];
@@ -33,7 +35,8 @@ async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const outside=all.filter(r=>!active.scope.ids.includes(r.personId)).length;
   if(outside)throw new Error(`${outside} registros fora do recorte da versão`);
 }
-export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promise<{publicationId:string;files:number}>{
+export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={}):Promise<{publicationId:string;files:number}>{
+  const siteOptions=resolveOptions(options);
   // Everything is built aside: a refusal at any step leaves the previous output in place.
   const outDir=finalDir+'.building';
   const active=await activePublication(db,'despesas');
@@ -74,7 +77,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
   // The cells exist for the supplier cross-check; the page reads the finer supplier rows, so they are not published twice.
   await fs.writeFile(path.join(data,'summary.json'),JSON.stringify({...summary,people:summary.people.map(({cells:_cells,...person})=>person)}));
   // Supplier names are already redacted for private persons; the scan refuses any that slipped through.
-  const suppliers=JSON.stringify(buildSupplierSummary(summary,allRecords));if(findCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
+  const supplierSummary=buildSupplierSummary(summary,allRecords),suppliers=JSON.stringify(supplierSummary);if(findCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
   await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
   await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,audit:await publicationAudit(db,active.id)}));
@@ -83,6 +86,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string):Promi
   await fs.mkdir(path.join(outDir,'fonts'));
   for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});
+  await writePrerendered(outDir,publicationId,deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary,months:active.scope.months}),{year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1)},siteOptions);
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
   checkLimits(files.length,Math.max(...sizes));
   await fs.rm(finalDir,{recursive:true,force:true});

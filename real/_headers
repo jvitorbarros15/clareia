@@ -34,3 +34,15 @@
 
 /styles.css
   Cache-Control: max-age=0, must-revalidate
+
+/deputado/*
+  Cache-Control: max-age=0, must-revalidate
+
+/estado/*
+  Cache-Control: max-age=0, must-revalidate
+
+/robots.txt
+  Cache-Control: max-age=0, must-revalidate
+
+/sitemap.xml
+  Cache-Control: max-age=0, must-revalidate

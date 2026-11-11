@@ -18,7 +18,7 @@ const run=(label:string,command:string,commandArgs:string[],env:Record<string,st
   spawn(command,commandArgs,{stdio:'inherit',shell,env:{...process.env,...env}}).on('exit',code=>code===0?resolve():reject(new Error(`${label} falhou (código ${code})`)));
 });
 const node=process.execPath,tsx=(script:string,...rest:string[])=>['--import','tsx','--max-old-space-size=8192',script,...rest];
-await run('1/5 build do site completo',node,tsx('scripts/build-full-site.ts','--out',OUT,'--portraits',portraits,'--noindex',...passthrough,...args.includes('--allow-missing-portraits')?['--allow-missing-portraits']:[]));
+await run('1/5 build do site completo',node,tsx('scripts/build-full-site.ts','--out',OUT,'--portraits',portraits,'--noindex',...value('--url')?['--site-url',value('--url')]:[],...passthrough,...args.includes('--allow-missing-portraits')?['--allow-missing-portraits']:[]));
 const wranglerName=JSON.parse((await fs.readFile('wrangler.jsonc','utf8')).replace(/^\s*\/\/.*$/gm,'')).name;
 if(/^\s*X-Robots-Tag:.*noindex/mi.test(await fs.readFile(path.join(OUT,'_headers'),'utf8'))&&wranglerName!==TEST_WORKER)throw new Error(`Build com noindex só pode ir para o Worker de teste "${TEST_WORKER}", não "${wranglerName}"`);
 await run('2/5 busca de CPF',node,tsx('scripts/scan-cpf.ts',OUT,...value('--known')?['--known',value('--known')]:[]));
