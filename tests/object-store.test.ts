@@ -80,6 +80,39 @@ test('r2Store backs off with full jitter up to a cap',async()=>{
   assert.equal(waits.length,6);
   waits.forEach((ms,i)=>assert.ok(ms>=0&&ms<=Math.min(30000,500*2**i)));
 });
+test('r2Store sends bodies over 16 MiB as a multipart upload',async()=>{
+  const seen:{method:string;url:string;size:number;md5:string|null}[]=[];
+  const body=new Uint8Array(16*1024**2*2+5).map((_,i)=>i%251);
+  await r2Store(env,{fetch:async input=>{
+    const r=input as Request,size=(await r.arrayBuffer()).byteLength;seen.push({method:r.method,url:r.url,size,md5:r.headers.get('content-md5')});
+    if(r.url.endsWith('?uploads'))return new Response('<InitiateMultipartUploadResult><UploadId>u 1</UploadId></InitiateMultipartUploadResult>');
+    if(r.method==='PUT')return new Response(null,{status:200,headers:{etag:`"e${new URL(r.url).searchParams.get('partNumber')}"`}});
+    return new Response('<CompleteMultipartUploadResult></CompleteMultipartUploadResult>');
+  }}).put('big',body);
+  assert.deepEqual(seen.map(s=>s.method),['POST','PUT','PUT','PUT','POST']);
+  assert.deepEqual(seen.slice(1,4).map(s=>s.size),[16*1024**2,16*1024**2,5]);
+  assert.ok(seen.slice(1,4).every((s,i)=>new URL(s.url).searchParams.get('partNumber')===String(i+1)&&new URL(s.url).searchParams.get('uploadId')==='u 1'&&s.md5));
+  assert.equal(seen[4].size,'<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>"e1"</ETag></Part><Part><PartNumber>2</PartNumber><ETag>"e2"</ETag></Part><Part><PartNumber>3</PartNumber><ETag>"e3"</ETag></Part></CompleteMultipartUpload>'.length);
+});
+test('r2Store aborts a multipart upload when a part fails',async()=>{
+  const methods:string[]=[];
+  await assert.rejects(r2Store(env,{sleep:noWait,fetch:async input=>{
+    const r=input as Request;methods.push(r.method);
+    if(r.url.endsWith('?uploads'))return new Response('<UploadId>u</UploadId>');
+    if(r.method==='PUT')return new Response('x',{status:403});
+    return new Response(null,{status:204});
+  }}).put('big',new Uint8Array(16*1024**2+1)),/403/);
+  assert.deepEqual(methods,['POST','PUT','DELETE']);
+});
+test('r2Store fails a multipart upload whose completion reports an error',async()=>{
+  await assert.rejects(r2Store(env,{fetch:async input=>{
+    const r=input as Request;
+    if(r.url.endsWith('?uploads'))return new Response('<UploadId>u</UploadId>');
+    if(r.method==='PUT')return new Response(null,{status:200,headers:{etag:'"e"'}});
+    if(r.method==='POST')return new Response('<Error><Code>InternalError</Code></Error>');
+    return new Response(null,{status:204});
+  }}).put('big',new Uint8Array(16*1024**2+1)),/não concluiu/);
+});
 test('r2Store scales the timeout with the upload size',async()=>{
   const timers:number[]=[],real=globalThis.setTimeout;
   globalThis.setTimeout=((fn:()=>void,ms:number)=>{timers.push(ms);return real(fn,ms);}) as typeof setTimeout;
