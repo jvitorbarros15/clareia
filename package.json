@@ -38,6 +38,7 @@
     "unlock": "tsx scripts/unlock.ts",
     "migrate:snapshot": "tsx scripts/migrate-snapshot.ts",
     "db:state": "tsx scripts/db-state.ts",
+    "backup:data": "tsx scripts/backup-data.ts",
     "scan:cpf": "tsx scripts/scan-cpf.ts"
   },
   "engines": {
