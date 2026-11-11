@@ -88,6 +88,11 @@
     return `<span class="photo"><img src="${escape(p.photo)}" alt="Retrato oficial de ${escape(p.name)}" loading="lazy"></span>`;
   }
   const avatar = p => `<span class="avatar">${photo(p)}</span>`;
+  function setPath(path, title) {
+    const url = new URL(location.href);
+    if (url.pathname !== path) { url.pathname = path; writeHistory('replaceState', history.state, url); }
+    if (title) document.title = pageTitle.value = title;
+  }
   function syncURL() {
     const url = new URL(location.href);
     url.search = '';
@@ -294,28 +299,93 @@
   // Views opened from inside the dialog keep a trail back; anything opened from the page starts a new one.
   let dialogTrail = [], dialogView = null, navigating = false;
   function openView(render) {
-    if ($('#detail').open && dialogView) dialogTrail.push(dialogView); else dialogTrail = [];
+    const nested = $('#detail').open && dialogView && session;
+    if (nested) dialogTrail.push(dialogView); else dialogTrail = [];
     dialogView = { render, title: '' };
+    if (nested) {
+      session.d++; session.views.length = session.d;
+      try { history.pushState({ clareia: session.id, d: session.d }, '', location.href); } catch { /* file previews may restrict history */ }
+    }
     navigating = true;
     try { return render(); } finally { navigating = false; }
   }
   function goBack() {
+    if (session?.live && session.d > 0) { history.back(); return; }
     const previous = dialogTrail.pop(); if (!previous) return;
     dialogView = previous; navigating = true;
     try { return previous.render(); } finally { navigating = false; }
   }
-  function showDialog(title, html, resetScroll = true) {
+  function showDialog(title, html, resetScroll = true, route = null) {
     const dialog = $('#detail');
     if (!navigating) { dialogTrail = []; dialogView = null; } else if (dialogView) dialogView.title = title;
     const back = dialogTrail.at(-1);
     if (back && !html.includes('data-action="back-to-list"')) html = `<button type="button" class="text-button dialog-back" data-action="dialog-back">← Voltar: ${escape(back.title)}</button>` + html;
-    if (!dialog.open) dialogTrigger = document.activeElement;
+    const opening = !dialog.open;
+    if (opening) dialogTrigger = document.activeElement;
     dialog.classList.remove('records-wide');
     $('#detail-title').textContent = title; $('#detail-body').innerHTML = html;
-    if (!dialog.open) dialog.showModal();
+    if (opening) dialog.showModal();
+    recordView(title, html, resetScroll, route, opening);
     if (resetScroll) dialog.scrollTop = 0;
     $('#detail .close-button').focus({ preventScroll: true });
   }
+  // Every dialog is one history entry, and each view opened inside it is another, so Back and Forward walk the same trail as the buttons.
+  let session = null, sessionSeq = 0, restoring = false, adopting = false, afterRestore = null;
+  const pageTitle = { value: document.title };
+  const writeHistory = (method, state, url) => { try { history[method](state, '', url); } catch { /* file previews may restrict history */ } };
+  function recordView(title, html, resetScroll, route, opening) {
+    if (restoring) { if (route) document.title = route.title; return; }
+    if (opening || !session) {
+      pageTitle.value = document.title;
+      session = { id: `${Date.now()}-${++sessionSeq}`, views: [], d: 0, live: true, base: adopting ? 'self' : 'beneath' };
+      writeHistory(adopting ? 'replaceState' : 'pushState', { clareia: session.id, d: 0 }, route?.url ?? location.href);
+    } else if (route) writeHistory('replaceState', history.state, route.url);
+    if (route) document.title = route.title;
+    session.views[session.d] = { render: dialogView?.render ?? (() => showDialog(title, html, resetScroll, route)), title, docTitle: document.title };
+  }
+  async function restoreView(index) {
+    const view = session.views[index];
+    session.d = index; session.live = true;
+    dialogTrail = session.views.slice(0, index).map(v => ({ render: v.render, title: v.title }));
+    dialogView = { render: view.render, title: view.title };
+    restoring = true; navigating = true;
+    try { await view.render(); } finally { restoring = false; navigating = false; }
+    document.title = view.docTitle;
+  }
+  const slugOf = name => norm(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const deputyPath = p => `/deputado/${p.officialId}-${slugOf(p.name)}`;
+  function parseRoute(path) {
+    let parts; try { parts = path.split('/').filter(Boolean).map(decodeURIComponent); } catch { return { type: 'unknown' }; }
+    if (!parts.length || (parts.length === 1 && parts[0] === 'index.html')) return null;
+    if (parts[0] === 'deputado') { const m = parts.length === 2 ? /^(\d+)(?:-.*)?$/.exec(parts[1]) : null; return { type: 'deputado', id: m?.[1] ?? null, slug: m ? parts[1].slice(m[1].length + 1) : '' }; }
+    if (parts[0] === 'estado' && parts.length === 2) return { type: 'estado', uf: parts[1].toUpperCase() };
+    return { type: 'unknown' };
+  }
+  const NOT_FOUND = {
+    deputado: ['Deputado(a) não encontrado(a)', 'Não existe deputado(a) com este endereço nesta versão dos dados. Confira o link ou procure pelo nome na busca. Nenhum outro perfil foi exibido no lugar.'],
+    estado: ['Estado não encontrado', 'Este endereço não corresponde a nenhuma UF. Use a sigla de duas letras, como SP ou BA, ou escolha um estado no mapa.'],
+    unknown: ['Página não encontrada', 'Este endereço não existe no Clareia. Volte ao início para ver os rankings e a busca.']
+  };
+  function notFound(kind, url) {
+    const [title, text] = NOT_FOUND[kind];
+    showDialog(title, `<p class="records-note" role="alert">${text}</p><div class="action-row"><button type="button" class="outline-button primary" data-action="close">Ir para o início</button></div>`, true, { url, title: `${title} — Clareia` });
+  }
+  function openRoute(route, { initial = false } = {}) {
+    const target = location.pathname + location.search;
+    if (initial) writeHistory('replaceState', null, '/' + location.search);
+    const found = route.type === 'deputado' && route.id ? person(route.id) : null;
+    if (found) profile(found.id); else notFound(route.type, target);
+  }
+  function closeFromHistory() { if (session) session.live = false; $('#detail').close(); }
+  window.addEventListener('popstate', async () => {
+    const st = history.state;
+    if (session && st?.clareia === session.id && session.views[st.d]) { await restoreView(st.d); const after = afterRestore; afterRestore = null; after?.(); return; }
+    const route = parseRoute(location.pathname);
+    if (route?.type === 'deputado' || route?.type === 'unknown') {
+      adopting = true;
+      try { openRoute(route); } finally { adopting = false; }
+    } else if ($('#detail').open) closeFromHistory();
+  });
   const union = () => index.validation.sourceKind === 'annual-api-union';
   const sourceNote = () => `<div class="fixture-note">Dados oficiais da Câmara dos Deputados, versão ${escape(index.snapshotId.slice(0, 12))}. Verificações automáticas não são auditoria do gasto; revisão humana ampla ainda pende.</div>`;
   function sourceBlock(p) {
@@ -406,7 +476,8 @@
   }
   function profile(id) {
     const p = person(id), peer = comparable(p) ? byTotal().find(other => other.id !== id) : null;
-    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${!p.noExercise && exclusionNote(p) ? `<small class="held-note">${exclusionNote(p)}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`);
+    const route = { url: deputyPath(p), title: `${p.name} — Clareia` };
+    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${p.officialId}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${!p.noExercise && exclusionNote(p) ? `<small class="held-note">${exclusionNote(p)}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button><button class="outline-button" data-action="copy-link" data-id="${id}">Copiar link</button>${p.sourceUrl ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`, true, route);
   }
   function methodology() {
     const v = index.validation, audit = index.audit, compare = v.apiComparison;
@@ -426,7 +497,25 @@
     const keep = r => inCategory(r) && (month === undefined || month === r.month);
     loadRecords(p).then(list => { const items = list.filter(keep), href = URL.createObjectURL(new Blob([ClareiaView.csv(items.map(r => r.raw))], { type: 'text/csv;charset=utf-8' })); save(href, items.length); setTimeout(() => URL.revokeObjectURL(href), 1000); }, () => toast('Registros indisponíveis agora. Nenhum valor foi estimado.'));
   }
-  function closeDialog() { $('#detail').close(); if (dialogTrigger?.isConnected) dialogTrigger.focus({ preventScroll: true }); }
+  // Resolves once the browser has gone back to the page entry, so callers that change the URL next do not write to the profile's entry.
+  function closeDialog() {
+    const dialog = $('#detail');
+    if (!dialog.open) return Promise.resolve();
+    const unwinding = session?.live && session.base === 'beneath';
+    const settled = unwinding ? new Promise(resolve => { window.addEventListener('popstate', resolve, { once: true }); setTimeout(resolve, 500); }) : Promise.resolve();
+    dialog.close();
+    if (dialogTrigger?.isConnected) dialogTrigger.focus({ preventScroll: true });
+    return settled;
+  }
+  async function copyProfileLink(id, button) {
+    const url = location.origin + deputyPath(person(id));
+    const copied = () => { toast('Link do perfil copiado.'); const text = button.textContent; button.textContent = 'Link copiado'; setTimeout(() => { if (button.isConnected) button.textContent = text; }, 2000); };
+    try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(url); copied(); return; } catch { /* falls back to a selectable field */ }
+    let box = $('#profile-link-box');
+    if (!box) { box = document.createElement('div'); box.id = 'profile-link-box'; box.className = 'manual-share'; box.innerHTML = `<label for="profile-link">Copie o link do perfil</label><input id="profile-link" readonly value="${escape(url)}">`; button.closest('.action-row').after(box); }
+    const field = $('#profile-link'); field.focus(); field.select();
+    try { if (document.execCommand('copy')) copied(); } catch { /* the selected field is the fallback */ }
+  }
   document.addEventListener('click', event => {
     const target = event.target.closest('[data-action],[data-tab],[data-metric],[data-question]');
     if (!event.target.closest('.search-wrap')) closeSuggestions();
@@ -443,14 +532,16 @@
     else if (action === 'answer-evidence' && state.answer?.ids?.length) evidence(state.answer.ids[0], { kind: state.answer.kind, compare: state.answer.type === 'compare' ? state.answer.ids[1] : null });
     else if (action === 'bars-more' || action === 'bars-less') { const before = state.barLimit; state.barLimit = action === 'bars-more' ? before + BAR_STEP : BAR_STEP; $('#comparison').outerHTML = barSection(); (action === 'bars-more' ? document.querySelectorAll('#bar-chart .bar-row')[before] : document.querySelector('[data-action=bars-more]'))?.focus({ preventScroll: action === 'bars-more' }); }
     else if (action === 'records') openView(() => recordTable(person(id)));
+    else if (action === 'back-to-list' && session?.live && session.d > 0 && dialogTrail.length) { afterRestore = () => [...document.querySelectorAll('#detail .record-row')].find(tr => tr.dataset.record === target.dataset.record)?.querySelector('button')?.focus(); history.back(); }
     else if (action === 'back-to-list') { const previous = dialogTrail.pop(); if (previous) dialogView = previous; navigating = Boolean(previous); try { backToList(id, target.dataset.record); } finally { navigating = false; } }
     else if (action === 'record') openView(() => recordDetail(person(id), target.dataset.record));
     else if (action === 'month') openView(() => recordTable(person(id), Number(target.dataset.month)));
     else if (action === 'profile') openView(() => profile(id));
     else if (action === 'methodology') methodology();
     else if (action === 'focus-search') { $('#query').focus(); $('#query').scrollIntoView({ block: 'center' }); }
-    else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog(); ask(`Compare ${person(id).name} e ${peer.name}`); }
+    else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog().then(() => ask(`Compare ${person(id).name} e ${peer.name}`)); }
     else if (action === 'share') shareLink();
+    else if (action === 'copy-link') copyProfileLink(id, target);
     else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });
@@ -463,12 +554,19 @@
     if (event.target.id === 'query' && event.key === 'ArrowDown') { event.preventDefault(); $('#suggestions button')?.focus(); }
   });
   $('#detail').addEventListener('click', event => { if (event.target === $('#detail')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right) closeDialog(); } });
-  $('#detail').addEventListener('close', () => { dialogTrail = []; dialogView = null; const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
+  $('#detail').addEventListener('close', () => {
+    dialogTrail = []; dialogView = null;
+    if (session?.live) {
+      session.live = false;
+      if (session.base === 'beneath') history.go(-(session.d + 1)); else writeHistory('replaceState', null, '/');
+    }
+    document.title = pageTitle.value;
+    const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
   layout();
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
+  window.Clareia = { parseRoute, openRoute, deputyPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false, fromURL);
 })();

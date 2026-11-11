@@ -384,9 +384,11 @@
   }
   function brief() {C.showDialog('Seu resumo de acompanhamento',`<p class="records-note">Seleção local · ${C.span()}. Nenhuma notificação foi enviada.</p>${[...state.favorites].map(id=>`<section class="brief-person"><h3>${esc(C.person(id).name)}</h3>${events(id).slice(0,2).map(e=>`<button data-p-event="${e.action}" data-value="${e.value}"><small>${e.date}</small><b>${e.title}</b><span>${e.text} ↗︎</span></button>`).join('')}</section>`).join('')||'<p>Acompanhe uma pessoa para montar seu resumo.</p>'}`);}
   function assistant() {C.showDialog('Sua investigação começa aqui',`<div class="assistant-intro"><img class="assistant-spark" src="/icon.svg" alt="" width="24" height="24"><h3>Qual número você quer entender?</h3><p>Escolha uma pergunta ou escreva a sua. A busca consulta os registros oficiais desta versão, sem IA conectada.</p></div><form id="assistant-form"><label class="sr-only" for="assistant-query">Sua pergunta</label><textarea id="assistant-query" placeholder="Ex.: quem mais gastou por mês?" maxlength="300" required></textarea><button class="p-primary" type="submit">Investigar ${icon('arrow')}</button></form><div class="assistant-examples">${['Quem mais gastou por mês?','Quem mais gastou com passagens?','Quem gastou menos?'].map(q=>`<button data-p-ask="${esc(q)}">${esc(q)}${icon('arrow')}</button>`).join('')}</div><p class="p-small">Cobertura: ${C.all().length} deputados, despesas de ${C.span()}.</p>`);setTimeout(()=>$('#assistant-query')?.focus(),30);}
-  function runAsk(q) {C.closeDialog();C.ask(q);$('#answer-slot').scrollIntoView({behavior:state.motion?'smooth':'instant',block:'center'});}
+  function runAsk(q) {C.closeDialog().then(()=>{C.ask(q);$('#answer-slot').scrollIntoView({behavior:state.motion?'smooth':'instant',block:'center'});});}
   C.portalActive=()=>state.month!==COVER||state.highlightCategory!==null||state.mapUF!==null||state.mapMetric!=='total'||state.from!==1||state.to!==COVERAGE.length;
-  document.addEventListener('clareia:reset',()=>{state.month=COVER;state.highlightCategory=null;state.mapUF=null;state.mapMetric='total';state.from=1;state.to=COVERAGE.length;});
+  const homeTitle=document.title;
+  const syncEstado=()=>C.setPath(state.mapUF?`/estado/${state.mapUF}`:'/',state.mapUF?`${UF[state.mapUF][0]} — Clareia`:homeTitle);
+  document.addEventListener('clareia:reset',()=>{state.month=COVER;state.highlightCategory=null;state.mapUF=null;syncEstado();state.mapMetric='total';state.from=1;state.to=COVERAGE.length;});
   document.addEventListener('clareia:change',updateAll);
   document.addEventListener('click',e=>{
     const b=e.target.closest('[data-p-highlight],[data-p],[data-p-follow],[data-p-uf],[data-p-category],[data-p-supplier],[data-p-evidence-person],[data-p-drill],[data-p-month],[data-p-metric],[data-p-topic],[data-p-project],[data-p-project-save],[data-p-vote],[data-p-dossier],[data-p-event],[data-p-summary],[data-p-ask],[data-p-add-compare]');if(!b)return;
@@ -396,7 +398,7 @@
     if(b.dataset.pDrill){supplierDetail(b.dataset.pDrill);return;}
     if(b.dataset.pAddCompare){state.a=b.dataset.pAddCompare;if(state.b===state.a)state.b=C.byTotal().find(p=>p.id!==state.a).id;renderPart('comparacao',comparison);if(editorial){C.toast(`${C.person(state.a).name.split(' ')[0]} entrou na comparação, ao lado de ${C.person(state.b).name.split(' ')[0]}.`);const h=$('#comparacao h2');if(h){h.tabIndex=-1;h.focus({preventScroll:true});}}$('#comparacao').scrollIntoView({behavior:state.motion?'smooth':'instant',block:'start'});return;}
     if(b.dataset.pFollow){const id=b.dataset.pFollow;state.favorites.has(id)?state.favorites.delete(id):state.favorites.add(id);save('clareia-favorites',[...state.favorites]);const section=b.closest('.p-section');updateSaved();(section?.querySelector(`[data-p-follow="${id}"]`)||section?.querySelector('[data-p-follow]'))?.focus({preventScroll:true});C.toast(state.favorites.has(id)?'Perfil salvo neste navegador.':'Perfil removido do acompanhamento.');return;}
-    if(b.dataset.pUf){state.mapUF=b.dataset.pUf;state.mapLimit=MAP_STEP;renderPart('atlas',atlas);focusMatch(`[data-p-uf="${state.mapUF}"]`);return;}
+    if(b.dataset.pUf){state.mapUF=b.dataset.pUf;state.mapLimit=MAP_STEP;syncEstado();renderPart('atlas',atlas);focusMatch(`[data-p-uf="${state.mapUF}"]`);return;}
     if(b.dataset.pCategory){expenseEvidence(b.dataset.pCategory);return;}
     if(b.dataset.pMonth){state.month=+b.dataset.pMonth;renderPart('despesas',spending);focusMatch(`[data-p-month="${state.month}"]`);return;}
     if(b.dataset.pMetric){C.state.metric=b.dataset.pMetric;C.refresh();focusMatch(`[data-p-metric="${C.state.metric}"]`);return;}
@@ -418,7 +420,7 @@
       case 'map-evidence':C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.span()} · ${state.mapMetric==='projects'?'autoria principal':catText(C.state.category)}</p><p>UF de representação, não destino da despesa. Média por representante = soma das despesas dividida pelo número de perfis da UF; não ajusta tempo em exercício.</p><table class="data-table"><thead><tr><th>UF</th><th>Perfis</th><th>Valor</th></tr></thead><tbody>${Object.entries(UF).filter(([uf])=>C.all().some(p=>!p.noExercise&&p.uf===uf)).map(([uf,[name]])=>`<tr><td>${uf} / ${name}</td><td>${C.all().filter(p=>!p.noExercise).filter(p=>p.uf===uf).length}</td><td>${mapFormat(mapValue(uf))}</td></tr>`).join('')}</tbody></table><p class="fixture-note">UF de representação conforme o cadastro da Câmara. UFs sem deputados neste recorte aparecem como indisponíveis; indisponível não significa zero.</p>`);break;
       case 'map-metric':state.mapMetric=b.dataset.value;renderPart('atlas',atlas);focusMatch('[data-p=map-metric][data-value='+state.mapMetric+']');break;
       case 'activity-more':{const kind=b.dataset.kind;listState[kind].limit+=LIST_STEP;renderList(kind);focusMatch(`[data-p=activity-more][data-kind=${kind}]`);break;}
-      case 'map-reset':state.mapUF=null;renderPart('atlas',atlas);focusMatch('[data-p=map-reset]');break;
+      case 'map-reset':state.mapUF=null;syncEstado();renderPart('atlas',atlas);focusMatch('[data-p=map-reset]');break;
       case 'apply-state':{const local=C.all().filter(p=>!p.noExercise&&p.uf===state.mapUF);state.a=local[0].id;state.b=(local[1]||C.byTotal().find(p=>p.id!==state.a)).id;C.state.uf=state.mapUF;C.refresh();}C.toast(`Recorte aplicado: ${UF[state.mapUF][0]}.`);break;
       case 'swap':[state.a,state.b]=[state.b,state.a];renderPart('comparacao',comparison);focusMatch('[data-p="swap"]');break;
       case 'compare-evidence':C.evidence(state.a,{kind:'gastos',compare:state.b});break;
@@ -477,7 +479,7 @@
   document.addEventListener('change',e=>{
     const id=e.target.id,val=e.target.value;
     
-    if(id==='map-select'){state.mapUF=val||null;state.mapLimit=MAP_STEP;renderPart('atlas',atlas);focusMatch('#map-select');}
+    if(id==='map-select'){state.mapUF=val||null;state.mapLimit=MAP_STEP;syncEstado();renderPart('atlas',atlas);focusMatch('#map-select');}
     if(id==='activity-bills'||id==='activity-votes'){state.activity=val;activityShown=null;for(const list of Object.values(listState)){list.limit=LIST_STEP;list.query='';}document.querySelectorAll('#activity-bills,#activity-votes').forEach(select=>{select.value=val;});document.querySelectorAll('#bills-list,#votes-list').forEach(el=>el.setAttribute('aria-busy','true'));hydrateActivity();return;}
     if(id==='compare-a'||id==='compare-b'){const k=id==='compare-a'?'a':'b',other=k==='a'?'b':'a';if(state[other]===val)state[other]=state[k];state[k]=val;renderPart('comparacao',comparison);focusMatch('#'+id);if(editorial&&id==='compare-a'){state.voter=val;state.timeline=val;renderPart('votacoes',voteSection);renderPart('acompanhar',following);watchMotion();focusMatch('#compare-a');}}
     if(id==='project-stage'){state.stage=val;renderPart('project-grid',projectCards);watchMotion();}
@@ -522,6 +524,10 @@
       e.target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     }
   });
+  const route=C.parseRoute(location.pathname);
+  if(route?.type==='estado'&&UF[route.uf])state.mapUF=route.uf;
   mount();
   updateFollowCount();
+  if(route?.type==='estado'&&UF[route.uf]){syncEstado();(document.fonts?.ready??Promise.resolve()).then(()=>requestAnimationFrame(()=>$('#atlas')?.scrollIntoView({block:'start'})));}
+  else if(route)C.openRoute(route,{initial:true});
 })();
