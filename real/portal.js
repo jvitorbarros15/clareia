@@ -155,7 +155,7 @@
       return `<g role="button" tabindex="0" data-p-uf="${uf}" aria-label="${name}${available?' — '+mapFormat(value):' — sem dados neste recorte'}" aria-pressed="${state.mapUF===uf}" class="uf-tile ${available?'has-data':''} ${available&&value<0?'negative':''} ${available&&value>0&&value/max>.55?'strong':''} ${state.mapUF===uf?'selected':''}" transform="translate(${x} ${y})"><path class="tile-hit" aria-hidden="true" d="M0 12 25 0 50 12 50 40 25 52 0 40Z"/><path style="${available&&value>=0?'fill:var(--accent);fill-opacity:'+(.2+.8*value/max):''}" d="M0 12 25 0 50 12 50 40 25 52 0 40Z"/><text x="25" y="${available?25:31}" text-anchor="middle">${uf}</text>${available?`<text class="tile-value" x="25" y="38" text-anchor="middle">${esc(tileValue(value))}</text>`:''}<title>${name}${available?' · '+mapFormat(value):' · sem dados'}</title></g>`;
     }).join('')}</svg>`;
   }
-  const tileValue=v=>compact(v).replace(/R\$\s/,'');
+  const tileValue=v=>compact(v).replace(/R\$\s/,'').replace(/\smilh(?:ão|ões)$/,' mi');
   function mapValue(uf) {
     const people=C.all().filter(p=>!p.noExercise&&p.uf===uf);
     if(!people.length)return null;

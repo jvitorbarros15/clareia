@@ -875,8 +875,9 @@ body[data-model=editorial] section h3:not(.person-name,dialog *,.directory-perso
 body[data-model=editorial] .editorial-rank .tabs button{flex:none}
 body[data-model=editorial] .editorial-rank .tabs button:first-child{padding-left:0}
 
-body .uf-tile text.tile-value{font-size:8px;font-weight:500}
-body .uf-tile.has-data text:not(.tile-value){font-size:12px}
+body .uf-tile text.tile-value{font-size:10px;font-weight:500}
+body .uf-tile.has-data text:not(.tile-value){font-size:14px}
+@media(max-width:560px){body .uf-tile text.tile-value{display:none}body .uf-tile.has-data text:not(.tile-value){transform:translateY(6px)}}
 @media(min-width:801px){
   #perguntar{display:grid;grid-template-columns:1fr 1fr;column-gap:56px;align-items:end}
   .closing-top{display:contents}
