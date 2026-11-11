@@ -122,6 +122,8 @@ const shortValue = cents => {
   if (abs >= 99950) return `${sign}${br(Math.round(abs / 10000) / 10, 1)}mil`;
   return `${sign}${br(Math.round(abs / 100), 0)}R$`;
 };
+// Map tiles drop the currency and shorten "milhão/milhões" to "mi".
+const tileText = cents => clean(brlCompact(cents)).replace('R$ ', '').replace(/ milh(?:ão|ões)$/, ' mi');
 const percentOf = value => (clean(value).match(/(\d+(?:,\d+)?)%/) || [])[1];
 
 check('no JS errors on load at 1440 and 390', async () => {
@@ -214,7 +216,9 @@ check('copy', async () => {
   else assert.ok(body.includes('Votações nominais ainda não foram coletadas'), 'votações copy');
   const negative = Object.values(data.categories).find(c => c < 0);
   assert.ok(negative < 0, 'the published sample has a negative category');
-  assert.ok(body.includes(clean(brlCompact(negative))), `negative compact value ${brlCompact(negative)}`);
+  await page.locator('#despesas [data-p=more-cats]').click();
+  const listed = clean(await page.locator('#despesas .donut-legend').innerText());
+  assert.ok(listed.includes(clean(brlCompact(negative))), `negative compact value ${brlCompact(negative)} in the category list`);
   await page.locator('#despesas .donut-caption [data-p=spend-evidence]').click();
   await page.waitForSelector('#detail[open]');
   assert.doesNotMatch(await page.locator('#detail-body').innerText(), /fict[íi]ci/i, 'no fictional wording in the evidence dialog');
@@ -424,6 +428,7 @@ check('negative category', async () => {
   const page = await at(1440);
   const data = await published(page);
   const [name, cents] = Object.entries(data.categories).find(([, c]) => c < 0);
+  await page.locator('#despesas [data-p=more-cats]').click();
   const row = page.locator(`.donut-legend [data-p-highlight="${name}"]`);
   const rowText = clean(await row.innerText());
   assert.ok(rowText.includes(clean(brl(cents))), `exact negative value in the row: ${rowText}`);
@@ -827,7 +832,7 @@ check('map starts neutral', async () => {
     for (const p of data.people) byUf[state.uf[p.id]] = (byUf[state.uf[p.id]] || 0) + p.records.reduce((n, r) => n + r.cents, 0);
     assert.ok(state.tiles.length > 0, 'tiles with data exist');
     for (const t of state.tiles) {
-      const expected = clean(brlCompact(byUf[t.uf])).replace(/^R\$ /, '');
+      const expected = tileText(byUf[t.uf]);
       assert.deepEqual(t.lines, [t.uf, expected], `${t.uf} tile shows its compact value at ${width}`);
     }
     await page.locator('[data-p-uf=SP]').click();
@@ -1349,7 +1354,7 @@ check('map with net-negative totals shades by the largest positive value and str
       const opacity = Number(/fill-opacity:\s*([\d.]+)/.exec(tile.style)?.[1]);
       assert.ok(Math.abs(opacity - (0.2 + 0.8 * cents / max)) < 1e-6, `${uf} fill-opacity ${opacity} for ${cents}`);
     }
-    const expected = clean(brlCompact(cents)).replace('R$ ', '');
+    const expected = tileText(cents);
     assert.equal(clean(tile.value), expected, `${uf} tile value`);
   }
   await page.close();
@@ -1554,6 +1559,19 @@ check('shared link with a question keeps defaults the reader chose, and short li
   await plain.close();
 });
 
+check('a link without uf never matches deputies who have no uf, so a question still renders the page', async () => {
+  const data = await published();
+  const noUf = data.summary.people.filter(q => inOffice(q) && !data.index.people.find(p => p.id === q.id).uf);
+  assert.ok(noUf.length > 0, 'the published data has deputies in office without a uf');
+  for (const search of [`?q=${encodeURIComponent('Quem mais gastou?')}`, `?q=${encodeURIComponent('Quem mais gastou?')}&uf=`]) {
+    const page = await at(1440, { search });
+    assert.equal(await page.evaluate(() => window.Clareia.state.uf), 'Brasil', `uf stays Brasil for ${search}`);
+    assert.match(await text(page.locator('.p-overview-head span')), /deputados · /, 'the Panorama scope line renders');
+    assert.deepEqual(page.errors, [], `no errors for ${search}`);
+    await page.close();
+  }
+});
+
 check('UF travels in the shared link and scopes the answer and cards', async () => {
   const probe = await at(1440);
   const data = await published(probe);
@@ -1608,7 +1626,7 @@ check('map shades only positive values and gives net-negative tiles their own st
     if (cents < 0) {
       assert.ok(/\bnegative\b/.test(tile.cls), `${uf} has the negative class`);
       assert.ok(!/fill-opacity/.test(tile.style || ''), `${uf} is not on the accent intensity scale: ${tile.style}`);
-      const expected = clean(brlCompact(cents)).replace('R$ ', '');
+      const expected = tileText(cents);
       assert.equal(clean(tile.value), expected, `${uf} keeps its value`);
       assert.ok(tile.aria.includes(brl(cents)), `${uf} aria-label keeps the exact value: ${tile.aria}`);
       assert.notEqual(tile.dash, 'none', 'negative tiles are dashed');
