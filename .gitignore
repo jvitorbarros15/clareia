@@ -22,3 +22,5 @@ test-results/
 # Planning docs stay local
 for agents/
 docs/superpowers/plans/
+build/
+.wrangler/

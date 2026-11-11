@@ -133,6 +133,35 @@ npm run verify:ui
 
 Os testes de navegador conferem valores contra os arquivos publicados, navegação até os registros, exportação e comportamento da interface em diferentes larguras. Relatórios e capturas de tela ficam em `output/qa/`, fora do Git.
 
+## Site completo e publicação de teste
+
+As execuções auditadas (histórico, 12 lotes de despesas, projetos, votações e cobertura) ficam listadas em `config/full-site.json`. `npm run build:full` monta o site completo num banco em memória: cada domínio só é aprovado com a auditoria real da própria execução e qualquer auditoria ausente ou reprovada interrompe a montagem. Os caminhos partem de `--data-root` (padrão `data`):
+
+```sh
+npm run fetch:portraits -- --out <fotos>
+npm run build:full -- --out <saida> --portraits <fotos> [--noindex] [--dry-run]
+```
+
+`npm run deploy:test -- --portraits <fotos>` encadeia build em `build/site`, `scan:cpf`, `verify:browser` (amostra de 30 deputados; `node scripts/verify-real.cjs --all` confere todos), `wrangler deploy` e uma conferência do site publicado. Qualquer falha interrompe a cadeia, e sem `--yes` nada é publicado (`--dry-run` simula o deploy; os dois não podem ser usados juntos). `--verify-ui` acrescenta `verify:ui`, escrito para o piloto de 3 deputados. O build do teste usa `--noindex`, que só pode ir para o Worker `clareia`; qualquer outro nome de Worker com `noindex` é recusado. O build também falha se faltar o retrato de quem tem foto oficial (`--allow-missing-portraits` libera isso só em montagens locais) e se o `_headers` não tiver exatamente um bloco `/*` com CSP, HSTS e, no teste, `X-Robots-Tag`.
+
+O Worker em `worker/index.ts` não roda para arquivos que existem: o Cloudflare os serve direto dos assets, com o `Cache-Control` imutável do `_headers`. Só pedidos sem arquivo chegam ao Worker, que marca a resposta de erro como `no-store`, para que um 404 não fique em cache como arquivo imutável.
+
+Passo 5, conferência pós-publicação (`--url`, padrão `https://clareia.clareia.workers.dev`; até 6 tentativas em cerca de 30 s por causa da propagação): `/` com 200, CSP, HSTS e `x-robots-tag: noindex`; `manifest.json` com a mesma `base` do build local; `index.json`, `summary.json` e uma `despesas.json` com o mesmo sha256 dos arquivos locais e `immutable`; um arquivo inexistente com 404 e `no-store`. Qualquer falha encerra o script com erro e mostra o caminho de volta.
+
+Para voltar à versão anterior do Worker de teste:
+
+```sh
+npx wrangler@4.160.0 deployments list
+npx wrangler@4.160.0 versions list
+npx wrangler@4.160.0 rollback [version-id]
+```
+
+Sem `version-id`, o `rollback` volta à implantação imediatamente anterior. Depois, repita a conferência abrindo o site de teste.
+
+A busca de CPF do deploy roda sem `--known`, então CPFs de 11 dígitos sem formatação só são pegos pela varredura agendada do `collect`. Quem tem localmente o arquivo de CPFs conhecidos pode passá-lo com `--known <arquivo>` em `deploy:test`.
+
+As datas `publishedAt` e `checkedAt` do build completo vêm das auditorias das próprias execuções de entrada (a mais recente), ou de `publishedAt` em `config/full-site.json`, para que o mesmo conjunto de entradas gere sempre os mesmos bytes em `data/<hash>/`.
+
 ## Arquitetura
 
 O processamento acontece antes da publicação. A navegação pelo site gerado não precisa consultar um banco ou a API da Câmara a cada visita.

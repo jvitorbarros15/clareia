@@ -1,10 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {withLock} from '../src/lock.ts';
-import {buildExpenseVersion} from '../src/expense-publication.ts';
+import {auditExpenseVersion,buildExpenseVersion} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
-import {activePublication,publishDomain,readPublication,recordDomainAudit,reobservePublication} from '../src/publications.ts';
-import {snapshotId} from '../src/model.ts';
+import {activePublication,publishDomain,recordDomainAudit,reobservePublication} from '../src/publications.ts';
 import {openDB} from '../src/store.ts';
 
 const args=process.argv.slice(2),runs:string[]=[];let historyRun='';
@@ -28,15 +27,7 @@ await withLock(async()=>{
   try{
     // Storing never changes which version is newest: an older version prepared for review must not come back on a later audit.
     await publishDomain(db,'despesas',version,{reobserve:false});
-    // Re-read what the database now holds; the lot audits already re-derived every competence from the sealed originals.
-    const stored=await readPublication(db,version.id),failures:string[]=[];
-    if(!stored)failures.push('not-stored');
-    else{
-      if(snapshotId(stored)!==version.id)failures.push('content-id');
-      if(stored.records.length!==version.validation.recordCount)failures.push('record-count');
-      if(String(stored.records.reduce((n,r)=>n+BigInt(r.cents),0n))!==version.validation.independentTotalCents)failures.push('total');
-    }
-    const report={checkedAt:new Date().toISOString(),status:failures.length?'failed':'passed',failures,lots:lots.length,competences:lots.reduce((n,l)=>n+l.audit.competences,0),selected:version.records.length};
+    const report=await auditExpenseVersion(db,version,lots),failures=report.failures;
     if(failures.length){await recordDomainAudit(db,version.id,'failed',report);console.error(JSON.stringify({id:version.id,failures}));process.exitCode=1;}
     else if(approve){await db.query('BEGIN');try{await reobservePublication(db,version.id);await recordDomainAudit(db,version.id,'passed',report);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}}
     console.log(JSON.stringify({...summary,database,stored:true,audit:report.status,active:(await activePublication(db,'despesas'))?.id===version.id},null,2));
