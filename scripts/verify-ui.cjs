@@ -38,6 +38,9 @@ async function firstEvidencePerson(page) {
 async function revealBar(page, personId) {
   const row = page.locator(`.bar-row[data-id="${personId}"]`), more = page.locator('#comparison [data-action=bars-more]');
   while (!await row.count() && await more.count()) await more.click();
+  // A deputy whose ceiling is not confirmed has no % and is only in the ranking in reais.
+  const reais = page.locator('.measure-toggle [data-measure=valor]');
+  if (!await row.count() && await reais.count()) { await reais.click(); while (!await row.count() && await more.count()) await more.click(); }
   assert.equal(await row.count(), 1, `deputy ${personId} is in the ranking`);
 }
 // The directory also grows in steps; its name filter finds one card.
@@ -84,8 +87,7 @@ let ranked;
 async function rankedIds(page) {
   if (ranked) return ranked;
   const probe = page || await at(1440);
-  while (await probe.locator('#comparison [data-action=bars-more]').count()) await probe.locator('#comparison [data-action=bars-more]').click();
-  ranked = await probe.locator('.bar-row').evaluateAll(rows => rows.map(r => Number(r.dataset.id)));
+  ranked = await probe.evaluate(() => window.Clareia.ranking('gastos', true).map(p => p.officialId));
   if (!page) await probe.close();
   assert.ok(ranked.length >= 3, 'the ranking has deputies');
   return ranked;
@@ -340,7 +342,7 @@ check('bar values fit', async () => {
 });
 
 check('category labels', async () => {
-  const page = await at(1440);
+  const page = await at(1440, { search: '?medida=valor' });
   const data = await published(page);
   const names = Object.keys(data.categories);
   const body = await page.evaluate(() => document.body.innerText);
@@ -1034,7 +1036,7 @@ check('comparison with a positive base keeps its percentage', async () => {
 const rangeLabel = async page => clean(await page.locator((await page.locator('#despesas output').count()) ? '#despesas output' : '#despesas .range-heading h3').innerText());
 
 check('month click scopes every label to the selected month', async () => {
-  const page = await at(1440);
+  const page = await at(1440, { search: '?medida=valor' });
   const data = await published(page);
   const jan = data.people.reduce((n, p) => n + (monthSums(p)[1] || 0), 0), whole = await page.evaluate(() => window.Clareia.span().replace(/ \d+$/, ''));
   await page.locator('#despesas [data-p-month="1"]').click();
@@ -1551,10 +1553,10 @@ check('shared link with a question keeps defaults the reader chose, and short li
   assert.deepEqual(await reopened.evaluate(() => [window.Clareia.state.metric, window.Clareia.state.tab, window.Clareia.state.category]), ['total', 'gastos', 'Todas'], 'reopened link keeps Total');
   await reopened.close();
   await page.close();
-  const plain = await at(1440);
+  const plain = await at(1440, { search: '?medida=valor' });
   await plain.locator('.metric-toggle [data-metric=mensal]').click();
   await plain.locator('.metric-toggle [data-metric=total]').click();
-  const keys = [...(await searchOf(plain)).keys()].filter(k => k !== 'destaque');
+  const keys = [...(await searchOf(plain)).keys()].filter(k => k !== 'destaque' && k !== 'medida');
   assert.deepEqual(keys, [], 'a link without a question carries no default parameters');
   await plain.close();
 });
@@ -2069,7 +2071,7 @@ check('rankings need the minimum months of exercise and the average divides by m
   const data = await published();
   const min = Math.min(6, data.months.length), short = data.summary.people.find(q => !data.withoutData.includes(q.id) && exercisedMonths(q) < min && !q.months.some(m => m.held));
   assert.ok(short, 'the published data has a deputy with fewer months of exercise than the minimum');
-  const page = await at(1440);
+  const page = await at(1440, { search: '?medida=valor' });
   const info = await page.evaluate(id => { const C = window.Clareia, p = C.person(String(id)); return { min: C.MIN_MONTHS, exercised: p.exercisedMonths, months: p.months, ranked: C.ranking('gastos').some(x => x.officialId === id), few: C.fewMonths(p), coverage: window.ClareiaData.coverage.length }; }, short.id);
   assert.equal(info.min, min);
   assert.equal(info.exercised, exercisedMonths(short), 'months of exercise follow the published months');
@@ -2120,6 +2122,87 @@ check('every ranking tab renders rows or an explicit empty message with its reas
       await page.close();
     }
   }
+});
+
+// Independent of the page: the share of the ceiling recomputed from the summary's months and ceiling table with plain BigInt arithmetic.
+async function expectedShares(page) {
+  const raw = await page.evaluate(async () => { const m = await (await fetch('/manifest.json')).json(), s = await (await fetch(`/${m.base}/summary.json`)).json(), i = await (await fetch(`/${m.base}/index.json`)).json(); return { s, names: Object.fromEntries(i.people.map(p => [p.id, p.name])) }; });
+  const rows = [];
+  for (const p of raw.s.people) {
+    const held = p.months.some(m => m.held), exercised = p.months.filter(m => m.exercise !== 'outside' || m.records > 0).length, none = p.records === 0 && p.months.every(m => !m.exercise || ['unknown', 'outside', 'conflict'].includes(m.exercise));
+    if (none || held || exercised < Math.min(6, p.months.length)) continue;
+    const counted = p.months.filter(m => (m.exercise !== 'outside' || m.records > 0) && !m.held && m.exercise !== 'partial');
+    if (!counted.length || counted.some(m => m.ufStatus !== 'single' || !raw.s.ceiling.byUf[m.uf])) continue;
+    const num = counted.reduce((n, m) => n + BigInt(m.cents), 0n), den = counted.reduce((n, m) => n + BigInt(raw.s.ceiling.byUf[m.uf][m.month - 1]), 0n);
+    rows.push({ id: p.id, name: raw.names[p.id], num, den, tenths: (num * 2000n + den) / (2n * den), counted, excluded: p.months.filter(m => (m.exercise !== 'outside' || m.records > 0) && (m.held || m.exercise === 'partial')) });
+  }
+  const cmp = (a, b) => (a.num * b.den === b.num * a.den ? 0 : a.num * b.den > b.num * a.den ? -1 : 1) || a.name.localeCompare(b.name, 'pt-BR');
+  const asc = (a, b) => (a.num * b.den === b.num * a.den ? 0 : a.num * b.den > b.num * a.den ? 1 : -1) || a.name.localeCompare(b.name, 'pt-BR');
+  return { rows, desc: [...rows].sort(cmp), asc: [...rows].sort(asc), ceiling: raw.s.ceiling };
+}
+const pct1 = tenths => (Number(tenths) / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+const reais = cents => clean((Number(cents) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/^-/, '−'));
+
+check('default ranking orders by % of the ceiling, shows reais beside it, the caveats, and the switch returns to reais', async () => {
+  const page = await at(1440), exp = await expectedShares(page);
+  assert.ok(exp.rows.length > 3, 'some deputies have a confirmed ceiling');
+  assert.equal(await page.locator('.measure-toggle [data-measure=teto]').getAttribute('aria-pressed'), 'true', '% is the default');
+  assert.equal(await page.locator('.metric-toggle [data-metric=mensal]').count(), 0, 'Total / Por mês does not apply to the %');
+  for (const [tab, list] of [['gastos', exp.desc], ['menos', exp.asc]]) {
+    await page.locator(`[data-tab=${tab}]`).click();
+    const cards = await page.locator('.rank-card').evaluateAll(els => els.map(el => [el.querySelector('.person-name').textContent, el.querySelector('.value-button').textContent.trim(), el.querySelector('.card-caption').textContent]));
+    list.slice(0, 3).forEach((r, i) => { assert.equal(cards[i][0], r.name, `${tab} card ${i + 1} name`); assert.equal(cards[i][1], pct1(r.tenths), `${tab} card ${i + 1} %`); assert.ok(clean(cards[i][2]).includes(reais(r.num)), `${tab} card shows the reais: ${cards[i][2]}`); });
+    const bars = await page.locator('#comparison .bar-row').evaluateAll(els => els.map(el => [el.querySelector('.bar-name').textContent, el.querySelector('.bar-value').firstChild.textContent.trim(), el.querySelector('.bar-money').textContent, parseFloat(el.querySelector('.track i').style.width)]));
+    assert.equal(bars.length, 10);
+    bars.forEach((b, i) => { assert.equal(b[0], list[i].name, `${tab} bar ${i + 1}`); assert.equal(b[1], pct1(list[i].tenths)); assert.equal(clean(b[2]), reais(list[i].num)); });
+    const value = b => Number(b[1].replace(',', '.').replace('%', '')), top = Math.max(100, ...bars.map(value));
+    bars.forEach(b => assert.ok(Math.abs(b[3] - value(b) / top * 100) < 0.2, `bar length is the %: ${b[1]} ${b[3]}`));
+  }
+  const note = await text(page.locator('.ranking-context'));
+  assert.match(note, /Um mês isolado pode passar de 100%/); assert.match(note, /adicionais de líderes/); assert.match(note, /além da cota/); assert.match(note, /Total e Por mês não se aplicam/);
+  assert.equal(await page.locator('.ranking-context [data-action=methodology]').count(), 1);
+  await page.locator('.measure-toggle [data-measure=valor]').click();
+  assert.equal(await page.locator('.metric-toggle [data-metric=mensal]').count(), 1, 'Total / Por mês returns with reais');
+  const names = await page.evaluate(() => window.Clareia.ranking('gastos', true).slice(0, 3).map(p => p.name));
+  assert.deepEqual(await page.locator('.rank-card .person-name').allTextContents(), names);
+  assert.doesNotMatch(await text(page.locator('.rank-card .value-button').first()), /%/);
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
+
+check('% evidence dialog shows the counted months, both sums, the division and the excluded months, matching the data', async () => {
+  const page = await at(1440), exp = await expectedShares(page);
+  const target = exp.desc.find(r => r.excluded.length) || exp.desc[0];
+  await revealBar(page, target.id);
+  await page.locator(`.bar-row[data-id="${target.id}"]`).click();
+  await page.waitForSelector('#detail[open] .ceiling-table');
+  const rows = await page.locator('#detail .ceiling-table tbody tr').evaluateAll(trs => trs.map(tr => [...tr.children].map(td => td.textContent.trim())));
+  assert.equal(rows.length, target.counted.length, 'one row per counted month');
+  target.counted.forEach((m, i) => { assert.equal(rows[i][1], m.uf); assert.equal(clean(rows[i][2]), reais(m.cents)); assert.equal(clean(rows[i][3]), reais(exp.ceiling.byUf[m.uf][m.month - 1])); });
+  const foot = await page.locator('#detail .ceiling-table tfoot td').allTextContents();
+  assert.equal(clean(foot[0]), reais(target.num)); assert.equal(clean(foot[1]), reais(target.den));
+  const body = await text(page.locator('#detail-body'));
+  assert.ok(body.includes(`${reais(target.num)} ÷ ${reais(target.den)} × 100`), 'the division is written out');
+  assert.ok(body.includes(pct1(target.tenths)), 'the result is the ranked %');
+  assert.match(body, new RegExp(`${target.excluded.length} meses? excluídos?|Nenhum mês excluído`));
+  for (const m of target.excluded) assert.ok(body.includes(m.exercise === 'partial' ? 'mês parcial' : 'mês em revisão'), 'the reason of each excluded month');
+  assert.ok(body.includes('Ato da Mesa nº 270/2023'), 'cites the act');
+  assert.equal(await page.locator('#detail [data-action=methodology]').count(), 1);
+  await page.locator('#detail [data-action=methodology]').click();
+  const method = await text(page.locator('#detail-body'));
+  assert.match(method, /% do teto da cota usado/); assert.match(method, /Ato da Mesa nº 43\/2009/); assert.match(method, /Ato da Mesa nº 270\/2023/);
+  assert.ok(await page.locator('#detail-body a[href^="https://www2.camara.leg.br/legin/int/atomes/2009/"]').count() > 0, 'the methodology links the source');
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
+
+check('the % numerator is the exact sum of the raw records of the counted months', async () => {
+  const page = await at(1440), exp = await expectedShares(page);
+  for (const target of [exp.desc[0], exp.desc.find(r => r.excluded.length)]) {
+    const sum = await page.evaluate(async ([id, months]) => { const m = await (await fetch('/manifest.json')).json(), r = await (await fetch(`/${m.base}/deputados/${id}/despesas.json`)).json(); return r.filter(x => months.includes(x.month)).reduce((n, x) => n + x.cents, 0); }, [target.id, target.counted.map(m => m.month)]);
+    assert.equal(BigInt(sum), target.num);
+  }
+  await page.close();
 });
 
 (async () => {
