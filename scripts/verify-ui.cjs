@@ -2129,13 +2129,11 @@ async function expectedShares(page) {
     const held = p.months.some(m => m.held), exercised = p.months.filter(m => m.exercise !== 'outside' || m.records > 0).length, none = p.records === 0 && p.months.every(m => !m.exercise || ['unknown', 'outside', 'conflict'].includes(m.exercise));
     if (none || held || exercised < Math.min(6, p.months.length)) continue;
     const counted = p.months.filter(m => (m.exercise !== 'outside' || m.records > 0) && !m.held && m.exercise !== 'partial');
-    if (!counted.length || counted.some(m => m.ufStatus !== 'single' || !raw.s.ceiling.byUf[m.uf])) continue;
+    if (!counted.length || counted.some(m => m.exercise !== 'full' || m.ufStatus !== 'single' || !raw.s.ceiling.byUf[m.uf])) continue;
     const num = counted.reduce((n, m) => n + BigInt(m.cents), 0n), den = counted.reduce((n, m) => n + BigInt(raw.s.ceiling.byUf[m.uf][m.month - 1]), 0n);
     rows.push({ id: p.id, name: raw.names[p.id], num, den, tenths: (num * 2000n + den) / (2n * den), counted, excluded: p.months.filter(m => (m.exercise !== 'outside' || m.records > 0) && (m.held || m.exercise === 'partial')) });
   }
-  const cmp = (a, b) => (a.num * b.den === b.num * a.den ? 0 : a.num * b.den > b.num * a.den ? -1 : 1) || a.name.localeCompare(b.name, 'pt-BR');
-  const asc = (a, b) => (a.num * b.den === b.num * a.den ? 0 : a.num * b.den > b.num * a.den ? 1 : -1) || a.name.localeCompare(b.name, 'pt-BR');
-  return { rows, desc: [...rows].sort(cmp), asc: [...rows].sort(asc), ceiling: raw.s.ceiling };
+  return { rows, ceiling: raw.s.ceiling };
 }
 const pct1 = tenths => (Number(tenths) / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 const reais = cents => clean((Number(cents) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/^-/, '−'));
@@ -2198,7 +2196,7 @@ check('the pill opens the % evidence dialog: subtitle, warning with the count ab
   await page.waitForSelector('#detail[open] .ceiling-table');
   assert.equal(clean(await text(page.locator('#detail .dialog-subtitle'))), 'A porcentagem do teto, passo a passo');
   const warning = clean(await text(page.locator('#detail .ceiling-warning')));
-  assert.ok(warning.includes(`Atenção: ${exp.rows.filter(r => Number(r.tenths) > 1000).length} de ${exp.rows.length} deputados aparecem acima de 100% no ano`), 'warning counts deputies above 100%');
+  assert.ok(warning.includes(`Atenção: ${exp.rows.filter(r => r.num > r.den).length} de ${exp.rows.length} deputados comparáveis do país aparecem acima de 100% no ano`), 'warning counts comparable deputies nationwide strictly above 100%');
   assert.match(warning, /adicionais de líderes/); assert.match(warning, /além da cota/); assert.doesNotMatch(warning, /levemente/);
   const rows = await page.locator('#detail .ceiling-table tbody tr').evaluateAll(trs => trs.map(tr => [...tr.children].map(td => td.textContent.trim())));
   assert.equal(rows.length, target.counted.length, 'one row per counted month');
@@ -2233,6 +2231,17 @@ check('% evidence dialog shows the counted months, both sums, the division and t
   const method = await text(page.locator('#detail-body'));
   assert.match(method, /% do teto da cota usado/); assert.match(method, /Ato da Mesa nº 43\/2009/); assert.match(method, /Ato da Mesa nº 270\/2023/);
   assert.ok(await page.locator('#detail-body a[href^="https://www2.camara.leg.br/legin/int/atomes/2009/"]').count() > 0, 'the methodology links the source');
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
+
+check('the % warning count stays nationwide when a UF filter is active', async () => {
+  const page = await at(1440, { search: '?uf=SP' }), exp = await expectedShares(page);
+  const pill = page.locator('.rank-card button.ceiling-pill').first();
+  assert.ok(await pill.count(), 'a confirmed pill exists in SP');
+  await pill.click();
+  await page.waitForSelector('#detail[open] .ceiling-warning');
+  assert.ok(clean(await text(page.locator('#detail .ceiling-warning'))).includes(`Atenção: ${exp.rows.filter(r => r.num > r.den).length} de ${exp.rows.length} deputados comparáveis do país`), 'same national count under ?uf=SP');
   assert.equal(page.errors.length, 0, page.errors.join('|'));
   await page.close();
 });

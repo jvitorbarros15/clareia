@@ -14,6 +14,8 @@ export function ceilingUse(months:UseMonth[],ceiling:UseCeiling|null,coverageApp
     if(coverageApproved&&m.exercise==='outside'&&m.records===0){outside.push(m.month);continue;}
     if(m.held){excluded.push({month:m.month,reason:'held'});continue;}
     if(coverageApproved&&m.exercise==='partial'){excluded.push({month:m.month,reason:'partial'});continue;}
+    // Only a month confirmed as fully in office has a known ceiling; anything else leaves the figure unconfirmed.
+    if(coverageApproved&&m.exercise!=='full'){missing.push(m.month);continue;}
     const uf=coverageApproved&&m.ufStatus==='single'?m.uf:null,cents=uf&&ceiling?.byUf[uf]?.[m.month-1];
     if(!uf||!cents){missing.push(m.month);continue;}
     counted.push({month:m.month,uf,expenseCents:m.cents,ceilingCents:cents,records:m.records});
@@ -26,9 +28,4 @@ export function ceilingUse(months:UseMonth[],ceiling:UseCeiling|null,coverageApp
 export function tenthsOf(num:number,den:number):number{
   const n=BigInt(num),d=BigInt(den),neg=n<0n,a=neg?-n:n,t=(a*2000n+d)/(2n*d);
   return Number(neg?-t:t);
-}
-// Exact order of two ok results by their fraction, highest first.
-export function compareUse(a:Extract<CeilingUse,{status:'ok'}>,b:Extract<CeilingUse,{status:'ok'}>):number{
-  const x=BigInt(a.expenseCents)*BigInt(b.ceilingCents),y=BigInt(b.expenseCents)*BigInt(a.ceilingCents);
-  return x===y?0:x>y?-1:1;
 }

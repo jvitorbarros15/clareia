@@ -8,7 +8,7 @@ import type {Expense} from '../src/model.ts';
 import {ceilingReport,deriveCeiling} from '../src/cota-ceiling.ts';
 import {auditCeiling} from '../src/cota-ceiling-audit.ts';
 import {buildSiteCeiling} from '../src/ceiling-site.ts';
-import {ceilingUse,compareUse,tenthsOf} from '../src/ceiling-use.ts';
+import {ceilingUse,tenthsOf} from '../src/ceiling-use.ts';
 import {buildSiteSummary} from '../src/site-summary.ts';
 import {openDB} from '../src/store.ts';
 import {publishDomain,recordDomainAudit} from '../src/publications.ts';
@@ -72,8 +72,18 @@ test('a counted month without a confirmed UF ceiling is not confirmed, never zer
   assert.equal(ceilingUse([month(1,5,{uf:'XX'})],table,true).status,'unconfirmed');
   assert.equal(ceilingUse([month(1,5,{exercise:'partial'})],table,true).status,'unconfirmed');
 });
-test('tenths round half up from exact sums and ordering compares exact fractions',()=>{
+test('tenths round half away from zero from exact sums',()=>{
   assert.equal(tenthsOf(1,8),125);assert.equal(tenthsOf(1,3),333);assert.equal(tenthsOf(2,3),667);assert.equal(tenthsOf(0,5),0);assert.equal(tenthsOf(5,1000),5);assert.equal(tenthsOf(4,1000),4);
-  const ok=(a:number,b:number)=>({status:'ok' as const,counted:[],excluded:[],outside:[],expenseCents:a,ceilingCents:b,tenths:tenthsOf(a,b)});
-  assert.equal(compareUse(ok(1001,10000),ok(1000,10000)),-1);assert.equal(compareUse(ok(1,2),ok(2,4)),0);assert.equal(compareUse(ok(1,3),ok(1,2)),1);
+  assert.equal(tenthsOf(1,2000),1);assert.equal(tenthsOf(-1,2000),-1);assert.equal(tenthsOf(-1,8),-125);assert.equal(tenthsOf(-1,3),-333);
+});
+test('only fully exercised months count; unknown, conflict and outside months with expenses leave the figure unconfirmed',()=>{
+  for(const exercise of ['unknown','conflict',null])assert.equal(ceilingUse([month(1,5),month(2,5,{exercise})],table,true).status,'unconfirmed',String(exercise));
+  const late=ceilingUse([month(1,5),month(2,5,{exercise:'outside'})],table,true);
+  assert.equal(late.status,'unconfirmed');assert.deepEqual(late.outside,[]);
+  assert.equal(ceilingUse([month(1,5),month(2,5,{ufStatus:'changed'})],table,true).status,'unconfirmed');
+});
+test('a negative month lowers the sum and the percent keeps its sign',()=>{
+  const u=ceilingUse([month(1,4283733),month(2,-4283733*2)],table,true);
+  assert.equal(u.status,'ok');if(u.status!=='ok')return;
+  assert.equal(u.expenseCents,-4283733);assert.equal(u.tenths,-500);
 });

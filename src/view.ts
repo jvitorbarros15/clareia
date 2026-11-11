@@ -32,4 +32,4 @@ export function personView(index:PublicIndex,records:Expense[]|null,params:URLSe
   const snapshot={...index,id:index.snapshotId,pages:[],records};
   return results(snapshot,parseFilters(params,snapshot));
 }
-export {ceilingUse,tenthsOf,compareUse} from "./ceiling-use.ts";
+export {ceilingUse,tenthsOf} from "./ceiling-use.ts";
