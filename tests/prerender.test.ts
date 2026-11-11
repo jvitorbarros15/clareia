@@ -146,16 +146,16 @@ async function built(options:Parameters<typeof buildSite>[3],task:(dist:string,p
   }finally{await db.close();await fs.rm(dir,{recursive:true,force:true});}
 }
 test('a build writes deputy, state and home pages and rebuilds byte for byte',()=>built({siteUrl:SITE,sitemap:true},async(dist,id)=>{
-  const ana=await fs.readFile(path.join(dist,'deputado','1-ana-souza','index.html'),'utf8');
+  const ana=await fs.readFile(path.join(dist,'deputado','1-ana-souza.html'),'utf8');
   assert.ok(ana.includes('<title>Ana &lt;&amp;&quot;&gt; Souza — Clareia</title>'));
   assert.equal(meta(ana,'og:image'),`${SITE}/data/${id}/portraits/1.jpg`);
   assert.equal(meta(ana,'og:image:width'),'300');
   assert.equal(meta(ana,'og:image:height'),'400');
   assert.ok(ana.includes('<script defer src="/view.js"></script>'));
-  const ze=await fs.readFile(path.join(dist,'deputado','2-ze-avila','index.html'),'utf8');
+  const ze=await fs.readFile(path.join(dist,'deputado','2-ze-avila.html'),'utf8');
   assert.equal(meta(ze,'og:image'),`${SITE}/icon-512.png`);
   assert.equal((await fs.readdir(path.join(dist,'estado'))).length,27);
-  assert.ok((await fs.readFile(path.join(dist,'estado','SP','index.html'),'utf8')).includes('São Paulo: 1 deputado neste recorte.'));
+  assert.ok((await fs.readFile(path.join(dist,'estado','SP.html'),'utf8')).includes('São Paulo: 1 deputado neste recorte.'));
   assert.ok((await fs.readFile(path.join(dist,'sitemap.xml'),'utf8')).includes(`${SITE}/deputado/2-ze-avila`));
   assert.ok((await fs.readFile(path.join(dist,'robots.txt'),'utf8')).includes(`Sitemap: ${SITE}/sitemap.xml`));
   const first=await tree(dist);
@@ -169,10 +169,10 @@ test('a noindex build has no sitemap and disallows everything; both flags togeth
   const db=await openDB(true);
   try{await assert.rejects(buildSite(db,path.join(os.tmpdir(),'never'),os.tmpdir(),{sitemap:true,noindex:true}),/não podem ser usados juntos/);}finally{await db.close();}
 });
-test('the local server answers a prerendered folder with its own page',async()=>{
+test('the local server answers a prerendered route with its own page',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-serve-'));
-  await fs.mkdir(path.join(dir,'deputado','1-ana'),{recursive:true});
-  await fs.writeFile(path.join(dir,'index.html'),'home');await fs.writeFile(path.join(dir,'deputado','1-ana','index.html'),'ana');
+  await fs.mkdir(path.join(dir,'deputado'),{recursive:true});
+  await fs.writeFile(path.join(dir,'index.html'),'home');await fs.writeFile(path.join(dir,'deputado','1-ana.html'),'ana');
   const server=createApp(dir,0);await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
   const url=`http://127.0.0.1:${(server.address() as {port:number}).port}`;
   try{

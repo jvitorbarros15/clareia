@@ -20,8 +20,8 @@ export function createApp(root:string,port:number){
       if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405);res.end('Método não permitido');return;}
       const target=path.resolve(base,'.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname));
       let file=target,body=target.startsWith(base+path.sep)&&path.basename(target)!=='_headers'?await fs.readFile(target).catch(()=>null):null;
-      // A folder with an index.html answers with it, as the static host does for the prerendered pages.
-      if(!body&&target.startsWith(base+path.sep)){const index=path.join(target,'index.html');body=await fs.readFile(index).catch(()=>null);if(body)file=index;}
+      // A prerendered page <route>.html answers at <route>, as the static host does.
+      if(!body&&target.startsWith(base+path.sep)&&!path.extname(target)){const page=`${target}.html`;body=await fs.readFile(page).catch(()=>null);if(body)file=page;}
       // Routes such as /deputado/123-nome have no file: like the static host, they answer with the page and the page reads the address.
       if(!body&&!path.extname(url.pathname)&&!url.pathname.startsWith('/data/')&&path.basename(target)!=='_headers'){file=path.join(base,'index.html');body=await fs.readFile(file).catch(()=>null);}
       if(!body){res.writeHead(404);res.end('Não encontrado');return;}

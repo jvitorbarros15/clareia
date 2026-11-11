@@ -146,14 +146,14 @@ export async function writePrerendered(outDir:string,publicationId:string,deputi
   for(const p of deputies){
     const file=path.join(outDir,'data',publicationId,'portraits',`${p.id}.jpg`),bytes=await fs.readFile(file).catch(()=>null);
     const portrait=bytes?{url:`${options.siteUrl}/data/${publicationId}/portraits/${p.id}.jpg`,...jpegSize(bytes)??{}}:null;
-    const dir=path.join(outDir,deputyPath(p.id,p.name).slice(1));
-    await fs.mkdir(dir,{recursive:true});
-    await fs.writeFile(path.join(dir,'index.html'),renderDeputy(shell,p,period,options.siteUrl,portrait));
+    // A file named <route>.html is served at <route> with no redirect; a folder index would answer 307 to a trailing slash.
+    const page=path.join(outDir,`${deputyPath(p.id,p.name).slice(1)}.html`);
+    await fs.mkdir(path.dirname(page),{recursive:true});
+    await fs.writeFile(page,renderDeputy(shell,p,period,options.siteUrl,portrait));
   }
   for(const uf of Object.keys(UFS)){
-    const dir=path.join(outDir,'estado',uf);
-    await fs.mkdir(dir,{recursive:true});
-    await fs.writeFile(path.join(dir,'index.html'),renderState(shell,uf,deputies,period,options.siteUrl));
+    await fs.mkdir(path.join(outDir,'estado'),{recursive:true});
+    await fs.writeFile(path.join(outDir,'estado',`${uf}.html`),renderState(shell,uf,deputies,period,options.siteUrl));
   }
   await fs.writeFile(path.join(outDir,'index.html'),renderHome(shell,options.siteUrl));
   await fs.writeFile(path.join(outDir,'robots.txt'),robotsTxt(options));
