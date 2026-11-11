@@ -1,6 +1,6 @@
 export type UseMonth={month:number;cents:number;records:number;exercise:string|null;held:boolean;ufStatus:string;uf:string|null};
 export type UseCeiling={year:number;byUf:Record<string,number[]>};
-export type CountedMonth={month:number;uf:string;expenseCents:number;ceilingCents:number};
+export type CountedMonth={month:number;uf:string;expenseCents:number;ceilingCents:number;records:number};
 export type Excluded={month:number;reason:'held'|'partial'};
 export type CeilingUse=
   |{status:'ok';counted:CountedMonth[];excluded:Excluded[];outside:number[];expenseCents:number;ceilingCents:number;tenths:number}
@@ -16,7 +16,7 @@ export function ceilingUse(months:UseMonth[],ceiling:UseCeiling|null,coverageApp
     if(coverageApproved&&m.exercise==='partial'){excluded.push({month:m.month,reason:'partial'});continue;}
     const uf=coverageApproved&&m.ufStatus==='single'?m.uf:null,cents=uf&&ceiling?.byUf[uf]?.[m.month-1];
     if(!uf||!cents){missing.push(m.month);continue;}
-    counted.push({month:m.month,uf,expenseCents:m.cents,ceilingCents:cents});
+    counted.push({month:m.month,uf,expenseCents:m.cents,ceilingCents:cents,records:m.records});
   }
   if(missing.length||!counted.length)return {status:'unconfirmed',counted,excluded,outside,missing};
   const expenseCents=counted.reduce((n,c)=>n+c.expenseCents,0),ceilingCents=counted.reduce((n,c)=>n+c.ceilingCents,0);

@@ -24,13 +24,15 @@
   if (categories.includes(initial.get('categoria')) || initial.get('categoria') === 'Todas') fromURL.category = initial.get('categoria');
   if (['total', 'mensal'].includes(initial.get('metrica'))) fromURL.metric = initial.get('metrica');
   if (['gastos', 'menos', 'projetos'].includes(initial.get('aba'))) fromURL.tab = initial.get('aba');
+  if (['teto', 'valor'].includes(initial.get('medida'))) fromURL.measure = initial.get('medida');
+  else if (fromURL.metric === 'mensal') fromURL.measure = 'valor';
   const urlUf = initial.get('uf');
   if (urlUf && D.dataset().some(p => !p.noExercise && p.uf === urlUf)) fromURL.uf = urlUf;
   const state = {
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
-    tab: fromURL.tab ?? 'gastos', barLimit: BAR_STEP,
+    tab: fromURL.tab ?? 'gastos', measure: fromURL.measure ?? 'teto', barLimit: BAR_STEP,
     query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && comparable(D.dataset().find(p => p.id === initial.get('destaque'))) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
   let dialogTrigger = null, toastTimer, listOrigin = null;
@@ -74,10 +76,19 @@
     const result = sum(cells(p));
     return state.metric === 'mensal' ? result / p.months : result;
   }
-  const formatted = (p, kind = state.tab) => kind === 'projetos' ? (p.approved === null ? pending : approvedText(p)) : compact(value(p, kind));
+  const formatted = (p, kind = state.tab) => kind === 'projetos' ? (p.approved === null ? pending : approvedText(p)) : showPercent() ? pctText(p) : compact(value(p, kind));
   // The answer ranks expenses even when the Projetos tab is open, where value() has nothing to sort by.
-  function ranking(kind = state.tab) {
-    return sortedBy(all().filter(p => comparable(p) && (state.uf === 'Brasil' || p.uf === state.uf)), p => state.tab === 'menos' ? -value(p, kind) : value(p, kind));
+  // The share of the ceiling is over the whole period and counts every category, so Total/Por mês and the category filter do not apply to it.
+  const showPercent = () => state.tab !== 'projetos' && state.measure === 'teto' && Boolean(D.ceiling) && state.category === 'Todas';
+  const usable = p => p.use.status === 'ok';
+  const pctText = p => (p.use.tenths / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+  const proofKind = () => showPercent() ? ' data-kind="teto"' : '';
+  const byShare = (people, ascending) => [...people].sort((a, b) => (ascending ? -1 : 1) * ClareiaView.compareUse(a.use, b.use) || a.name.localeCompare(b.name, 'pt-BR'));
+  const inScope = () => all().filter(p => comparable(p) && inUF(p));
+  // Answers and the featured deputy stay in reais, whatever the ranking measure.
+  function ranking(kind = state.tab, inReais = false) {
+    if (!inReais && showPercent()) return byShare(inScope().filter(usable), state.tab === 'menos');
+    return sortedBy(inScope(), p => state.tab === 'menos' ? -value(p, kind) : value(p, kind));
   }
   const icon = name => {
     const paths = {
@@ -106,7 +117,7 @@
     url.search = '';
     // On load an absent parameter means "let the question decide", so a link with a question spells out every choice, defaults included.
     const explicit = Boolean(state.query);
-    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || state.metric !== 'total' ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
+    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || state.metric !== 'total' ? state.metric : '', medida: explicit || state.measure !== 'teto' ? state.measure : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
     try { history.replaceState(null, '', url); } catch { /* file previews may restrict history */ }
   }
   const examples = () => { const [a, b] = byTotal(); return [`${first(a)} gastou mais que ${first(b)}?`, 'Quem mais gastou por mês?', 'Quem mais gastou com passagens?', 'Quem gastou menos?']; };
@@ -121,13 +132,22 @@
     return `<header class="site-header"><a class="logo" href="/" aria-label="Clareia, início">${logo}</a>
       <button class="header-search" data-action="focus-search" aria-label="Ir para a busca">${icon('search')}</button></header>`;
   }
+  function measureToggle() {
+    return `<div class="metric-toggle measure-toggle" role="group" aria-label="Medida do ranking"><button data-measure="teto" aria-pressed="${state.measure === 'teto'}">% do teto usado</button><button data-measure="valor" aria-pressed="${state.measure === 'valor'}">Valor em reais</button></div>`;
+  }
   function metricToggle() {
     return `<div class="metric-toggle" role="group" aria-label="Forma de comparar"><button data-metric="total" aria-pressed="${state.metric === 'total'}">Total</button><button data-metric="mensal" aria-pressed="${state.metric === 'mensal'}">Por mês</button></div>`;
   }
   function tabs() {
     return `<div class="tabs" role="group" aria-label="Indicador">${[['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']].map(([key, label]) => `<button data-tab="${key}" aria-pressed="${state.tab === key}">${label}</button>`).join('')}</div>`;
   }
+  const monthsWord = n => n === 1 ? 'mês' : 'meses';
+  function shareCaption(p) {
+    const u = p.use, out = u.excluded.length;
+    return `${money(u.expenseCents)} de ${money(u.ceilingCents)} de limite · ${u.counted.length} ${monthsWord(u.counted.length)} contados${out ? ` · ${out} ${out === 1 ? 'excluído' : 'excluídos'}` : ''}`;
+  }
   function caption(p) {
+    if (showPercent()) return shareCaption(p);
     return `${state.metric === 'mensal' ? 'Média mensal' : 'Cota parlamentar'} · ${span()} · ${p.months} ${p.months === 1 ? 'mês' : 'meses'} no recorte`;
   }
   function cards() {
@@ -136,31 +156,38 @@
     if (state.tab === 'projetos' && !projects) return `<div class="empty-state"><b>Projetos de lei ainda não foram coletados.</b><p>A próxima etapa inclui PL, PLP e PEC da Câmara, separando autoria principal de coautoria. Nenhum número é mostrado antes da conferência.</p><button class="outline-button" data-tab="gastos">Ver gastos</button></div>`;
     return (projects ? projectRanking() : ranking()).slice(0, 3).map((p, i) => `<article class="rank-card editorial-card" data-person="${p.id}">
       <button class="portrait-button" data-action="profile" data-id="${p.id}" aria-label="Abrir perfil de ${escape(p.name)}">${photo(p)}<span class="rank-number">0${i + 1}</span></button>
-      <div class="card-info"><h3 class="person-name">${escape(p.name)}</h3><p class="editorial-person-context">${escape(cardContext(p))}</p><button class="value-button" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}: ${projects ? approvedText(p) : money(value(p))}. Como chegamos nisso?">${formatted(p)}</button>
-      <p class="card-caption">${projects ? `Projetos aprovados · ${billsPeriod()}` : caption(p)}</p><button class="editorial-proof" data-action="evidence" data-id="${p.id}">Como chegamos nisso? →</button></div></article>`).join('');
+      <div class="card-info"><h3 class="person-name">${escape(p.name)}</h3><p class="editorial-person-context">${escape(cardContext(p))}</p><button class="value-button" data-action="evidence" data-id="${p.id}"${proofKind()} aria-label="${escape(p.name)}: ${projects ? approvedText(p) : showPercent() ? `${pctText(p)} do teto` : money(value(p))}. Como chegamos nisso?">${formatted(p)}</button>
+      <p class="card-caption">${projects ? `Projetos aprovados · ${billsPeriod()}` : caption(p)}</p><button class="editorial-proof" data-action="evidence" data-id="${p.id}"${proofKind()}>Como chegamos nisso? →</button></div></article>`).join('');
+  }
+  function categoryNote() { return D.ceiling && state.measure === 'teto' && state.tab !== 'projetos' && state.category !== 'Todas' ? 'O % do teto vale só para todas as categorias; com uma categoria filtrada, o ranking mostra valores em reais. ' : ''; }
+  function percentNote() {
+    const pool = inScope(), ranked = pool.filter(usable), left = pool.length - ranked.length, excluded = ranked.reduce((n, p) => n + p.use.excluded.length, 0), who = ranked.filter(p => p.use.excluded.length).length, where = state.uf === 'Brasil' ? '' : ` de ${escape(state.uf)}`;
+    return `<strong>% do teto usado</strong> = despesas ÷ limite mensal da cota da UF do deputado, somados nos meses contados. Vale para o período inteiro, então Total e Por mês não se aplicam. Inclui ${ranked.length} de ${pool.length} deputados comparáveis${where}${excluded ? `; ${excluded} ${monthsWord(excluded)} de ${who} ${who === 1 ? 'deputado' : 'deputados'} ficaram fora da conta (posse ou afastamento no meio do mês, ou mês em revisão)` : ''}${left ? `; ${left} ${left === 1 ? 'fica de fora porque o limite de algum mês não foi confirmado' : 'ficam de fora porque o limite de algum mês não foi confirmado'} (UF do mês em revisão), e nenhum aparece com 0%` : ''}.<span class="caveat">Um mês isolado pode passar de 100%: o saldo não usado acumula ao longo do ano.</span><span class="caveat">Os adicionais de líderes e de outros cargos não estão no limite, então esses deputados podem aparecer um pouco acima.</span><span class="caveat">Passagens extras a Brasília “além da cota”, desde 2023, entram como passagens comuns, e o % pode ficar levemente superestimado.</span>Gasto maior não significa irregularidade. <button class="text-button" data-action="methodology">Fontes e metodologia →</button>`;
   }
   function rankNote() {
     if (state.tab === 'projetos' && window.ClareiaData.billsApproved) {
       const scope = all().filter(inUF).length, included = projectRanking().length, excluded = scope - included;
       return `Projetos aprovados: PL, PLP e PEC apresentados em ${billsPeriod()} em que o deputado é proponente (autor), não apenas signatário, e que viraram norma jurídica: lei ordinária, lei complementar ou emenda constitucional, com a norma identificada no despacho oficial da Câmara. Só conta a autoria; a coautoria fica de fora. Projetos apresentados não equivalem a leis aprovadas. Inclui ${included} de ${scope} deputados${state.uf === 'Brasil' ? '' : ` de ${escape(state.uf)}`}${excluded ? `; ${excluded} ficam fora porque as proposições deles não foram coletadas, e não aparecem com zero` : ', todos com proposições coletadas'}. Projetos cuja norma não pôde ser confirmada no despacho ou que estão retidos para revisão não entram na contagem. <button class="text-button" data-action="methodology">Fontes e metodologia →</button>`;
     }
-    return state.tab === 'projetos' ? 'Projetos apresentados não equivalem a leis aprovadas.' : `Inclui quem exerceu o mandato em pelo menos ${MIN_MONTHS} meses do recorte, sem meses em revisão: ${ranking('gastos').length} de ${all().filter(p => state.uf === 'Brasil' || p.uf === state.uf).length} deputados${state.uf === 'Brasil' ? '' : ` de ${escape(state.uf)}`}. Cota parlamentar é a verba mensal para despesas do mandato, como passagens, combustível e divulgação. Gasto maior não significa irregularidade.`;
+    if (showPercent()) return percentNote();
+    return state.tab === 'projetos' ? 'Projetos apresentados não equivalem a leis aprovadas.' : `${categoryNote()}Inclui quem exerceu o mandato em pelo menos ${MIN_MONTHS} meses do recorte, sem meses em revisão: ${ranking('gastos').length} de ${all().filter(p => state.uf === 'Brasil' || p.uf === state.uf).length} deputados${state.uf === 'Brasil' ? '' : ` de ${escape(state.uf)}`}. Cota parlamentar é a verba mensal para despesas do mandato, como passagens, combustível e divulgação. Gasto maior não significa irregularidade.`;
   }
   // Long lists grow in steps; only the visible rows are drawn.
   const listMore = (total, limit, step, kind, noun) => total <= step ? '' : `<div class="list-more"><p class="list-count">Mostrando ${Math.min(limit, total)} de ${total} ${noun}</p>${total > limit ? `<button class="outline-button" data-action="${kind}-more">Mostrar mais ${Math.min(step, total - limit)}</button>` : ''}${limit > step ? `<button class="outline-button" data-action="${kind}-less">Mostrar menos</button>` : ''}</div>`;
   function barSection() {
     const projects = state.tab === 'projetos';
     if (projects && (!window.ClareiaData.billsApproved || !projectRanking().length)) return '';
-    const ranked = projects ? projectRanking() : ranking(), amount = p => projects ? p.approved : Math.abs(value(p)), shown = p => projects ? approvedText(p) : money(value(p)), max = Math.max(1, ...ranked.map(amount));
-    return `<section class="bar-section" id="comparison"><h2>${projects ? `Ranking de projetos aprovados · ${billsPeriod()}` : `Comparativo de gastos · ${span()}`}</h2><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${shown(p)}: ${projects ? 'ver definição' : 'ver cálculo'}" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${amount(p) / max * 100}%"></i></span><span class="bar-value">${shown(p)}</span></button>`).join('')}</div>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'deputados')}</section>`;
+    const ranked = projects ? projectRanking() : ranking(), pct = showPercent(), amount = p => projects ? p.approved : pct ? p.use.tenths / 10 : Math.abs(value(p)), shown = p => projects ? approvedText(p) : pct ? pctText(p) : money(value(p)), max = pct ? Math.max(100, ...ranked.map(amount)) : Math.max(1, ...ranked.map(amount));
+    return `<section class="bar-section" id="comparison"><h2>${projects ? `Ranking de projetos aprovados · ${billsPeriod()}` : `${pct ? 'Comparativo do teto da cota usado' : 'Comparativo de gastos'} · ${span()}`}</h2><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => `<button class="bar-row" data-action="evidence" data-id="${p.id}"${proofKind()} aria-label="${escape(p.name)}, ${shown(p)}${pct ? ` (${money(p.use.expenseCents)})` : ''}: ${projects ? 'ver definição' : 'ver cálculo'}" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${amount(p) / max * 100}%"></i></span><span class="bar-value">${shown(p)}${pct ? `<small class="bar-money">${money(p.use.expenseCents)}</small>` : ''}</span></button>`).join('')}</div>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'deputados')}</section>`;
   }
   function editorialFollowUp() {
     if (state.tab === 'projetos') return '';
+    if (showPercent()) return `<div class="editorial-follow-up"><span>Continue investigando</span><button type="button" data-measure="valor">E se compararmos em valores em reais? →</button></div>`;
     const monthly = state.metric === 'mensal';
     return `<div class="editorial-follow-up"><span>Continue investigando</span><button type="button" data-metric="${monthly ? 'total' : 'mensal'}">${monthly ? 'E se compararmos o total do período?' : 'A ordem muda quando comparamos por mês?'} →</button></div>`;
   }
   function rankingSection() {
-    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados de ${state.year}</h2>${tabs()}<div class="editorial-controls"><div class="selects"><span class="real-year">${state.tab === 'projetos' && D.billsApproved && D.billsYears.length ? `Projetos apresentados em ${billsPeriod()}` : span()}</span></div>${state.tab === 'projetos' ? '' : metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
+    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados de ${state.year}</h2>${tabs()}<div class="editorial-controls"><div class="selects"><span class="real-year">${state.tab === 'projetos' && D.billsApproved && D.billsYears.length ? `Projetos apresentados em ${billsPeriod()}` : span()}</span></div>${state.tab === 'projetos' ? '' : `${D.ceiling && state.category === 'Todas' ? measureToggle() : ''}${showPercent() ? '' : metricToggle()}`}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
   }
   function answerHTML() {
     if (!state.answer) return '';
@@ -249,11 +276,11 @@
   function refresh() {
     state.popover = null;
     const focused = document.activeElement;
-    const focusKey = focused?.dataset.metric ? ['metric', focused.dataset.metric] : focused?.dataset.tab ? ['tab', focused.dataset.tab] : null;
+    const focusKey = focused?.dataset.metric ? ['metric', focused.dataset.metric] : focused?.dataset.tab ? ['tab', focused.dataset.tab] : focused?.dataset.measure ? ['measure', focused.dataset.measure] : null;
     const before = new Map([...document.querySelectorAll('.rank-card')].map(el => [el.dataset.person, el.getBoundingClientRect()]));
     $('#rank-slot').innerHTML = rankingSection();
     if ($('#editorial-feature')) $('#editorial-feature').innerHTML = editorialFeature();
-    if (state.answer?.type === 'rank') state.answer.ids = ranking('gastos').slice(0, 3).map(p => p.id);
+    if (state.answer?.type === 'rank') state.answer.ids = ranking('gastos', true).slice(0, 3).map(p => p.id);
     $('#answer-slot').innerHTML = answerHTML();
     if (focusKey) document.querySelector(`[data-${focusKey[0]}="${focusKey[1]}"]`)?.focus({ preventScroll: true });
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches && document.body.dataset.motion !== 'off') document.querySelectorAll('.rank-card').forEach(el => {
@@ -292,18 +319,18 @@
       else if (matches.length > 2) message = ['Escolha duas pessoas para comparar', `Experimente: “${examples()[0]}”.`];
       else if (!matches.length && !/\bquem\b|maiores gastos|menores gastos|^(gastos|despesas)$/.test(q)) message = ['Vamos delimitar a investigação', `Não identifiquei uma pergunta compatível ou uma pessoa deste recorte. Experimente “${examples()[0]}” ou “Quem mais gastou por mês?”. A busca usa regras locais, sem IA conectada.`];
       else {
-        Object.assign(state, { metric: /por mes|mensal|media/.test(q) ? 'mensal' : 'total', category: categoryFor(q) || 'Todas', tab: /quem.*menos|menor gasto/.test(q) ? 'menos' : 'gastos' }, fixed);
+        Object.assign(state, { metric: /por mes|mensal|media/.test(q) ? 'mensal' : 'total', category: categoryFor(q) || 'Todas', tab: /quem.*menos|menor gasto/.test(q) ? 'menos' : 'gastos', measure: 'valor' }, fixed);
         if (matches.length === 2) {
           matches.sort((a, b) => q.indexOf(norm(first(a))) - q.indexOf(norm(first(b))));
           state.answer = { type: 'compare', ids: matches.map(p => p.id), kind: 'gastos' };
         } else if (matches.length === 1) state.answer = { type: 'profile', ids: [matches[0].id], kind: 'gastos' };
-        else state.answer = { type: 'rank', ids: ranking('gastos').slice(0, 3).map(p => p.id), kind: 'gastos' };
+        else state.answer = { type: 'rank', ids: ranking('gastos', true).slice(0, 3).map(p => p.id), kind: 'gastos' };
       }
     }
     if (message) {
-      const cleared = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric !== 'total' || state.tab !== 'gastos' || Boolean(window.Clareia.portalActive?.());
+      const cleared = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric !== 'total' || state.tab !== 'gastos' || state.measure !== 'teto' || Boolean(window.Clareia.portalActive?.());
       document.dispatchEvent(new CustomEvent('clareia:reset'));
-      state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos';
+      state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.measure = 'teto';
       state.answer = { type: 'message', title: message[0], message: cleared ? `${message[1]} Os filtros ativos foram limpos.` : message[1] };
     }
     $('#query').value = state.query;
@@ -411,11 +438,33 @@
     const max = Math.max(1, ...list.map(item => Math.abs(item.total)));
     return `<section class="detail-section"><h3>Despesas de ${escape(first(p))}</h3>${list.map(item => `<div class="category-row"><div class="category-head"><span>${escape(label(item.category))}</span><strong>${money(item.total)}</strong></div><small class="source-name">Nome na fonte: ${escape(item.category)}</small><span class="track"><i style="width:${Math.abs(item.total) / max * 100}%;opacity:.7"></i></span></div>`).join('')}<p class="context">Total do período: ${money(totalOf(p))}. ${state.category !== 'Todas' ? `O recorte atual usa apenas ${escape(label(state.category))}.` : ''}</p></section>`;
   }
+  function ceilingEvidence(p) {
+    const u = p.use, c = D.ceiling, why = { partial: 'mês parcial (posse ou afastamento no meio do mês): a cota é proporcional aos dias e a base de dias não é pública, então o mês fica fora das despesas e do limite', held: 'mês em revisão: fora da soma de despesas e do limite' };
+    const rows = u.counted.map(m => `<tr><td>${months[m.month - 1]}</td><td>${escape(m.uf)}</td><td>${money(m.expenseCents)}</td><td>${money(m.ceilingCents)}</td></tr>`).join('');
+    const groups = [...new Set(u.counted.map(m => m.uf))].map(uf => { const own = u.counted.filter(m => m.uf === uf); return `${escape(uf)}: ${own.length} ${monthsWord(own.length)} × ${[...new Set(own.map(m => m.ceilingCents))].map(money).join(' / ')}`; });
+    const records = u.counted.reduce((n, m) => n + m.records, 0);
+    const left = [...u.excluded.map(m => `<li><strong>${months[m.month - 1]}</strong>: ${why[m.reason]}.</li>`), ...(u.outside.length ? [`<li><strong>${u.outside.map(m => months[m - 1]).join(', ')}</strong>: fora do exercício do mandato, sem despesa; não contam como mês excluído.</li>`] : [])];
+    showDialog('Como chegamos nisso?', `<p class="dialog-subtitle">O % do teto, passo a passo</p>
+      <section class="evidence-step"><span class="step-number">1</span><div><h3>O que estamos calculando</h3><p>Quanto do limite mensal da cota parlamentar foi usado por ${escape(p.name)} em ${span()}: despesas ÷ limite, somados nos meses contados. A UF é a de representação em cada mês.</p></div></section>
+      <section class="evidence-step"><span class="step-number">2</span><div><h3>Os ${u.counted.length} ${monthsWord(u.counted.length)} contados</h3><table class="data-table ceiling-table"><thead><tr><th>Mês</th><th>UF</th><th>Despesas</th><th>Limite da UF</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><th colspan="2">Soma</th><td>${money(u.expenseCents)}</td><td>${money(u.ceilingCents)}</td></tr></tfoot></table></div></section>
+      <section class="evidence-step"><span class="step-number">3</span><div><h3>Soma das despesas</h3><p>${records} registros oficiais, valor líquido, nos meses contados.</p><div class="calculation-result">${money(u.expenseCents)}<small>despesas dos meses contados</small></div></div></section>
+      <section class="evidence-step"><span class="step-number">4</span><div><h3>Soma do limite</h3><p>${groups.join('; ')}.</p><div class="calculation-result">${money(u.ceilingCents)}<small>limite dos meses contados</small></div></div></section>
+      <section class="evidence-step"><span class="step-number">5</span><div><h3>A divisão</h3><p>${money(u.expenseCents)} ÷ ${money(u.ceilingCents)} × 100</p><div class="calculation-result">${pctText(p)}<small>do limite usado, calculado sobre as somas exatas em centavos</small></div><div class="action-row"><button class="outline-button primary" data-action="records" data-id="${p.id}">Ver registros</button></div></div></section>
+      <section class="evidence-step"><span class="step-number">6</span><div><h3>Meses fora da conta</h3>${left.length ? `<p><strong>${u.excluded.length} ${monthsWord(u.excluded.length)} ${u.excluded.length === 1 ? "excluído" : "excluídos"}.</strong></p><ul class="ceiling-excluded">${left.join('')}</ul>` : '<p>Nenhum mês excluído: todos os meses de exercício entraram na conta.</p>'}</div></section>
+      <p class="records-note" role="note">Limite: valor base mensal da UF, ${escape(c.act)}, em vigor desde ${day(c.effectiveFrom)}. Não inclui adicionais de líderes e outros cargos. Um mês isolado pode passar de 100%, porque o saldo acumula no ano. Passagens extras a Brasília “além da cota” entram como passagens comuns e podem superestimar o %.</p>
+      <div class="action-row"><button class="outline-button" data-action="methodology">Fontes e metodologia</button></div>${sourceNote()}`);
+  }
+  function ceilingMethod() {
+    const c = D.ceiling;
+    if (!c) return '';
+    return `<h3>% do teto da cota usado</h3><p>Divide as despesas dos meses contados pelo limite mensal da cota da UF de representação nesses mesmos meses. O limite é o valor base do Anexo Único do <a href="${escape(safeUrl(c.annexUrl))}" target="_blank" rel="noopener noreferrer">Ato da Mesa nº 43/2009</a>, na redação dada pelo <a href="${escape(safeUrl(c.actUrl))}" target="_blank" rel="noopener noreferrer">Ato da Mesa nº 270/2023</a>, em vigor desde ${day(c.effectiveFrom)}. Contam os meses de exercício completo: o mês de posse ou afastamento no meio do mês, o mês em revisão e os meses fora do mandato ficam fora das duas somas. Só entram deputados comparáveis, e quem tem algum mês sem limite confirmado fica de fora, nunca com 0%.</p><p>Como ler: o saldo não usado acumula ao longo do ano (art. 13 do Ato 43), então um mês isolado pode passar de 100%. Os adicionais de líderes e de outros cargos e as missões do Parlamento do Mercosul não estão no limite usado. Os trechos aéreos extras a Brasília “além da cota”, previstos desde 2023, aparecem na fonte como passagens comuns, o que pode superestimar levemente o %. O percentual não mede irregularidade, qualidade do mandato nem se relaciona a projetos ou votações. Fonte do limite: <a href="${escape(safeUrl(c.annexUrl))}" target="_blank" rel="noopener noreferrer">${escape(c.annexUrl)}</a>.</p>`;
+  }
   function evidence(id, options = {}) {
     if (person(id)?.noExercise && options.kind !== 'projetos') { showDialog('Sem exercício confirmado', `<p>${escape(person(id).name)} não tem exercício de mandato confirmado em ${state.year} nas fontes oficiais, e não há despesas nesse período. Por isso não aparece valor nem entra no ranking de gastos.</p>`); return; }
     const p = person(id), kind = options.kind || state.tab, comparison = options.compare ? person(options.compare) : null;
     if (kind === 'projetos' && window.ClareiaData.billsApproved) { showDialog('Projetos aprovados', `<p class="records-note">${escape(p.name)} · ${billsPeriod()}</p><h3>${p.approved === null ? pending : approvedText(p)}</h3><p>Contamos PL, PLP e PEC apresentados em ${billsPeriod()} em que o deputado é proponente (autor), não apenas signatário, e que viraram norma jurídica: lei ordinária, lei complementar ou emenda constitucional, com a norma identificada no despacho oficial da Câmara.</p>${p.projects === null ? '' : `<p class="context">Apresentou ${number(p.projects)} como proponente no período; projetos apresentados não equivalem a leis aprovadas.</p>`}<p>A autoria e a situação de cada proposta estão na seção de atividade.</p><div class="action-row"><button class="outline-button" data-action="methodology">Fontes e metodologia</button></div>${sourceNote()}`); return; }
     if (kind === 'projetos') { showDialog('Projetos de lei', `<p class="records-note">Projetos de lei ainda não foram coletados nesta versão.</p><p>A próxima etapa inclui PL, PLP e PEC, separando autoria principal de coautoria. Nenhum número é mostrado antes da conferência.</p>${sourceNote()}`); return; }
+    if (kind === 'teto' && p.use.status === 'ok') { ceilingEvidence(p); return; }
     const amount = value(p, 'gastos'), total = sum(cells(p));
     let formula = state.metric === 'mensal' ? `${money(total)} ÷ ${p.months} meses no recorte` : `Soma de ${count(cells(p))} registros = ${money(total)}`;
     let result = money(amount), resultCaption = state.metric === 'mensal' ? 'por mês no recorte' : 'no período';
@@ -496,7 +545,7 @@
   }
   function methodology() {
     const v = index.validation, audit = index.audit, compare = v.apiComparison;
-    showDialog('Fontes e metodologia', `<div class="text-content"><h3>O que somamos</h3><p>O valor líquido publicado pela Câmara, por competência financeira: o campo <code>vlrLiquido</code> do arquivo anual CEAP${union() ? ' e, nos registros que só a API traz, o <code>valorLiquido</code> da API' : ''}. Salário, gabinete e emendas não entram nesta conta.</p><h3>O que conferimos</h3><p>Duas capturas de cada fonte, identidade pelo ID oficial e contas em centavos, reconciliadas com uma segunda soma e com o banco.${audit ? ` Releitura independente do arquivo anual: <b>${audit.status === 'passed' ? 'sem divergências' : 'divergência encontrada'}</b> (${audit.selected} linhas, ${audit.groupsCompared !== undefined ? `${audit.groupsCompared} grupos pessoa/mês/categoria` : `${audit.competences} competências deputado/mês`}, ${date(audit.checkedAt)}).` : ''}</p>${compare?.paired !== undefined ? `<p>${compare.paired} registros (${money(compare.originCents.both)}) estão nas duas fontes, ${compare.missingInApi} (${money(compare.originCents.annual)}) só no arquivo anual e ${compare.extraInApi} (${money(compare.originCents.api)}) só na API.</p>` : compare?.missingInApi ? `<p>O arquivo anual contém ${compare.annualRecords} lançamentos; a API retornou ${compare.apiRecords}. Os ${compare.missingInApi} adicionais estão incluídos.</p>` : ''}${window.ClareiaData.billsApproved ? `<h3>Projetos aprovados</h3><p>Contamos PL, PLP e PEC apresentados em ${billsPeriod()} em que o deputado aparece como proponente na lista de autores da Câmara e cuja norma (lei ordinária, lei complementar ou emenda constitucional) foi identificada no despacho oficial. Coautoria não conta. Projetos com a situação 'Transformado em Norma Jurídica' sem norma identificável, ou retidos para revisão, ficam fora, e por isso a contagem pode ficar abaixo do total real. Deputados sem proposições coletadas não entram no ranking.</p>` : ''}<h3>O que não concluímos</h3><p>Gasto maior não demonstra irregularidade. O recorte não mede qualidade do mandato nem faz nova subtração de restituições. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'.</p><h3>Limites desta versão</h3><ul>${v.limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul><h3>Versão</h3><dl class="trace"><dt>Versão</dt><dd><code>${escape(index.snapshotId)}</code></dd><dt>Métrica</dt><dd><code>${escape(index.metric)}</code></dd><dt>Coleta</dt><dd>${date(index.collectedAt)} (Brasília)</dd><dt>Publicação</dt><dd>${date(index.publishedAt)} (Brasília)</dd></dl><p><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dicionário oficial da CEAP ↗︎</a> · <a href="https://dadosabertos.camara.leg.br/swagger/api.html" target="_blank" rel="noopener noreferrer">Documentação da API ↗︎</a></p></div>`);
+    showDialog('Fontes e metodologia', `<div class="text-content"><h3>O que somamos</h3><p>O valor líquido publicado pela Câmara, por competência financeira: o campo <code>vlrLiquido</code> do arquivo anual CEAP${union() ? ' e, nos registros que só a API traz, o <code>valorLiquido</code> da API' : ''}. Salário, gabinete e emendas não entram nesta conta.</p><h3>O que conferimos</h3><p>Duas capturas de cada fonte, identidade pelo ID oficial e contas em centavos, reconciliadas com uma segunda soma e com o banco.${audit ? ` Releitura independente do arquivo anual: <b>${audit.status === 'passed' ? 'sem divergências' : 'divergência encontrada'}</b> (${audit.selected} linhas, ${audit.groupsCompared !== undefined ? `${audit.groupsCompared} grupos pessoa/mês/categoria` : `${audit.competences} competências deputado/mês`}, ${date(audit.checkedAt)}).` : ''}</p>${compare?.paired !== undefined ? `<p>${compare.paired} registros (${money(compare.originCents.both)}) estão nas duas fontes, ${compare.missingInApi} (${money(compare.originCents.annual)}) só no arquivo anual e ${compare.extraInApi} (${money(compare.originCents.api)}) só na API.</p>` : compare?.missingInApi ? `<p>O arquivo anual contém ${compare.annualRecords} lançamentos; a API retornou ${compare.apiRecords}. Os ${compare.missingInApi} adicionais estão incluídos.</p>` : ''}${window.ClareiaData.billsApproved ? `<h3>Projetos aprovados</h3><p>Contamos PL, PLP e PEC apresentados em ${billsPeriod()} em que o deputado aparece como proponente na lista de autores da Câmara e cuja norma (lei ordinária, lei complementar ou emenda constitucional) foi identificada no despacho oficial. Coautoria não conta. Projetos com a situação 'Transformado em Norma Jurídica' sem norma identificável, ou retidos para revisão, ficam fora, e por isso a contagem pode ficar abaixo do total real. Deputados sem proposições coletadas não entram no ranking.</p>` : ''}${ceilingMethod()}<h3>O que não concluímos</h3><p>Gasto maior não demonstra irregularidade. O recorte não mede qualidade do mandato nem faz nova subtração de restituições. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'.</p><h3>Limites desta versão</h3><ul>${v.limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul><h3>Versão</h3><dl class="trace"><dt>Versão</dt><dd><code>${escape(index.snapshotId)}</code></dd><dt>Métrica</dt><dd><code>${escape(index.metric)}</code></dd><dt>Coleta</dt><dd>${date(index.collectedAt)} (Brasília)</dd><dt>Publicação</dt><dd>${date(index.publishedAt)} (Brasília)</dd></dl><p><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dicionário oficial da CEAP ↗︎</a> · <a href="https://dadosabertos.camara.leg.br/swagger/api.html" target="_blank" rel="noopener noreferrer">Documentação da API ↗︎</a></p></div>`);
   }
   function toast(text) { const el = $('#toast'); el.textContent = text; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2800); }
   async function shareLink() {
@@ -533,12 +582,13 @@
     try { if (document.execCommand('copy')) copied(); } catch { /* the selected field is the fallback */ }
   }
   document.addEventListener('click', event => {
-    const target = event.target.closest('[data-action],[data-tab],[data-metric],[data-question]');
+    const target = event.target.closest('[data-action],[data-tab],[data-metric],[data-measure],[data-question]');
     if (!event.target.closest('.search-wrap')) closeSuggestions();
     if (!target) return;
     if (target.tagName === 'A' && !target.href) event.preventDefault();
     if (target.dataset.tab) { state.tab = target.dataset.tab; state.barLimit = BAR_STEP; refresh(); return; }
     if (target.dataset.metric) { state.metric = target.dataset.metric; refresh(); return; }
+    if (target.dataset.measure) { state.measure = target.dataset.measure; state.barLimit = BAR_STEP; refresh(); return; }
     if (target.dataset.question) { ask(target.dataset.question); return; }
     const id = target.dataset.id, action = target.dataset.action;
     if (action === 'close') closeDialog();
@@ -558,7 +608,7 @@
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog().then(() => ask(`Compare ${person(id).name} e ${peer.name}`)); }
     else if (action === 'share') shareLink();
     else if (action === 'copy-link') copyProfileLink(id, target);
-    else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
+    else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.measure = 'teto'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });
   document.addEventListener('submit', event => { if (event.target.id === 'search-form') { event.preventDefault(); ask($('#query').value); } });
