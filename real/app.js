@@ -492,7 +492,7 @@
   function profile(id) {
     const p = person(id), peer = comparable(p) ? byTotal().find(other => other.id !== id) : null;
     const route = { url: deputyPath(p), title: `${p.name} — Clareia` };
-    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${escape(p.officialId)}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${!p.noExercise && exclusionNote(p) ? `<small class="held-note">${exclusionNote(p)}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos apresentados</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button><button class="share-button" data-action="copy-link" data-id="${id}">Compartilhar</button>${safeUrl(p.sourceUrl) ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`, true, route);
+    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${escape(p.officialId)}</p>${p.party ? `<p class="context">${window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${!p.noExercise && exclusionNote(p) ? `<small class="held-note">${exclusionNote(p)}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos apresentados</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button><button class="share-button" data-action="copy-link" data-id="${id}">Compartilhar</button>${index.shareImages ? `<button class="outline-button" data-action="share-image" data-id="${id}">Baixar imagem</button>` : ''}${safeUrl(p.sourceUrl) ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`, true, route);
   }
   function methodology() {
     const v = index.validation, audit = index.audit, compare = v.apiComparison;
@@ -521,6 +521,14 @@
     dialog.close();
     if (dialogTrigger?.isConnected) dialogTrigger.focus({ preventScroll: true });
     return settled;
+  }
+  async function downloadShareImage(id) {
+    try {
+      const names = await (await fetch(`${base}/share/index.json`)).json(), name = names[person(id).officialId];
+      if (!name) throw new Error('No image');
+      const a = document.createElement('a'); a.href = `${base}/share/${name}-square.png`; a.download = `clareia-${person(id).officialId}.png`; a.click();
+      toast('Imagem para compartilhar preparada.');
+    } catch { toast('Imagem indisponível agora.'); }
   }
   async function copyProfileLink(id, button) {
     const p = person(id), url = location.origin + deputyPath(p);
@@ -558,6 +566,7 @@
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog().then(() => ask(`Compare ${person(id).name} e ${peer.name}`)); }
     else if (action === 'share') shareLink();
     else if (action === 'copy-link') copyProfileLink(id, target);
+    else if (action === 'share-image') downloadShareImage(id);
     else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });
