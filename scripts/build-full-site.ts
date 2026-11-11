@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {buildSite} from '../src/build-site.ts';
+import {resolveOptions} from '../src/prerender.ts';
 import {auditBillsVersion,buildBillsVersion,storeBillsVersion} from '../src/bills-publication.ts';
 import {auditExpenseVersion,buildExpenseVersion} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
@@ -14,10 +15,11 @@ import {auditVotesVersion,buildVotesVersion,storeVotesVersion} from '../src/vote
 
 delete process.env.TEST_DATABASE_URL;
 const args=process.argv.slice(2),value=(name:string)=>{const i=args.indexOf(name);return i<0?'':args[i+1]??'';};
-if(args.includes('--help')){console.log('npm run build:full -- --out PASTA --portraits PASTA [--config config/full-site.json] [--data-root data] [--noindex] [--allow-missing-portraits] [--dry-run]\nMonta o site completo a partir das execuções auditadas listadas na configuração, num banco em memória. Cada domínio só é aprovado com a auditoria real da própria execução; qualquer auditoria ausente ou reprovada interrompe a montagem. --dry-run só confere as entradas. Sem --allow-missing-portraits, faltar o retrato de quem tem foto oficial interrompe a montagem.');process.exit(0);}
-for(let i=0;i<args.length;i++){if(['--noindex','--dry-run','--allow-missing-portraits'].includes(args[i]))continue;if(['--out','--portraits','--config','--data-root'].includes(args[i])&&args[i+1]){i++;continue;}throw new Error('Argumento inválido');}
+if(args.includes('--help')){console.log('npm run build:full -- --out PASTA --portraits PASTA [--config config/full-site.json] [--data-root data] [--noindex | --sitemap] [--site-url URL] [--allow-missing-portraits] [--dry-run]\nMonta o site completo a partir das execuções auditadas listadas na configuração, num banco em memória. Cada domínio só é aprovado com a auditoria real da própria execução; qualquer auditoria ausente ou reprovada interrompe a montagem. --sitemap gera o sitemap.xml e o robots.txt apontando para ele (para o domínio de produção; não combina com --noindex). --site-url é a origem usada nos endereços canônicos e nas imagens de compartilhamento. --dry-run só confere as entradas. Sem --allow-missing-portraits, faltar o retrato de quem tem foto oficial interrompe a montagem.');process.exit(0);}
+for(let i=0;i<args.length;i++){if(['--noindex','--sitemap','--dry-run','--allow-missing-portraits'].includes(args[i]))continue;if(['--out','--portraits','--config','--data-root','--site-url'].includes(args[i])&&args[i+1]){i++;continue;}throw new Error('Argumento inválido');}
 const out=value('--out'),portraits=value('--portraits'),dryRun=args.includes('--dry-run'),root=path.resolve(value('--data-root')||'data','private');
 if(!out||!portraits)throw new Error('Informe --out e --portraits');
+const siteOptions=resolveOptions({siteUrl:value('--site-url'),sitemap:args.includes('--sitemap'),noindex:args.includes('--noindex')});
 const RUN=/^[a-zA-Z0-9-]{1,80}$/,runs=(config:Record<string,unknown>,key:string)=>{const list=config[key];if(!Array.isArray(list)||!list.length||!list.every(r=>typeof r==='string'&&RUN.test(r))||new Set(list).size!==list.length)throw new Error(`Configuração inválida: ${key}`);return list as string[];};
 const raw=JSON.parse(await fs.readFile(path.resolve(value('--config')||'config/full-site.json'),'utf8')),one=(key:string)=>{if(typeof raw[key]!=='string'||!RUN.test(raw[key]))throw new Error(`Configuração inválida: ${key}`);return raw[key] as string;};
 const config={historyRun:one('historyRun'),legacyRun:one('legacyRun'),expenseRuns:runs(raw,'expenseRuns'),billsRuns:runs(raw,'billsRuns'),votesRuns:runs(raw,'votesRuns')};
@@ -50,7 +52,7 @@ try{
   await storeBillsVersion(db,billsVersion);await approve('projetos',billsVersion.id,await auditBillsVersion(db,billsVersion.id,bills.map(b=>b.report)));
   await storeVotesVersion(db,votesVersion);await approve('votacoes',votesVersion.id,await auditVotesVersion(db,votesVersion.id));
   for(const [domain,id] of [['despesas',expenses.id],['pessoas',coverage.id],['projetos',billsVersion.id],['votacoes',votesVersion.id]] as const)if((await activePublication(db,domain))?.id!==id)throw new Error(`Versão de ${domain} não ficou ativa`);
-  const built=await buildSite(db,out,portraits),have=await Promise.all(expenses.scope.ids.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
+  const built=await buildSite(db,out,portraits,siteOptions),have=await Promise.all(expenses.scope.ids.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
   const headersFile=path.join(out,'_headers');
   if(args.includes('--noindex'))await fs.writeFile(headersFile,addNoindex(await fs.readFile(headersFile,'utf8')));
   assertHeaders(await fs.readFile(headersFile,'utf8'),args.includes('--noindex'));
