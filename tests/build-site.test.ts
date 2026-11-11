@@ -128,8 +128,10 @@ test('_headers marks data as immutable and manifest as revalidated',()=>setup(as
   assert.match(headers,/Strict-Transport-Security: max-age=31536000; includeSubDomains\r?\n/);
   assert.doesNotMatch(headers,/Strict-Transport-Security:[^\n]*preload/);
   assert.match(headers,/Permissions-Policy: camera=\(\), microphone=\(\), geolocation=\(\), payment=\(\), usb=\(\), browsing-topics=\(\)/);
-  for(const file of ['app.js','portal.js','data.js','view.js','styles.css'])assert.match(headers,new RegExp(`\\n/${file.replace('.','\\.')}\\s+Cache-Control: max-age=0, must-revalidate`));
-  for(const file of ['index.html','app.js','view.js','styles.css'])await fs.access(path.join(dist,file));
+  for(const file of ['app.js','portal.js','data.js','analytics.js','view.js','styles.css'])assert.match(headers,new RegExp(`\\n/${file.replace('.','\\.')}\\s+Cache-Control: max-age=0, must-revalidate`));
+  assert.match(headers,/script-src 'self' https:\/\/static\.cloudflareinsights\.com;/);
+  assert.match(headers,/connect-src 'self' https:\/\/cloudflareinsights\.com;/);
+  for(const file of ['index.html','app.js','analytics.js','view.js','styles.css'])await fs.access(path.join(dist,file));
 }));
 
 const coverageVersion=(party:string|null,review=false):PeopleCoverage=>{
