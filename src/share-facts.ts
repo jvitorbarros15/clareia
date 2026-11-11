@@ -2,7 +2,7 @@ import {canonical,hash} from './model.ts';
 import {exclusionNote,money,partyText,spanOf} from './prerender.ts';
 import type {Deputy,Period} from './prerender.ts';
 
-export const TEMPLATE_VERSION=1;
+export const TEMPLATE_VERSION=2,JPEG_QUALITY=85;
 export const FORMATS={wide:{width:1200,height:630,suffix:''},square:{width:1080,height:1080,suffix:'-square'}} as const;
 export type ShareFormat=keyof typeof FORMATS;
 
@@ -46,6 +46,6 @@ export function valueSize(value:string):'big'|'mid'|'small'{
 }
 
 export function shareHash(fact:ShareFact,portrait:Uint8Array|null,assetsSha:string):string{
-  return hash(canonical({version:TEMPLATE_VERSION,fact,portrait:portrait?hash(portrait):null,assets:assetsSha}));
+  return hash(canonical({version:TEMPLATE_VERSION,quality:JPEG_QUALITY,fact,portrait:portrait?hash(portrait):null,assets:assetsSha}));
 }
-export const shareName=(id:number,contentHash:string,format:ShareFormat)=>`${id}-${contentHash.slice(0,12)}${FORMATS[format].suffix}.png`;
+export const shareName=(id:number,contentHash:string,format:ShareFormat)=>`${id}-${contentHash.slice(0,12)}${FORMATS[format].suffix}.jpg`;

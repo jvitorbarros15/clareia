@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {hash} from './model.ts';
-import {esc} from './prerender.ts';
+import {esc,jpegSize} from './prerender.ts';
 import type {Deputy,Period} from './prerender.ts';
-import {DISCLAIMER,FORMATS,SOURCE,monogram,monogramColors,nameSize,shareFactOf,shareHash,shareName,valueSize} from './share-facts.ts';
+import {DISCLAIMER,FORMATS,JPEG_QUALITY,SOURCE,monogram,monogramColors,nameSize,shareFactOf,shareHash,shareName,valueSize} from './share-facts.ts';
 import type {ShareFact,ShareFormat} from './share-facts.ts';
 
 export type ShareAssets={css:string;logo:string;sha:string};
@@ -82,12 +82,6 @@ export function shareDocument(fact:ShareFact,format:ShareFormat,assets:ShareAsse
 }
 const shell=(assets:ShareAssets)=>`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}"><style>${assets.css}${STYLE}</style></head><body></body></html>`;
 
-export function pngSize(b:Uint8Array):{width:number;height:number}|null{
-  const buf=Buffer.from(b.buffer,b.byteOffset,b.length);
-  if(buf.length<24||buf.readUInt32BE(0)!==0x89504e47||buf.toString('latin1',12,16)!=='IHDR')return null;
-  return {width:buf.readUInt32BE(16),height:buf.readUInt32BE(20)};
-}
-
 type Job={fact:ShareFact;format:ShareFormat;portrait:Portrait};
 type Page={setViewportSize(s:{width:number;height:number}):Promise<void>;setContent(html:string):Promise<void>;evaluate:(fn:any,arg?:any)=>Promise<any>;screenshot(o:object):Promise<Buffer>};
 
@@ -128,7 +122,7 @@ export async function openRenderer(assets:ShareAssets,concurrency=4):Promise<Ren
         await page.setViewportSize({width,height});
         const bad:string[]=await page.evaluate(`(${FIT})(${JSON.stringify(shareBody(job.fact,job.format,assets,job.portrait))})`);
         if(bad.length)throw new Error(`Imagem de compartilhamento de ${job.fact.deputyId} (${job.format}) não cabe no modelo: ${bad.join(', ')}`);
-        return await page.screenshot({type:'png',clip:{x:0,y:0,width,height}});
+        return await page.screenshot({type:'jpeg',quality:JPEG_QUALITY,clip:{x:0,y:0,width,height}});
       }finally{give(page);}
     },
     async close(){await browser.close();}
@@ -147,7 +141,7 @@ export async function generateShareImages(o:{outDir:string;publicationId:string;
   }));
   const keep=new Set<string>(),todo:{item:typeof plan[number];format:ShareFormat}[]=[];
   for(const item of plan)for(const format of Object.keys(FORMATS) as ShareFormat[]){
-    const file=`${item.hash}${FORMATS[format].suffix}.png`;keep.add(file);
+    const file=`${item.hash}${FORMATS[format].suffix}.jpg`;keep.add(file);
     if(!await exists(path.join(o.cacheDir,file)))todo.push({item,format});
   }
   todo.sort((a,b)=>a.format===b.format?0:a.format==='wide'?-1:1);
@@ -157,21 +151,21 @@ export async function generateShareImages(o:{outDir:string;publicationId:string;
       let next=0;
       const worker=async()=>{for(;;){
         const t=todo[next++];if(!t)return;
-        const png=await renderer.render({fact:t.item.fact,format:t.format,portrait:t.item.portrait}),size=pngSize(png),want=FORMATS[t.format];
+        const image=await renderer.render({fact:t.item.fact,format:t.format,portrait:t.item.portrait}),size=jpegSize(image),want=FORMATS[t.format];
         if(!size||size.width!==want.width||size.height!==want.height)throw new Error(`Imagem de compartilhamento de ${t.item.id} fora do tamanho ${want.width}x${want.height}`);
-        const file=path.join(o.cacheDir,`${t.item.hash}${want.suffix}.png`);
-        await fs.writeFile(file+'.tmp',png);await fs.rename(file+'.tmp',file);
+        const file=path.join(o.cacheDir,`${t.item.hash}${want.suffix}.jpg`);
+        await fs.writeFile(file+'.tmp',image);await fs.rename(file+'.tmp',file);
       }};
       await Promise.all(Array.from({length:4},worker));
     }finally{if(!o.renderer)await renderer.close();}
   }
   const names=new Map<number,{name:string;alt:string}>();
   for(const item of plan){
-    for(const format of Object.keys(FORMATS) as ShareFormat[])await fs.copyFile(path.join(o.cacheDir,`${item.hash}${FORMATS[format].suffix}.png`),path.join(dir,shareName(item.id,item.hash,format)));
+    for(const format of Object.keys(FORMATS) as ShareFormat[])await fs.copyFile(path.join(o.cacheDir,`${item.hash}${FORMATS[format].suffix}.jpg`),path.join(dir,shareName(item.id,item.hash,format)));
     names.set(item.id,{name:`${item.id}-${item.hash.slice(0,12)}`,alt:item.fact.alt});
   }
-  for(const f of await fs.readdir(o.cacheDir))if(f.endsWith('.png')&&!keep.has(f))await fs.rm(path.join(o.cacheDir,f));
-  const served=new Set([...names.values()].flatMap(n=>[`${n.name}.png`,`${n.name}-square.png`,'index.json']));
+  for(const f of await fs.readdir(o.cacheDir))if(f.endsWith('.jpg')&&!keep.has(f))await fs.rm(path.join(o.cacheDir,f));
+  const served=new Set([...names.values()].flatMap(n=>[`${n.name}.jpg`,`${n.name}-square.jpg`,'index.json']));
   for(const f of await fs.readdir(dir))if(!served.has(f))await fs.rm(path.join(dir,f));
   await fs.writeFile(path.join(dir,'index.json'),JSON.stringify(Object.fromEntries([...names].sort((a,b)=>a[0]-b[0]).map(([id,n])=>[id,n.name]))));
   return {names,rendered:todo.length,reused:plan.length*2-todo.length,ms:Date.now()-started};

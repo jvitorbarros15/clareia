@@ -6,7 +6,8 @@ import path from 'node:path';
 import {deputyDescription,renderDeputy} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
 import {DISCLAIMER,FORMATS,SOURCE,monogram,monogramColors,nameSize,shareFactOf,shareHash,shareName,valueSize} from '../src/share-facts.ts';
-import {generateShareImages,loadShareAssets,openRenderer,pngSize,shareBody,shareDocument} from '../src/share-images.ts';
+import {generateShareImages,loadShareAssets,openRenderer,shareBody,shareDocument} from '../src/share-images.ts';
+import {jpegSize} from '../src/prerender.ts';
 import type {Renderer} from '../src/share-images.ts';
 
 const PAGE=path.join(import.meta.dirname,'..','real');
@@ -97,16 +98,17 @@ test('the content hash changes only when an input changes',()=>{
   assert.notEqual(h,shareHash(f,Buffer.from([0xff,0xd8,0x00,0xff,0xd9]),assets.sha));
   assert.notEqual(h,shareHash(f,null,assets.sha));
   assert.notEqual(h,shareHash(f,jpeg,'outro'));
-  assert.equal(shareName(100,h,'wide'),`100-${h.slice(0,12)}.png`);
-  assert.equal(shareName(100,h,'square'),`100-${h.slice(0,12)}-square.png`);
+  assert.equal(shareName(100,h,'wide'),`100-${h.slice(0,12)}.jpg`);
+  assert.equal(shareName(100,h,'square'),`100-${h.slice(0,12)}-square.jpg`);
 });
 test('the deputy page points og:image at the horizontal image and falls back to the portrait',()=>{
   const meta=(html:string,key:string)=>new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)">`).exec(html)?.[1];
-  const share={url:'https://example.test/data/p/share/100-abc.png',alt:'Imagem'};
+  const share={url:'https://example.test/data/p/share/100-abc.jpg',alt:'Imagem'};
   const html=renderDeputy(shell,normal,period,'https://example.test',{url:'https://example.test/p.jpg',width:10,height:20},share);
   assert.equal(meta(html,'og:image'),share.url);
   assert.equal(meta(html,'og:image:width'),'1200');
   assert.equal(meta(html,'og:image:height'),'630');
+  assert.equal(meta(html,'og:image:type'),'image/jpeg');
   assert.equal(meta(html,'twitter:card'),'summary_large_image');
   assert.equal(meta(html,'twitter:image'),share.url);
   const plain=renderDeputy(shell,normal,period,'https://example.test',{url:'https://example.test/p.jpg',width:10,height:20});
@@ -114,7 +116,7 @@ test('the deputy page points og:image at the horizontal image and falls back to 
   assert.equal(meta(plain,'twitter:card'),'summary');
 });
 
-const png=(width:number,height:number)=>{const b=Buffer.alloc(33);b.writeUInt32BE(0x89504e47,0);b.writeUInt32BE(13,8);b.write('IHDR',12,'latin1');b.writeUInt32BE(width,16);b.writeUInt32BE(height,20);return b;};
+const png=(width:number,height:number)=>{const b=Buffer.alloc(40);b.writeUInt16BE(0xffd8,0);b.writeUInt16BE(0xffc0,2);b.writeUInt16BE(11,4);b.writeUInt8(8,6);b.writeUInt16BE(height,7);b.writeUInt16BE(width,9);return b;};
 function stub(log:string[]):Renderer{
   return {async render(job){log.push(`${job.fact.deputyId}:${job.format}`);const {width,height}=FORMATS[job.format];return png(width,height);},async close(){}};
 }
@@ -128,7 +130,7 @@ test('images are cached by content and only changed deputies render again',async
     const index=JSON.parse(await fs.readFile(path.join(tmp,'out','data','pub','share','index.json'),'utf8'));
     assert.deepEqual(Object.keys(index),['100','101']);
     for(const id of ['100','101']){
-      for(const f of ['','-square'])assert.ok(pngSize(await fs.readFile(path.join(tmp,'out','data','pub','share',`${index[id]}${f}.png`))));
+      for(const f of ['','-square'])assert.ok(jpegSize(await fs.readFile(path.join(tmp,'out','data','pub','share',`${index[id]}${f}.jpg`))));
     }
     assert.equal(a.names.get(100)!.alt,shareFactOf(normal,period).alt);
     const second:string[]=[],b=await run([normal,partial],second);
@@ -156,7 +158,7 @@ test('real renderer: exact sizes, long name, no portrait, and a layout that does
     const long={...normal,id:103,name:'Francisco Pereira Gonçalves de Albuquerque Montenegro Cavalcanti da Rocha Lima Sobrinho',heldMonths:[2,3]};
     for(const d of [normal,partial,none,long])for(const format of ['wide','square'] as const){
       const bytes=await renderer.render({fact:shareFactOf(d,period),format,portrait:null});
-      assert.deepEqual(pngSize(bytes),{width:FORMATS[format].width,height:FORMATS[format].height});
+      assert.deepEqual(jpegSize(bytes),{width:FORMATS[format].width,height:FORMATS[format].height});
     }
     const absurd={...normal,name:'W'.repeat(400)};
     await assert.rejects(renderer.render({fact:shareFactOf(absurd,period),format:'wide',portrait:null}),/não cabe no modelo/);

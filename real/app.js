@@ -526,7 +526,7 @@
     try {
       const names = await (await fetch(`${base}/share/index.json`)).json(), name = names[person(id).officialId];
       if (!name) throw new Error('No image');
-      const a = document.createElement('a'); a.href = `${base}/share/${name}-square.png`; a.download = `clareia-${person(id).officialId}.png`; a.click();
+      const a = document.createElement('a'); a.href = `${base}/share/${name}-square.jpg`; a.download = `clareia-${person(id).officialId}.jpg`; a.click();
       toast('Imagem para compartilhar preparada.');
     } catch { toast('Imagem indisponível agora.'); }
   }

@@ -86,7 +86,7 @@ type Meta={title:string;description:string;url:string;type:'website'|'profile';i
 function metaTags(m:Meta):string{
   const tags=[`<link rel="canonical" href="${esc(m.url)}">`,`<meta property="og:site_name" content="Clareia">`,`<meta property="og:locale" content="pt_BR">`,`<meta property="og:type" content="${m.type}">`,`<meta property="og:title" content="${esc(m.title)}">`,`<meta property="og:description" content="${esc(m.description)}">`,`<meta property="og:url" content="${esc(m.url)}">`,`<meta property="og:image" content="${esc(m.image.url)}">`];
   if(m.image.width&&m.image.height)tags.push(`<meta property="og:image:width" content="${m.image.width}">`,`<meta property="og:image:height" content="${m.image.height}">`);
-  tags.push(`<meta property="og:image:alt" content="${esc(m.image.alt)}">`,`<meta name="twitter:card" content="${m.image.large?'summary_large_image':'summary'}">`,`<meta name="twitter:title" content="${esc(m.title)}">`,`<meta name="twitter:description" content="${esc(m.description)}">`,`<meta name="twitter:image" content="${esc(m.image.url)}">`,`<meta name="twitter:image:alt" content="${esc(m.image.alt)}">`);
+  tags.push(...m.image.large?[`<meta property="og:image:type" content="image/jpeg">`]:[],`<meta property="og:image:alt" content="${esc(m.image.alt)}">`,`<meta name="twitter:card" content="${m.image.large?'summary_large_image':'summary'}">`,`<meta name="twitter:title" content="${esc(m.title)}">`,`<meta name="twitter:description" content="${esc(m.description)}">`,`<meta name="twitter:image" content="${esc(m.image.url)}">`,`<meta name="twitter:image:alt" content="${esc(m.image.alt)}">`);
   return tags.join('\n  ');
 }
 const TITLE=/<title>[^<]*<\/title>/,DESCRIPTION=/<meta name="description" content="[^"]*">/,NOSCRIPT=/<noscript>[^<]*<\/noscript>/;
@@ -150,7 +150,7 @@ export async function writePrerendered(outDir:string,publicationId:string,deputi
     // A file named <route>.html is served at <route> with no redirect; a folder index would answer 307 to a trailing slash.
     const page=path.join(outDir,`${deputyPath(p.id,p.name).slice(1)}.html`);
     await fs.mkdir(path.dirname(page),{recursive:true});
-    await fs.writeFile(page,renderDeputy(shell,p,period,options.siteUrl,portrait,shares.has(p.id)?{url:`${options.siteUrl}/data/${publicationId}/share/${shares.get(p.id)!.name}.png`,alt:shares.get(p.id)!.alt}:null));
+    await fs.writeFile(page,renderDeputy(shell,p,period,options.siteUrl,portrait,shares.has(p.id)?{url:`${options.siteUrl}/data/${publicationId}/share/${shares.get(p.id)!.name}.jpg`,alt:shares.get(p.id)!.alt}:null));
   }
   for(const uf of Object.keys(UFS)){
     await fs.mkdir(path.join(outDir,'estado'),{recursive:true});
