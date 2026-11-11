@@ -33,6 +33,18 @@ test('the static server answers bad requests, stays inside its folder and hides 
     assert.equal((await fetch(base+'/_headers')).status,404);assert.equal((await fetch(base+'/index.html',{method:'POST'})).status,405);
   });}finally{await fs.rm(parent,{recursive:true,force:true});}
 });
+test('addresses without a file fall back to the page, but missing files and data keep answering 404',async()=>{
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-spa-'));
+  await fs.mkdir(path.join(root,'data'));await fs.writeFile(path.join(root,'index.html'),'<title>page</title>');await fs.writeFile(path.join(root,'app.js'),'1');
+  try{await serving(root,async base=>{
+    for(const route of ['/deputado/204379-fulano-de-tal','/estado/SP','/deputado/x?ref=1']){
+      const res=await fetch(base+route);assert.equal(res.status,200);assert.match(res.headers.get('content-type')||'',/^text\/html/);assert.equal(await res.text(),'<title>page</title>');
+    }
+    assert.equal((await fetch(base+'/app.js')).status,200);
+    for(const missing of ['/missing.js','/styles.css','/data/missing','/data/v1/x/index.json','/deputado/1.json'])assert.equal((await fetch(base+missing)).status,404,missing);
+    assert.equal((await fetch(base+'/deputado/1',{method:'POST'})).status,405);
+  });}finally{await fs.rm(root,{recursive:true,force:true});}
+});
 test('a lock owned by a dead process is taken over; a live owner keeps it',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-lock-')),file=path.join(dir,'pilot.lock');
   try{

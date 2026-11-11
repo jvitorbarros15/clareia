@@ -19,9 +19,11 @@ export function createApp(root:string,port:number){
       let url:URL;try{url=new URL(req.url||'/',`http://127.0.0.1:${port}`);}catch{res.writeHead(400);res.end('Endereço inválido');return;}
       if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405);res.end('Método não permitido');return;}
       const target=path.resolve(base,'.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname));
-      const body=target.startsWith(base+path.sep)&&path.basename(target)!=='_headers'?await fs.readFile(target).catch(()=>null):null;
+      let file=target,body=target.startsWith(base+path.sep)&&path.basename(target)!=='_headers'?await fs.readFile(target).catch(()=>null):null;
+      // Routes such as /deputado/123-nome have no file: like the static host, they answer with the page and the page reads the address.
+      if(!body&&!path.extname(url.pathname)&&!url.pathname.startsWith('/data/')&&path.basename(target)!=='_headers'){file=path.join(base,'index.html');body=await fs.readFile(file).catch(()=>null);}
       if(!body){res.writeHead(404);res.end('Não encontrado');return;}
-      res.writeHead(200,{'Content-Type':TYPES[path.extname(target)]||'application/octet-stream'});res.end(req.method==='HEAD'?undefined:body);
+      res.writeHead(200,{'Content-Type':TYPES[path.extname(file)]||'application/octet-stream'});res.end(req.method==='HEAD'?undefined:body);
     }catch(e){console.error(e instanceof Error?e.message:'Falha interna');if(res.headersSent)res.destroy();else{res.writeHead(400);res.end('Pedido inválido');}}
   });
 }
