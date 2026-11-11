@@ -177,7 +177,7 @@
     const noun = n => n === 1 ? 'deputado' : 'deputados';
     const lostData = everyone.length - withData.length, lostCompared = withData.length - compared.length;
     return `<section class="universe" id="universo" aria-labelledby="universe-title"><h2 id="universe-title" class="universe-title">Quem entra nas comparações</h2><ol class="universe-steps">${
-      step(everyone.length, `${noun(everyone.length)} exerceram mandato em ${state.year}`, '')}${
+      step(everyone.length, `${noun(everyone.length)} com mandato em ${state.year}`, '')}${
       step(withData.length, 'com exercício confirmado ou despesas publicadas', lostData ? `${lostData} sem exercício confirmado nem despesa publicada.` : '')}${
       step(compared.length, `comparáveis: ao menos ${MIN_MONTHS} meses de exercício, sem mês em revisão`, lostCompared ? `${lostCompared} com menos meses de exercício ou algum mês em revisão.` : '')
     }</ol><button type="button" class="text-button" data-action="methodology">Como chegamos nisso? →</button></section>`;
