@@ -6,6 +6,7 @@ import path from 'node:path';
 import {openDB} from '../src/store.ts';
 import {publishDomain,recordDomainAudit} from '../src/publications.ts';
 import {buildSite} from '../src/build-site.ts';
+import {createApp} from '../src/app.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
@@ -167,4 +168,16 @@ test('a noindex build has no sitemap and disallows everything; both flags togeth
   });
   const db=await openDB(true);
   try{await assert.rejects(buildSite(db,path.join(os.tmpdir(),'never'),os.tmpdir(),{sitemap:true,noindex:true}),/não podem ser usados juntos/);}finally{await db.close();}
+});
+test('the local server answers a prerendered folder with its own page',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-serve-'));
+  await fs.mkdir(path.join(dir,'deputado','1-ana'),{recursive:true});
+  await fs.writeFile(path.join(dir,'index.html'),'home');await fs.writeFile(path.join(dir,'deputado','1-ana','index.html'),'ana');
+  const server=createApp(dir,0);await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+  const url=`http://127.0.0.1:${(server.address() as {port:number}).port}`;
+  try{
+    assert.equal(await (await fetch(url+'/deputado/1-ana')).text(),'ana');
+    assert.equal(await (await fetch(url+'/deputado/2-outro')).text(),'home');
+    assert.equal((await fetch(url+'/data/x/nao-existe.json')).status,404);
+  }finally{server.close();await fs.rm(dir,{recursive:true,force:true});}
 });
