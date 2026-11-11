@@ -6,8 +6,8 @@ import {createApp} from '../src/app.ts';
 
 const WRANGLER='wrangler@4.160.0',OUT='build/site',TEST_WORKER='clareia',DEFAULT_URL='https://clareia.clareia.workers.dev';
 const args=process.argv.slice(2),value=(name:string)=>{const i=args.indexOf(name);return i<0?'':args[i+1]??'';};
-if(args.includes('--help')){console.log(`npm run deploy:test -- --portraits PASTA [--data-root data] [--config config/full-site.json] [--verify-ui] [--known ARQUIVO] [--url URL] [--allow-missing-portraits (não vale com --yes)] [--dry-run | --yes]\nMonta o site completo em ${OUT}, procura CPF, confere os valores no navegador e só então publica com ${WRANGLER}. Qualquer etapa que falhar interrompe a cadeia. Sem --yes nada é publicado; --dry-run roda o wrangler sem publicar (não combina com --yes). Depois de publicar, o passo 5 confere o site em --url (padrão ${DEFAULT_URL}) e, se algo falhar, mostra como voltar à versão anterior. --known repassa ao scan:cpf um arquivo local de CPFs conhecidos. --verify-ui acrescenta a suíte verify:ui, escrita para o piloto de 3 deputados.`);process.exit(0);}
-for(let i=0;i<args.length;i++){if(['--yes','--dry-run','--verify-ui','--allow-missing-portraits'].includes(args[i]))continue;if(['--portraits','--data-root','--config','--known','--url'].includes(args[i])&&args[i+1]){i++;continue;}throw new Error('Argumento inválido');}
+if(args.includes('--help')){console.log(`npm run deploy:test -- --portraits PASTA [--data-root data] [--config config/full-site.json] [--skip-verify-ui] [--known ARQUIVO] [--url URL] [--allow-missing-portraits (não vale com --yes)] [--dry-run | --yes]\nMonta o site completo em ${OUT}, procura CPF, confere os valores no navegador e só então publica com ${WRANGLER}. Qualquer etapa que falhar interrompe a cadeia. Sem --yes nada é publicado; --dry-run roda o wrangler sem publicar (não combina com --yes). Depois de publicar, o passo 5 confere o site em --url (padrão ${DEFAULT_URL}) e, se algo falhar, mostra como voltar à versão anterior. --known repassa ao scan:cpf um arquivo local de CPFs conhecidos. verify:ui roda por padrão depois de verify:browser; --skip-verify-ui pula essa suíte.`);process.exit(0);}
+for(let i=0;i<args.length;i++){if(['--yes','--dry-run','--skip-verify-ui','--allow-missing-portraits'].includes(args[i]))continue;if(['--portraits','--data-root','--config','--known','--url'].includes(args[i])&&args[i+1]){i++;continue;}throw new Error('Argumento inválido');}
 const portraits=value('--portraits');if(!portraits)throw new Error('Informe --portraits');
 if(args.includes('--yes')&&args.includes('--dry-run'))throw new Error('--yes e --dry-run não podem ser usados juntos');
 if(args.includes('--yes')&&args.includes('--allow-missing-portraits'))throw new Error('--allow-missing-portraits não pode ser usado com --yes');
@@ -26,7 +26,7 @@ const server=createApp(OUT,0);await new Promise<void>(resolve=>server.listen(0,'
 try{
   const env={BASE_URL:`http://127.0.0.1:${(server.address() as {port:number}).port}`};
   await run('3/5 conferência no navegador',node,['scripts/verify-real.cjs'],env);
-  if(args.includes('--verify-ui'))await run('3/5 verify:ui',node,['scripts/verify-ui.cjs'],env);
+  if(!args.includes('--skip-verify-ui'))await run('3/5 verify:ui',node,['scripts/verify-ui.cjs'],env);
 }finally{server.close();}
 const manifest=JSON.parse(await fs.readFile(path.join(OUT,'manifest.json'),'utf8')),wrangler=JSON.parse((await fs.readFile('wrangler.jsonc','utf8')).replace(/^\s*\/\/.*$/gm,''));
 console.log(`\nSerá publicado: Worker "${wrangler.name}" com os arquivos de ${path.resolve(OUT)}\n  dados: ${manifest.base}\n${Object.entries(manifest.domains as Record<string,{version:string}>).map(([d,v])=>`  ${d}: ${v.version.slice(0,12)}`).join('\n')}`);
