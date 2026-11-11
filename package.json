@@ -20,6 +20,7 @@
     "publish:expenses": "tsx scripts/publish-expenses.ts",
     "collect:votes": "tsx scripts/collect-votes.ts",
     "collect:bills": "tsx scripts/collect-bills.ts",
+    "collect:cota-ceiling": "tsx scripts/collect-cota-ceiling.ts",
     "publish:people": "tsx scripts/publish-people-coverage.ts",
     "verify:people:legacy": "tsx scripts/verify-people-legacy.ts",
     "collect:expenses:intermediate": "tsx scripts/collect-expense-intermediate.ts",
