@@ -1911,6 +1911,47 @@ check('rankings need the minimum months of exercise and the average divides by m
   await page.close();
 });
 
+const approvedSummary = (norms, { drop = 0 } = {}) => async p => {
+  await p.route('**/summary.json', async route => {
+    const res = await route.fetch(), s = await res.json(); s.billsId = 'b'; s.billsYears = [2023, 2024, 2025, 2026];
+    s.people.forEach((q, i) => { q.bills = i < drop ? null : { proposed: 5, joint: 0, coauthored: 0, norms: norms(i) }; });
+    await route.fulfill({ response: res, json: s });
+  });
+};
+
+check('projects tab ranks approved projects by count then name, hides Total / Por mês and states definition, period and exclusions', async () => {
+  const page = await at(1440, { search: '?aba=projetos', before: approvedSummary(i => (i === 0 ? 0 : i % 3), { drop: 2 }) });
+  await page.waitForSelector('#comparison .bar-row');
+  assert.equal(await page.locator('.metric-toggle').count(), 0, 'Total / Por mês is hidden on the projects tab');
+  const rows = await page.locator('#comparison .bar-row').evaluateAll(els => els.map(el => [el.querySelector('.bar-name').textContent, Number(el.querySelector('.bar-value').textContent.replace(/\D/g, ''))]));
+  assert.equal(rows.length, 10);
+  for (let i = 1; i < rows.length; i++) assert.ok(rows[i - 1][1] > rows[i][1] || (rows[i - 1][1] === rows[i][1] && rows[i - 1][0].localeCompare(rows[i][0], 'pt-BR') <= 0), `row ${i} out of order`);
+  const note = await text(page.locator('.ranking-context'));
+  assert.match(note, /2023–2026/); assert.match(note, /proponente/); assert.match(note, /Projetos apresentados não equivalem a leis aprovadas\./);
+  assert.match(note, /2 ficam fora porque as proposições deles não foram coletadas, e não aparecem com zero/);
+  assert.equal(await page.locator('.ranking-context [data-action=methodology]').count(), 1);
+  const total = await page.evaluate(() => window.Clareia.all().length);
+  assert.match(note, new RegExp(`Inclui ${total - 2} de ${total} deputados`));
+  assert.equal(await page.locator('#comparison [data-action=bars-more]').count(), 1);
+  await page.locator('#comparison .bar-row').first().click();
+  await page.waitForSelector('#detail[open]');
+  assert.match(await text(page.locator('#detail')), /Projetos aprovados/);
+  assert.deepEqual(page.errors, []);
+  await page.close();
+});
+
+check('every ranking tab renders rows or an explicit empty message with its reason', async () => {
+  for (const [label, before] of [['without bills', undefined], ['with bills', approvedSummary(i => i % 4)], ['bills collected for nobody', approvedSummary(() => 0, { drop: 10000 })]]) {
+    for (const tab of ['gastos', 'menos', 'projetos']) {
+      const page = await at(1440, { search: `?aba=${tab}`, before });
+      const rows = await page.locator('#rankings .bar-row').count(), empty = await page.locator('#rankings .empty-state').count();
+      assert.ok(rows > 0 || empty > 0, `${label}, tab ${tab}: neither rows nor empty state`);
+      if (!rows) assert.match(await text(page.locator('#rankings .empty-state')), /coleta|coletad/i, `${label}, tab ${tab}: empty state gives no reason`);
+      await page.close();
+    }
+  }
+});
+
 (async () => {
   browser =await chromium.launch({ headless: true });
   let failed = 0;
