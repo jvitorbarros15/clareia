@@ -328,7 +328,8 @@
   }
   function showDialog(title, html, resetScroll = true, route = null) {
     const dialog = $('#detail');
-    if (!navigating) { dialogTrail = []; dialogView = null; } else if (dialogView) dialogView.title = title;
+    // A view opened from outside the dialog (page click, direct link, timeline) starts a new trail and can be returned to.
+    if (!navigating) { dialogTrail = []; dialogView = { render: () => showDialog(title, html, resetScroll, route), title }; } else if (dialogView) dialogView.title = title;
     const back = dialogTrail.at(-1);
     if (back && !html.includes('data-action="back-to-list"')) html = `<button type="button" class="text-button dialog-back" data-action="dialog-back">← Voltar: ${escape(back.title)}</button>` + html;
     const opening = !dialog.open;
