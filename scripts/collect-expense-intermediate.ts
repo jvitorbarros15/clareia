@@ -1,3 +1,4 @@
+import {parseExpensePeriodArgs} from '../src/expense-period.ts';
 import {lock as acquireLock} from '../src/lock.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -10,19 +11,30 @@ import {LOT_SIZE,lotProposal} from '../src/expense-lots.ts';
 import {vaultKey} from '../src/vault.ts';
 
 const args=process.argv.slice(2),value=(flag:string)=>{const i=args.indexOf(flag);return i<0?'':args[i+1];};
-if(args.includes('--help')){console.log('npm run collect:expenses:intermediate -- --local --selection-run ID --run ID [--lot N [--lot-size 50]] [--offline] [--portal] [--workers 1|2|3]\n--lot coleta um lote do universo de 2025 (todos com exercício ou despesa no ano) em vez da amostra intermediária.\nCaptura financeira intermediária cifrada, sem publicação. --portal confere o relatório oficial SIGEPA e permanece ativo nas retomadas. --offline não consulta a rede.');process.exit(0);}
-for(let i=0;i<args.length;i++){if(['--local','--offline','--portal'].includes(args[i]))continue;if(['--selection-run','--run','--workers','--lot','--lot-size'].includes(args[i])&&args[i+1]&&!args[i+1].startsWith('--')){i++;continue;}throw Error('Argumento inválido');}
+if(args.includes('--help')){console.log('npm run collect:expenses:intermediate -- --local --selection-run ID --run ID [--lot N [--lot-size 50] [--year YYYY --months 1,2,...]] [--offline] [--portal] [--workers 1|2|3]\n--lot coleta um lote do universo anual (default 2025, meses 1-12; apenas meses encerrados) (todos com exercício ou despesa no ano) em vez da amostra intermediária.\nCaptura financeira intermediária cifrada, sem publicação. --portal confere o relatório oficial SIGEPA e permanece ativo nas retomadas. --offline não consulta a rede.');process.exit(0);}
+for(let i=0;i<args.length;i++){if(['--local','--offline','--portal'].includes(args[i]))continue;if(['--selection-run','--run','--workers','--lot','--lot-size','--year','--months'].includes(args[i])&&args[i+1]&&!args[i+1].startsWith('--')){i++;continue;}throw Error('Argumento inválido');}
+const period=parseExpensePeriodArgs(args);
+if(!args.includes('--lot')&&args.some(a=>['--year','--months'].includes(a)))throw Error('--year e --months exigem --lot');
 const runId=value('--run'),selectionId=value('--selection-run'),workers=Number(value('--workers')||'2'),lotMode=args.includes('--lot'),lot=Number(value('--lot')),lotSize=Number(value('--lot-size')||String(LOT_SIZE));
 if(lotMode&&(!/^\d+$/.test(value('--lot'))||!Number.isInteger(lotSize)))throw Error('Lote inválido');
 if(!lotMode&&args.includes('--lot-size'))throw Error('--lot-size exige --lot');
 if([runId,selectionId].some(id=>!/^[a-zA-Z0-9-]{1,80}$/.test(id))||!Number.isInteger(workers)||workers<1||workers>3)throw Error('Execução inválida');
-const root=path.resolve('data/private/expense-intermediate',runId),selectionRoot=path.resolve('data/private/people-legacy',selectionId),key=args.includes('--local')?await readLocalPeopleKey():vaultKey();
+const root=path.resolve('data/private/expense-intermediate',runId),selectionRoot=path.resolve('data/private/people-legacy',selectionId);
+// Reject incompatible resumes before obtaining a key or writing a lock. Recheck
+// under the lock below so the read-only preflight cannot introduce a race.
+const preserved=await fs.readFile(path.join(root,'run.json'),'utf8').then(JSON.parse).catch((e:NodeJS.ErrnoException)=>{if(e.code!=='ENOENT')throw e;return null;});
+if(preserved){
+  if(preserved.selectionRun!==selectionId)throw Error('Retomada incompatível com a seleção preservada');
+  const input=JSON.parse(await fs.readFile(path.join(root,'input.json'),'utf8'));
+  if(preserved.selectionRun!==selectionId||hash(canonical(input))!==preserved.inputSha256||(input.schema==='clareia.expense-lot-input.v1')!==lotMode||lotMode&&(input.proposal.lot!==lot||input.proposal.lotSize!==lotSize||input.proposal.year!==period.year||canonical(input.proposal.months)!==canonical(period.months)))throw Error('Retomada incompatível com a entrada preservada');
+}
+const key=args.includes('--local')?await readLocalPeopleKey():vaultKey();
 await fs.mkdir(root,{recursive:true});const lock=await acquireLock(path.join(root,'running.lock'));
 try{
   const previous=await fs.readFile(path.join(root,'run.json'),'utf8').then(JSON.parse).catch((e:NodeJS.ErrnoException)=>{if(e.code!=='ENOENT')throw e;return null;});
   if(previous&&previous.selectionRun!==selectionId)throw Error('Outra seleção não pode retomar esta execução');
   let input:any;
-  if(previous){input=JSON.parse(await fs.readFile(path.join(root,'input.json'),'utf8'));if(hash(canonical(input))!==previous.inputSha256)throw Error('Entrada preservada diverge');if((input.schema==='clareia.expense-lot-input.v1')!==lotMode||lotMode&&(input.proposal.lot!==lot||input.proposal.lotSize!==lotSize))throw Error('Outro lote não pode retomar esta execução');}
+  if(previous){input=JSON.parse(await fs.readFile(path.join(root,'input.json'),'utf8'));if(hash(canonical(input))!==previous.inputSha256)throw Error('Entrada preservada diverge');if((input.schema==='clareia.expense-lot-input.v1')!==lotMode||lotMode&&(input.proposal.lot!==lot||input.proposal.lotSize!==lotSize||input.proposal.year!==period.year||canonical(input.proposal.months)!==canonical(period.months)))throw Error('Outro lote não pode retomar esta execução');}
   else{
     const selectionLock=await acquireLock(path.join(selectionRoot,'running.lock'));
     try{
@@ -31,7 +43,7 @@ try{
       if(audit.schema!=='clareia.people-legacy-audit.v1'||audit.status!=='passed'||audit.legacySha256!==hash(canonical(legacy))||audit.crosscheckSha256!==hash(canonical(cross))||audit.historySha256!==hash(canonical(history))||audit.temporalSha256!==hash(canonical(temporal))||audit.discoverySha256!==history.discoverySha256)throw Error('Cruzamento sem auditoria correspondente');
       const discovery=await readAuditedPeopleDiscovery(manifest.discoveryRun,audit.discoverySha256);
       let proposal:any;
-      if(lotMode)proposal=lotProposal(temporal,cross,discovery,2025,lot,lotSize);
+      if(lotMode)proposal=lotProposal(temporal,cross,discovery,period.year,lot,lotSize,period.months);
       else{proposal=await load('intermediate-proposal.json');if(canonical(proposeIntermediate(discovery,history,temporal,legacy,cross))!==canonical(proposal)||proposal.people.length<12||proposal.people.length>20||proposal.unmetCriteria.length)throw Error('Seleção intermediária incompleta ou divergente');}
       input={schema:lotMode?'clareia.expense-lot-input.v1':'clareia.expense-intermediate-input.v1',selectionRun:selectionId,proposal,temporal,originAudit:audit};
       const priorInput=await fs.readFile(path.join(root,'input.json'),'utf8').catch((e:NodeJS.ErrnoException)=>{if(e.code!=='ENOENT')throw e;return null;});
@@ -41,13 +53,14 @@ try{
   }
   const {proposal,temporal}=input,scope={year:proposal.year,legislature:temporal.scope.legislature,ids:proposal.people.map((p:any)=>p.id),months:proposal.months};
   if(proposal.temporalSha256!==hash(canonical(temporal))||input.originAudit.temporalSha256!==proposal.temporalSha256||input.originAudit.crosscheckSha256!==proposal.crosscheckSha256)throw Error('Origem temporal diverge');
+  if(previous&&(canonical(previous.scope)!==canonical(scope)||previous.proposalSha256!==hash(canonical(proposal))))throw Error('Escopo preservado diverge');
   const firstAttempt=previous?.firstAttempt??(previous?.reportSha256&&previous.metrics?{reportSha256:previous.reportSha256,metrics:previous.metrics}:undefined);
   const portalRequested=args.includes('--portal')||previous?.portalRequested===true;
   const manifest={runId,selectionRun:selectionId,inputSha256:hash(canonical(input)),proposalSha256:hash(canonical(proposal)),scope,portalRequested,startedAt:previous?.startedAt??new Date().toISOString(),firstAttempt};
   await fs.writeFile(path.join(root,'run.json'),JSON.stringify({...manifest,status:'collecting'},null,2));
   try{
     const offline=args.includes('--offline'),capture=(pass:number)=>new PeopleCapture(path.join(root,'pass-'+pass),key,offline?async()=>new Response('',{status:404}):undefined);
-    const report=await collectExpenseBatch(scope,temporal,hash(canonical(proposal)),capture(1),capture(2),{workers,portal:portalRequested,wait:offline?async()=>{}:undefined,progress:(pass,done,total)=>{if(done%12===0||done===total)console.log(`Despesas 2025: passe ${pass}, ${done}/${total} competências`);}});
+    const report=await collectExpenseBatch(scope,temporal,hash(canonical(proposal)),capture(1),capture(2),{workers,portal:portalRequested,wait:offline?async()=>{}:undefined,progress:(pass,done,total)=>{if(done%12===0||done===total)console.log(`Despesas ${scope.year}: passe ${pass}, ${done}/${total} competências`);}});
     const version=hash(canonical(report)),folder=path.join(root,'reports');await fs.mkdir(folder,{recursive:true});
     await fs.writeFile(path.join(folder,version+'.batch.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(root,'batch.json'),JSON.stringify(report,null,2));
     const coverage=report.cells.reduce<Record<string,number>>((out,c)=>{out[c.status]=(out[c.status]||0)+1;return out;},{});

@@ -47,6 +47,15 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   if(report.schema!=='clareia.expense-intermediate.v1'||report.publicationEligible!==false||report.status!=='review-required')fail('publication-gate');
   if(canonical(report.scope)!==canonical(expectedScope)||report.peopleVersion!==hash(canonical(temporal))||report.proposalSha256!==proposalSha256)fail('input-version-or-scope');
   if(expectedScope.legislature!==temporal.scope.legislature)fail('temporal-legislature');
+  // Independently check closed months and historical coverage, using capture time.
+  const auditTime=new Date(report.createdAt).valueOf();
+  if(!Number.isFinite(auditTime)||!Number.isInteger(expectedScope.year)||expectedScope.year<2009||!expectedScope.months.length||expectedScope.months.length>12||!expectedScope.ids.length||new Set(expectedScope.ids).size!==expectedScope.ids.length||expectedScope.ids.some(id=>!Number.isSafeInteger(id)||id<1))fail('invalid-period');
+  for(const [i,month] of expectedScope.months.entries()){
+    if(!Number.isInteger(month)||month<1||month>12){fail('invalid-period');continue;}
+    const start=expectedScope.year+'-'+String(month).padStart(2,'0')+'-01',end=new Date(Date.UTC(expectedScope.year,month,0)).toISOString().slice(0,10);
+    if((i>0&&month!==expectedScope.months[i-1]+1)||Date.UTC(expectedScope.year,month,1)>auditTime||!temporal.scope.start||!temporal.scope.end||temporal.scope.start>start||temporal.scope.end<end)fail('invalid-period');
+    for(const id of expectedScope.ids){const cells=temporal.people.filter(p=>p.id===id).flatMap(p=>p.months.filter(m=>m.year===expectedScope.year&&m.month===month));if(cells.length!==1||cells[0].partialScope)fail('incomplete-temporal-period',{personId:id,month});}
+  }
   const stable=(v:any):any=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).filter(k=>k!=='fetchedAt').map(k=>[k,stable(v[k])])):v;
   const body=JSON.parse(JSON.stringify(report));delete body.createdAt;delete body.metrics;delete body.contentSha256;body.sources.sort((a:ExpenseSource,b:ExpenseSource)=>a.pass-b.pass||a.url.localeCompare(b.url));
   if(report.contentSha256!==hash(canonical(stable(body))))fail('logical-content-version');

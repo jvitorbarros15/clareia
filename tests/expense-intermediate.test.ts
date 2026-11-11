@@ -159,13 +159,13 @@ test('an empty response identifying another competence cannot manufacture a zero
   const r=await setup(t,url=>url.includes('/2/despesas')&&url.includes('mes=2&')?{dados:[],links:[{rel:'self',href:url.replace('mes=2&','mes=1&')}]}:undefined);
   const cell=r.report.cells.find(c=>c.personId===2&&c.month===2)!;assert.equal(cell.status,'source-failure');assert.equal(cell.totalCents,null);assert.equal(r.report.totalCents,null);
 });
-test('financial CLI takes its lock before reading inputs and refuses a different selection without overwriting a run',async t=>{
+test('financial CLI refuses a different selection before reading inputs or touching a lock',async t=>{
   const cwd=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-financial-cli-'));t.after(()=>fs.rm(cwd,{recursive:true,force:true}));
   const root=path.join(cwd,'data/private/expense-intermediate/test-run'),keys=path.join(cwd,'data/private/people-discovery');await fs.mkdir(root,{recursive:true});await fs.mkdir(keys,{recursive:true});await fs.writeFile(path.join(keys,'local-vault-key'),randomBytes(32));
   const original=JSON.stringify({selectionRun:'original-selection',status:'review-required'});await fs.writeFile(path.join(root,'run.json'),original);
   const script=fileURLToPath(new URL('../scripts/collect-expense-intermediate.ts',import.meta.url)),args=['--import',import.meta.resolve('tsx'),script,'--local','--offline','--run','test-run','--selection-run','another-selection'];
   await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}));assert.equal(await fs.readFile(path.join(root,'run.json'),'utf8'),original);await assert.rejects(fs.stat(path.join(root,'running.lock')),{code:'ENOENT'});
-  await fs.writeFile(path.join(root,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('Outra tarefa possui'));assert.equal(await fs.readFile(path.join(root,'running.lock'),'utf8'),'keep');
+  await fs.writeFile(path.join(root,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('Retomada incompat'));assert.equal(await fs.readFile(path.join(root,'running.lock'),'utf8'),'keep');
 });
 
 const sigepa=(month:number,overrides:Record<string,unknown>={})=>apiRow(month,{tipoDespesa:'PASSAGEM AÉREA - SIGEPA',codDocumento:'11',numDocumento:'T1',valorDocumento:500,valorLiquido:500,...overrides});
@@ -190,4 +190,13 @@ test('a selected identity with another year in the annual file stops the run ins
 test('an annual file without numParcela stops the run',async t=>{
   const noParcel=zipSync({'Ano-2025.csv':strToU8(columns.replace(';numParcela','')+'\n'+annualLine().replace(/;0$/,'')+'\n')});
   await assert.rejects(setup(t,url=>url.endsWith('.zip')?noParcel:undefined));
+});
+
+test('an annual row from another legislature remains evidence and holds its competence',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine().replace(';57;',';56;')]):undefined);
+  const c=cell(r.report);
+  assert.equal(c.annualCount,1);assert.equal(c.status,'held-review');
+  assert.deepEqual(c.reasons,['financial-normalization-failed']);
+  assert.equal(c.totalCents,null);assert.deepEqual(c.records,[]);
+  // setup also independently audits both preserved captures.
 });

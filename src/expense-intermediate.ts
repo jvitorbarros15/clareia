@@ -1,3 +1,4 @@
+import {validateExpenseTemporal} from './expense-period.ts';
 import {unzipSync} from 'fflate';
 import {BASE,canonical,hash,normalize,stableDigest} from './model.ts';
 import type {Scope,Expense} from './model.ts';
@@ -73,8 +74,8 @@ export function privatePaths(value:unknown,known:Set<string>,at='report'):string
   return [];
 }
 export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,proposalSha256:string,one:PeopleCapture,two:PeopleCapture,options:{workers?:number;portal?:boolean;wait?:(ms:number)=>Promise<void>;progress?:(pass:number,done:number,total:number)=>void}={}):Promise<ExpenseBatch>{
-  validateExpenseScope(scope);const start=Date.now(),workers=options.workers??2,known=new Set<string>();
-  if(!Number.isInteger(workers)||workers<1||workers>3||!/^[a-f0-9]{64}$/.test(proposalSha256)||scope.legislature!==temporal.scope.legislature||scope.ids.some(id=>!temporal.people.some(p=>p.id===id))||temporal.scope.start>`${scope.year}-01-01`||temporal.scope.end<`${scope.year}-12-31`)throw Error('Entradas financeiras incompatíveis');
+  validateExpenseScope(scope);validateExpenseTemporal(scope,temporal);const start=Date.now(),workers=options.workers??2,known=new Set<string>();
+  if(!Number.isInteger(workers)||workers<1||workers>3||!/^[a-f0-9]{64}$/.test(proposalSha256)||scope.legislature!==temporal.scope.legislature||scope.ids.some(id=>!temporal.people.some(p=>p.id===id)))throw Error('Entradas financeiras incompatíveis');
   const {data:contract}=await one.json(BASE+'/api-docs'),parameters=contract.paths?.['/deputados/{id}/despesas']?.get?.parameters;
   if(!Array.isArray(parameters)||['ano','mes','idLegislatura','itens','pagina','ordem','ordenarPor'].some(name=>!parameters.some((p:any)=>p.name===name&&p.in==='query')))throw Error('Contrato da API de despesas mudou');
   const firstAnnual=await expenseAnnual(one,scope,1);for(const id of firstAnnual.known)known.add(id);
