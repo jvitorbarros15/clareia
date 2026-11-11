@@ -3,6 +3,8 @@ import type {Expense,Person,Snapshot} from './model.ts';
 import type {ExpenseBatch} from './expense-intermediate.ts';
 import type {HistoryReport} from './people-history.ts';
 import type {TemporalReport} from './people-temporal.ts';
+import {readPublication} from './publications.ts';
+import type {DB} from './store.ts';
 
 export type ExpenseLotRun={runId:string;manifest:{runId:string;status:string;reportSha256:string;proposalSha256:string;inputSha256:string};input:{schema:string;proposal:any;temporal:TemporalReport};report:ExpenseBatch;audit:{status:string;reportSha256:string;proposalSha256:string;checkedAt:string;competences:number}};
 
@@ -44,4 +46,15 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   const body={metric:'camara.ceap.valor-liquido-uniao-fontes.v1',scope:{year:first.year,months:first.months,ids,legislature:temporal.scope.legislature},people,records,collectedAt,publishedAt:now,pages:[],
     validation:{sourceKind:'annual-api-union',stablePasses:2,recordCount:records.length,totalCents:Number(total),independentTotalCents:String(cellTotal),duplicatePolicy:'Documento não é chave. Ocorrências do CSV preservadas; conteúdo idêntico ambíguo retém a competência.',limitations:['Competências retidas para revisão ficam fora dos totais e são indicadas por deputado.'],heldMonths,heldCompetences:heldCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),lots:ordered.map(l=>({runId:l.runId,lot:l.input.proposal.lot,reportSha256:l.manifest.reportSha256,contentSha256:l.report.contentSha256,auditCheckedAt:l.audit.checkedAt}))}};
   return {...body,id:snapshotId(body)};
+}
+// Re-reads what the database now holds; the lot audits already re-derived every competence from the sealed originals.
+export async function auditExpenseVersion(db:DB,version:Snapshot,lots:ExpenseLotRun[]){
+  const stored=await readPublication(db,version.id),failures:string[]=[];
+  if(!stored)failures.push('not-stored');
+  else{
+    if(snapshotId(stored)!==version.id)failures.push('content-id');
+    if(stored.records.length!==version.validation.recordCount)failures.push('record-count');
+    if(String(stored.records.reduce((n,r)=>n+BigInt(r.cents),0n))!==version.validation.independentTotalCents)failures.push('total');
+  }
+  return {checkedAt:new Date().toISOString(),status:failures.length?'failed' as const:'passed' as const,failures,lots:lots.length,competences:lots.reduce((n,l)=>n+l.audit.competences,0),selected:version.records.length};
 }

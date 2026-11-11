@@ -1,0 +1,30 @@
+{
+  "historyRun": "history-20261107",
+  "legacyRun": "legacy-20261108",
+  "expenseRuns": [
+    "expenses-2025-lot00-20261109",
+    "expenses-2025-lot01-20261109",
+    "expenses-2025-lot02-20261109-r2",
+    "expenses-2025-lot03-20261109",
+    "expenses-2025-lot04-20261109",
+    "expenses-2025-lot05-20261109",
+    "expenses-2025-lot06-20261109",
+    "expenses-2025-lot07-20261109",
+    "expenses-2025-lot08-20261109",
+    "expenses-2025-lot09-20261109",
+    "expenses-2025-lot10-20261109",
+    "expenses-2025-lot11-20261109"
+  ],
+  "billsRuns": [
+    "bills-2023-20261109",
+    "bills-2024-20261109",
+    "bills-2025-20261109",
+    "bills-2026-20261109"
+  ],
+  "votesRuns": [
+    "votes-2023-20261109",
+    "votes-2024-20261109",
+    "votes-2025-20261109",
+    "votes-2026-20261109"
+  ]
+}
