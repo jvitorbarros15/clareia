@@ -5,6 +5,7 @@ import {resolveOptions} from '../src/prerender.ts';
 import {auditBillsVersion,buildBillsVersion,storeBillsVersion} from '../src/bills-publication.ts';
 import {auditExpenseVersion,buildExpenseVersion} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
+import {buildSiteCeiling} from '../src/ceiling-site.ts';
 import {canonical,hash} from '../src/model.ts';
 import {auditPeopleCoverage,buildPeopleCoverage,storePeopleCoverage} from '../src/people-publication.ts';
 import {activePublication,publishDomain,recordDomainAudit} from '../src/publications.ts';
@@ -22,7 +23,7 @@ if(!out||!portraits)throw new Error('Informe --out e --portraits');
 const siteOptions=resolveOptions({siteUrl:value('--site-url'),sitemap:args.includes('--sitemap'),noindex:args.includes('--noindex')});
 const RUN=/^[a-zA-Z0-9-]{1,80}$/,runs=(config:Record<string,unknown>,key:string)=>{const list=config[key];if(!Array.isArray(list)||!list.length||!list.every(r=>typeof r==='string'&&RUN.test(r))||new Set(list).size!==list.length)throw new Error(`Configuração inválida: ${key}`);return list as string[];};
 const raw=JSON.parse(await fs.readFile(path.resolve(value('--config')||'config/full-site.json'),'utf8')),one=(key:string)=>{if(typeof raw[key]!=='string'||!RUN.test(raw[key]))throw new Error(`Configuração inválida: ${key}`);return raw[key] as string;};
-const config={historyRun:one('historyRun'),legacyRun:one('legacyRun'),expenseRuns:runs(raw,'expenseRuns'),billsRuns:runs(raw,'billsRuns'),votesRuns:runs(raw,'votesRuns')};
+const config={historyRun:one('historyRun'),legacyRun:one('legacyRun'),expenseRuns:runs(raw,'expenseRuns'),billsRuns:runs(raw,'billsRuns'),votesRuns:runs(raw,'votesRuns'),ceilingRun:raw.ceilingRun===undefined?null:one('ceilingRun')};
 const load=async(...parts:string[])=>{const file=path.join(root,...parts);try{return JSON.parse(await fs.readFile(file,'utf8'));}catch(e){throw new Error(`Arquivo ausente ou ilegível: ${file}`,{cause:e});}};
 const history=await load('people-history',config.historyRun,'history.json'),temporal=await load('people-history',config.historyRun,'temporal.json'),temporalAudit=await load('people-history',config.historyRun,'temporal-audit.json');
 const crosscheck=await load('people-legacy',config.legacyRun,'crosscheck.json'),crosscheckAudit=await load('people-legacy',config.legacyRun,'crosscheck-audit.json');
@@ -36,7 +37,9 @@ const now=typeof raw.publishedAt==='string'&&!Number.isNaN(Date.parse(raw.publis
 // The builders refuse any input whose own audit is missing, not passed or for another content.
 const expenses=buildExpenseVersion(lots,history,now),coverage=buildPeopleCoverage(temporal,crosscheck,temporalAudit,now),billsVersion=buildBillsVersion(bills,now),votesVersion=buildVotesVersion(votes,now);
 if(coverage.temporalSha256!==lots[0].input.proposal.temporalSha256||coverage.crosscheckSha256!==lots[0].input.proposal.crosscheckSha256)throw new Error('Despesas e cobertura de pessoas vêm de versões temporais diferentes');
-const summary={expenses:expenses.id,people:expenses.scope.ids.length,records:expenses.records.length,totalCents:expenses.validation.totalCents,coverage:coverage.id,bills:billsVersion.id,votes:votesVersion.id};
+// The ceiling only travels with an audit that passed for exactly this report; without a configured run the site shows no percentage.
+const ceiling=config.ceilingRun?buildSiteCeiling(await load('cota-ceiling',config.ceilingRun,`cota-ceiling-${expenses.scope.year}.json`),await load('cota-ceiling',config.ceilingRun,'audit.json'),expenses.scope.year):null;
+const summary={expenses:expenses.id,people:expenses.scope.ids.length,records:expenses.records.length,totalCents:expenses.validation.totalCents,coverage:coverage.id,bills:billsVersion.id,votes:votesVersion.id,ceiling:ceiling?ceiling.reportSha256:null};
 if(dryRun){console.log(JSON.stringify({...summary,built:false}));process.exit(0);}
 await fs.access(portraits).catch(()=>{throw new Error(`Pasta de retratos ausente: ${portraits}`);});
 const db=await openDB(true);
@@ -52,7 +55,7 @@ try{
   await storeBillsVersion(db,billsVersion);await approve('projetos',billsVersion.id,await auditBillsVersion(db,billsVersion.id,bills.map(b=>b.report)));
   await storeVotesVersion(db,votesVersion);await approve('votacoes',votesVersion.id,await auditVotesVersion(db,votesVersion.id));
   for(const [domain,id] of [['despesas',expenses.id],['pessoas',coverage.id],['projetos',billsVersion.id],['votacoes',votesVersion.id]] as const)if((await activePublication(db,domain))?.id!==id)throw new Error(`Versão de ${domain} não ficou ativa`);
-  const built=await buildSite(db,out,portraits,siteOptions),have=await Promise.all(expenses.scope.ids.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
+  const built=await buildSite(db,out,portraits,siteOptions,ceiling),have=await Promise.all(expenses.scope.ids.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
   const headersFile=path.join(out,'_headers');
   if(args.includes('--noindex'))await fs.writeFile(headersFile,addNoindex(await fs.readFile(headersFile,'utf8')));
   assertHeaders(await fs.readFile(headersFile,'utf8'),args.includes('--noindex'));

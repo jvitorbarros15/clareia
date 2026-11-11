@@ -13,6 +13,7 @@ import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
 import {deputiesOf,resolveOptions,writePrerendered} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
+import type {SiteCeiling} from './ceiling-site.ts';
 
 const DOMAINS:Domain[]=['pessoas','despesas','votacoes','projetos','eleicoes','emendas'];
 const MAX_FILES=15000,MAX_BYTES=10*1024*1024;
@@ -35,7 +36,7 @@ async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const outside=all.filter(r=>!active.scope.ids.includes(r.personId)).length;
   if(outside)throw new Error(`${outside} registros fora do recorte da versão`);
 }
-export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={}):Promise<{publicationId:string;files:number}>{
+export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number}>{
   const siteOptions=resolveOptions(options);
   // Everything is built aside: a refusal at any step leaves the previous output in place.
   const outDir=finalDir+'.building';
@@ -54,7 +55,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const ballotsOf=new Map<number,Awaited<ReturnType<typeof readBallots>>>(),voteTotals=new Map<number,Record<string,number>>(),votesHeld=new Map<number,number>();
   if(votesVersion)for(const id of active.scope.ids){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
   const allRecords=await readRecords(db,active.id);
-  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:allRecords,expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld,held:active.validation.heldCompetences??[]});
+  const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:allRecords,expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld,held:active.validation.heldCompetences??[],ceiling});
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const withoutData:number[]=[];
