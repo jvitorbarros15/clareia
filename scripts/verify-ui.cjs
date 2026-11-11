@@ -4,11 +4,14 @@ let chromium;
 try { ({ chromium } = require('playwright')); }
 catch { ({ chromium } = require(path.join(process.env.APPDATA, 'npm/node_modules/playwright'))); }
 
+const argv = process.argv.slice(2), everyone = argv.includes('--all'), seedAt = argv.indexOf('--seed'), onlyAt = argv.indexOf('--only');
+const seed = seedAt < 0 ? 20261110 : Number(argv[seedAt + 1]), only = onlyAt < 0 ? '' : argv[onlyAt + 1].toLowerCase();
 const base = process.env.BASE_URL || 'http://127.0.0.1:4174';
 const checks = [];
 const check = (name, fn) => checks.push({ name, fn });
 const text = async locator => (await locator.innerText()).replace(/\s+/g, ' ').trim();
 const clean = value => value.replace(/\s+/g, ' ').trim();
+const random = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
 let browser;
 async function at(width, { height = 900, reducedMotion = 'no-preference', search = '', init, before } = {}) {
@@ -31,28 +34,78 @@ async function firstEvidencePerson(page) {
   if (await page.locator('#detail [data-p-evidence-person]').count()) await page.locator('#detail [data-p-evidence-person]').first().click();
   await page.waitForSelector('#detail[open] .record-row');
 }
+// The ranking shows ten bars at a time: press "Mostrar mais" until the deputy's row is there.
+async function revealBar(page, personId) {
+  const row = page.locator(`.bar-row[data-id="${personId}"]`), more = page.locator('#comparison [data-action=bars-more]');
+  while (!await row.count() && await more.count()) await more.click();
+  assert.equal(await row.count(), 1, `deputy ${personId} is in the ranking`);
+}
+// The directory also grows in steps; its name filter finds one card.
+async function revealCard(page, personId) {
+  const data = await published(), name = data.index.people.find(p => p.id === personId).name;
+  await page.locator('#roster-query').fill(name);
+  const card = page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${personId}"]`) }).first();
+  await card.waitFor();
+  return card;
+}
 async function openRecords(page, personId) {
+  await revealBar(page, personId);
   await page.locator(`.bar-row[data-id="${personId}"]`).click();
   await page.waitForSelector('#detail[open]');
   await page.locator('#detail [data-action=records]').click();
   await recordsShown(page);
 }
 
-// Expected values come from the published files, independently of the page code.
-async function published(page) {
-  return page.evaluate(async () => {
-    const manifest = await fetch('/manifest.json').then(r => r.json());
-    const index = await fetch(`/${manifest.base}/index.json`).then(r => r.json());
-    const people = [];
-    for (const id of index.scope.ids) {
-      const records = await fetch(`/${manifest.base}/deputados/${id}/despesas.json`).then(r => r.json());
-      const meta = index.people.find(p => p.id === id);
-      people.push({ id, name: meta.name, uf: meta.uf, records });
+// Expected values come from the published files, read once here in integer cents, independently of the page code.
+let loaded;
+function published() {
+  return loaded ||= (async () => {
+    const get = async url => { const res = await fetch(base + url); return res.ok ? res.json() : null; };
+    const manifest = await get('/manifest.json'), index = await get(`/${manifest.base}/index.json`), summary = await get(`/${manifest.base}/summary.json`);
+    const withoutData = new Set(index.withoutData || []), ids = index.scope.ids.filter(id => !withoutData.has(id)), people = [];
+    for (let i = 0; i < ids.length; i += 16) {
+      people.push(...await Promise.all(ids.slice(i, i + 16).map(async id => {
+        const meta = index.people.find(p => p.id === id);
+        return { id, name: meta.name, uf: meta.uf, records: await get(`/${manifest.base}/deputados/${id}/despesas.json`) };
+      })));
     }
+    for (const p of people) assert.ok(Array.isArray(p.records), `published records for ${p.name}`);
     const categories = {};
     for (const p of people) for (const r of p.records) categories[r.category] = (categories[r.category] || 0) + r.cents;
-    return { people, categories, total: people.reduce((n, p) => n + p.records.reduce((m, r) => m + r.cents, 0), 0) };
-  });
+    return {
+      manifest, index, summary, people, categories, withoutData: [...withoutData], byId: new Map(people.map(p => [p.id, p])),
+      total: people.reduce((n, p) => n + p.records.reduce((m, r) => m + r.cents, 0), 0), months: index.scope.months, domains: Object.keys(manifest.domains),
+    };
+  })();
+}
+
+// The spending ranking in the order the page lists it (the comparable deputies), read once.
+let ranked;
+async function rankedIds(page) {
+  if (ranked) return ranked;
+  const probe = page || await at(1440);
+  while (await probe.locator('#comparison [data-action=bars-more]').count()) await probe.locator('#comparison [data-action=bars-more]').click();
+  ranked = await probe.locator('.bar-row').evaluateAll(rows => rows.map(r => Number(r.dataset.id)));
+  if (!page) await probe.close();
+  assert.ok(ranked.length >= 3, 'the ranking has deputies');
+  return ranked;
+}
+// Deterministic sample: the leader, the last one, and seeded-random deputies from the rest (everybody with --all).
+async function sampleIds(page, n) {
+  const order = await rankedIds(page);
+  if (everyone || order.length <= n) return order;
+  const next = random(seed), pool = order.slice(1, -1);
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  return [order[0], ...pool.slice(0, n - 2), order.at(-1)];
+}
+const exercisedMonths = q => q.months.filter(m => m.exercise !== 'outside' || m.records > 0).length;
+// Somebody the Câmara confirmed in office in the period, or with published expenses, as the summary declares.
+const inOffice = q => q.records > 0 || q.months.some(m => !['unknown', 'outside', 'conflict'].includes(m.exercise));
+// A name word that no other deputy shares, so a question names exactly one person.
+async function uniqueWord(name) {
+  const data = await published(), count = new Map();
+  for (const p of data.index.people) for (const t of new Set(p.name.toLowerCase().split(' '))) count.set(t, (count.get(t) || 0) + 1);
+  return name.split(' ').find(t => t.length > 3 && count.get(t.toLowerCase()) === 1);
 }
 
 const NBSP = ' ';
@@ -62,6 +115,13 @@ const brlCompact = cents => Math.abs(cents) >= 99995000
   : Math.abs(cents) >= 100000
   ? `${cents < 0 ? '−' : ''}R$${NBSP}${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`
   : brl(cents);
+const shortValue = cents => {
+  const sign = cents < 0 ? '−' : '', abs = Math.abs(cents), br = (v, d) => v.toLocaleString('pt-BR', { maximumFractionDigits: d });
+  if (abs >= 99950000) return `${sign}${br(Math.round(abs / 10000000) / 10, 1)}mi`;
+  if (abs >= 9995000) return `${sign}${br(Math.round(abs / 100000), 0)}mil`;
+  if (abs >= 99950) return `${sign}${br(Math.round(abs / 10000) / 10, 1)}mil`;
+  return `${sign}${br(Math.round(abs / 100), 0)}R$`;
+};
 const percentOf = value => (clean(value).match(/(\d+(?:,\d+)?)%/) || [])[1];
 
 check('no JS errors on load at 1440 and 390', async () => {
@@ -83,7 +143,8 @@ for (const reducedMotion of ['no-preference', 'reduce']) {
     assert.match(clean(await button.getAttribute('aria-label')), new RegExp('^' + clean(expected).replace(/[.$]/g, '\\$&')), 'aria-label carries the final value from the start');
     await page.evaluate(() => document.querySelector('#panorama').scrollIntoView());
     if (reducedMotion === 'reduce') assert.equal(await text(button.locator('strong')), clean(expected), 'no count-up under reduced motion');
-    await page.waitForTimeout(1000);
+    // Counting 500+ deputies can take longer than the pilot's three: it only has to end on the published value.
+    await page.waitForFunction(([selector, value]) => document.querySelector(selector).textContent.replace(/\s+/g, ' ').trim() === value, ['[data-p-summary=expenses] strong', clean(expected)], { timeout: 8000 }).catch(() => {});
     assert.equal(await text(button.locator('strong')), clean(expected), 'count-up ends on the published value');
     await page.close();
   });
@@ -101,7 +162,7 @@ check('no broken accents', async () => {
 check('one percentage per category', async () => {
   const page = await at(1440);
   await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
-  await page.locator('.donut-legend [data-p-highlight="LOCAÇÃO OU FRETAMENTO DE VEÍCULOS AUTOMOTORES"]').click();
+  await page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click();
   await page.mouse.move(0, 0);
   const readout = await text(page.locator('.donut-readout'));
   const focus = await text(page.locator('.category-focus'));
@@ -124,11 +185,24 @@ check('adjustments explained', async () => {
 
 check('scope labels follow the coverage', async () => {
   const page = await at(1440);
-  const { n, span } = await page.evaluate(() => ({ n: window.Clareia.all().length, span: window.Clareia.span() }));
-  const body = clean(await page.evaluate(() => document.body.innerText));
+  const data = await published(page);
+  const names = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const span = `${names[data.months[0] - 1]}–${names[data.months.at(-1) - 1]} ${data.summary.scope.year}`;
+  assert.equal(await page.evaluate(() => window.Clareia.span()), span, 'the span follows the published months');
+  // The deputies with exercise in the period are the ones the Panorama counts.
+  const counted = data.summary.people.filter(inOffice).length;
+  let body = clean(await page.evaluate(() => document.body.innerText));
+  // A deputy may be called "Brasil" (e.g. "Marco Brasil · PR"), so published names are taken out before looking for the banned label.
+  for (const name of data.index.people.map(p => p.name).filter(n => /Brasil/.test(n))) body = body.split(name).join('');
   for (const banned of ['Brasil ·', 'totais anuais', '· 2025 ·', 'jan–Fev']) assert.ok(!body.includes(banned), `body has "${banned}"`);
   assert.ok(body.includes(span), `body has ${span}`);
-  assert.ok(body.includes(`Amostra · ${n} deputados`), `body has Amostra · ${n} deputados`);
+  assert.match(body, new RegExp(String.raw`Panorama de \d+ ${counted}\s?deputados · ${span}`), `Panorama counts ${counted} deputados · ${span}: ${body.match(/Panorama de \d+.{0,80}/)}`);
+  await page.close();
+});
+
+check('Panorama header separates the number of deputies from the word', async () => {
+  const page = await at(1440);
+  assert.doesNotMatch(clean(await page.locator('.p-overview-head span').innerText()), /^\d+deputados?/, 'the count runs into the word');
   await page.close();
 });
 
@@ -136,7 +210,8 @@ check('copy', async () => {
   const page = await at(1440);
   const data = await published(page);
   const body = clean(await page.evaluate(() => document.body.innerText));
-  assert.ok(body.includes('Votações nominais ainda não foram coletadas'), 'votações copy');
+  if (data.summary.votesId) assert.ok(body.includes(`Votações nominais de ${data.summary.votesYears.join(', ')}.`), 'votações copy for collected votes');
+  else assert.ok(body.includes('Votações nominais ainda não foram coletadas'), 'votações copy');
   const negative = Object.values(data.categories).find(c => c < 0);
   assert.ok(negative < 0, 'the published sample has a negative category');
   assert.ok(body.includes(clean(brlCompact(negative))), `negative compact value ${brlCompact(negative)}`);
@@ -147,7 +222,7 @@ check('copy', async () => {
 });
 
 const settle = page => page.waitForTimeout(500);
-const peopleOf = page => page.evaluate(() => window.Clareia.all().map(p => p.id));
+const peopleOf = page => sampleIds(page, 4);
 
 check('record amount visible', async () => {
   for (const width of [1440, 390]) {
@@ -186,7 +261,7 @@ check('record amount visible', async () => {
 check('records sorted', async () => {
   const page = await at(1440);
   const data = await published(page);
-  for (const person of data.people) {
+  for (const person of (await peopleOf(page)).map(id => data.byId.get(id))) {
     await openRecords(page, person.id);
     const ids = await page.locator('#detail [data-action=record]').evaluateAll(els => els.map(el => el.dataset.record));
     const byId = new Map(person.records.map(r => [r.id, r]));
@@ -205,7 +280,7 @@ check('records sorted', async () => {
 check('dates formatted', async () => {
   const page = await at(1440);
   const data = await published(page);
-  const person = data.people[0];
+  const person = data.byId.get((await peopleOf(page))[0]);
   await openRecords(page, person.id);
   const id = await page.locator('#detail [data-action=record]').first().evaluate(el => el.dataset.record);
   await page.locator('#detail [data-action=record]').first().click();
@@ -424,7 +499,8 @@ check('short heading hierarchy', async () => {
     });
     return {
       h1: pick('h1', 'x'),
-      h2: pick('main section h2, .full-portal section h2', '.bar-section'),
+      // "Quem entra nas comparações" is a small accent label by design, not a section title.
+      h2: pick('main section h2, .full-portal section h2', '.bar-section, .universe'),
       h3: pick('main section h3, .full-portal section h3', '.person-name, .directory-person, .timeline-event'),
     };
   });
@@ -442,7 +518,7 @@ for (const width of [1440, 390]) {
   check(`dock indicator on its rule (${width})`, async () => {
     const page = await at(width);
     for (const id of ['despesas', 'atlas']) {
-      await page.evaluate(target => document.getElementById(target).scrollIntoView(), id);
+      await page.evaluate(target => document.getElementById(target).scrollIntoView({ behavior: 'instant' }), id);
       await page.waitForTimeout(700);
       const geometry = await page.evaluate(() => {
         const dock = document.querySelector('.section-dock');
@@ -534,7 +610,7 @@ for (const width of [1440, 768, 390]) {
     const main = await measureTargets(page, [
       ['header search', '.header-search'], ['value button', '.value-button'], ['footer links', '.footer-links a, .footer-links button'],
       ['swap', '.swap-button'], ['Visão inicial', '[data-p=map-reset]'], ['chart point', '.chart-point'], ['legend row', '.donut-legend [data-p-highlight]'],
-      ['panorama stat', '[data-p-summary]'], ['month bar', '.p-mini-bars button'], ['map tile', '.uf-tile'],
+      ['panorama stat', '[data-p-summary]'], ['map tile', '.uf-tile'],
     ]);
     await page.locator('.bar-row').first().click();
     await page.waitForSelector('#detail[open]');
@@ -549,6 +625,17 @@ for (const width of [1440, 768, 390]) {
     const dialog = { fails: [...list.fails, ...detail.fails], exceptions: [...list.exceptions, ...detail.exceptions] };
     for (const e of [...main.exceptions, ...dialog.exceptions]) console.log(`  EXCEPTION (${width}) ${e}`);
     assert.deepEqual([...main.fails, ...dialog.fails], [], `targets whose 44x44 box is not clickable at ${width}`);
+    await page.close();
+  });
+}
+
+for (const width of [1440, 768, 390]) {
+  check(`real 44px targets: month bars (${width})`, async () => {
+    const page = await at(width);
+    await page.waitForTimeout(1200);
+    const report = await measureTargets(page, [['month bar', '.p-mini-bars button']]);
+    for (const e of report.exceptions) console.log(`  EXCEPTION (${width}) ${e}`);
+    assert.deepEqual(report.fails, [], `month bars whose 44x44 box is not clickable at ${width}`);
     await page.close();
   });
 }
@@ -625,14 +712,16 @@ check('per-month bars label months and values', async () => {
       const D = window.ClareiaData;
       return { coverage: D.coverage, names: D.monthNames, bars: [...document.querySelectorAll('.p-mini-bars button')].map(b => {
         const small = b.querySelector('small'), bar = b.querySelector(':scope > span:not(.bar-value)'), value = b.querySelector('.bar-value');
-        return { label: small && small.textContent.trim(), value: value && value.textContent.replace(/\s+/g, ' ').trim(), valueBottom: value && value.getBoundingClientRect().bottom, barTop: bar && bar.getBoundingClientRect().top };
+        return { aria: b.getAttribute('aria-label'), label: small && small.textContent.trim(), value: value && value.textContent.replace(/\s+/g, ' ').trim(), valueBottom: value && value.getBoundingClientRect().bottom, barTop: bar && bar.getBoundingClientRect().top };
       }) };
     });
     assert.equal(info.bars.length, info.coverage.length, 'one bar per covered month');
     info.bars.forEach((b, k) => {
       assert.equal(b.label, info.names[info.coverage[k]], 'label comes from the data (Jan/Fev)');
       const month = data.people.flatMap(p => p.records).filter(r => r.month === info.coverage[k] + 1).reduce((n, r) => n + r.cents, 0);
-      assert.equal(b.value, clean(brlCompact(month)), `value of ${b.label} equals the published records`);
+      // With more than six months each bar is too narrow for a full value, so it shows a short one and keeps the exact value in its aria-label.
+      assert.equal(b.value, info.bars.length > 6 ? shortValue(month) : clean(brlCompact(month)), `value of ${b.label} equals the published records`);
+      assert.ok(b.aria.includes(brl(month)), `exact value of ${b.label} in its aria-label: ${b.aria}`);
       assert.ok(b.valueBottom <= b.barTop + 0.5, 'value sits above the bar');
     });
     await page.close();
@@ -847,6 +936,23 @@ check('mobile comparison', async () => {
 const AUX = 'COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA';
 const sumCents = (data, name, category, month) => data.people.find(p => p.name === name).records
   .filter(r => (!category || r.category === category) && (!month || r.month === month)).reduce((n, r) => n + r.cents, 0);
+const monthSums = (person, category) => { const sums = {}; for (const r of person.records) if (!category || r.category === category) sums[r.month] = (sums[r.month] || 0) + r.cents; return sums; };
+// A first name no other deputy shares, so a question that names it finds exactly one person.
+const uniqueFirst = async name => (await uniqueWord(name)) === name.split(' ')[0] ? name.split(' ')[0] : undefined;
+// Two deputies picked from the published records, in published order: one whose auxílio-moradia adjustments are negative in January and never positive, and one with none at all.
+let adjusted;
+async function adjustmentPair(data) {
+  if (adjusted) return adjusted;
+  let negative, zero;
+  for (const p of data.people) {
+    const sums = monthSums(p, AUX), values = Object.values(sums);
+    if (!negative && values.length && values.every(v => v <= 0) && sums[1] < 0 && await uniqueFirst(p.name)) negative = p;
+    if (!zero && !values.length && await uniqueFirst(p.name)) zero = p;
+    if (negative && zero) break;
+  }
+  assert.ok(negative && zero, 'the published data has a deputy with negative adjustments and one with none in the category');
+  return adjusted = { negative, zero };
+}
 const pickPair = async (page, data, a, b) => {
   await page.locator('#comparacao').scrollIntoViewIfNeeded();
   await page.locator('#compare-a').selectOption(String(data.people.find(p => p.name === a).id));
@@ -872,25 +978,26 @@ check('search category terms do not over-match', async () => {
 check('comparison with a zero or negative base has no percentage', async () => {
   const page = await at(1440, { search: `?categoria=${encodeURIComponent(AUX)}` });
   const data = await published(page);
-  const tiririca = sumCents(data, 'Tiririca', AUX), acacio = sumCents(data, 'Acácio Favacho', AUX);
-  assert.ok(tiririca < 0 && acacio === 0, 'the published sample has a negative and a zero total in the category');
+  const { negative, zero } = await adjustmentPair(data), neg = negative.name, nil = zero.name, negName = neg.split(' ')[0], nilName = nil.split(' ')[0];
+  const tiririca = sumCents(data, neg, AUX), acacio = sumCents(data, nil, AUX);
+  assert.ok(tiririca < 0 && acacio === 0, 'the published data has a negative and a zero total in the category');
   const diff = Math.abs(tiririca - acacio);
-  await pickPair(page, data, 'Tiririca', 'Acácio Favacho');
+  await pickPair(page, data, neg, nil);
   let center = clean(await page.locator('.comparison-center').innerText());
   assert.ok(!center.includes('%'), `no percent when the base is zero: ${center}`);
   assert.ok(center.includes(clean(brlCompact(diff))), `difference ${brlCompact(diff)} in: ${center}`);
-  assert.match(center, /a menos para Tiririca do que para Acácio/, `direction a < b: ${center}`);
+  assert.ok(center.includes(`a menos para ${negName} do que para ${nilName}`), `direction a < b: ${center}`);
   await page.locator('[data-p=swap]').click();
   center = clean(await page.locator('.comparison-center').innerText());
   assert.ok(!center.includes('%'), `no percent after swap (base is negative): ${center}`);
   assert.ok(center.includes(clean(brlCompact(diff))), `difference after swap: ${center}`);
-  assert.match(center, /a mais para Acácio do que para Tiririca/, `direction a > b after swap: ${center}`);
+  assert.ok(center.includes(`a mais para ${nilName} do que para ${negName}`), `direction a > b after swap: ${center}`);
   await page.locator('[data-p=compare-evidence]').click();
   await page.waitForSelector('#detail[open]');
   let result = clean(await page.locator('#detail .calculation-result').innerText());
   assert.ok(!result.includes('%') && result.includes(clean(brl(diff))), `evidence result: ${result}`);
   await page.keyboard.press('Escape');
-  for (const [q, direction] of [['Compare Tiririca e Acácio com auxílio-moradia', 'menos'], ['Compare Acácio e Tiririca com auxílio-moradia', 'mais']]) {
+  for (const [q, direction] of [[`Compare ${negName} e ${nilName} com auxílio-moradia`, 'menos'], [`Compare ${nilName} e ${negName} com auxílio-moradia`, 'mais']]) {
     await page.evaluate(q => window.Clareia.ask(q, false), q);
     const summary = clean(await page.locator('.answer-summary').innerText());
     assert.ok(!summary.includes('%') && !/100/.test(summary), `answer without percent: ${summary}`);
@@ -908,44 +1015,50 @@ check('comparison with a zero or negative base has no percentage', async () => {
 check('comparison with a positive base keeps its percentage', async () => {
   const page = await at(1440);
   const data = await published(page);
-  const a = sumCents(data, 'Acácio Favacho'), b = sumCents(data, 'Tiririca');
-  await pickPair(page, data, 'Acácio Favacho', 'Tiririca');
+  const [first, second] = (await rankedIds(page)).slice(0, 2).map(id => data.byId.get(id));
+  const a = sumCents(data, first.name), b = sumCents(data, second.name);
+  assert.ok(b > 0 && a > b, 'the two leaders have positive totals, the first larger');
+  await pickPair(page, data, first.name, second.name);
   const expected = (Math.abs(a - b) / b * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   const center = clean(await page.locator('.comparison-center').innerText());
-  assert.ok(center.includes(`${expected}%`) && /a mais para Acácio/.test(center), `${expected}% in: ${center}`);
+  assert.ok(center.includes(`${expected}%`) && center.includes(`a mais para ${first.name.split(' ')[0]}`), `${expected}% in: ${center}`);
   await page.close();
 });
+
+// The label of the month range: a heading for one or two months, otherwise the slider's output.
+const rangeLabel = async page => clean(await page.locator((await page.locator('#despesas output').count()) ? '#despesas output' : '#despesas .range-heading h3').innerText());
 
 check('month click scopes every label to the selected month', async () => {
   const page = await at(1440);
   const data = await published(page);
-  const jan = data.people.reduce((n, p) => n + sumCents(data, p.name, null, 1), 0);
+  const jan = data.people.reduce((n, p) => n + (monthSums(p)[1] || 0), 0), whole = await page.evaluate(() => window.Clareia.span().replace(/ \d+$/, ''));
   await page.locator('#despesas [data-p-month="1"]').click();
   const section = clean(await page.locator('#despesas').innerText());
   assert.ok(!/Jan–Jan/.test(section), 'no "Jan–Jan"');
-  assert.ok(!section.includes('Jan–Fev'), `full period next to January-only data: ${section.match(/.{30}Jan–Fev.{10}/)}`);
-  assert.equal(clean(await page.locator('#despesas .range-heading h3').innerText()), 'Por mês · Jan 2025');
+  assert.ok(!section.includes(whole), `full period next to January-only data: ${section.match(new RegExp(`.{30}${whole}.{10}`))}`);
+  assert.equal(await rangeLabel(page), data.months.length < 3 ? 'Por mês · Jan 2025' : 'Jan → Jan');
   assert.equal(clean(await page.locator('.donut-hole span').innerText()), 'Jan 2025');
   assert.equal(clean(await page.locator('.donut-hole strong').innerText()), clean(brlCompact(jan)), 'donut total is January only');
   await page.locator('#despesas .donut-caption [data-p=spend-evidence]').click();
   await recordsShown(page);
   const note = clean(await page.locator('#detail .records-note').first().innerText());
-  assert.ok(note.includes('Jan 2025') && !note.includes('Jan–Fev'), `dialog scope: ${note}`);
+  assert.ok(note.includes('Jan 2025') && !note.includes(whole), `dialog scope: ${note}`);
   assert.equal(clean(await page.locator('#detail .calculation-result').innerText()).split(' Soma')[0], clean(brl(jan)), 'dialog total is January only');
   await page.keyboard.press('Escape');
   await page.locator('.metric-toggle [data-metric=mensal]').click();
   await page.locator('#scope-chip [data-action=reset]').click();
-  assert.equal(clean(await page.locator('#despesas .range-heading h3').innerText()), 'Por mês · Jan–Fev 2025', 'Limpar resets the month');
-  assert.equal(await page.locator('.p-mini-bars button.included').count(), 2, 'both months included again');
+  assert.equal(await rangeLabel(page), data.months.length < 3 ? `Por mês · ${whole} 2025` : whole.replace('–', ' → '), 'Limpar resets the month');
+  assert.equal(await page.locator('.p-mini-bars button.included').count(), data.months.length, 'every month included again');
   await page.close();
 });
 
 check('monthly chart with negative values uses a true axis', async () => {
   const page = await at(1440, { search: `?categoria=${encodeURIComponent(AUX)}` });
   const data = await published(page);
-  await pickPair(page, data, 'Tiririca', 'Acácio Favacho');
-  const lo = sumCents(data, 'Tiririca', AUX, 1);
-  assert.ok(lo < 0 && sumCents(data, 'Acácio Favacho', AUX, 1) === 0, 'January: negative and zero');
+  const { negative, zero } = await adjustmentPair(data);
+  await pickPair(page, data, negative.name, zero.name);
+  const lo = Math.min(...Object.values(monthSums(negative, AUX)));
+  assert.ok(sumCents(data, negative.name, AUX, 1) < 0 && sumCents(data, zero.name, AUX, 1) === 0, 'January: negative and zero');
   const chart = await page.evaluate(() => {
     const svg = document.querySelector('.linked-lines');
     return {
@@ -956,7 +1069,7 @@ check('monthly chart with negative values uses a true axis', async () => {
   assert.deepEqual([...chart.ticks].sort(), [lo, lo / 2, 0].map(v => clean(brlCompact(v))).sort(), `tick labels are true values: ${chart.ticks}`);
   assert.ok(chart.points.every(p => Number.isFinite(p.cy) && p.cy > 0 && p.cy < 255), `points inside the plot: ${JSON.stringify(chart.points)}`);
   const y = who => chart.points.find(p => p.label.startsWith(who) && p.label.includes('Jan')).cy;
-  assert.ok(y('Tiririca') > y('Acácio'), 'the negative value is drawn below zero');
+  assert.ok(y(negative.name) > y(zero.name), 'the negative value is drawn below zero');
   await page.close();
 });
 
@@ -978,7 +1091,9 @@ check('map explanation lists its rows and coverage text is accurate', async () =
   await page.waitForSelector('#detail[open]');
   const rows = await page.locator('#detail table tbody tr').evaluateAll(trs => trs.map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').trim())));
   const byUf = {};
-  for (const p of data.people) { byUf[p.uf] ||= { n: 0, cents: 0 }; byUf[p.uf].n++; byUf[p.uf].cents += p.records.reduce((n, r) => n + r.cents, 0); }
+  const officeIds = new Set(data.summary.people.filter(inOffice).map(q => q.id)), ufOf = new Map(data.index.people.map(p => [p.id, p.uf]));
+  for (const id of officeIds) if (ufOf.get(id)) { byUf[ufOf.get(id)] ||= { n: 0, cents: 0 }; byUf[ufOf.get(id)].n++; }
+  for (const p of data.people.filter(p => p.uf)) { byUf[p.uf].cents += p.records.reduce((n, r) => n + r.cents, 0); }
   assert.equal(rows.length, Object.keys(byUf).length, `one row per UF with deputies: ${JSON.stringify(rows)}`);
   for (const [uf, v] of Object.entries(byUf)) {
     const row = rows.find(r => r[0].includes(uf));
@@ -1012,7 +1127,8 @@ check('chart hit areas do not loop the resize observer', async () => {
   assert.deepEqual(await read(), first, 'idle: no new observers or writes');
   assert.ok(first.made <= 1, `observers created: ${first.made}`);
   const data = await published(page);
-  await pickPair(page, data, 'Tabata Amaral', 'Tiririca');
+  const [a, b] = await sampleIds(page, 4);
+  await pickPair(page, data, data.byId.get(a).name, data.byId.get(b).name);
   await page.waitForTimeout(500);
   const second = await read();
   await page.waitForTimeout(1500);
@@ -1021,10 +1137,25 @@ check('chart hit areas do not loop the resize observer', async () => {
   await page.close();
 });
 
+// Makes the given deputies look like people the Câmara never confirmed in office: no records, no exercise, no totals.
+const withoutExercise = ids => async page => {
+  const gone = new Set(ids);
+  await page.route('**/summary.json', async route => {
+    const res = await route.fetch(), s = await res.json();
+    s.coverageId ||= 'c';
+    for (const q of s.people) if (gone.has(q.id)) { for (const m of q.months) Object.assign(m, { exercise: 'unknown', cents: 0, records: 0, held: false }); Object.assign(q, { cents: 0, records: 0, categories: [] }); }
+    await route.fulfill({ response: res, json: s });
+  });
+  await page.route('**/fornecedores.json', async route => { const res = await route.fetch(), f = await res.json(); for (const id of gone) f.people[id] = []; await route.fulfill({ response: res, json: f }); });
+  await page.route('**/deputados/*/despesas.json', route => gone.has(Number(route.request().url().match(/deputados\/(\d+)\//)[1])) ? route.fulfill({ status: 404, body: '' }) : route.continue());
+};
+
 check('Explorar a state with one deputy keeps a valid pair', async () => {
-  const page = await at(1440);
-  const data = await published(page);
-  const solo = Object.entries(data.people.reduce((m, p) => ({ ...m, [p.uf]: (m[p.uf] || 0) + 1 }), {})).find(([, n]) => n === 1)[0];
+  const data = await published();
+  const byUf = {};
+  for (const p of data.people.filter(p => p.uf)) (byUf[p.uf] ||= []).push(p.id);
+  const [solo, members] = Object.entries(byUf).sort((a, b) => a[1].length - b[1].length || a[0].localeCompare(b[0]))[0];
+  const page = await at(1440, { before: withoutExercise(members.slice(1)) });
   await page.locator('#map-select').selectOption(solo);
   await page.locator('[data-p=apply-state]').click();
   const [a, b] = await page.evaluate(() => [document.querySelector('#compare-a').value, document.querySelector('#compare-b').value]);
@@ -1157,10 +1288,28 @@ const stub = ({ months, records } = {}) => async page => {
     await route.fulfill({ response: res, json: s });
   });
 };
+// The published people as the stubbed files above reshape them: the same transformation, applied to the records read from the real files.
+const reshaped = async ({ months, records }) => {
+  const data = await published();
+  return { ...data, people: data.people.map(p => {
+    let rows = p.records;
+    if (months) rows = months.flatMap((m, k) => rows.filter(r => r.month === (k % 2) + 1).map(r => ({ ...r, month: m })));
+    if (records) rows = records(rows, data.index.people.find(q => q.id === p.id));
+    return { ...p, records: rows };
+  }) };
+};
 const FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const MON = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const sumOf = (person, category) => person.records.filter(r => !category || r.category === category).reduce((n, r) => n + r.cents, 0);
-const rankNames = (data, { category, ascending }) => data.people.map(p => ({ name: p.name, cents: sumOf(p, category) }))
+// Who the page ranks: in office, no month held for review, and at least the minimum months of exercise, as the published summary declares them.
+const comparableIds = data => {
+  const min = Math.min(6, data.months.length), ids = new Set();
+  for (const q of data.summary.people) {
+    if (inOffice(q) && !q.months.some(m => m.held) && exercisedMonths(q) >= min) ids.add(q.id);
+  }
+  return ids;
+};
+const rankNames = (data, { category, ascending, uf }) => data.people.filter(p => comparableIds(data).has(p.id) && (!uf || p.uf === uf)).map(p => ({ name: p.name, cents: sumOf(p, category) }))
   .sort((a, b) => (ascending ? a.cents - b.cents : b.cents - a.cents) || a.name.localeCompare(b.name, 'pt-BR'));
 
 for (const [title, query, expected] of [
@@ -1171,7 +1320,7 @@ for (const [title, query, expected] of [
   check(`shared link decides the final state before the answer: ${title}`, async () => {
     const page = await at(1440, { search: query });
     const data = await published(page);
-    const rank = rankNames(data, expected);
+    const rank = rankNames(data, expected).slice(0, 3);
     const state = await page.evaluate(() => ({ category: window.Clareia.state.category, tab: window.Clareia.state.tab }));
     assert.equal(state.category, expected.category || 'Todas', 'category');
     assert.equal(state.tab, expected.ascending ? 'menos' : 'gastos', 'tab');
@@ -1188,9 +1337,9 @@ for (const [title, query, expected] of [
 check('map with net-negative totals shades by the largest positive value and strips the currency from negative tiles', async () => {
   const negateSP = (recs, meta) => meta.uf === 'SP' ? recs.map(r => ({ ...r, cents: -Math.abs(r.cents) })) : recs;
   const page = await at(1440, { before: stub({ records: negateSP }) });
-  const data = await published(page);
+  const data = await reshaped({ records: negateSP });
   const byUf = {};
-  for (const p of data.people) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p);
+  for (const p of data.people.filter(p => p.uf)) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p);
   assert.ok(byUf.SP < 0 && Object.values(byUf).some(v => v > 0), 'stub gives SP a negative net total and another UF a positive one');
   const max = Math.max(1, ...Object.values(byUf).filter(v => v > 0));
   for (const [uf, cents] of Object.entries(byUf)) {
@@ -1200,7 +1349,7 @@ check('map with net-negative totals shades by the largest positive value and str
       const opacity = Number(/fill-opacity:\s*([\d.]+)/.exec(tile.style)?.[1]);
       assert.ok(Math.abs(opacity - (0.2 + 0.8 * cents / max)) < 1e-6, `${uf} fill-opacity ${opacity} for ${cents}`);
     }
-    const expected = Math.abs(cents) >= 100000 ? `${cents < 0 ? '−' : ''}${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : brl(cents).replace(`R$${NBSP}`, '');
+    const expected = clean(brlCompact(cents)).replace('R$ ', '');
     assert.equal(clean(tile.value), expected, `${uf} tile value`);
   }
   await page.close();
@@ -1246,7 +1395,7 @@ check('unanswerable question clears filters, says so, and resets portal state', 
 check('charts and sliders follow a coverage that does not start in January', async () => {
   const months = [2, 3, 4];
   const page = await at(1440, { before: stub({ months }) });
-  const data = await published(page);
+  const data = await reshaped({ months });
   const top = [...data.people].sort((a, b) => sumOf(b) - sumOf(a)).slice(0, 2);
   const names = months.map(m => MON[m - 1]);
   assert.equal(await page.locator('#despesas output').innerText().then(clean), `${names[0]} → ${names.at(-1)}`, 'spending slider label');
@@ -1278,8 +1427,9 @@ check('charts and sliders follow a coverage that does not start in January', asy
   assert.ok(!(await page.locator('.linked-lines').innerHTML()).match(/NaN|undefined/), 'no NaN after moving');
   await page.close();
   const real = await at(1440);
-  assert.ok(clean(await real.locator('.linked-chart-body .records-note').innerText()).startsWith('Jan–Fev 2025'), 'Jan–Fev unchanged');
-  assert.deepEqual(await real.locator('.linked-lines .x-label').evaluateAll(els => els.map(el => el.textContent)), ['Jan', 'Fev']);
+  const publishedMonths = (await published()).months;
+  assert.ok(clean(await real.locator('.linked-chart-body .records-note').innerText()).startsWith(`${MON[publishedMonths[0] - 1]}–${MON[publishedMonths.at(-1) - 1]} 2025`), 'the published months unchanged');
+  assert.deepEqual(await real.locator('.linked-lines .x-label').evaluateAll(els => els.map(el => el.textContent)), publishedMonths.map(m => MON[m - 1]));
   await real.close();
 });
 
@@ -1290,7 +1440,7 @@ check('navigating inside a dialog keeps the highlight and returns focus', async 
   const trigger = page.locator('.supplier-list [data-p-supplier]').first();
   const name = await trigger.getAttribute('data-p-supplier');
   await trigger.click();
-  await page.waitForSelector('#detail[open]');
+  await firstEvidencePerson(page);
   await page.locator('#detail .record-row').first().click();
   await page.locator('#detail [data-action=back-to-list]').click();
   await page.locator('#detail .record-row').first().click();
@@ -1332,7 +1482,8 @@ check('comparison breakdown bars use magnitudes', async () => {
   const page = await at(1440);
   const data = await published(page);
   const cats = await page.evaluate(() => window.ClareiaData.categories);
-  for (const [a, b] of [['Tiririca', 'Acácio Favacho'], ['Tabata Amaral', 'Tiririca'], ['Acácio Favacho', 'Tabata Amaral']]) {
+  const pool = (await sampleIds(page, 4)).map(id => data.byId.get(id).name), { negative, zero } = await adjustmentPair(data);
+  for (const [a, b] of [[negative.name, zero.name], [pool[0], negative.name], [zero.name, pool[1]]]) {
     await pickPair(page, data, a, b);
     const vals = cats.map(c => [sumCents(data, a, c), sumCents(data, b, c)]);
     const max = Math.max(1, ...vals.flat().map(Math.abs));
@@ -1407,10 +1558,10 @@ check('UF travels in the shared link and scopes the answer and cards', async () 
   const probe = await at(1440);
   const data = await published(probe);
   await probe.close();
-  const ufs = [...new Set(data.people.map(p => p.uf))];
-  const uf = ufs.find(u => data.people.some(p => p.uf !== u));
-  assert.ok(uf, 'sample has more than one UF');
-  const inUF = data.people.filter(p => p.uf === uf).map(p => p.name).sort();
+  const ufs = [...new Set(data.people.map(p => p.uf).filter(Boolean))].sort();
+  const uf = ufs[0];
+  assert.ok(ufs.length > 1, 'the data has more than one UF');
+  const inUF = rankNames(data, { uf }).slice(0, 3).map(r => r.name);
   const page = await at(1440);
   await page.locator(`[data-p-uf="${uf}"]`).click();
   await page.locator('[data-p=apply-state]').click();
@@ -1419,8 +1570,8 @@ check('UF travels in the shared link and scopes the answer and cards', async () 
   await page.close();
   const reopened = await at(1440, { search: `${link}&q=${encodeURIComponent('Quem mais gastou?')}` });
   assert.equal(await reopened.evaluate(() => window.Clareia.state.uf), uf, 'uf restored');
-  assert.deepEqual((await reopened.locator('.answer-row b').allInnerTexts()).sort(), inUF, 'answer scoped to the UF');
-  assert.deepEqual((await reopened.locator('.rank-card .person-name').allInnerTexts()).sort(), inUF, 'cards scoped to the UF');
+  assert.deepEqual(await reopened.locator('.answer-row b').allInnerTexts(), inUF, 'answer scoped to the UF');
+  assert.deepEqual(await reopened.locator('.rank-card .person-name').allInnerTexts(), inUF, 'cards scoped to the UF');
   await reopened.close();
   const bogus = await at(1440, { search: '?uf=ZZ' });
   assert.equal(await bogus.evaluate(() => window.Clareia.state.uf), 'Brasil', 'unknown UF ignored');
@@ -1438,11 +1589,13 @@ const luminance = css => {
 const contrast = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); };
 
 check('map shades only positive values and gives net-negative tiles their own style', async () => {
-  const page = await at(1440, { search: `?q=${encodeURIComponent('Quem mais gastou com auxílio-moradia?')}` });
-  const data = await published(page);
+  // The data has deputies in every state, so one state is emptied (nobody confirmed in office) to have a tile with no data to compare with.
+  const data = await published();
+  const smallest = Object.entries(data.index.people.filter(p => p.uf).reduce((m, p) => ({ ...m, [p.uf]: [...(m[p.uf] || []), p.id] }), {})).sort((a, b) => a[1].length - b[1].length || a[0].localeCompare(b[0]))[0];
+  const page = await at(1440, { search: `?q=${encodeURIComponent('Quem mais gastou com auxílio-moradia?')}`, before: withoutExercise(smallest[1]) });
   const cat = await page.evaluate(() => window.Clareia.state.category);
   const byUf = {};
-  for (const p of data.people) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p, cat);
+  for (const p of data.people.filter(p => p.uf && p.uf !== smallest[0])) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p, cat);
   assert.ok(Object.values(byUf).some(v => v < 0), 'real data has a net-negative state for this category');
   const maxPositive = Math.max(0, ...Object.values(byUf).filter(v => v > 0));
   const read = uf => page.locator(`[data-p-uf="${uf}"]`).evaluate(g => {
@@ -1455,7 +1608,7 @@ check('map shades only positive values and gives net-negative tiles their own st
     if (cents < 0) {
       assert.ok(/\bnegative\b/.test(tile.cls), `${uf} has the negative class`);
       assert.ok(!/fill-opacity/.test(tile.style || ''), `${uf} is not on the accent intensity scale: ${tile.style}`);
-      const expected = Math.abs(cents) >= 100000 ? `−${(Math.abs(cents) / 100000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : brl(cents).replace(`R$${NBSP}`, '');
+      const expected = clean(brlCompact(cents)).replace('R$ ', '');
       assert.equal(clean(tile.value), expected, `${uf} keeps its value`);
       assert.ok(tile.aria.includes(brl(cents)), `${uf} aria-label keeps the exact value: ${tile.aria}`);
       assert.notEqual(tile.dash, 'none', 'negative tiles are dashed');
@@ -1550,7 +1703,7 @@ check('Voltar aos registros returns to the list the reader came from', async () 
   await page.locator('.donut-legend [data-p-highlight]:not(:disabled)').first().click();
   await page.locator('[data-p-drill]').click();
   await page.locator('#detail .supplier-list [data-p-supplier]').first().click();
-  await page.waitForSelector('#detail[open] .record-row');
+  await firstEvidencePerson(page);
   await roundTrip(page, 'category supplier');
   await closeDetail(page);
   await page.evaluate(() => document.querySelector('.linked-lines').scrollIntoView());
@@ -1660,25 +1813,26 @@ check('changing the deputy swaps the activity list without blanking the section'
 });
 
 check('someone without confirmed exercise shows no zero and leaves the spending ranking', async () => {
-  let target;
-  const page = await at(1440, { before: async p => {
-    const manifest = await (await p.request.get(`${base}/manifest.json`)).json();
-    target = (await (await p.request.get(`${base}/${manifest.base}/index.json`)).json()).scope.ids.at(-1);
-    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.coverageId = 'c'; for (const q of s.people) { for (const m of q.months) { m.exercise = q.id === target ? 'unknown' : 'full'; m.partyStatus = 'single'; m.party = 'X'; } if (q.id === target) Object.assign(q, { cents: 0, records: 0, cells: [] }); } await route.fulfill({ response: res, json: s }); });
-    await p.route('**/fornecedores.json', async route => { const res = await route.fetch(), f = await res.json(); f.people[target] = []; await route.fulfill({ response: res, json: f }); });
-    await p.route('**/deputados/*/despesas.json', async route => { if (route.request().url().includes('/' + target + '/')) return route.fulfill({ status: 404, body: '' }); return route.continue(); });
-  } });
-  const card = page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${target}"]`) }).first();
+  const data = await published();
+  const target = data.summary.people.find(q => data.withoutData.includes(q.id) && q.months.every(m => ['unknown', 'outside', 'conflict'].includes(m.exercise)) && q.records === 0).id;
+  const page = await at(1440);
+  const card = await revealCard(page, target);
   assert.match(await text(card), /Sem exercício confirmado em 2025/); assert.doesNotMatch(await text(card), /R\$ 0,00/);
   assert.equal(await page.evaluate(id => window.Clareia.ranking ? window.Clareia.ranking('gastos').some(p => p.officialId === id) : false, target), false);
   assert.equal(await page.locator(`.editorial-rank [data-id="${target}"]`).count(), 0, 'not in the ranking');
+  assert.equal(await page.locator(`.bar-row[data-id="${target}"]`).count(), 0, 'no bar');
   await page.close();
 });
 
 check('a test notice and held months are shown when the version declares them', async () => {
-  const page = await at(1440, { before: async p => { await p.route('**/index.json', async route => { const res = await route.fetch(), j = await res.json(); j.validation.testNotice = 'Versão de teste.'; j.validation.heldMonths = { [j.scope.ids[0]]: 1 }; await route.fulfill({ response: res, json: j }); }); } });
+  // Without an approved coverage the page divides by the published months minus the ones the index declares held.
+  const { months, index } = await published();
+  const page = await at(1440, { before: async p => {
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); Reflect.deleteProperty(s, 'coverageId'); await route.fulfill({ response: res, json: s }); });
+    await p.route('**/index.json', async route => { const res = await route.fetch(), j = await res.json(); j.validation.testNotice = 'Versão de teste.'; j.validation.heldMonths = { [j.scope.ids[0]]: 1 }; await route.fulfill({ response: res, json: j }); });
+  } });
   assert.equal(await text(page.locator('.test-notice')), 'Versão de teste.');
-  assert.equal(await page.evaluate(() => window.ClareiaData.dataset()[0].months), 1);
+  assert.equal(await page.evaluate(id => window.ClareiaData.dataset().find(p => p.officialId === id).months, index.scope.ids[0]), months.length - 1);
   await page.close();
 });
 
@@ -1726,7 +1880,7 @@ check('a record list loads on demand with one row per counted record', async () 
   page.on('request', r => urls.push(r.url()));
   const id = (await peopleOf(page))[0];
   await openRecords(page, id);
-  const expected = await page.evaluate(id => window.Clareia.count(window.Clareia.cells(window.Clareia.person(id))), id);
+  const expected = await page.evaluate(id => window.Clareia.count(window.Clareia.cells(window.Clareia.person(String(id)))), id);
   assert.equal(await page.locator('#detail .record-row').count(), expected);
   assert.equal(urls.filter(u => u.includes('/despesas.json')).length, 1, 'only that deputy file');
   await page.close();
@@ -1811,20 +1965,20 @@ check('a slow record file never fills a later request for another deputy', async
 });
 
 check('a deputy with a held month shows a partial total outside rankings, and one fully held shows no zero', async () => {
-  let partial, held;
+  const data = await published();
+  // One real deputy with a single month held for review; a second one is stubbed so that every one of his months is held, which the real data has nobody for.
+  const partial = data.summary.people.find(q => !data.withoutData.includes(q.id) && q.months.filter(m => m.held).length === 1 && q.records > 0).id;
+  const held = data.people.find(p => p.id !== partial).id;
   const page = await at(1440, { before: async p => {
-    // Both files are fetched together, so the ids are fixed before either stub runs.
-    const manifest = await (await p.request.get(`${base}/manifest.json`)).json(), scope = (await (await p.request.get(`${base}/${manifest.base}/index.json`)).json()).scope.ids;
-    partial = scope[0]; held = scope.at(-1);
-    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); for (const q of s.people) for (const m of q.months) { m.held = (q.id === partial && m.month === s.scope.months[0]) || q.id === held; if (q.id === held) { m.exercise = 'full'; m.cents = 0; m.records = 0; } } const h = s.people.find(q => q.id === held); Object.assign(h, { cents: 0, records: 0 }); await route.fulfill({ response: res, json: s }); });
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); for (const q of s.people) if (q.id === held) { for (const m of q.months) Object.assign(m, { held: true, exercise: 'full', cents: 0, records: 0 }); Object.assign(q, { cents: 0, records: 0 }); } await route.fulfill({ response: res, json: s }); });
     await p.route('**/fornecedores.json', async route => { const res = await route.fetch(), f = await res.json(); f.people[held] = []; await route.fulfill({ response: res, json: f }); });
   } });
   const ranked = await page.evaluate(() => window.Clareia.ranking('gastos').map(p => p.officialId));
   assert.equal(ranked.includes(partial), false, 'partial total not ranked'); assert.equal(ranked.includes(held), false, 'held not ranked');
-  const card = id => page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${id}"]`) }).first();
-  assert.match(await text(card(partial)), /parcial · 1 mês em revisão/);
-  assert.match(await text(card(held)), /Em revisão/); assert.doesNotMatch(await text(card(held)), /R\$ 0,00/);
+  assert.match(await text(await revealCard(page, partial)), /parcial · 1 mês em revisão/);
   assert.equal(await page.locator(`#pessoas .directory-card [data-p-add-compare="${partial}"]`).count(), 0, 'no compare for a partial total');
+  const card = await revealCard(page, held);
+  assert.match(await text(card), /Em revisão/); assert.doesNotMatch(await text(card), /R\$ 0,00/);
   await page.evaluate(id => window.Clareia.profile(String(id)), held);
   assert.doesNotMatch(await text(page.locator('#detail')), /R\$ 0,00/);
   assert.match(await text(page.locator('#detail')), /Em revisão/);
@@ -1894,19 +2048,17 @@ check('views opened inside the dialog can go back step by step to the profile', 
 });
 
 check('rankings need the minimum months of exercise and the average divides by months of exercise only', async () => {
-  let short;
-  const page = await at(1440, { before: async p => {
-    const manifest = await (await p.request.get(`${base}/manifest.json`)).json(), ids = (await (await p.request.get(`${base}/${manifest.base}/index.json`)).json()).scope.ids; short = ids[0];
-    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); s.coverageId = 'c'; for (const q of s.people) q.months.forEach((m, i) => { m.exercise = q.id === short && i > 0 && !m.records ? 'outside' : 'full'; m.partyStatus = 'single'; m.party = 'X'; }); await route.fulfill({ response: res, json: s }); });
-  } });
-  const info = await page.evaluate(id => { const C = window.Clareia, p = C.person(String(id)); return { min: C.MIN_MONTHS, exercised: p.exercisedMonths, months: p.months, ranked: C.ranking('gastos').some(x => x.officialId === id), few: C.fewMonths(p), coverage: window.ClareiaData.coverage.length }; }, short);
-  assert.equal(info.min, Math.min(6, info.coverage));
-  if (info.exercised < info.min) {
-    assert.equal(info.few, true); assert.equal(info.ranked, false, 'too few months stays out of the ranking');
-    assert.equal(info.months, Math.max(1, info.exercised), 'the average divides by months of exercise');
-    const card = page.locator('#pessoas .directory-card', { has: page.locator(`[data-id="${short}"]`) }).first();
-    assert.match(await text(card), /exerceu \d+ de \d+ meses · fora do ranking/);
-  }
+  const data = await published();
+  const min = Math.min(6, data.months.length), short = data.summary.people.find(q => !data.withoutData.includes(q.id) && exercisedMonths(q) < min && !q.months.some(m => m.held));
+  assert.ok(short, 'the published data has a deputy with fewer months of exercise than the minimum');
+  const page = await at(1440);
+  const info = await page.evaluate(id => { const C = window.Clareia, p = C.person(String(id)); return { min: C.MIN_MONTHS, exercised: p.exercisedMonths, months: p.months, ranked: C.ranking('gastos').some(x => x.officialId === id), few: C.fewMonths(p), coverage: window.ClareiaData.coverage.length }; }, short.id);
+  assert.equal(info.min, min);
+  assert.equal(info.exercised, exercisedMonths(short), 'months of exercise follow the published months');
+  assert.equal(info.few, true); assert.equal(info.ranked, false, 'too few months stays out of the ranking');
+  assert.equal(info.months, Math.max(1, info.exercised), 'the average divides by months of exercise');
+  const card = await revealCard(page, short.id);
+  assert.match(await text(card), new RegExp(`exerceu ${info.exercised} de ${info.coverage} meses · fora do ranking`));
   assert.match(await text(page.locator('.ranking-context')), /pelo menos \d+ meses/);
   await page.close();
 });
@@ -1953,13 +2105,17 @@ check('every ranking tab renders rows or an explicit empty message with its reas
 });
 
 (async () => {
-  browser =await chromium.launch({ headless: true });
-  let failed = 0;
+  browser = await chromium.launch({ headless: true });
+  let failed = 0, ran = 0;
   try {
     for (const { name, fn } of checks) {
+      if (only && !name.toLowerCase().includes(only)) continue;
+      ran++;
       try { await fn(); console.log(`PASS ${name}`); }
       catch (error) { failed++; console.log(`FAIL ${name}\n  ${String(error.message).split('\n').join('\n  ')}`); }
+      for (const page of browser.contexts().flatMap(context => context.pages())) await page.close().catch(() => {});
     }
   } finally { await browser.close(); }
-  if (failed) { console.log(`${failed} of ${checks.length} checks failed`); process.exitCode = 1; }
+  console.log(`${ran - failed} of ${ran} checks passed`);
+  if (failed) process.exitCode = 1;
 })();
