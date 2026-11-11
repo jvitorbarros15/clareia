@@ -8,9 +8,10 @@ export const UFS:Record<string,string>={AC:'Acre',AL:'Alagoas',AM:'Amazonas',AP:
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MONTH_ABBR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const ICON='/icon-512.png';
+export const SHARE_WIDTH=1200,SHARE_HEIGHT=630;
 
-export type SiteOptions={siteUrl?:string;sitemap?:boolean;noindex?:boolean};
-export type ResolvedOptions={siteUrl:string;sitemap:boolean;noindex:boolean};
+export type SiteOptions={siteUrl?:string;sitemap?:boolean;noindex?:boolean;shareImages?:boolean};
+export type ResolvedOptions={siteUrl:string;sitemap:boolean;noindex:boolean;shareImages:boolean};
 
 export function resolveOptions(options:SiteOptions={}):ResolvedOptions{
   const sitemap=Boolean(options.sitemap),noindex=Boolean(options.noindex);
@@ -18,7 +19,7 @@ export function resolveOptions(options:SiteOptions={}):ResolvedOptions{
   let url:URL;
   try{url=new URL(options.siteUrl||DEFAULT_SITE_URL);}catch{throw new Error('--site-url inválido');}
   if(!/^https?:$/.test(url.protocol)||url.username||url.password||url.search||url.hash||url.pathname!=='/')throw new Error('--site-url deve ser só a origem, como https://exemplo.com');
-  return {siteUrl:url.origin,sitemap,noindex};
+  return {siteUrl:url.origin,sitemap,noindex,shareImages:Boolean(options.shareImages)};
 }
 
 export const esc=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]!);
@@ -28,7 +29,7 @@ const norm=(value:string)=>value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]
 export const slugOf=(name:string)=>norm(name).replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 export const deputyPath=(officialId:number,name:string)=>`/deputado/${officialId}-${slugOf(name)}`;
 export const statePath=(uf:string)=>`/estado/${uf}`;
-const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
+export const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
 
 export type Deputy={id:number;name:string;uf:string|null;party:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];cents:number;hasCells:boolean;projects:number|null};
 export type Period={year:string;coverage:number[]};
@@ -52,15 +53,15 @@ export function deputiesOf(input:{ids:number[];people:Person[];summary:SiteSumma
   });
 }
 
-const spanOf=(period:Period)=>`${MONTH_ABBR[period.coverage[0]]}–${MONTH_ABBR[period.coverage.at(-1)!]} ${period.year}`;
+export const spanOf=(period:Period)=>`${MONTH_ABBR[period.coverage[0]]}–${MONTH_ABBR[period.coverage.at(-1)!]} ${period.year}`;
 const minMonths=(period:Period)=>Math.min(6,period.coverage.length);
 // Same words as partialNote and exclusionNote in real/app.js.
-function exclusionNote(p:Deputy,period:Period):string{
+export function exclusionNote(p:Deputy,period:Period):string{
   if(p.heldMonths.length)return `Total parcial: ${p.heldMonths.length===1?`${MONTHS[p.heldMonths[0]].toLowerCase()} de ${period.year} está em revisão`:`${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
   if(p.exercisedMonths<minMonths(period))return `Exerceu o mandato em ${p.exercisedMonths} de ${period.coverage.length} meses do recorte. Rankings e comparações incluem quem exerceu pelo menos ${minMonths(period)} meses.`;
   return '';
 }
-function partyText(p:Deputy):string|null{
+export function partyText(p:Deputy):string|null{
   if(p.partyInReview)return p.lastConfirmedParty?`${p.lastConfirmedParty} (último confirmado)`:null;
   if(!p.party||p.party==='Partido indisponível')return null;
   return p.party;
@@ -80,12 +81,12 @@ export function stateDescription(uf:string,deputies:Deputy[],period:Period):stri
   return [`${UFS[uf]}: ${people.length} ${people.length===1?'deputado':'deputados'} neste recorte.`,`Cota total em ${spanOf(period)}: ${money(people.reduce((n,p)=>n+p.cents,0))} (valor exato).`,partial?`Inclui ${partial} ${partial===1?'deputado com total parcial':'deputados com total parcial'}; meses em revisão ficam fora da soma.`:'','Dados oficiais da Câmara dos Deputados.'].filter(Boolean).join(' ');
 }
 
-type Image={url:string;width?:number;height?:number;alt:string};
+type Image={url:string;width?:number;height?:number;alt:string;large?:boolean};
 type Meta={title:string;description:string;url:string;type:'website'|'profile';image:Image};
 function metaTags(m:Meta):string{
   const tags=[`<link rel="canonical" href="${esc(m.url)}">`,`<meta property="og:site_name" content="Clareia">`,`<meta property="og:locale" content="pt_BR">`,`<meta property="og:type" content="${m.type}">`,`<meta property="og:title" content="${esc(m.title)}">`,`<meta property="og:description" content="${esc(m.description)}">`,`<meta property="og:url" content="${esc(m.url)}">`,`<meta property="og:image" content="${esc(m.image.url)}">`];
   if(m.image.width&&m.image.height)tags.push(`<meta property="og:image:width" content="${m.image.width}">`,`<meta property="og:image:height" content="${m.image.height}">`);
-  tags.push(`<meta property="og:image:alt" content="${esc(m.image.alt)}">`,`<meta name="twitter:card" content="summary">`,`<meta name="twitter:title" content="${esc(m.title)}">`,`<meta name="twitter:description" content="${esc(m.description)}">`,`<meta name="twitter:image" content="${esc(m.image.url)}">`,`<meta name="twitter:image:alt" content="${esc(m.image.alt)}">`);
+  tags.push(`<meta property="og:image:alt" content="${esc(m.image.alt)}">`,`<meta name="twitter:card" content="${m.image.large?'summary_large_image':'summary'}">`,`<meta name="twitter:title" content="${esc(m.title)}">`,`<meta name="twitter:description" content="${esc(m.description)}">`,`<meta name="twitter:image" content="${esc(m.image.url)}">`,`<meta name="twitter:image:alt" content="${esc(m.image.alt)}">`);
   return tags.join('\n  ');
 }
 const TITLE=/<title>[^<]*<\/title>/,DESCRIPTION=/<meta name="description" content="[^"]*">/,NOSCRIPT=/<noscript>[^<]*<\/noscript>/;
@@ -105,9 +106,9 @@ export function renderHome(shell:string,siteUrl:string):string{
   if(!title||!description)throw new Error('Esqueleto sem título ou descrição');
   return swap(shell,DESCRIPTION,`<meta name="description" content="${description}">\n  ${metaTags({title,description,url:siteUrl+'/',type:'website',image:icon(siteUrl)})}`);
 }
-export function renderDeputy(shell:string,p:Deputy,period:Period,siteUrl:string,portrait:{url:string;width?:number;height?:number}|null):string{
+export function renderDeputy(shell:string,p:Deputy,period:Period,siteUrl:string,portrait:{url:string;width?:number;height?:number}|null,share:{url:string;alt:string}|null=null):string{
   const description=deputyDescription(p,period),title=`${p.name} — Clareia`;
-  const image:Image=portrait?{...portrait,alt:`Retrato oficial de ${p.name}, da Câmara dos Deputados`}:icon(siteUrl);
+  const image:Image=share?{url:share.url,width:SHARE_WIDTH,height:SHARE_HEIGHT,alt:share.alt,large:true}:portrait?{...portrait,alt:`Retrato oficial de ${p.name}, da Câmara dos Deputados`}:icon(siteUrl);
   const source=/^https:\/\//.test(p.sourceUrl)?` <a href="${esc(p.sourceUrl)}" rel="noopener noreferrer">Cadastro na Câmara</a>`:'';
   const noscript=`<noscript><main id="main"><h1>${esc(p.name)}</h1><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.${source}</p></main></noscript>`;
   return page(shell,{title,description,url:siteUrl+deputyPath(p.id,p.name),type:'profile',image},noscript);
@@ -141,7 +142,7 @@ export function robotsTxt(o:ResolvedOptions):string{
   return `User-agent: *\nAllow: /\n${o.sitemap?`\nSitemap: ${o.siteUrl}/sitemap.xml\n`:''}`;
 }
 
-export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions):Promise<void>{
+export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions,shares:Map<number,{name:string;alt:string}>=new Map()):Promise<void>{
   const shell=await fs.readFile(path.join(outDir,'index.html'),'utf8');
   for(const p of deputies){
     const file=path.join(outDir,'data',publicationId,'portraits',`${p.id}.jpg`),bytes=await fs.readFile(file).catch(()=>null);
@@ -149,7 +150,7 @@ export async function writePrerendered(outDir:string,publicationId:string,deputi
     // A file named <route>.html is served at <route> with no redirect; a folder index would answer 307 to a trailing slash.
     const page=path.join(outDir,`${deputyPath(p.id,p.name).slice(1)}.html`);
     await fs.mkdir(path.dirname(page),{recursive:true});
-    await fs.writeFile(page,renderDeputy(shell,p,period,options.siteUrl,portrait));
+    await fs.writeFile(page,renderDeputy(shell,p,period,options.siteUrl,portrait,shares.has(p.id)?{url:`${options.siteUrl}/data/${publicationId}/share/${shares.get(p.id)!.name}.png`,alt:shares.get(p.id)!.alt}:null));
   }
   for(const uf of Object.keys(UFS)){
     await fs.mkdir(path.join(outDir,'estado'),{recursive:true});
