@@ -6,7 +6,7 @@ import path from 'node:path';
 import {openDB} from '../src/store.ts';
 import type {DB} from '../src/store.ts';
 import {publishDomain,recordDomainAudit} from '../src/publications.ts';
-import {buildSite,checkLimits} from '../src/build-site.ts';
+import {buildSite,checkLimits,dataFolderId} from '../src/build-site.ts';
 import {personView} from '../src/view.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
@@ -63,6 +63,26 @@ test('a new publication gets a new data path',()=>setup(async(db,dist,portraits)
   const second=await buildSite(db,dist,portraits);
   assert.notEqual(first.publicationId,second.publicationId);
 }));
+test('the data folder name is the same for identical builds and changes with any published byte',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0)]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const first=await buildSite(db,dist,portraits),second=await buildSite(db,dist,portraits);
+  assert.equal(first.publicationId,second.publicationId);
+  assert.deepEqual(await fs.readdir(path.join(dist,'data')),[first.publicationId]);
+  assert.equal((await json(dist,'manifest.json')).base,`data/${first.publicationId}`);
+  await fs.writeFile(path.join(portraits,'1.jpg'),'other jpg');
+  assert.notEqual((await buildSite(db,dist,portraits)).publicationId,first.publicationId);
+}));
+test('dataFolderId depends on every file path and byte',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-hash-'));
+  try{
+    await fs.mkdir(path.join(dir,'sub'));await fs.writeFile(path.join(dir,'a.json'),'{}');await fs.writeFile(path.join(dir,'sub','b.json'),'1');
+    const base=await dataFolderId(dir);
+    assert.equal(await dataFolderId(dir),base);assert.match(base,/^[0-9a-f]{12}$/);
+    await fs.writeFile(path.join(dir,'sub','b.json'),'2');const changed=await dataFolderId(dir);assert.notEqual(changed,base);
+    await fs.rename(path.join(dir,'sub','b.json'),path.join(dir,'sub','c.json'));assert.notEqual(await dataFolderId(dir),changed);
+  }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
 test('fails above 15000 files or with a file above 10 MiB',()=>{
   assert.throws(()=>checkLimits(15000,1),/arquivos/);
   assert.throws(()=>checkLimits(1,10*1024*1024+1),/MiB/);
