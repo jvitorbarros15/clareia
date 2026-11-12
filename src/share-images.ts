@@ -36,12 +36,12 @@ body{font-family:"Public Sans",sans-serif;color:#0b0e18;-webkit-font-smoothing:a
 .brand{font:600 32px "Newsreader",serif;letter-spacing:-.01em}
 .body{flex:1;min-height:0;display:grid}
 .wide .body{grid-template-columns:minmax(0,1fr) 290px;grid-template-rows:auto minmax(0,1fr);column-gap:44px;margin-top:24px}
-.square .body{grid-template-columns:320px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);column-gap:44px;margin-top:40px}
+.square .body{grid-template-columns:400px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);column-gap:44px;margin-top:40px}
 .photo{border-radius:16px;overflow:hidden;background:#e8edff}
 .photo img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
 .mono{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font:600 96px "Newsreader",serif}
 .wide .photo{grid-column:2;grid-row:1/3;height:386px;align-self:start}
-.square .photo{grid-column:1;grid-row:1;height:400px}
+.square .photo{grid-column:1;grid-row:1;height:500px}
 .who{min-width:0}
 .square .who{align-self:center}
 .name{font-family:"Newsreader",serif;font-weight:600;line-height:1.06;letter-spacing:-.015em;overflow-wrap:anywhere}

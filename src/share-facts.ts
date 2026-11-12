@@ -3,7 +3,7 @@ import {exclusionNote,money,partyText,spanOf} from './prerender.ts';
 import type {Deputy,Period} from './prerender.ts';
 import type {CeilingUse,Standing} from './ceiling-use.ts';
 
-export const TEMPLATE_VERSION=3,JPEG_QUALITY=85;
+export const TEMPLATE_VERSION=4,JPEG_QUALITY=85;
 export const FORMATS={wide:{width:1200,height:630,suffix:''},square:{width:1080,height:1080,suffix:'-square'}} as const;
 export type ShareFormat=keyof typeof FORMATS;
 
