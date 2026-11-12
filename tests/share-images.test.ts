@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {deputyDescription,renderDeputy} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
-import {DISCLAIMER,FORMATS,SOURCE,monogram,monogramColors,nameSize,shareFactOf,shareHash,shareName,valueSize} from '../src/share-facts.ts';
+import {ufStandings} from '../src/ceiling-use.ts';
+import type {CeilingUse} from '../src/ceiling-use.ts';
+import {ceilingLine,DISCLAIMER,FORMATS,SOURCE,monogram,monogramColors,nameSize,shareFactOf,shareHash,shareName,valueSize} from '../src/share-facts.ts';
 import {generateShareImages,loadShareAssets,openRenderer,shareBody,shareDocument} from '../src/share-images.ts';
 import {jpegSize} from '../src/prerender.ts';
 import type {Renderer} from '../src/share-images.ts';
@@ -163,4 +165,44 @@ test('real renderer: exact sizes, long name, no portrait, and a layout that does
     const absurd={...normal,name:'W'.repeat(400)};
     await assert.rejects(renderer.render({fact:shareFactOf(absurd,period),format:'wide',portrait:null}),/não cabe no modelo/);
   }finally{await renderer.close();}
+});
+
+const okUse=(tenths:number,uf='AC'):CeilingUse=>({status:'ok',counted:[{month:1,uf,expenseCents:1,ceilingCents:1,records:1}],excluded:[],outside:[],expenseCents:1,ceilingCents:1,tenths});
+test('the ceiling line states the share and the position among comparable deputies of the state',()=>{
+  assert.equal(ceilingLine(okUse(818),{uf:'AC',rank:1,total:7}),'81,8% do teto da cota do AC · maior uso entre 7 deputados comparáveis do estado');
+  assert.equal(ceilingLine(okUse(818),{uf:'AC',rank:3,total:7}),'81,8% do teto da cota do AC · 3º maior uso entre 7 deputados comparáveis do estado');
+  assert.equal(ceilingLine(okUse(1048),{uf:'AC',rank:7,total:7}),'104,8% do teto da cota do AC · menor uso entre 7 deputados comparáveis do estado');
+  assert.equal(ceilingLine(okUse(1000),{uf:'AC',rank:1,total:1}),'100,0% do teto da cota do AC');
+  assert.equal(ceilingLine(okUse(500),null),'50,0% do teto da cota do AC');
+  const unconfirmed:CeilingUse={status:'unconfirmed',counted:[],excluded:[],outside:[],missing:[1]};
+  assert.equal(ceilingLine(unconfirmed,{uf:'AC',rank:1,total:7}),'');
+  assert.equal(ceilingLine(undefined,null),'');
+});
+test('the position counts only comparable deputies whose counted months are all in one state',()=>{
+  const mixed:CeilingUse={...okUse(900),counted:[{month:1,uf:'AC',expenseCents:1,ceilingCents:1,records:1},{month:2,uf:'SP',expenseCents:1,ceilingCents:1,records:1}]} as CeilingUse;
+  const s=ufStandings([
+    {id:1,name:'Ana',comparable:true,use:okUse(900)},
+    {id:2,name:'Bia',comparable:true,use:okUse(950)},
+    {id:3,name:'Caio',comparable:false,use:okUse(990)},
+    {id:4,name:'Davi',comparable:true,use:mixed},
+    {id:5,name:'Eva',comparable:true,use:{status:'unconfirmed',counted:[],excluded:[],outside:[],missing:[1]}},
+    {id:6,name:'Fabio',comparable:true,use:okUse(900)},
+    {id:7,name:'Gil',comparable:true,use:okUse(100,'SP')}
+  ]);
+  assert.deepEqual(s.get(2),{uf:'AC',rank:1,total:3});
+  assert.deepEqual(s.get(1),{uf:'AC',rank:2,total:3});
+  assert.deepEqual(s.get(6),{uf:'AC',rank:3,total:3});
+  assert.deepEqual(s.get(7),{uf:'SP',rank:1,total:1});
+  for(const id of [3,4,5])assert.equal(s.has(id),false);
+});
+test('the line reaches the fact and the alt text only for a full or few-months total with a confirmed share',()=>{
+  const withUse={...normal,use:okUse(818,'SP')},st={uf:'SP',rank:2,total:5};
+  const f=shareFactOf(withUse,period,st);
+  assert.equal(f.ceiling,'81,8% do teto da cota do SP · 2º maior uso entre 5 deputados comparáveis do estado');
+  assert.ok(f.alt.includes(f.ceiling));
+  assert.ok(shareBody(f,'wide',assets,null).includes(f.ceiling));
+  assert.equal(shareFactOf({...withUse,heldMonths:[2]},period,st).ceiling,'');
+  assert.equal(shareFactOf({...withUse,hasCells:false,heldMonths:[2]},period,st).ceiling,'');
+  assert.equal(shareFactOf({...withUse,noExercise:true},period,st).ceiling,'');
+  assert.equal(shareFactOf(normal,period).ceiling,'');
 });

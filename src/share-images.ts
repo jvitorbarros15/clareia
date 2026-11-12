@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {hash} from './model.ts';
-import {esc,jpegSize} from './prerender.ts';
+import {esc,jpegSize,minMonths} from './prerender.ts';
 import type {Deputy,Period} from './prerender.ts';
+import {ufStandings} from './ceiling-use.ts';
 import {DISCLAIMER,FORMATS,JPEG_QUALITY,SOURCE,monogram,monogramColors,nameSize,shareFactOf,shareHash,shareName,valueSize} from './share-facts.ts';
 import type {ShareFact,ShareFormat} from './share-facts.ts';
 
@@ -51,10 +52,12 @@ body{font-family:"Public Sans",sans-serif;color:#0b0e18;-webkit-font-smoothing:a
 .wide .fact{grid-column:1;grid-row:2}
 .square .fact{grid-column:1/3;grid-row:2;margin-top:40px}
 .label{font-size:24px;font-weight:500;color:#656977}
-.value{margin-top:6px;font-family:"Newsreader",serif;font-weight:600;color:#1551ff;line-height:1.04;letter-spacing:-.02em;font-variant-numeric:lining-nums tabular-nums;overflow-wrap:anywhere}
+.value{margin-top:6px;padding-top:10px;font-family:"Newsreader",serif;font-weight:600;color:#1551ff;line-height:1.04;letter-spacing:-.02em;font-variant-numeric:lining-nums tabular-nums;overflow-wrap:anywhere}
 .wide .value.big{font-size:92px}.wide .value.mid{font-size:68px}.wide .value.small{font-size:50px}
 .value.big,.value.mid{white-space:nowrap}
 .square .value.big{font-size:118px}.square .value.mid{font-size:92px}.square .value.small{font-size:68px}
+.ceil{margin-top:12px;text-wrap:balance;font-size:21px;line-height:1.35;color:#3a3f4e;max-width:900px}
+.square .ceil{font-size:25px}
 .notes{margin-top:14px;font-size:21px;line-height:1.35;color:#3a3f4e;max-width:900px}
 .square .notes{font-size:25px}
 .foot{display:flex;justify-content:space-between;gap:24px;margin-top:18px;padding-top:14px;border-top:1px solid #dbdcd9;font-size:19px;color:#656977}
@@ -73,7 +76,7 @@ export function shareBody(fact:ShareFact,format:ShareFormat,assets:Pick<ShareAss
     +`<div class="head"><img class="logo" src="${assets.logo}" alt=""><span class="brand">Clareia</span></div>`
     +`<div class="body"><div class="who"><h1 class="name ${nameSize(fact.name,format)}">${esc(fact.name)}</h1><p class="context">${esc(fact.context)}</p></div>`
     +`<div class="photo">${picture}</div>`
-    +`<div class="fact">${fact.label?`<p class="label">${esc(fact.label)}</p>`:''}<p class="value ${valueSize(fact.value)}">${esc(fact.value)}</p>${fact.notes.map(n=>`<p class="notes">${esc(n)}</p>`).join('')}</div></div>`
+    +`<div class="fact">${fact.label?`<p class="label">${esc(fact.label)}</p>`:''}<p class="value ${valueSize(fact.value)}">${esc(fact.value)}</p>${fact.ceiling?`<p class="ceil">${esc(fact.ceiling)}</p>`:''}${fact.notes.map(n=>`<p class="notes">${esc(n)}</p>`).join('')}</div></div>`
     +`<div class="foot"><span>${esc(SOURCE)}</span><b>${esc(DISCLAIMER)}</b></div></div>`;
 }
 
@@ -93,7 +96,7 @@ const FIT=`async html=>{
   await Promise.all([...document.images].map(i=>i.decode()));
   const card=document.querySelector('.card'),box=card.getBoundingClientRect(),bad=[];
   if(card.scrollHeight>card.clientHeight+1||card.scrollWidth>card.clientWidth+1)bad.push('card');
-  for(const el of card.querySelectorAll('.name,.context,.label,.value,.notes,.foot span,.foot b')){const r=el.getBoundingClientRect();if(r.right>box.right-1||r.bottom>box.bottom-1||el.scrollWidth>el.clientWidth+1)bad.push(el.className);}
+  for(const el of card.querySelectorAll('.name,.context,.label,.value,.ceil,.notes,.foot span,.foot b')){const r=el.getBoundingClientRect();if(r.right>box.right-1||r.bottom>box.bottom-1||el.scrollWidth>el.clientWidth+1)bad.push(el.className);}
   const who=card.querySelector('.who').getBoundingClientRect(),fact=card.querySelector('.fact').getBoundingClientRect();
   if(who.bottom>fact.top+1)bad.push('overlap');
   if(!['Newsreader','Public Sans'].every(f=>document.fonts.check('20px "'+f+'"')))bad.push('fonts');
@@ -135,8 +138,9 @@ const exists=(file:string)=>fs.access(file).then(()=>true,()=>false);
 export async function generateShareImages(o:{outDir:string;publicationId:string;deputies:Deputy[];period:Period;portraitsDir:string;pageDir:string;cacheDir:string;renderer?:Renderer}):Promise<ShareResult>{
   const started=Date.now(),assets=await loadShareAssets(o.pageDir),dir=path.join(o.outDir,'data',o.publicationId,'share');
   await fs.mkdir(dir,{recursive:true});await fs.mkdir(o.cacheDir,{recursive:true});
+  const standings=ufStandings(o.deputies.map(p=>({id:p.id,name:p.name,use:p.use,comparable:!p.noExercise&&!p.heldMonths.length&&p.exercisedMonths>=minMonths(o.period)})));
   const plan=await Promise.all(o.deputies.map(async p=>{
-    const portrait=await fs.readFile(path.join(o.portraitsDir,`${p.id}.jpg`)).catch(()=>null),fact=shareFactOf(p,o.period),h=shareHash(fact,portrait,assets.sha);
+    const portrait=await fs.readFile(path.join(o.portraitsDir,`${p.id}.jpg`)).catch(()=>null),fact=shareFactOf(p,o.period,standings.get(p.id)??null),h=shareHash(fact,portrait,assets.sha);
     return {id:p.id,fact,portrait,hash:h};
   }));
   const keep=new Set<string>(),todo:{item:typeof plan[number];format:ShareFormat}[]=[];
