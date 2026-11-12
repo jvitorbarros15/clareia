@@ -4,6 +4,7 @@
   "main": "worker/index.ts",
   "assets": {
     "directory": "./build/site",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": true
   }
 }

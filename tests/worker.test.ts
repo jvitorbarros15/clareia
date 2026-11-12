@@ -22,20 +22,41 @@ test('the default export serves through the ASSETS binding',async()=>{
   const r=await worker.fetch(request,{ASSETS:assets(404)});
   assert.equal(r.headers.get('Cache-Control'),'no-store');
 });
-const recording=()=>{const seen:string[]=[];return {seen,fetch:async(r:Request)=>{seen.push(new URL(r.url).pathname);return new URL(r.url).pathname==='/'?new Response('<html>',{status:200}):new Response('Not found',{status:404,headers:immutable});}};};
-test('deputy and state routes get the app page',async()=>{
-  for(const path of ['/deputado/62881-gabriel-mota','/deputado/62881','/estado/SP','/estado/sp/']){
-    const a=recording(),r=await worker.fetch(new Request(`https://clareia.example${path}`),{ASSETS:a});
-    assert.equal(r.status,200,path);assert.deepEqual(a.seen,['/'],path);
+const site=(prerendered:string[]=[])=>{const seen:string[]=[];return {seen,fetch:async(r:Request)=>{const p=new URL(r.url).pathname;seen.push(p);
+  if(p==='/')return new Response('<html>home',{status:200,headers:{'Cache-Control':'max-age=0, must-revalidate'}});
+  if(p==='/404')return new Response('<html>404 page',{status:200,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'max-age=0'}});
+  if(prerendered.includes(p))return new Response('<html>deputy',{status:200});
+  return new Response('Not found',{status:404,headers:immutable});}};};
+test('a prerendered page is served as an asset',async()=>{
+  const a=site(['/deputado/1-a']),r=await worker.fetch(new Request('https://clareia.example/deputado/1-a'),{ASSETS:a});
+  assert.equal(r.status,200);assert.equal(await r.text(),'<html>deputy');assert.deepEqual(a.seen,['/deputado/1-a']);
+});
+test('unknown deputy and state routes get the 404 page, never the app shell',async()=>{
+  for(const path of ['/deputado/999-x','/deputado/62881','/deputado/62881-gabriel-mota','/estado/ZZ','/estado/sp','/estado/SPX']){
+    const a=site(),r=await worker.fetch(new Request(`https://clareia.example${path}`),{ASSETS:a});
+    assert.equal(r.status,404,path);assert.equal(await r.text(),'<html>404 page',path);
+    assert.equal(r.headers.get('Cache-Control'),'no-store',path);assert.equal(a.seen.includes('/'),false,path);
   }
 });
-test('other misses stay real 404s and are never cached',async()=>{
-  for(const path of ['/data/abc/nao-existe.json','/deputado/62881/despesas.json','/estado/SPX','/qualquer','/deputado/a/b']){
-    const a=recording(),r=await worker.fetch(new Request(`https://clareia.example${path}`),{ASSETS:a});
-    assert.equal(r.status,404,path);assert.equal(r.headers.get('Cache-Control'),'no-store',path);assert.deepEqual(a.seen,[path],path);
+test('unknown pages get the branded 404 and are never cached',async()=>{
+  const a=site(),r=await worker.fetch(new Request('https://clareia.example/naoexiste'),{ASSETS:a});
+  assert.equal(r.status,404);assert.equal(r.headers.get('Cache-Control'),'no-store');assert.equal(await r.text(),'<html>404 page');assert.deepEqual(a.seen,['/naoexiste','/404']);
+});
+test('HEAD answers the 404 without a body',async()=>{
+  const r=await worker.fetch(new Request('https://clareia.example/naoexiste',{method:'HEAD'}),{ASSETS:site()});
+  assert.equal(r.status,404);assert.equal(r.headers.get('Cache-Control'),'no-store');assert.equal(await r.text(),'');
+});
+test('a missing data file keeps the plain 404 and never reaches the 404 page',async()=>{
+  for(const path of ['/data/abc/nao-existe.json','/data/abc/deputados/1/despesas.json']){
+    const a=site(),r=await worker.fetch(new Request(`https://clareia.example${path}`),{ASSETS:a});
+    assert.equal(r.status,404,path);assert.equal(r.headers.get('Cache-Control'),'no-store',path);assert.equal(await r.text(),'Not found',path);assert.deepEqual(a.seen,[path],path);
   }
 });
-test('app routes only answer reads',async()=>{
-  const a=recording(),r=await worker.fetch(new Request('https://clareia.example/deputado/1',{method:'POST'}),{ASSETS:a});
-  assert.equal(r.status,404);assert.deepEqual(a.seen,['/deputado/1']);
+test('plain http is redirected to https with the same path and query',async()=>{
+  const a=site(),r=await worker.fetch(new Request('http://clareia.example/deputado/1-a?ano=2025'),{ASSETS:a});
+  assert.equal(r.status,301);assert.equal(r.headers.get('Location'),'https://clareia.example/deputado/1-a?ano=2025');assert.deepEqual(a.seen,[]);
+});
+test('https requests are answered by the assets',async()=>{
+  const r=await worker.fetch(new Request('https://clareia.example/'),{ASSETS:site()});
+  assert.equal(r.status,200);assert.equal(await r.text(),'<html>home');
 });
