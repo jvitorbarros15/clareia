@@ -510,7 +510,7 @@
   document.addEventListener('submit',e=>{if(e.target.id==='assistant-form'){e.preventDefault();const q=$('#assistant-query').value.trim();if(q)runAsk(q);}});
   document.addEventListener('keydown',e=>{if(e.target.matches('.donut-legend [data-p-highlight]')&&['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();const rows=[...document.querySelectorAll('.donut-legend [data-p-highlight]:not(:disabled)')],next=rows[rows.indexOf(e.target)+(e.key==='ArrowDown'?1:-1)];next?.click();return;}if(e.target.matches('[data-p-uf]')&&['Enter',' '].includes(e.key)){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}));}if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)&&!$('#detail').open){e.preventDefault();$('#query').focus();$('#query').scrollIntoView({block:'center',behavior:state.motion?'smooth':'instant'});}});
   let ticking=false;
-  addEventListener('scroll',()=>{if(!ticking){requestAnimationFrame(()=>{const max=document.documentElement.scrollHeight-innerHeight;$('.page-progress i').style.width=`${max?scrollY/max*100:0}%`;spySections();document.body.classList.toggle('past-hero',scrollY>innerHeight*.9);ticking=false;});ticking=true;}},{passive:true});
+  addEventListener('scroll',()=>{if(!ticking){requestAnimationFrame(()=>{const max=document.documentElement.scrollHeight-innerHeight;const bar=$('.page-progress i');if(bar)bar.style.width=`${max?scrollY/max*100:0}%`;spySections();document.body.classList.toggle('past-hero',scrollY>innerHeight*.9);ticking=false;});ticking=true;}},{passive:true});
   document.addEventListener('pointermove',e=>{if(C.model!=='explorador'||!state.motion||e.pointerType==='touch')return;const card=e.target.closest('.dossier-card,.project-card');if(!card)return;const r=card.getBoundingClientRect();card.style.setProperty('--tilt-x',`${-(e.clientY-r.top-r.height/2)/r.height*3}deg`);card.style.setProperty('--tilt-y',`${(e.clientX-r.left-r.width/2)/r.width*3}deg`);});
   document.addEventListener('pointerout',e=>{const card=e.target.closest('.dossier-card,.project-card');if(card&&!card.contains(e.relatedTarget)){card.style.setProperty('--tilt-x','0deg');card.style.setProperty('--tilt-y','0deg');}});
   reduced.addEventListener('change',e=>{if(e.matches){state.motion=false;document.body.dataset.motion='off';watchMotion();}});
@@ -548,8 +548,11 @@
   const route=C.parseRoute(location.pathname);
   if(route?.type==='page'){C.renderPage(route.name);fillFooter();return;}
   if(route?.type==='estado'&&UF[route.uf])state.mapUF=route.uf;
-  mount();
-  updateFollowCount();
-  if(route?.type==='estado'&&UF[route.uf]){syncEstado();(document.fonts?.ready??Promise.resolve()).then(()=>requestAnimationFrame(()=>$('#atlas')?.scrollIntoView({block:'start'})));}
-  else if(route)C.openRoute(route,{initial:true});
+  // Every section reads the monthly and supplier cells, so the page is drawn only once they are loaded.
+  window.ClareiaData.loadSuppliers().then(()=>{
+    mount();
+    updateFollowCount();
+    if(route?.type==='estado'&&UF[route.uf]){syncEstado();(document.fonts?.ready??Promise.resolve()).then(()=>requestAnimationFrame(()=>$('#atlas')?.scrollIntoView({block:'start'})));}
+    else if(route)C.openRoute(route,{initial:true});
+  },()=>{});
 })();

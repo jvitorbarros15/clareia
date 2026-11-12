@@ -171,6 +171,7 @@
   function answerHTML() {
     if (!state.answer) return '';
     const answer = state.answer;
+    if (answer.type === 'loading') return '<section class="answer" aria-live="polite"><p class="loading-note">Carregando…</p></section>';
     if (answer.type === 'message') return `<section class="answer" aria-label="Resposta da investigação"><p class="eyebrow">Busca por regras locais · sem IA conectada</p><div class="answer-message"><h3>${escape(answer.title)}</h3><p>${escape(answer.message)}</p><div class="answer-next"><span>Tente:</span>${examples().slice(0, 2).map(q => `<button type="button" class="outline-button" data-question="${escape(q)}">${escape(q)}</button>`).join('')}</div></div></section>`;
     const ppl = answer.ids.map(person).filter(p => p && comparable(p));
     if (!ppl.length || ppl.length < answer.ids.length && answer.ids.length === 2) {
@@ -288,6 +289,8 @@
   function ask(query, scroll = true, fixed = {}) {
     state.query = query.trim();
     if (!state.query) { $('#query').focus(); return; }
+    // The category order and the monthly cells come from fornecedores.json, so an answer waits for it.
+    if (!D.suppliersLoaded()) { state.answer = { type: 'loading' }; refresh(); D.loadSuppliers().then(() => ask(query, scroll, fixed), () => { state.answer = null; refresh(); }); return; }
     const q = norm(state.query), years = q.match(/\b20\d{2}\b/g);
     let message;
     if (years?.some(y => y !== state.year)) message = ['Período fora desta versão', `Esta versão contém ${span()}. Outros períodos ainda não foram publicados.`];
@@ -609,7 +612,7 @@
     else if (action === 'back-to-list') { const previous = dialogTrail.pop(); if (previous) dialogView = previous; navigating = Boolean(previous); try { backToList(id, target.dataset.record); } finally { navigating = false; } }
     else if (action === 'record') openView(() => recordDetail(person(id), target.dataset.record));
     else if (action === 'month') openView(() => recordTable(person(id), Number(target.dataset.month)));
-    else if (action === 'profile') openView(() => profile(id));
+    else if (action === 'profile') D.loadSuppliers().then(() => openView(() => profile(id)), () => {});
     else if (action === 'methodology') methodology();
     else if (action === 'focus-search') { $('#query').focus(); $('#query').scrollIntoView({ block: 'center' }); }
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog().then(() => ask(`Compare ${person(id).name} e ${peer.name}`)); }
