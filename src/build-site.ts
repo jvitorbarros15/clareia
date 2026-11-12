@@ -20,6 +20,12 @@ const DOMAINS:Domain[]=['pessoas','despesas','votacoes','projetos','eleicoes','e
 const MAX_FILES=15000,MAX_BYTES=10*1024*1024;
 const PAGE=path.join(import.meta.dirname,'..','real');
 
+const STAGING='.staging';
+// The data folder is served immutable, so its name must change whenever any published byte does, not only when a domain version does.
+export async function dataFolderId(dir:string):Promise<string>{
+  const files=(await listFiles(dir)).map(f=>path.relative(dir,f).split(path.sep).join('/')).sort();
+  return hash(canonical(await Promise.all(files.map(async f=>[f,hash(await fs.readFile(path.join(dir,f)))])))).slice(0,12);
+}
 export function checkLimits(files:number,largest:number):void{
   if(files>=MAX_FILES)throw new Error(`Site com ${files} arquivos, acima do limite de ${MAX_FILES}`);
   if(largest>MAX_BYTES)throw new Error('Arquivo acima de 10 MiB');
@@ -49,7 +55,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     const p=await activePublication(db,domain);
     if(p)domains[domain]={version:p.id,coverage:p.scope,collectedAt:p.collectedAt,publishedAt:p.publishedAt};
   }
-  const publicationId=hash(canonical(Object.values(domains).map(d=>d.version).sort())).slice(0,12),base=`data/${publicationId}`,data=path.join(outDir,'data',publicationId);
+  const data=path.join(outDir,'data',STAGING);
   const peopleVersion=await activePublication(db,'pessoas'),billsVersion=await activePublication(db,'projetos'),votesVersion=await activePublication(db,'votacoes');
   if(votesVersion)await assertVotesMatchVersion(db,votesVersion.id);
   const billList=billsVersion?await readBills(db,billsVersion.id):[],voteList=votesVersion?new Map((await readVotes(db,votesVersion.id)).map(v=>[v.id,v])):new Map();
@@ -87,15 +93,17 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
   await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,...siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)}));
-  await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base,domains}));
   for(const file of ['index.html','404.html','data.js','pages.js','analytics.js','app.js','portal.js','styles.css','_headers','icon.svg','apple-touch-icon.png','favicon-32.png','site.webmanifest','icon-192.png','icon-512.png','icon-maskable-512.png'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
   await fs.mkdir(path.join(outDir,'fonts'));
   for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});
   const deputies=deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary,months:active.scope.months}),period={year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1)};
   // The cache sits beside the output so an unchanged image is copied, not rendered again; the output folder itself is rebuilt every time.
-  const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache'}):null;
+  const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId:STAGING,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache'}):null;
   if(share)console.error(`Imagens de compartilhamento: ${share.rendered} geradas, ${share.reused} reaproveitadas, ${(share.ms/1000).toFixed(1)} s`);
+  const publicationId=await dataFolderId(data);
+  await fs.rename(data,path.join(outDir,'data',publicationId));
+  await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base:`data/${publicationId}`,domains}));
   await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names);
   await writeStaticPages(outDir,siteOptions);
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
