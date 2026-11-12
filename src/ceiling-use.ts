@@ -29,3 +29,22 @@ export function tenthsOf(num:number,den:number):number{
   const n=BigInt(num),d=BigInt(den),neg=n<0n,a=neg?-n:n,t=(a*2000n+d)/(2n*d);
   return Number(neg?-t:t);
 }
+
+export type Standing={uf:string;rank:number;total:number};
+// Same peers as the site rankings (comparable: exercised, nothing held, enough months) and the same name tiebreak.
+// Only a confirmed figure with every counted month in one UF takes part, so the position is always among that UF's own deputies.
+export function ufStandings(people:{id:number;name:string;comparable:boolean;use?:CeilingUse}[]):Map<number,Standing>{
+  const groups=new Map<string,{id:number;name:string;tenths:number}[]>();
+  for(const p of people){
+    if(!p.comparable||p.use?.status!=='ok')continue;
+    const ufs=new Set(p.use.counted.map(c=>c.uf));
+    if(ufs.size!==1)continue;
+    const uf=[...ufs][0],list=groups.get(uf)??[];list.push({id:p.id,name:p.name,tenths:p.use.tenths});groups.set(uf,list);
+  }
+  const out=new Map<number,Standing>();
+  for(const [uf,list] of groups){
+    list.sort((a,b)=>b.tenths-a.tenths||a.name.localeCompare(b.name,'pt-BR'));
+    list.forEach((p,i)=>out.set(p.id,{uf,rank:i+1,total:list.length}));
+  }
+  return out;
+}

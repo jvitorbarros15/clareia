@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
 import type {Person} from './model.ts';
+import {ceilingUse} from './ceiling-use.ts';
+import type {CeilingUse} from './ceiling-use.ts';
 import type {SiteSummary,SupplierSummary} from './site-summary.ts';
 
 const REPO=path.join(import.meta.dirname,'..');
@@ -33,7 +35,7 @@ export const deputyPath=(officialId:number,name:string)=>`/deputado/${officialId
 export const statePath=(uf:string)=>`/estado/${uf}`;
 export const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
 
-export type Deputy={id:number;name:string;uf:string|null;party:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];cents:number;hasCells:boolean;projects:number|null};
+export type Deputy={id:number;name:string;uf:string|null;party:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse};
 export type Period={year:string;coverage:number[]};
 
 // Mirrors the derivation in real/data.js, so a prerendered page states what the app shows for the same person.
@@ -51,12 +53,12 @@ export function deputiesOf(input:{ids:number[];people:Person[];summary:SiteSumma
     const info=input.people.find(p=>p.id===id),own=summaryOf.get(id),months=summary.coverageId?own?.months??[]:null,party=partyOfPeriod(id,info?.party??null);
     const last=[...(own?.months??[])].filter(m=>m.partyStatus==='single'&&m.party).sort((a,b)=>b.month-a.month)[0]?.party??null;
     const noExercise=!summary.coverageId||(own?.records??0)>0?false:(own?.months??[]).length>0&&(own?.months??[]).every(m=>!m.exercise||['unknown','outside','conflict'].includes(m.exercise));
-    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??null,party,partyInReview:party==='Partido em revisão',lastConfirmedParty:last,sourceUrl:info?.sourceUrl??'',exercisedMonths:months?months.filter(exercised).length:input.months.length,noExercise,heldMonths:(own?.months??[]).filter(m=>m.held).map(m=>m.month-1),cents:own?.cents??0,hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null};
+    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??null,party,partyInReview:party==='Partido em revisão',lastConfirmedParty:last,sourceUrl:info?.sourceUrl??'',exercisedMonths:months?months.filter(exercised).length:input.months.length,noExercise,heldMonths:(own?.months??[]).filter(m=>m.held).map(m=>m.month-1),cents:own?.cents??0,use:ceilingUse(own?.months??[],summary.ceiling,Boolean(summary.coverageId)),hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null};
   });
 }
 
 export const spanOf=(period:Period)=>`${MONTH_ABBR[period.coverage[0]]}–${MONTH_ABBR[period.coverage.at(-1)!]} ${period.year}`;
-const minMonths=(period:Period)=>Math.min(6,period.coverage.length);
+export const minMonths=(period:Period)=>Math.min(6,period.coverage.length);
 // Same words as partialNote and exclusionNote in real/app.js.
 export function exclusionNote(p:Deputy,period:Period):string{
   if(p.heldMonths.length)return `Total parcial: ${p.heldMonths.length===1?`${MONTHS[p.heldMonths[0]].toLowerCase()} de ${period.year} está em revisão`:`${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;

@@ -1,8 +1,9 @@
 import {canonical,hash} from './model.ts';
 import {exclusionNote,money,partyText,spanOf} from './prerender.ts';
 import type {Deputy,Period} from './prerender.ts';
+import type {CeilingUse,Standing} from './ceiling-use.ts';
 
-export const TEMPLATE_VERSION=2,JPEG_QUALITY=85;
+export const TEMPLATE_VERSION=4,JPEG_QUALITY=85;
 export const FORMATS={wide:{width:1200,height:630,suffix:''},square:{width:1080,height:1080,suffix:'-square'}} as const;
 export type ShareFormat=keyof typeof FORMATS;
 
@@ -10,16 +11,30 @@ export const DISCLAIMER='Gasto maior não indica irregularidade';
 export const SOURCE='Dados oficiais da Câmara dos Deputados';
 
 export type ShareStatus='full'|'partial'|'review'|'few-months'|'no-exercise';
-export type ShareFact={deputyId:number;name:string;context:string;status:ShareStatus;label:string;value:string;notes:string[];alt:string};
+export type ShareFact={deputyId:number;name:string;context:string;status:ShareStatus;label:string;value:string;ceiling:string;notes:string[];alt:string};
+
+const OF_UF:Record<string,string>={BA:'da',PB:'da',AL:'de',GO:'de',MT:'de',MS:'de',MG:'de',PE:'de',RO:'de',RR:'de',SC:'de',SP:'de',SE:'de'};
+const pct=(tenths:number)=>(tenths/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
+// The position only appears with at least two comparable peers; a figure that is not confirmed gets no line at all.
+export function ceilingLine(use:CeilingUse|undefined,standing:Standing|null):string{
+  if(use?.status!=='ok')return '';
+  const ufs=[...new Set(use.counted.map(c=>c.uf))];
+  if(ufs.length!==1)return '';
+  const head=`${pct(use.tenths)}% do teto da cota ${OF_UF[ufs[0]!]??'do'} ${ufs[0]}`;
+  if(!standing||standing.uf!==ufs[0]||standing.total<2)return head;
+  const {rank,total}=standing;
+  return `${head} · ${rank===1?'maior uso':rank===total?'menor uso':`${rank}º maior uso`} entre ${total} deputados comparáveis do estado`;
+}
 
 // The words come from the same helpers as deputyDescription, so the image says what the page says for the same person.
-export function shareFactOf(p:Deputy,period:Period):ShareFact{
+export function shareFactOf(p:Deputy,period:Period,standing:Standing|null=null):ShareFact{
   const context=['Deputado(a) federal',p.uf,partyText(p)].filter(Boolean).join(' · ');
   const note=p.noExercise?'':exclusionNote(p,period);
   const status:ShareStatus=p.noExercise?'no-exercise':p.heldMonths.length&&!p.hasCells?'review':p.heldMonths.length?'partial':note?'few-months':'full';
   const label=p.noExercise?'':`Despesas no recorte (${spanOf(period)})`;
   const value=p.noExercise?`Sem exercício confirmado em ${period.year}`:status==='review'?'Em revisão':money(p.cents);
-  return {deputyId:p.id,name:p.name,context,status,label,value,notes:note?[note]:[],alt:`Imagem de compartilhamento de ${p.name}. ${[label,value].filter(Boolean).join(': ')}. ${DISCLAIMER}.`};
+  const ceiling=status==='full'||status==='few-months'?ceilingLine(p.use,standing):'';
+  return {deputyId:p.id,name:p.name,context,status,label,value,ceiling,notes:note?[note]:[],alt:`Imagem de compartilhamento de ${p.name}. ${[label,value].filter(Boolean).join(': ')}. ${ceiling?ceiling+'. ':''}${DISCLAIMER}.`};
 }
 
 const PARTICLES=new Set(['de','da','do','das','dos','e']);
