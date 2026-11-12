@@ -957,3 +957,13 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .text-page h3{font-size:18px;color:var(--ink);margin:28px 0 8px}
 .text-page p,.text-page li{font-size:16px;line-height:1.6;color:var(--ink);margin:0 0 14px;overflow-wrap:anywhere}
 .text-page code{overflow-wrap:anywhere;word-break:break-all}
+.not-found{box-sizing:border-box;max-width:640px;margin:0 auto;padding:40px 16px 64px;min-height:100vh;display:flex;flex-direction:column;justify-content:center}
+.not-found-brand{display:inline-flex;align-items:center;min-height:44px;margin-bottom:48px;color:var(--ink)}
+.not-found-brand .logo-mark{height:28px;width:auto}
+.not-found-code{font:600 13px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 12px}
+.not-found h1{font:600 clamp(36px,6vw,56px)/1.05 var(--serif);letter-spacing:-.015em;color:var(--ink);margin:0 0 16px}
+.not-found-lede{font:400 18px/1.55 var(--sans);color:var(--muted);margin:0 0 32px;max-width:52ch}
+.not-found-links{display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px;margin:0}
+.not-found-links a{display:inline-flex;align-items:center;min-height:44px;font:500 15px var(--sans);color:var(--ink);text-underline-offset:4px}
+.not-found-links .not-found-primary{padding:0 20px;border-radius:999px;background:var(--accent);color:var(--on-accent);text-decoration:none}
+.not-found-links .not-found-primary:hover{filter:brightness(1.08)}
