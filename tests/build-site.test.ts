@@ -131,7 +131,7 @@ test('_headers marks data as immutable and manifest as revalidated',()=>setup(as
   for(const file of ['app.js','portal.js','data.js','analytics.js','view.js','styles.css'])assert.match(headers,new RegExp(`\\n/${file.replace('.','\\.')}\\s+Cache-Control: max-age=0, must-revalidate`));
   assert.match(headers,/script-src 'self' https:\/\/static\.cloudflareinsights\.com;/);
   assert.match(headers,/connect-src 'self' https:\/\/cloudflareinsights\.com;/);
-  for(const file of ['index.html','app.js','analytics.js','view.js','styles.css'])await fs.access(path.join(dist,file));
+  for(const file of ['index.html','404.html','app.js','analytics.js','view.js','styles.css'])await fs.access(path.join(dist,file));
 }));
 
 const coverageVersion=(party:string|null,review=false):PeopleCoverage=>{
