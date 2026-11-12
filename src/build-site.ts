@@ -6,7 +6,7 @@ import {activePublication,publicationAudit,readRecords} from './publications.ts'
 import type {Domain,Publication} from './publications.ts';
 import type {DB} from './store.ts';
 import {csv} from './view.ts';
-import {findCpfs} from './cpf-scan.ts';
+import {redactCpf,redactExpense,scanCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary,buildSupplierSummary} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
@@ -55,7 +55,9 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const billList=billsVersion?await readBills(db,billsVersion.id):[],voteList=votesVersion?new Map((await readVotes(db,votesVersion.id)).map(v=>[v.id,v])):new Map();
   const ballotsOf=new Map<number,Awaited<ReturnType<typeof readBallots>>>(),voteTotals=new Map<number,Record<string,number>>(),votesHeld=new Map<number,number>();
   if(votesVersion)for(const id of active.scope.ids){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
-  const allRecords=await readRecords(db,active.id);
+  // Records come from an approved version that may predate the redaction rule; the site never shows a CPF the source typed into free text.
+  const redacted={n:0},allRecords=(await readRecords(db,active.id)).map(r=>redactExpense(r,redacted));
+  if(redacted.n)console.error(`CPF omitido em ${redacted.n} valores de despesas`);
   const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:allRecords,expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld,held:active.validation.heldCompetences??[],ceiling});
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
@@ -66,20 +68,22 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     await fs.copyFile(path.join(portraitsDir,`${id}.jpg`),path.join(data,'portraits',`${id}.jpg`)).catch(()=>{});
     // Loaded by the page only when someone opens the section, and never joined to expenses.
     if(billsVersion||votesVersion){
-      const bills=billList.filter(b=>!b.issues.length&&b.authors.some(a=>a.deputyId===id)).map(b=>({id:b.id,type:b.type,number:b.number,year:b.year,summary:b.summary,situation:b.situation,situationAt:b.situationAt,norm:b.norm,proponent:b.authors.find(a=>a.deputyId===id)!.proponent,joint:b.authors.filter(a=>a.proponent).length+b.otherProponents>1})).sort((x,y)=>y.id-x.id);
-      const votes=(ballotsOf.get(id)??[]).map(([voteId,,category])=>{const v=voteList.get(voteId)!;return {id:voteId,date:v.date,organ:v.organ,kind:v.kind,description:v.description,matters:v.objects.map((o:{title:string|null})=>o.title).filter(Boolean),category};}).sort((x,y)=>y.date.localeCompare(x.date)||x.id.localeCompare(y.id));
-      await fs.mkdir(path.join(data,'atividade'),{recursive:true});const activity=JSON.stringify({bills,votes});if(findCpfs(activity,new Set()))throw new Error('Identificador privado na atividade de um deputado');await fs.writeFile(path.join(data,'atividade',id+'.json'),activity);
+      const bills=billList.filter(b=>!b.issues.length&&b.authors.some(a=>a.deputyId===id)).map(b=>({id:b.id,type:b.type,number:b.number,year:b.year,summary:redactCpf(b.summary),situation:b.situation,situationAt:b.situationAt,norm:b.norm,proponent:b.authors.find(a=>a.deputyId===id)!.proponent,joint:b.authors.filter(a=>a.proponent).length+b.otherProponents>1})).sort((x,y)=>y.id-x.id);
+      const votes=(ballotsOf.get(id)??[]).map(([voteId,,category])=>{const v=voteList.get(voteId)!;return {id:voteId,date:v.date,organ:v.organ,kind:v.kind,description:redactCpf(v.description),matters:v.objects.map((o:{title:string|null})=>o.title?redactCpf(o.title):null).filter(Boolean),category};}).sort((x,y)=>y.date.localeCompare(x.date)||x.id.localeCompare(y.id));
+      await fs.mkdir(path.join(data,'atividade'),{recursive:true});const activity=JSON.stringify({bills,votes});if(scanCpfs(activity,new Set()))throw new Error('Identificador privado na atividade de um deputado');await fs.writeFile(path.join(data,'atividade',id+'.json'),activity);
     }
     if(!records.length){withoutData.push(id);continue;}
     const person=path.join(data,'deputados',String(id));
     await fs.mkdir(person,{recursive:true});
-    await fs.writeFile(path.join(person,'despesas.json'),JSON.stringify(records));
-    await fs.writeFile(path.join(person,'despesas.csv'),csv(records));
+    const json=JSON.stringify(records),table=csv(records);if(scanCpfs(json,new Set())||scanCpfs(table,new Set()))throw new Error('Identificador privado nas despesas de um deputado');
+    await fs.writeFile(path.join(person,'despesas.json'),json);
+    await fs.writeFile(path.join(person,'despesas.csv'),table);
   }
   // The cells exist for the supplier cross-check; the page reads the finer supplier rows, so they are not published twice.
-  await fs.writeFile(path.join(data,'summary.json'),JSON.stringify({...summary,people:summary.people.map(({cells:_cells,...person})=>person)}));
+  const summaryJson=JSON.stringify({...summary,people:summary.people.map(({cells:_cells,...person})=>person)});if(scanCpfs(summaryJson,new Set()))throw new Error('Identificador privado no resumo');
+  await fs.writeFile(path.join(data,'summary.json'),summaryJson);
   // Supplier names are already redacted for private persons; the scan refuses any that slipped through.
-  const supplierSummary=buildSupplierSummary(summary,allRecords),suppliers=JSON.stringify(supplierSummary);if(findCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
+  const supplierSummary=buildSupplierSummary(summary,allRecords),suppliers=JSON.stringify(supplierSummary);if(scanCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
   await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
   await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,...siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)}));
