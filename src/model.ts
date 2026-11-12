@@ -22,7 +22,7 @@ export function snapshotId(snapshot:object):string{
   return hash(canonical({schema:SNAPSHOT_SCHEMA,body:withoutCaptureTimes(body)}));
 }
 // Some suppliers are individuals with a CPF inside the trade name; it never reaches a published record.
-export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
+export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
 // An individual paid by the quota is not a public figure: the name stays out until a legal opinion says otherwise.
 export function publicSupplier(name:string,rawId:string):{name:string;key:'cnpj'|'person'|'unknown'}{
   const id=rawId.replace(/\D/g,'');
