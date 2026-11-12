@@ -12,6 +12,7 @@ import {buildSiteSummary,buildSupplierSummary} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
 import {deputiesOf,resolveOptions,writePrerendered} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
+import {generateShareImages} from './share-images.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
 import type {SiteCeiling} from './ceiling-site.ts';
 
@@ -81,13 +82,17 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const supplierSummary=buildSupplierSummary(summary,allRecords),suppliers=JSON.stringify(supplierSummary);if(findCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
   await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
-  await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,audit:await publicationAudit(db,active.id)}));
+  await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,...siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)}));
   await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base,domains}));
   for(const file of ['index.html','data.js','analytics.js','app.js','portal.js','styles.css','_headers','icon.svg','apple-touch-icon.png','favicon-32.png','site.webmanifest','icon-192.png','icon-512.png','icon-maskable-512.png'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
   await fs.mkdir(path.join(outDir,'fonts'));
   for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});
-  await writePrerendered(outDir,publicationId,deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary,months:active.scope.months}),{year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1)},siteOptions);
+  const deputies=deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary,months:active.scope.months}),period={year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1)};
+  // The cache sits beside the output so an unchanged image is copied, not rendered again; the output folder itself is rebuilt every time.
+  const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache'}):null;
+  if(share)console.error(`Imagens de compartilhamento: ${share.rendered} geradas, ${share.reused} reaproveitadas, ${(share.ms/1000).toFixed(1)} s`);
+  await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names);
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
   checkLimits(files.length,Math.max(...sizes));
   await fs.rm(finalDir,{recursive:true,force:true});

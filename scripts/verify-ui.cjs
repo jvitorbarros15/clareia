@@ -227,6 +227,23 @@ check('copy', async () => {
 const settle = page => page.waitForTimeout(500);
 const peopleOf = page => sampleIds(page, 4);
 
+const jpegBox = bytes => { for (let i = 2; i + 9 < bytes.length; i += 2 + bytes.readUInt16BE(i + 2)) { if (bytes[i] !== 0xff) return null; if (bytes[i + 1] >= 0xc0 && bytes[i + 1] <= 0xc3) return { width: bytes.readUInt16BE(i + 7), height: bytes.readUInt16BE(i + 5) }; } return null; };
+check('share images: og:image is a 1200x630 JPEG and "Baixar imagem" downloads the square one', async () => {
+  const manifest = await (await fetch(`${base}/manifest.json`)).json(), index = await (await fetch(`${base}/${manifest.base}/index.json`)).json();
+  if (!index.shareImages) return;
+  const p = index.people[0], slug = p.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''), route = `deputado/${p.id}-${slug}`;
+  const html = await (await fetch(`${base}/${route}`)).text(), meta = key => new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)">`).exec(html)?.[1];
+  assert.equal(meta('twitter:card'), 'summary_large_image'); assert.equal(meta('og:image:width'), '1200'); assert.equal(meta('og:image:height'), '630'); assert.equal(meta('og:image:type'), 'image/jpeg');
+  const res = await fetch(base + new URL(meta('og:image')).pathname), bytes = Buffer.from(await res.arrayBuffer());
+  assert.equal(res.status, 200); assert.equal(res.headers.get('content-type'), 'image/jpeg'); assert.deepEqual(jpegBox(bytes), { width: 1200, height: 630 }); assert.ok(bytes.length < 300 * 1024, `og:image with ${bytes.length} bytes`);
+  const page = await at(1440, { search: route });
+  try {
+    const button = page.locator('#detail [data-action="share-image"]'); await button.waitFor();
+    const [download] = await Promise.all([page.waitForEvent('download'), button.click()]);
+    assert.ok(download.suggestedFilename().endsWith('.jpg'));
+    assert.deepEqual(jpegBox(await require('node:fs/promises').readFile(await download.path())), { width: 1080, height: 1080 });
+  } finally { await page.close(); }
+});
 check('record amount visible', async () => {
   for (const width of [1440, 390]) {
     const page = await at(width);
