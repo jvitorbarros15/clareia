@@ -555,6 +555,7 @@
       catch { main.innerHTML = P.layout('correcoes', 'Correções', 'Correções', 'Como pedir a correção de um dado e o registro público do que foi corrigido.', '<p>Não foi possível carregar o registro de correções. Nenhum valor foi alterado.</p>'); return; }
       main.innerHTML = P.pages.correcoes.body(list, P.CONTACT_EMAIL);
     }
+    P.reveal();
   }
   function toast(text) { const el = $('#toast'); el.textContent = text; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2800); }
   async function shareLink() {

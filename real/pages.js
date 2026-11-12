@@ -31,8 +31,18 @@
     heads.forEach(h => io.observe(h));
   };
 
+  // Without the observer or with reduced motion every tick is drawn at once; the hidden start state exists only under .doc-js.
+  const reveal = () => {
+    const doc = document.querySelector('.doc'), items = [...document.querySelectorAll('.doc-card,.doc-steps li,.doc-callout')];
+    if (!doc || !items.length || !('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    doc.classList.add('doc-js');
+    const io = new IntersectionObserver(entries => entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -12% 0px' });
+    items.forEach(el => io.observe(el));
+  };
+
   window.ClareiaPages = {
     spy,
+    reveal,
     CONTACT_EMAIL,
     POLICY,
     esc,
