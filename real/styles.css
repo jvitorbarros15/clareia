@@ -967,3 +967,6 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .not-found-links a{display:inline-flex;align-items:center;min-height:44px;font:500 15px var(--sans);color:var(--ink);text-underline-offset:4px}
 .not-found-links .not-found-primary{padding:0 20px;border-radius:999px;background:var(--accent);color:var(--on-accent);text-decoration:none}
 .not-found-links .not-found-primary:hover{filter:brightness(1.08)}
+/* First paint: a static shell replaced by the app, and the waits for the supplier file. */
+.boot-shell{max-width:1080px;margin:auto;padding:0 44px;min-height:calc(100vh - 70px)}.boot-head{display:flex;align-items:center;height:70px;border-bottom:1px solid var(--line)}.boot-brand{font:700 30px/1 Arial,Helvetica,sans-serif;letter-spacing:-1.5px}.boot-tagline{margin:56px 0 0;font:400 clamp(44px,8vw,96px)/1.02 "Newsreader",Georgia,serif;color:var(--ink)}.boot-status,.loading-note{margin:16px 0 0;color:var(--muted);font-size:14px}.supplier-pending{padding:48px 0}
+@media(max-width:700px){.boot-shell{padding:0 19px}}
