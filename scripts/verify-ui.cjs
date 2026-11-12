@@ -1305,7 +1305,12 @@ const stub = ({ months, records } = {}) => async page => {
   });
   await page.route('**/summary.json', async route => {
     const res = await route.fetch(), s = await res.json(), rows = await shaped;
-    for (const p of s.people) { const list = rows[p.id] || []; p.cents = list.reduce((n, r) => n + r.cents, 0); p.records = list.length; }
+    for (const p of s.people) {
+      const list = rows[p.id] || [];
+      p.cents = list.reduce((n, r) => n + r.cents, 0); p.records = list.length;
+      // The page sums each category from these totals, so they are regrouped from the same stubbed records.
+      p.categories = p.categories.map(c => { const rs = list.filter(r => r.category === c.category); return { ...c, cents: rs.reduce((n, r) => n + r.cents, 0), records: rs.length }; }).filter(c => c.records);
+    }
     await route.fulfill({ response: res, json: s });
   });
 };
