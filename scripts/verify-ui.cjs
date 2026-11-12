@@ -2272,6 +2272,33 @@ check('the % numerator is the exact sum of the raw records of the counted months
   await page.close();
 });
 
+check('static pages load at their own URLs and the footer links reach them', async () => {
+  const pages = [['sobre', 'Sobre o Clareia'], ['correcoes', 'Correções'], ['metodologia', 'Metodologia']];
+  for (const [route, heading] of pages) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(`${base}/${route}`);
+    await page.waitForSelector('#main h1');
+    assert.equal(clean(await page.locator('#main h1').innerText()), heading, route);
+    assert.match(await page.title(), /— Clareia$/, route);
+    assert.deepEqual(errors, [], `${route} errors`);
+    await page.close();
+  }
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(base);
+  await page.waitForSelector('.footer');
+  for (const [route, heading] of pages) {
+    await page.locator(`.footer a[href="/${route}"]`).click();
+    await page.waitForSelector('#main h1');
+    assert.equal(new URL(page.url()).pathname, `/${route}`);
+    assert.equal(clean(await page.locator('#main h1').innerText()), heading, `footer to ${route}`);
+    await page.goto(base);
+    await page.waitForSelector('.footer');
+  }
+  await page.close();
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
   let failed = 0, ran = 0;

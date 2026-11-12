@@ -1,8 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import vm from 'node:vm';
 import type {Person} from './model.ts';
 import type {SiteSummary,SupplierSummary} from './site-summary.ts';
 
+const REPO=path.join(import.meta.dirname,'..');
 export const DEFAULT_SITE_URL='https://clareia.clareia.workers.dev';
 export const UFS:Record<string,string>={AC:'Acre',AL:'Alagoas',AM:'Amazonas',AP:'Amapá',BA:'Bahia',CE:'Ceará',DF:'Distrito Federal',ES:'Espírito Santo',GO:'Goiás',MA:'Maranhão',MG:'Minas Gerais',MS:'Mato Grosso do Sul',MT:'Mato Grosso',PA:'Pará',PB:'Paraíba',PE:'Pernambuco',PI:'Piauí',PR:'Paraná',RJ:'Rio de Janeiro',RN:'Rio Grande do Norte',RO:'Rondônia',RR:'Roraima',RS:'Rio Grande do Sul',SC:'Santa Catarina',SE:'Sergipe',SP:'São Paulo',TO:'Tocantins'};
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -140,6 +142,33 @@ export function sitemapXml(siteUrl:string,deputies:Deputy[]):string{
 export function robotsTxt(o:ResolvedOptions):string{
   if(o.noindex)return 'User-agent: *\nDisallow: /\n';
   return `User-agent: *\nAllow: /\n${o.sitemap?`\nSitemap: ${o.siteUrl}/sitemap.xml\n`:''}`;
+}
+
+export type CorrectionEntry={date:string;title:string;detail:string};
+type StaticPages={CONTACT_EMAIL:string;POLICY:string;pages:{sobre:{title:string;description:string;body:()=>string};correcoes:{title:string;description:string;body:(list:CorrectionEntry[],email:string)=>string};metodologia:{title:string;description:string;naoConcluimos:string;privacidade:string}}};
+// real/pages.js is the one copy of these texts: the browser loads it as a script, and here it is run in an empty sandbox.
+export async function loadStaticPages():Promise<StaticPages>{
+  const sandbox:{window:{ClareiaPages?:StaticPages}}={window:{}};
+  vm.runInNewContext(await fs.readFile(path.join(REPO,'real','pages.js'),'utf8'),sandbox);
+  if(!sandbox.window.ClareiaPages)throw new Error('real/pages.js não define ClareiaPages');
+  return sandbox.window.ClareiaPages;
+}
+export async function loadCorrections():Promise<CorrectionEntry[]>{
+  const list:unknown=JSON.parse(await fs.readFile(path.join(REPO,'config','corrections.json'),'utf8'));
+  if(!Array.isArray(list)||list.some(e=>typeof e!=='object'||e===null||typeof e.date!=='string'||typeof e.title!=='string'||typeof e.detail!=='string'))throw new Error('config/corrections.json deve ser uma lista de {date, title, detail}');
+  return list as CorrectionEntry[];
+}
+export async function writeStaticPages(outDir:string,options:ResolvedOptions):Promise<void>{
+  const shell=await fs.readFile(path.join(outDir,'index.html'),'utf8');
+  const pages=await loadStaticPages(),corrections=await loadCorrections();
+  await fs.copyFile(path.join(REPO,'config','corrections.json'),path.join(outDir,'corrections.json'));
+  for(const name of ['sobre','correcoes','metodologia'] as const){
+    const entry=pages.pages[name];
+    const inner=name==='sobre'?pages.pages.sobre.body():name==='correcoes'?pages.pages.correcoes.body(corrections,pages.CONTACT_EMAIL):`<h1>Metodologia</h1><p>${esc(entry.description)}</p><p>Ative o JavaScript para ler a metodologia completa e os números desta versão.</p>`;
+    const noscript=`<noscript><main id="main">${inner}</main></noscript>`;
+    // Same rule as the deputy pages: <route>.html, so the route answers without a redirect.
+    await fs.writeFile(path.join(outDir,`${name}.html`),page(shell,{title:entry.title,description:entry.description,url:options.siteUrl+`/${name}`,type:'website',image:icon(options.siteUrl)},noscript));
+  }
 }
 
 export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions,shares:Map<number,{name:string;alt:string}>=new Map()):Promise<void>{

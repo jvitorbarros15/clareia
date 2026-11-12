@@ -274,12 +274,15 @@
     return `<div class="closing-top">${label('09','A sua próxima pergunta')}<h2>Curiosidade é <br>um bom começo.</h2><p>Você não precisa conhecer o vocabulário do Congresso. <br>Comece com uma pergunta. Termine nos registros.</p><div class="closing-questions">${['Quem mais gastou por mês?',`Compare ${C.byTotal()[0].name.split(' ')[0]} e ${C.byTotal()[1].name.split(' ')[0]}`,'Quem gastou menos?'].map(q=>`<button data-question="${esc(q)}">${esc(q)}${icon('arrow')}</button>`).join('')}</div></div><div class="trust-row"><div><span>01</span><h3>Fonte à vista</h3><p>Cada número tem um caminho até os registros.</p></div><div><span>02</span><h3>Contexto primeiro</h3><p>Período, cobertura e definição acompanham a comparação.</p></div><div><span>03</span><h3>Limites explícitos</h3><p>Ausência de dados nunca vira zero ou uma resposta inventada.</p></div></div><button class="p-link" data-action="methodology">Conheça a metodologia ${ext()}</button>`;
   }
   const sections = [['panorama',overview],['despesas',spending],['atlas',atlas],['pessoas',directory],['comparacao',comparison],['projetos',projectSection],['votacoes',voteSection],['dimensoes',moreSection],['acompanhar',following],['perguntar',closing]];
+  function fillFooter() {
+    $('.footer').innerHTML=`<div class="footer-brand"><span class="logo">${C.logo}</span><p>Entenda. Confira. Acompanhe.</p></div><div class="footer-links"><a href="#despesas">Gastos por categoria</a><a href="#comparacao">Comparar</a><a href="/sobre">Sobre</a><a href="/correcoes">Correções</a><a href="/metodologia">Metodologia</a><button data-p="coverage">Cobertura desta versão</button><button data-p="reset-saved">Apagar favoritos locais</button></div><div class="footer-disclaimer"><span>Versão ${C.span()}</span><p>Dados oficiais da Câmara dos Deputados, ${C.span()}. Versão de teste. Busca por regras locais, sem IA conectada.</p><button data-p="top">Voltar ao topo ↑</button></div>`;
+  }
   function mount() {
     const main=$('#main');
     main.insertAdjacentHTML('afterbegin',`<div class="page-progress" aria-hidden="true"><i></i></div><nav class="section-dock" aria-label="Seções da página"><a href="#rankings">Rankings</a><a href="#despesas">${editorial?'Gastos':'Despesas'}</a><a href="#atlas">Mapa</a>${editorial?'':'<a href="#comparacao">Comparar</a>'}<a href="#projetos">Projetos</a><a href="#votacoes">Votações</a><a href="#acompanhar" class="follow-nav">Acompanhar <span class="follow-count" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg><span id="saved-count">${state.favorites.size||''}</span></span></a><button type="button" id="dock-filter" class="dock-filter" data-action="reset" hidden></button></nav>`);
     C.scopeChip();
     main.insertAdjacentHTML('beforeend',`<div class="full-portal">${sections.map(([id,render])=>`<section class="p-section" id="${id}">${render()}</section>`).join('')}</div>`);
-    $('.footer').innerHTML=`<div class="footer-brand"><span class="logo">${C.logo}</span><p>Entenda. Confira. Acompanhe.</p></div><div class="footer-links"><a href="#despesas">Gastos por categoria</a><a href="#comparacao">Comparar</a><button data-action="methodology">Fontes e metodologia</button><button data-p="coverage">Cobertura desta versão</button><button data-p="reset-saved">Apagar favoritos locais</button></div><div class="footer-disclaimer"><span>Versão ${C.span()}</span><p>Dados oficiais da Câmara dos Deputados, ${C.span()}. Versão de teste. Busca por regras locais, sem IA conectada.</p><button data-p="top">Voltar ao topo ↑</button></div>`;
+    fillFooter();
     document.body.insertAdjacentHTML('beforeend',`<button class="assistant-launcher" data-p="assistant" aria-label="${editorial?'Fazer uma pergunta na busca':'Abrir assistente de investigação'}"><img class="assistant-spark" src="/icon.svg" alt="" width="24" height="24"><span>${editorial?'Fazer uma pergunta':'Pergunte ao Clareia'}</span>${icon('arrow')}</button>`);
     document.body.dataset.motion=state.motion?'on':'off';
     watchMotion(); watchSections(); fitChartHits();
@@ -543,6 +546,7 @@
     }
   });
   const route=C.parseRoute(location.pathname);
+  if(route?.type==='page'){C.renderPage(route.name);fillFooter();return;}
   if(route?.type==='estado'&&UF[route.uf])state.mapUF=route.uf;
   mount();
   updateFollowCount();
