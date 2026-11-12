@@ -23,6 +23,9 @@
 /app.js
   Cache-Control: max-age=0, must-revalidate
 
+/pages.js
+  Cache-Control: max-age=0, must-revalidate
+
 /analytics.js
   Cache-Control: max-age=0, must-revalidate
 

@@ -11,7 +11,7 @@
   const somamos = union => `<h3>O que somamos</h3><p>O valor líquido publicado pela Câmara, por competência financeira: o campo <code>vlrLiquido</code> do arquivo anual CEAP${union ? ' e, nos registros que só a API traz, o <code>valorLiquido</code> da API' : ''}. Salário, gabinete e emendas não entram nesta conta.</p>`;
   const conferimos = extra => `<h3>O que conferimos</h3><p>Duas capturas de cada fonte, identidade pelo ID oficial e contas em centavos, reconciliadas com uma segunda soma e com o banco.${extra}</p>`;
   const naoConcluimos = `<h3>O que não concluímos</h3><p>Gasto maior não demonstra irregularidade. O recorte não mede qualidade do mandato nem faz nova subtração de restituições. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'.</p>`;
-  const privacidade = `<h3>Privacidade</h3><p>Contamos visitas e páginas vistas com o Cloudflare Web Analytics, sem cookies e sem identificar quem visita. Não registramos quais deputados cada pessoa consulta.</p>`;
+  const privacidade = `<h3>Privacidade</h3><p>Contamos visitas e quantas vezes cada página foi vista, inclusive as páginas de deputados, com o Cloudflare Web Analytics, sem cookies e sem identificar quem visita. Não sabemos quem viu qual página.</p>`;
 
   window.ClareiaPages = {
     CONTACT_EMAIL,
