@@ -84,8 +84,7 @@ let ranked;
 async function rankedIds(page) {
   if (ranked) return ranked;
   const probe = page || await at(1440);
-  while (await probe.locator('#comparison [data-action=bars-more]').count()) await probe.locator('#comparison [data-action=bars-more]').click();
-  ranked = await probe.locator('.bar-row').evaluateAll(rows => rows.map(r => Number(r.dataset.id)));
+  ranked = await probe.evaluate(() => window.Clareia.ranking('gastos', true).map(p => p.officialId));
   if (!page) await probe.close();
   assert.ok(ranked.length >= 3, 'the ranking has deputies');
   return ranked;
@@ -2137,6 +2136,140 @@ check('every ranking tab renders rows or an explicit empty message with its reas
       await page.close();
     }
   }
+});
+
+// Independent of the page: the share of the ceiling recomputed from the summary's months and ceiling table with plain BigInt arithmetic.
+async function expectedShares(page) {
+  const raw = await page.evaluate(async () => { const m = await (await fetch('/manifest.json')).json(), s = await (await fetch(`/${m.base}/summary.json`)).json(), i = await (await fetch(`/${m.base}/index.json`)).json(); return { s, names: Object.fromEntries(i.people.map(p => [p.id, p.name])) }; });
+  const rows = [];
+  for (const p of raw.s.people) {
+    const held = p.months.some(m => m.held), exercised = p.months.filter(m => m.exercise !== 'outside' || m.records > 0).length, none = p.records === 0 && p.months.every(m => !m.exercise || ['unknown', 'outside', 'conflict'].includes(m.exercise));
+    if (none || held || exercised < Math.min(6, p.months.length)) continue;
+    const counted = p.months.filter(m => (m.exercise !== 'outside' || m.records > 0) && !m.held && m.exercise !== 'partial');
+    if (!counted.length || counted.some(m => m.exercise !== 'full' || m.ufStatus !== 'single' || !raw.s.ceiling.byUf[m.uf])) continue;
+    const num = counted.reduce((n, m) => n + BigInt(m.cents), 0n), den = counted.reduce((n, m) => n + BigInt(raw.s.ceiling.byUf[m.uf][m.month - 1]), 0n);
+    rows.push({ id: p.id, name: raw.names[p.id], num, den, tenths: (num * 2000n + den) / (2n * den), counted, excluded: p.months.filter(m => (m.exercise !== 'outside' || m.records > 0) && (m.held || m.exercise === 'partial')) });
+  }
+  return { rows, ceiling: raw.s.ceiling };
+}
+const pct1 = tenths => (Number(tenths) / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+const reais = cents => clean((Number(cents) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/^-/, '−'));
+
+check('the ranking is always in reais: no measure switch, a stale ?medida=teto link is ignored', async () => {
+  for (const search of ['', '?medida=teto']) {
+    const page = await at(1440, { search });
+    assert.equal(await page.locator('.measure-toggle, [data-measure]').count(), 0, 'no measure switch');
+    assert.equal(await page.locator('.metric-toggle [data-metric=mensal]').count(), 1, 'Total / Por mês stays');
+    assert.equal(await page.locator('#comparison .bar-money').count(), 0);
+    const names = await page.evaluate(() => window.Clareia.ranking('gastos').slice(0, 3).map(p => p.name));
+    assert.deepEqual(await page.locator('.rank-card .person-name').allTextContents(), names);
+    assert.doesNotMatch(await text(page.locator('.rank-card .value-button').first()), /%/);
+    if (!search) assert.deepEqual([...(await searchOf(page)).keys()].filter(k => k !== 'destaque'), [], 'a plain link carries no default parameters');
+    assert.equal(page.errors.length, 0, page.errors.join('|'));
+    await page.close();
+  }
+});
+
+check('each top-3 card has a pill with the % of the ceiling, or "% não confirmado", only on the expense tabs with all categories', async () => {
+  const page = await at(1440), exp = await expectedShares(page), byId = new Map(exp.rows.map(r => [String(r.id), r]));
+  assert.ok(exp.rows.length > 3, 'some deputies have a confirmed ceiling');
+  for (const tab of ['gastos', 'menos']) {
+    await page.locator(`[data-tab=${tab}]`).click();
+    const cards = await page.locator('.rank-card').evaluateAll(els => els.map(el => [el.dataset.person, el.querySelector('.ceiling-pill')?.textContent.trim() ?? null, el.querySelector('.ceiling-pill')?.tagName ?? null]));
+    assert.equal(cards.length, 3);
+    cards.forEach(([id, pill, tag], i) => {
+      const r = byId.get(id);
+      assert.equal(pill, r ? `${pct1(r.tenths)} do teto` : '% não confirmado', `${tab} card ${i + 1} pill`);
+      assert.equal(tag, r ? 'BUTTON' : 'SPAN', `${tab} card ${i + 1} pill is clickable only when confirmed`);
+    });
+  }
+  await page.locator('[data-tab=projetos]').click();
+  assert.equal(await page.locator('.ceiling-pill').count(), 0, 'no pill on Projetos');
+  await page.close();
+  const data = await published(), cat = Object.keys(data.categories)[0];
+  const filtered = await at(1440, { search: `?categoria=${encodeURIComponent(cat)}` });
+  assert.ok(await filtered.locator('.rank-card').count() > 0);
+  assert.equal(await filtered.locator('.ceiling-pill').count(), 0, 'no pill with a category filter: the % is only valid for all categories');
+  await filtered.close();
+});
+
+// The deputies whose pill is a confirmed % on the two expense tabs, with the tab each one is on.
+async function pillTargets(page, exp) {
+  const out = [];
+  for (const tab of ['gastos', 'menos']) {
+    await page.locator(`[data-tab=${tab}]`).click();
+    for (const id of await page.locator('.rank-card button.ceiling-pill').evaluateAll(els => els.map(el => el.dataset.id))) out.push({ tab, row: exp.rows.find(r => String(r.id) === id) });
+  }
+  assert.ok(out.length && out.every(t => t.row), 'confirmed pills match the data');
+  return out;
+}
+
+check('the pill opens the % evidence dialog: subtitle, warning with the count above 100%, counted months, both sums and the division', async () => {
+  const page = await at(1440), exp = await expectedShares(page);
+  const first = await page.locator('.rank-card .ceiling-pill:is(button)').first();
+  const id = await first.getAttribute('data-id'), target = exp.rows.find(r => String(r.id) === id);
+  assert.ok(target, 'the first pill is a confirmed %');
+  await first.click();
+  await page.waitForSelector('#detail[open] .ceiling-table');
+  assert.equal(clean(await text(page.locator('#detail .dialog-subtitle'))), 'A porcentagem do teto, passo a passo');
+  const warning = clean(await text(page.locator('#detail .ceiling-warning')));
+  assert.ok(warning.includes(`Atenção: ${exp.rows.filter(r => r.num > r.den).length} de ${exp.rows.length} deputados comparáveis do país aparecem acima de 100% no ano`), 'warning counts comparable deputies nationwide strictly above 100%');
+  assert.match(warning, /adicionais de líderes/); assert.match(warning, /além da cota/); assert.doesNotMatch(warning, /levemente/);
+  const rows = await page.locator('#detail .ceiling-table tbody tr').evaluateAll(trs => trs.map(tr => [...tr.children].map(td => td.textContent.trim())));
+  assert.equal(rows.length, target.counted.length, 'one row per counted month');
+  const foot = await page.locator('#detail .ceiling-table tfoot td').allTextContents();
+  assert.equal(clean(foot[0]), reais(target.num)); assert.equal(clean(foot[1]), reais(target.den));
+  const body = await text(page.locator('#detail-body'));
+  assert.ok(body.includes(`${reais(target.num)} ÷ ${reais(target.den)} × 100`), 'the division is written out');
+  assert.ok(body.includes(pct1(target.tenths)), 'the result is the pill %');
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
+
+check('% evidence dialog shows the counted months, both sums, the division and the excluded months, matching the data', async () => {
+  const page = await at(1440), exp = await expectedShares(page);
+  const pills = await pillTargets(page, exp), pick = pills.find(t => t.row.excluded.length) || pills[0], target = pick.row;
+  await page.locator(`[data-tab=${pick.tab}]`).click();
+  await page.locator(`.rank-card button.ceiling-pill[data-id="${target.id}"]`).click();
+  await page.waitForSelector('#detail[open] .ceiling-table');
+  const rows = await page.locator('#detail .ceiling-table tbody tr').evaluateAll(trs => trs.map(tr => [...tr.children].map(td => td.textContent.trim())));
+  assert.equal(rows.length, target.counted.length, 'one row per counted month');
+  target.counted.forEach((m, i) => { assert.equal(rows[i][1], m.uf); assert.equal(clean(rows[i][2]), reais(m.cents)); assert.equal(clean(rows[i][3]), reais(exp.ceiling.byUf[m.uf][m.month - 1])); });
+  const foot = await page.locator('#detail .ceiling-table tfoot td').allTextContents();
+  assert.equal(clean(foot[0]), reais(target.num)); assert.equal(clean(foot[1]), reais(target.den));
+  const body = await text(page.locator('#detail-body'));
+  assert.ok(body.includes(`${reais(target.num)} ÷ ${reais(target.den)} × 100`), 'the division is written out');
+  assert.ok(body.includes(pct1(target.tenths)), 'the result is the pill %');
+  assert.match(body, new RegExp(`${target.excluded.length} (meses|mês) excluídos?|Nenhum mês excluído`));
+  for (const m of target.excluded) assert.ok(body.includes(m.exercise === 'partial' ? 'mês parcial' : 'mês em revisão'), 'the reason of each excluded month');
+  assert.ok(body.includes('Ato da Mesa nº 270/2023'), 'cites the act');
+  assert.equal(await page.locator('#detail [data-action=methodology]').count(), 1);
+  await page.locator('#detail [data-action=methodology]').click();
+  const method = await text(page.locator('#detail-body'));
+  assert.match(method, /% do teto da cota usado/); assert.match(method, /Ato da Mesa nº 43\/2009/); assert.match(method, /Ato da Mesa nº 270\/2023/);
+  assert.ok(await page.locator('#detail-body a[href^="https://www2.camara.leg.br/legin/int/atomes/2009/"]').count() > 0, 'the methodology links the source');
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
+
+check('the % warning count stays nationwide when a UF filter is active', async () => {
+  const page = await at(1440, { search: '?uf=SP' }), exp = await expectedShares(page);
+  const pill = page.locator('.rank-card button.ceiling-pill').first();
+  assert.ok(await pill.count(), 'a confirmed pill exists in SP');
+  await pill.click();
+  await page.waitForSelector('#detail[open] .ceiling-warning');
+  assert.ok(clean(await text(page.locator('#detail .ceiling-warning'))).includes(`Atenção: ${exp.rows.filter(r => r.num > r.den).length} de ${exp.rows.length} deputados comparáveis do país`), 'same national count under ?uf=SP');
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
+
+check('the % numerator is the exact sum of the raw records of the counted months', async () => {
+  const page = await at(1440), exp = await expectedShares(page);
+  for (const { row: target } of await pillTargets(page, exp)) {
+    const sum = await page.evaluate(async ([id, months]) => { const m = await (await fetch('/manifest.json')).json(), r = await (await fetch(`/${m.base}/deputados/${id}/despesas.json`)).json(); return r.filter(x => months.includes(x.month)).reduce((n, x) => n + x.cents, 0); }, [target.id, target.counted.map(m => m.month)]);
+    assert.equal(BigInt(sum), target.num);
+  }
+  await page.close();
 });
 
 (async () => {

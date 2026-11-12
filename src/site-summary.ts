@@ -1,6 +1,7 @@
 import type {Expense,Person,Scope} from './model.ts';
 import type {CoverageRow} from './people-publication.ts';
 import type {BillPerson} from './bills.ts';
+import type {SiteCeiling} from './ceiling-site.ts';
 
 export type MonthSummary={month:number;cents:number;records:number;exercise:string|null;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean;partialScope:boolean;held:boolean};
 // [month, category index, cents, records]
@@ -8,7 +9,7 @@ export type Cell=[number,number,number,number];
 // [month, category index, supplier index, cents, records]
 export type SupplierCell=[number,number,number,number,number];
 export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];categories:{category:string;cents:number;records:number}[];cells:Cell[];bills:Omit<BillPerson,'id'>|null;votes:Record<string,number>|null;votesHeld:number};
-export type SiteSummary={schema:'clareia.site-summary.v1';publicationId:string;coverageId:string|null;billsId:string|null;billsYears:number[];votesId:string|null;votesYears:number[];scope:Scope;totalCents:number;records:number;categories:string[];people:PersonSummary[]};
+export type SiteSummary={schema:'clareia.site-summary.v1';publicationId:string;coverageId:string|null;billsId:string|null;billsYears:number[];votesId:string|null;votesYears:number[];ceiling:SiteCeiling|null;scope:Scope;totalCents:number;records:number;categories:string[];people:PersonSummary[]};
 export type SupplierSummary={schema:'clareia.supplier-summary.v1';publicationId:string;categories:string[];suppliers:string[];people:Record<string,SupplierCell[]>};
 
 const safe=(n:bigint):number=>{if(n>BigInt(Number.MAX_SAFE_INTEGER)||n<BigInt(Number.MIN_SAFE_INTEGER))throw new Error('Total do resumo fora da precisão segura');return Number(n);};
@@ -25,10 +26,11 @@ function cellsOf(rows:Expense[],categoryIndex:Map<string,number>):Cell[]{
 
 // Party and UF come only from an approved monthly coverage. Without one they stay
 // unavailable: the current registration must never be applied to a past expense.
-export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:Person[];records:Expense[];expectedTotalCents:number;coverageId:string|null;coverage:CoverageRow[];billsId?:string|null;billsYears?:number[];bills?:BillPerson[];votesId?:string|null;votesYears?:number[];votes?:Map<number,Record<string,number>>;votesHeld?:Map<number,number>;held?:{personId:number;month:number}[]}):SiteSummary{
-  const {publicationId,scope,people,records,expectedTotalCents,coverageId,coverage}=input,billsId=input.billsId??null,billsOf=new Map((input.bills??[]).map(b=>[b.id,b]));
+export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:Person[];records:Expense[];expectedTotalCents:number;coverageId:string|null;coverage:CoverageRow[];billsId?:string|null;billsYears?:number[];bills?:BillPerson[];votesId?:string|null;votesYears?:number[];votes?:Map<number,Record<string,number>>;votesHeld?:Map<number,number>;held?:{personId:number;month:number}[];ceiling?:SiteCeiling|null}):SiteSummary{
+  const {publicationId,scope,people,records,expectedTotalCents,coverageId,coverage}=input,ceiling=input.ceiling??null,billsId=input.billsId??null,billsOf=new Map((input.bills??[]).map(b=>[b.id,b]));
   if(billsId!==null&&!input.billsYears?.includes(scope.year))throw new Error('Proposições aprovadas não cobrem o ano do site');
   if(coverageId===null&&coverage.length)throw new Error('Cobertura sem versão aprovada');
+  if(ceiling&&ceiling.year!==scope.year)throw new Error('Limite da cota não cobre o ano do site');
   const heldKeys=new Set((input.held??[]).map(h=>h.personId+':'+h.month)),attribution=new Map(coverage.map(row=>[row.personId+':'+row.year+':'+row.month,row])),byPerson=new Map<number,Expense[]>();
   for(const r of records){if(!scope.ids.includes(r.personId)||r.year!==scope.year||!scope.months.includes(r.month))throw new Error('Registro fora do recorte do resumo');const list=byPerson.get(r.personId);if(list)list.push(r);else byPerson.set(r.personId,[r]);}
   const categoryList=sorted(records.map(r=>r.category)),categoryIndex=new Map(categoryList.map((c,i)=>[c,i]));
@@ -49,7 +51,7 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
   const totalCents=sum(records);
   if(totalCents!==expectedTotalCents)throw new Error('Resumo diverge do total aprovado');
   if(safe(summaries.reduce((n,p)=>n+BigInt(p.cents),0n))!==totalCents)throw new Error('Soma das pessoas diverge do total do resumo');
-  return {schema:'clareia.site-summary.v1',publicationId,coverageId,billsId,billsYears:input.billsYears??[],votesId:input.votesId??null,votesYears:input.votesYears??[],scope,totalCents,records:records.length,categories:categoryList,people:summaries};
+  return {schema:'clareia.site-summary.v1',publicationId,coverageId,billsId,billsYears:input.billsYears??[],votesId:input.votesId??null,votesYears:input.votesYears??[],ceiling,scope,totalCents,records:records.length,categories:categoryList,people:summaries};
 }
 
 // Grouped in a separate pass and checked cell by cell against the summary, so a grouping slip in either is refused.
