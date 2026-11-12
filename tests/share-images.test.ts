@@ -174,6 +174,8 @@ test('the ceiling line states the share and the position among comparable deputi
   assert.equal(ceilingLine(okUse(1048),{uf:'AC',rank:7,total:7}),'104,8% do teto da cota do AC · menor uso entre 7 deputados comparáveis do estado');
   assert.equal(ceilingLine(okUse(1000),{uf:'AC',rank:1,total:1}),'100,0% do teto da cota do AC');
   assert.equal(ceilingLine(okUse(500),null),'50,0% do teto da cota do AC');
+  assert.equal(ceilingLine(okUse(500,'SP'),null),'50,0% do teto da cota de SP');
+  assert.equal(ceilingLine(okUse(500,'BA'),null),'50,0% do teto da cota da BA');
   const unconfirmed:CeilingUse={status:'unconfirmed',counted:[],excluded:[],outside:[],missing:[1]};
   assert.equal(ceilingLine(unconfirmed,{uf:'AC',rank:1,total:7}),'');
   assert.equal(ceilingLine(undefined,null),'');
@@ -198,7 +200,7 @@ test('the position counts only comparable deputies whose counted months are all 
 test('the line reaches the fact and the alt text only for a full or few-months total with a confirmed share',()=>{
   const withUse={...normal,use:okUse(818,'SP')},st={uf:'SP',rank:2,total:5};
   const f=shareFactOf(withUse,period,st);
-  assert.equal(f.ceiling,'81,8% do teto da cota do SP · 2º maior uso entre 5 deputados comparáveis do estado');
+  assert.equal(f.ceiling,'81,8% do teto da cota de SP · 2º maior uso entre 5 deputados comparáveis do estado');
   assert.ok(f.alt.includes(f.ceiling));
   assert.ok(shareBody(f,'wide',assets,null).includes(f.ceiling));
   assert.equal(shareFactOf({...withUse,heldMonths:[2]},period,st).ceiling,'');

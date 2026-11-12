@@ -13,13 +13,14 @@ export const SOURCE='Dados oficiais da Câmara dos Deputados';
 export type ShareStatus='full'|'partial'|'review'|'few-months'|'no-exercise';
 export type ShareFact={deputyId:number;name:string;context:string;status:ShareStatus;label:string;value:string;ceiling:string;notes:string[];alt:string};
 
+const OF_UF:Record<string,string>={BA:'da',PB:'da',AL:'de',GO:'de',MT:'de',MS:'de',MG:'de',PE:'de',RO:'de',RR:'de',SC:'de',SP:'de',SE:'de'};
 const pct=(tenths:number)=>(tenths/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
 // The position only appears with at least two comparable peers; a figure that is not confirmed gets no line at all.
 export function ceilingLine(use:CeilingUse|undefined,standing:Standing|null):string{
   if(use?.status!=='ok')return '';
   const ufs=[...new Set(use.counted.map(c=>c.uf))];
   if(ufs.length!==1)return '';
-  const head=`${pct(use.tenths)}% do teto da cota do ${ufs[0]}`;
+  const head=`${pct(use.tenths)}% do teto da cota ${OF_UF[ufs[0]!]??'do'} ${ufs[0]}`;
   if(!standing||standing.uf!==ufs[0]||standing.total<2)return head;
   const {rank,total}=standing;
   return `${head} · ${rank===1?'maior uso':rank===total?'menor uso':`${rank}º maior uso`} entre ${total} deputados comparáveis do estado`;
