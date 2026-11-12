@@ -9,7 +9,7 @@ import {buildSite} from '../src/build-site.ts';
 import {createApp} from '../src/app.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
-import {UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
+import {loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
 
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
@@ -180,4 +180,43 @@ test('the local server answers a prerendered route with its own page',async()=>{
     assert.equal(await (await fetch(url+'/deputado/2-outro')).text(),'home');
     assert.equal((await fetch(url+'/data/x/nao-existe.json')).status,404);
   }finally{server.close();await fs.rm(dir,{recursive:true,force:true});}
+});
+test('static pages are prerendered at their own route, with the same meta tags as the other pages',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-static-'));
+  try{
+    await fs.writeFile(path.join(dir,'index.html'),shell);
+    await writeStaticPages(dir,resolveOptions({siteUrl:SITE}));
+    for(const route of ['sobre','correcoes','metodologia']){
+      const html=await fs.readFile(path.join(dir,route+'.html'),'utf8');
+      assert.match(html,/<title>[^<]+ — Clareia<\/title>/);
+      assert.ok(html.includes(`<link rel="canonical" href="${SITE}/${route}">`));
+      assert.ok(html.includes(`<meta property="og:url" content="${SITE}/${route}">`));
+      assert.match(html,/<meta name="description" content="[^"]+">/);
+      assert.ok(html.includes('<noscript><main id="main">'));
+    }
+    assert.equal(await fs.readFile(path.join(dir,'corrections.json'),'utf8'),await fs.readFile(path.join(import.meta.dirname,'..','config','corrections.json'),'utf8'));
+  }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('the corrections page shows the placeholder while no contact address is set, and escapes contact and entries',async()=>{
+  const pages=await loadStaticPages();
+  assert.equal(pages.CONTACT_EMAIL,'');
+  const empty=pages.pages.correcoes.body([],pages.CONTACT_EMAIL);
+  assert.ok(empty.includes('Canal de correções em configuração.'));
+  assert.ok(!empty.includes('mailto:'));
+  assert.ok(empty.includes('Nenhuma correção registrada até agora.'));
+  assert.ok(empty.includes(pages.POLICY));
+  const set=pages.pages.correcoes.body([],'a&"<b>');
+  assert.ok(set.includes('href="mailto:a&amp;&quot;&lt;b&gt;"'));
+  assert.ok(!set.includes('<b>'));
+  const entry=pages.pages.correcoes.body([{date:'2026-11-12',title:'<script>x</script>',detail:'a & b'}],'');
+  assert.ok(!entry.includes('<script>'));
+  assert.ok(entry.includes('&lt;script&gt;x&lt;/script&gt;'));
+  assert.ok(entry.includes('<time datetime="2026-11-12">12/11/2026</time>'));
+});
+test('the about and methodology texts name the project, not a person, and carry no contact address',async()=>{
+  const pages=await loadStaticPages();
+  const text=[pages.pages.sobre.body(),pages.pages.correcoes.body([],''),pages.pages.metodologia.naoConcluimos,pages.pages.metodologia.privacidade].join(' ');
+  assert.ok(text.includes('Projeto Clareia'));
+  assert.ok(text.includes('Gasto maior não significa irregularidade'));
+  assert.doesNotMatch(text,/[\w.+-]+@[\w-]+\.[\w.]+/);
 });
