@@ -5,7 +5,7 @@ const base=process.env.BASE_URL||'http://127.0.0.1:4174',out=path.resolve('outpu
 const money=c=>(c/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/\s+/g,' ').replace(/^-/,'−');
 const text=s=>s.replace(/\s+/g,' ').trim();
 const random=a=>()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
-(async()=>{const browser=await chromium.launch({headless:true});const errors=[],checks=[];
+(async()=>{const startedAt=Date.now();const browser=await chromium.launch({headless:true});const errors=[],checks=[];
 try{
   const page=await browser.newPage({viewport:{width:1360,height:1000},reducedMotion:'reduce'});page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base);await page.waitForSelector('.full-portal');
@@ -17,8 +17,10 @@ try{
   while(await page.locator('#comparison [data-action=bars-more]').count())await page.locator('#comparison [data-action=bars-more]').click();
   const order=(await page.locator('.bar-row').evaluateAll(rows=>rows.map(r=>Number(r.dataset.id)))),byId=new Map(data.people.map(p=>[p.id,p]));
   assert.ok(order.length&&order.every(id=>byId.has(id))&&new Set(order).size===order.length,'ranking lists only deputies with published expenses, once each');
+  assert.deepEqual([...order].sort((a,b)=>a-b),[...byId.keys()].sort((a,b)=>a-b),'ranking includes every deputy with published expenses');
   let chosen=order;
   if(!all&&order.length>30){const rest=order.slice(10,-10),next=random(seed),pool=[...rest];for(let i=pool.length-1;i>0;i--){const j=Math.floor(next()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}chosen=[...order.slice(0,10),...pool.slice(0,10),...order.slice(-10)];}
+  const detailStartedAt=Date.now();
   for(const id of chosen){
     const p=byId.get(id);
     await page.locator(`.bar-row[data-id="${p.id}"]`).click();await page.waitForSelector('#detail[open]');
@@ -34,7 +36,8 @@ try{
     const detail=await page.locator('#detail-body').innerText();assert.match(detail,/Documento|Sem documento fiscal/);assert.match(await page.locator('#detail-body a.primary').getAttribute('href'),/^https:\/\/(www\.camara\.leg\.br|dadosabertos\.camara\.leg\.br)\//);
     await close();
   }
-  checks.push(`evidence totals, record tables, CSV and record detail match the published files for ${chosen.length} of ${order.length} deputies (${all?'all':'first 10, last 10 and 10 seeded-random'})`);
+  const detailDurationMs=Date.now()-detailStartedAt;
+  checks.push(`evidence totals, record tables, CSV and record detail match the published files for ${chosen.length} of ${order.length} deputies (${chosen.length===order.length?'all':'first 10, last 10 and 10 seeded-random'})`);
   const total=data.people.reduce((n,p)=>n+p.cents,0);
   await page.locator('[data-p-summary=expenses]').click();await page.waitForSelector('#detail[open]');
   assert.equal(text(await page.locator('#detail .calculation-result').innerText()).split(' Soma')[0],money(total));await close();
@@ -60,5 +63,5 @@ try{
   for(const width of [390,768,1360]){await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`overflow ${width}`);await page.screenshot({path:path.join(out,`real-${width}.png`),fullPage:true});}
   checks.push('mobile/tablet/desktop overflow');
   assert.deepEqual(errors,[]);checks.push('no JavaScript errors');
-  const report={status:'passed',snapshotId:data.index.snapshotId,checks};fs.writeFileSync(path.join(out,'real-browser-verification.json'),JSON.stringify(report,null,2));console.log(report);
+  const report={status:'passed',snapshotId:data.index.snapshotId,coverage:{published:data.people.length,ranked:order.length,verified:chosen.length,mode:chosen.length===order.length?'all':'sample',seed},timing:{durationMs:Date.now()-startedAt,detailDurationMs},checks};fs.writeFileSync(path.join(out,'real-browser-verification.json'),JSON.stringify(report,null,2));console.log(report);
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
