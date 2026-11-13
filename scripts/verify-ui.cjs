@@ -2304,6 +2304,30 @@ check('static pages load at their own URLs and the footer links reach them', asy
   await page.close();
 });
 
+check('expense ranking median and differences match all filtered published records', async () => {
+  const data = await published(), uf = data.people.find(p => p.uf && comparableIds(data).has(p.id))?.uf;
+  const category = Object.keys(data.categories)[0];
+  const cases = [{}, ...(uf ? [{ uf }] : []), ...(category ? [{ category }] : [])];
+  const exact = cents => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 3 });
+  for (const filters of cases) {
+    const search = '?' + new URLSearchParams({ ...(filters.uf ? { uf: filters.uf } : {}), ...(filters.category ? { categoria: filters.category } : {}) });
+    const page = await at(1440, { search }), expected = rankNames(data, filters);
+    assert.ok(expected.length, 'published comparison population');
+    const amounts = expected.map(p => p.cents).sort((a, b) => a - b);
+    const median = (amounts[Math.floor((amounts.length - 1) / 2)] + amounts[Math.floor(amounts.length / 2)]) / 2;
+    assert.equal(await page.locator('.median-context strong').innerText(), exact(median));
+    const rows = await page.locator('#comparison .bar-row').evaluateAll(els => els.map(el => ({ name: el.querySelector('.bar-name').textContent, delta: el.querySelector('.median-delta').textContent })));
+    for (const [i, row] of rows.entries()) {
+      assert.equal(row.name, expected[i].name);
+      const diff = expected[i].cents - median;
+      assert.equal(row.delta, diff === 0 ? 'Na mediana' : `${exact(Math.abs(diff))} ${diff > 0 ? 'acima' : 'abaixo'}`);
+    }
+    await page.locator('.metric-toggle [data-metric=mensal]').click();
+    assert.equal(await page.locator('.median-context').count(), 0, 'monthly ranking retains its existing presentation');
+    await page.close();
+  }
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
   let failed = 0, ran = 0;

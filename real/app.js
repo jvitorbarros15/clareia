@@ -154,10 +154,26 @@
   }
   // Long lists grow in steps; only the visible rows are drawn.
   const listMore = (total, limit, step, kind, noun) => total <= step ? '' : `<div class="list-more"><p class="list-count">Mostrando ${Math.min(limit, total)} de ${total} ${noun}</p>${total > limit ? `<button class="outline-button" data-action="${kind}-more">Mostrar mais ${Math.min(step, total - limit)}</button>` : ''}${limit > step ? `<button class="outline-button" data-action="${kind}-less">Mostrar menos</button>` : ''}</div>`;
+  // Compare the complete filtered ranking, including rows not yet revealed.
+  function medianRanking(ranked) {
+    const values = ranked.map(p => value(p)).sort((a, b) => a - b), middle = Math.floor(values.length / 2);
+    const median = values.length ? (values[(values.length - 1) >> 1] + values[middle]) / 2 : null;
+    if (median === null) return '';
+    // An even population can yield half a cent; preserve it rather than silently round.
+    const exact = cents => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 3 });
+    const difference = p => value(p) - median;
+    const label = p => difference(p) === 0 ? 'Na mediana' : `${exact(Math.abs(difference(p)))} ${difference(p) > 0 ? 'acima' : 'abaixo'}`;
+    const max = Math.max(1, ...ranked.map(p => Math.abs(value(p))));
+    return `<section class="bar-section median-ranking" id="comparison"><h2>Comparativo de gastos · ${span()}</h2><p class="median-context">Mediana: <strong>${exact(median)}</strong> · ${ranked.length} deputados neste recorte</p><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => {
+      const bar = `<span class="track"><i style="width:${Math.abs(value(p)) / max * 100}%"></i></span>`;
+      return `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${money(value(p))}, ${label(p)}${difference(p) === 0 ? '' : ' da mediana'}: ver cálculo"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span><span class="bar-name">${escape(p.name)}</span>${bar}<span class="bar-amount"><span class="bar-value">${money(value(p))}</span><small class="median-delta">${label(p)}</small></span></button>`;
+    }).join('')}</div><p class="median-method">Mediana é o valor central dos totais ordenados; com quantidade par, é a média dos dois centrais. Mesmos filtros e critérios do ranking. Gasto maior não significa irregularidade.</p>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'deputados')}</section>`;
+  }
   function barSection() {
     const projects = state.tab === 'projetos';
     if (projects && (!window.ClareiaData.billsApproved || !projectRanking().length)) return '';
     const ranked = projects ? projectRanking() : ranking(), amount = p => projects ? p.approved : Math.abs(value(p)), shown = p => projects ? approvedText(p) : money(value(p)), max = Math.max(1, ...ranked.map(amount));
+    if (!projects && state.metric === 'total') return medianRanking(ranked);
     return `<section class="bar-section" id="comparison"><h2>${projects ? `Ranking de projetos aprovados · ${billsPeriod()}` : `Comparativo de gastos · ${span()}`}</h2><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${shown(p)}: ${projects ? 'ver definição' : 'ver cálculo'}" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${amount(p) / max * 100}%"></i></span><span class="bar-value">${shown(p)}</span></button>`).join('')}</div>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'deputados')}</section>`;
   }
   function editorialFollowUp() {
