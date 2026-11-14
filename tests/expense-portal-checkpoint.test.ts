@@ -52,6 +52,30 @@ test('completed unavailable and mismatch results retain their status after resum
   assert.deepEqual(await resumePortalSample(dir,run,async()=>{assert.fail('completed results must be preserved');},()=>{}),expected);
 });
 
+test('rejects a result with the correct deputy but the wrong month',async t=>{
+  const dir=await folder(t),calls:Competence[]=[],logs:string[]=[];
+  const mockCheck=async(c:Competence):Promise<PortalComparison>=>{
+    calls.push(c);
+    return {...result(c),month:c.month+1};
+  };
+  await assert.rejects(resumePortalSample(dir,run,mockCheck,line=>logs.push(line)),/Resultado fora da competência solicitada/);
+  assert.deepEqual(calls,[run.sample[0]]);
+  assert.deepEqual(logs,[]);
+  await assert.rejects(fs.readFile(path.join(dir,'checkpoint.json'),'utf8'),{code:'ENOENT'});
+});
+
+test('rejects a result with the correct month but the wrong deputy',async t=>{
+  const dir=await folder(t),calls:Competence[]=[],logs:string[]=[];
+  const mockCheck=async(c:Competence):Promise<PortalComparison>=>{
+    calls.push(c);
+    return {...result(c),personId:c.personId+1};
+  };
+  await assert.rejects(resumePortalSample(dir,run,mockCheck,line=>logs.push(line)),/Resultado fora da competência solicitada/);
+  assert.deepEqual(calls,[run.sample[0]]);
+  assert.deepEqual(logs,[]);
+  await assert.rejects(fs.readFile(path.join(dir,'checkpoint.json'),'utf8'),{code:'ENOENT'});
+});
+
 test('delay defaults to 700 ms and accepts only nonnegative safe integer milliseconds',()=>{
   assert.equal(portalDelay(undefined),700);assert.equal(portalDelay('0'),0);assert.equal(portalDelay('1500'),1500);
   for(const value of ['', ' ', '-1','0.5','NaN','Infinity','9007199254740992'])assert.throws(()=>portalDelay(value),/Intervalo inválido/);
