@@ -67,8 +67,8 @@
   const exclusionNote = p => p.heldMonths?.length ? partialNote(p) : fewMonths(p) ? `Exerceu o mandato em ${p.exercisedMonths} de ${D.coverage.length} meses do recorte. Rankings e comparações incluem quem exerceu pelo menos ${MIN_MONTHS} meses.` : '';
   const partialNote = p => `Total parcial: ${p.heldMonths.length === 1 ? `${months[p.heldMonths[0]].toLowerCase()} de ${state.year} está em revisão` : `${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
   // Party is the Câmara's current status at collection time, not a historical attribution.
-  const context = p => [p.uf, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
-  const cardContext = p => p.partyInReview ? [p.uf, p.lastConfirmedParty && `${p.lastConfirmedParty} (último confirmado)`].filter(Boolean).join(' · ') || 'Deputado(a) federal' : context(p);
+  const context = p => [p.uf, p.ufNote, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
+  const cardContext = p => p.partyInReview ? [p.uf, p.ufNote, p.lastConfirmedParty && `${p.lastConfirmedParty} (último confirmado)`].filter(Boolean).join(' · ') || 'Deputado(a) federal' : context(p);
   function value(p, kind = state.tab) {
     if (kind === 'projetos') return null;
     const result = sum(cells(p));

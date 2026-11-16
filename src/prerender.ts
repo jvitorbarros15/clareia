@@ -35,7 +35,7 @@ export const deputyPath=(officialId:number,name:string)=>`/deputado/${officialId
 export const statePath=(uf:string)=>`/estado/${uf}`;
 export const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
 
-export type Deputy={id:number;name:string;uf:string|null;party:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse};
+export type Deputy={id:number;name:string;uf:string|null;ufNote:string|null;party:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse};
 export type Period={year:string;coverage:number[]};
 
 // Mirrors the derivation in real/data.js, so a prerendered page states what the app shows for the same person.
@@ -53,7 +53,7 @@ export function deputiesOf(input:{ids:number[];people:Person[];summary:SiteSumma
     const info=input.people.find(p=>p.id===id),own=summaryOf.get(id),months=summary.coverageId?own?.months??[]:null,party=partyOfPeriod(id,info?.party??null);
     const last=[...(own?.months??[])].filter(m=>m.partyStatus==='single'&&m.party).sort((a,b)=>b.month-a.month)[0]?.party??null;
     const noExercise=!summary.coverageId||(own?.records??0)>0?false:(own?.months??[]).length>0&&(own?.months??[]).every(m=>!m.exercise||['unknown','outside','conflict'].includes(m.exercise));
-    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??null,party,partyInReview:party==='Partido em revisão',lastConfirmedParty:last,sourceUrl:info?.sourceUrl??'',exercisedMonths:months?months.filter(exercised).length:input.months.length,noExercise,heldMonths:(own?.months??[]).filter(m=>m.held).map(m=>m.month-1),cents:own?.cents??0,use:ceilingUse(own?.months??[],summary.ceiling,Boolean(summary.coverageId)),hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null};
+    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??own?.ufLast?.uf??null,ufNote:info?.uf?null:own?.ufLast?.note??null,party,partyInReview:party==='Partido em revisão',lastConfirmedParty:last,sourceUrl:info?.sourceUrl??'',exercisedMonths:months?months.filter(exercised).length:input.months.length,noExercise,heldMonths:(own?.months??[]).filter(m=>m.held).map(m=>m.month-1),cents:own?.cents??0,use:ceilingUse(own?.months??[],summary.ceiling,Boolean(summary.coverageId)),hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null};
   });
 }
 
@@ -72,7 +72,7 @@ export function partyText(p:Deputy):string|null{
 }
 
 export function deputyDescription(p:Deputy,period:Period):string{
-  const who=['Deputado(a) federal',p.uf,partyText(p)].filter(Boolean).join(' · ');
+  const who=['Deputado(a) federal',p.uf,p.ufNote,partyText(p)].filter(Boolean).join(' · ');
   const spend=p.noExercise?`Sem exercício confirmado em ${period.year}.`:p.heldMonths.length&&!p.hasCells?`Despesas no recorte (${spanOf(period)}): Em revisão.`:`Despesas no recorte (${spanOf(period)}): ${money(p.cents)}.`;
   const note=p.noExercise?'':exclusionNote(p,period);
   return [`${who}.`,spend,note,p.projects===null?'':`Projetos como proponente: ${p.projects.toLocaleString('pt-BR',{maximumFractionDigits:1})}.`,'Dados oficiais da Câmara dos Deputados.'].filter(Boolean).join(' ');

@@ -28,7 +28,7 @@ export function ceilingLine(use:CeilingUse|undefined,standing:Standing|null):str
 
 // The words come from the same helpers as deputyDescription, so the image says what the page says for the same person.
 export function shareFactOf(p:Deputy,period:Period,standing:Standing|null=null):ShareFact{
-  const context=['Deputado(a) federal',p.uf,partyText(p)].filter(Boolean).join(' · ');
+  const context=['Deputado(a) federal',p.uf,p.ufNote,partyText(p)].filter(Boolean).join(' · ');
   const note=p.noExercise?'':exclusionNote(p,period);
   const status:ShareStatus=p.noExercise?'no-exercise':p.heldMonths.length&&!p.hasCells?'review':p.heldMonths.length?'partial':note?'few-months':'full';
   const label=p.noExercise?'':`Despesas no recorte (${spanOf(period)})`;
