@@ -1514,10 +1514,11 @@ check('comparison breakdown bars use magnitudes', async () => {
     const vals = cats.map(c => [sumCents(data, a, c), sumCents(data, b, c)]);
     const max = Math.max(1, ...vals.flat().map(Math.abs));
     const widths = await page.locator('.compare-category').evaluateAll(rows => rows.map(r => [r.querySelector('.left-bar i').style.width, r.querySelector('.right-bar i').style.width].map(w => w === '' ? NaN : parseFloat(w))));
-    assert.equal(widths.length, cats.length);
+    const shown = vals.filter(v => v[0] || v[1]);
+    assert.equal(widths.length, shown.length);
     widths.forEach(([l, r], i) => {
-      assert.ok(Math.abs(l - Math.abs(vals[i][0]) / max * 100) < 1e-3, `${a} bar ${i}: ${l} vs ${vals[i][0]}`);
-      assert.ok(Math.abs(r - Math.abs(vals[i][1]) / max * 100) < 1e-3, `${b} bar ${i}: ${r} vs ${vals[i][1]}`);
+      assert.ok(Math.abs(l - Math.abs(shown[i][0]) / max * 100) < 1e-3, `${a} bar ${i}: ${l} vs ${shown[i][0]}`);
+      assert.ok(Math.abs(r - Math.abs(shown[i][1]) / max * 100) < 1e-3, `${b} bar ${i}: ${r} vs ${shown[i][1]}`);
     });
   }
   await page.close();
