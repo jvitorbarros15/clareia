@@ -812,6 +812,8 @@ body[data-model=editorial] .linked-chart-body:not(.is-year)::before{display:none
 @media (max-width:760px){
   body[data-model=editorial] .linked-lines text{font-size:20px}
   body[data-model=editorial] .linked-lines .line-label{font-size:22px}
+  body[data-model=editorial] .linked-chart-body.is-year svg{min-width:760px}
+  body[data-model=editorial] .linked-chart-body.is-year .x-label{font-size:17px}
 }
 @media (max-width:600px){
   body[data-model=editorial] .comparison-board{grid-template-columns:1fr;gap:20px;padding:20px 16px}
