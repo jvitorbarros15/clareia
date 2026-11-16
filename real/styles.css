@@ -546,6 +546,8 @@ body[data-model=editorial] .bar-section .bar-value{font:400 22px/1 var(--serif);
   body[data-model=editorial] .bar-section .bar-name{grid-column:3;grid-row:1}
   body[data-model=editorial] .bar-section .bar-value{grid-column:3;grid-row:2;text-align:left}
   body[data-model=editorial] .bar-section .track{grid-column:3;grid-row:3}
+  body[data-model=editorial]{font-size:16px}
+  html body[data-model=editorial] :is(.p-description,.p-small,.ranking-context,.records-note,.editorial-subtitle,.donut-adjustment,.context){font-size:16px}
 }
 
 /* The demonstration band now starts at Votações: votes, uncovered dimensions and following share one tone. */
