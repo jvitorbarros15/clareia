@@ -130,7 +130,7 @@
     return `<div class="metric-toggle" role="group" aria-label="Forma de comparar"><button data-metric="total" aria-pressed="${state.metric === 'total'}">Total</button><button data-metric="mensal" aria-pressed="${state.metric === 'mensal'}">Por mês</button></div>`;
   }
   function tabs() {
-    return `<div class="tabs" role="group" aria-label="Indicador">${[['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']].map(([key, label]) => `<button data-tab="${key}" aria-pressed="${state.tab === key}">${label}</button>`).join('')}</div>`;
+    return `<div class="tabs" role="tablist" aria-label="Indicador">${[['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']].map(([key, label]) => `<button role="tab" data-tab="${key}" aria-selected="${state.tab === key}">${label}</button>`).join('')}</div>`;
   }
   const monthsWord = n => n === 1 ? 'mês' : 'meses';
   function caption(p) {
@@ -246,7 +246,7 @@
     if (dock) { dock.hidden = !narrowed; dock.innerHTML = narrowed ? `<span>${escape(scope)}</span><span aria-hidden="true">✕</span>` : ''; dock.setAttribute('aria-label', `Filtro ativo: ${scope}. Limpar filtros`); }
   }
   function markTab(animate = true) {
-    const tabsEl = $('.editorial-rank .tabs'), on = tabsEl?.querySelector('[aria-pressed="true"]');
+    const tabsEl = $('.editorial-rank .tabs'), on = tabsEl?.querySelector('[aria-selected="true"]');
     if (!on) return;
     const next = { x: on.offsetLeft, w: on.offsetWidth };
     if (animate && tabMark) { tabsEl.style.setProperty('--tab-x', tabMark.x + 'px'); tabsEl.style.setProperty('--tab-w', tabMark.w + 'px'); tabsEl.getBoundingClientRect(); }

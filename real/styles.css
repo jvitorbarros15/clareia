@@ -356,7 +356,7 @@ body[data-model=editorial] .p-overview-sentence .p-stat:active{transform:none}
 
 /* Ranking tabs: one indicator travels to the chosen tab (state indication, 220ms). */
 body[data-model=editorial] .editorial-rank .tabs{position:relative}
-body[data-model=editorial] .editorial-rank .tabs button[aria-pressed=true]{border-bottom-color:transparent}
+body[data-model=editorial] .editorial-rank .tabs button[aria-selected=true]{border-bottom-color:transparent}
 body[data-model=editorial] .editorial-rank .tabs::after{content:"";position:absolute;left:0;bottom:-1px;height:3px;width:var(--tab-w,0);transform:translateX(var(--tab-x,0));background:var(--accent);transition:transform 220ms var(--ease-out),width 220ms var(--ease-out)}
 body[data-model=editorial] .p-overview-sentence .p-stat{padding:0!important;border:0!important}
 body[data-model=editorial] .p-overview-sentence .p-stat strong{margin:0;font-size:inherit;letter-spacing:inherit;line-height:inherit;white-space:nowrap}
