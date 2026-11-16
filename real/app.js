@@ -130,7 +130,7 @@
     return `<div class="metric-toggle" role="group" aria-label="Forma de comparar"><button data-metric="total" aria-pressed="${state.metric === 'total'}">Total</button><button data-metric="mensal" aria-pressed="${state.metric === 'mensal'}">Por mês</button></div>`;
   }
   function tabs() {
-    return `<div class="tabs" role="tablist" aria-label="Indicador">${[['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']].map(([key, label]) => `<button role="tab" data-tab="${key}" aria-selected="${state.tab === key}">${label}</button>`).join('')}</div>`;
+    return `<div class="tabs" role="tablist" aria-label="Indicador">${[['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']].map(([key, label]) => `<button role="tab" data-tab="${key}" aria-selected="${state.tab === key}" tabindex="${state.tab === key ? 0 : -1}">${label}</button>`).join('')}</div>`;
   }
   const monthsWord = n => n === 1 ? 'mês' : 'meses';
   function caption(p) {
@@ -248,6 +248,7 @@
   function markTab(animate = true) {
     const tabsEl = $('.editorial-rank .tabs'), on = tabsEl?.querySelector('[aria-selected="true"]');
     if (!on) return;
+    tabsEl.querySelectorAll('[role="tab"]').forEach(t => { t.tabIndex = t === on ? 0 : -1; });
     const next = { x: on.offsetLeft, w: on.offsetWidth };
     if (animate && tabMark) { tabsEl.style.setProperty('--tab-x', tabMark.x + 'px'); tabsEl.style.setProperty('--tab-w', tabMark.w + 'px'); tabsEl.getBoundingClientRect(); }
     tabsEl.style.setProperty('--tab-x', next.x + 'px'); tabsEl.style.setProperty('--tab-w', next.w + 'px');
@@ -599,6 +600,16 @@
     const field = $('#profile-link'); field.focus(); field.select();
     try { if (document.execCommand('copy')) copied(); } catch { /* the selected field is the fallback */ }
   }
+  document.addEventListener('keydown', event => {
+    const tab = event.target.closest?.('[role="tab"][data-tab]');
+    if (!tab) return;
+    const all = [...tab.parentElement.querySelectorAll('[role="tab"][data-tab]')], i = all.indexOf(tab);
+    const to = { ArrowRight: (i + 1) % all.length, ArrowLeft: (i - 1 + all.length) % all.length, Home: 0, End: all.length - 1 }[event.key];
+    if (to === undefined) return;
+    event.preventDefault();
+    all[to].click();
+    document.querySelector(`[role="tab"][data-tab="${all[to].dataset.tab}"]`)?.focus();
+  });
   document.addEventListener('click', event => {
     const target = event.target.closest('[data-action],[data-tab],[data-metric],[data-question]');
     if (!event.target.closest('.search-wrap')) closeSuggestions();
