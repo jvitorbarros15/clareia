@@ -239,7 +239,7 @@
     activityShown=data;
     document.querySelectorAll('#bills-list,#votes-list').forEach(el=>el.removeAttribute('aria-busy'));
     if(info?.bills){fill('#bills-list',`<div class="activity-numbers"><div><strong>${number(info.bills.proposed)}</strong><span>como proponente${info.bills.joint?`, ${number(info.bills.joint)} em conjunto`:''}</span></div><div><strong>${number(info.bills.coauthored)}</strong><span>em coautoria</span></div><div><strong>${number(info.bills.norms)}</strong><span>viraram norma</span></div></div>${activitySearch('bills')}<div id="bills-rows"></div>`);renderList('bills');}
-    if(info?.votes){fill('#votes-list',`${info.votesHeld?`<p class="p-small">${number(info.votesHeld)} voto(s) em votações retidas para revisão não entram nos números nem na lista.</p>`:''}<div class="activity-numbers">${Object.entries(info.votes).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<div><strong>${number(n)}</strong><span>${esc(c)}</span></div>`).join('')}</div>${activitySearch('votes')}<div id="votes-rows"></div>`);renderList('votes');}
+    if(info?.votes){fill('#votes-list',`${info.votesHeld?`<p class="p-small">${number(info.votesHeld)} ${info.votesHeld === 1 ? 'voto' : 'votos'} em votações retidas para revisão não entram nos números nem na lista.</p>`:''}<div class="activity-numbers">${Object.entries(info.votes).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<div><strong>${number(n)}</strong><span>${esc(c)}</span></div>`).join('')}</div>${activitySearch('votes')}<div id="votes-rows"></div>`);renderList('votes');}
   }
 
   function projectSection() {
