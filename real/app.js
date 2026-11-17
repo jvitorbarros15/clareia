@@ -51,7 +51,7 @@
   const sum = rows => rows.reduce((total, row) => total + row.amount, 0);
   const count = cells => cells.reduce((n, cell) => n + cell.count, 0);
   // A percentage needs a positive base; with a zero or negative base only the difference is meaningful. Direction always comes from a > b.
-  const compareValues = (a, b) => ({ equal: a === b, more: a > b, diff: Math.abs(a - b), percent: b > 0 ? Math.abs(a - b) / b * 100 : null });
+  const compareValues = (a, b) => ({ equal: a === b, more: a > b, diff: Math.abs(a - b), percent: b > 0 && a >= 0 ? Math.abs(a - b) / b * 100 : null });
   const all = () => D.dataset();
   const person = id => all().find(p => p.id === id);
   const first = p => p.name.split(' ')[0];
@@ -183,7 +183,7 @@
     let summary = '';
     if (answer.type === 'compare') {
       const a = value(ppl[0], answer.kind), b = value(ppl[1], answer.kind), c = compareValues(a, b), x = escape(first(ppl[0])), y = escape(first(ppl[1]));
-      summary = c.equal ? `${x} e ${y} têm o mesmo valor no recorte.` : c.percent === null ? `${x} registrou ${money(c.diff)} ${c.more ? 'a mais' : 'a menos'} em despesas no período do que ${y}. Sem percentual: o valor de ${y} é ${b < 0 ? 'negativo' : 'zero'}, então não há base para uma porcentagem.` : `${x} registrou ${number(c.percent)}% ${c.more ? 'mais' : 'menos'} despesas no período.`;
+      summary = c.equal ? `${x} e ${y} têm o mesmo valor no recorte.` : c.percent === null ? `${x} registrou ${money(c.diff)} ${c.more ? 'a mais' : 'a menos'} em despesas no período do que ${y}. Sem percentual: o valor de ${b > 0 ? x : y} é ${b === 0 ? 'zero' : 'negativo'}, então não há base para uma porcentagem.` : `${x} registrou ${number(c.percent)}% ${c.more ? 'mais' : 'menos'} despesas no período.`;
     } else summary = `${escape(ppl[0].name)} ${answer.type !== 'rank' ? 'neste recorte' : state.tab === 'menos' ? 'tem o menor valor deste recorte' : 'lidera este recorte'}.`;
     const unit = state.category === 'Todas' ? 'Cota parlamentar' : label(state.category);
     return `<section class="answer" aria-label="Resultado da investigação"><p class="eyebrow">Resultado da investigação</p><div class="answer-bars">${ppl.map(p => `<div class="answer-row">${avatar(p)}<b>${escape(p.name)}</b><strong>${money(value(p, answer.kind))}</strong><span class="track"><i style="width:${Math.abs(value(p, answer.kind)) / max * 100}%"></i></span></div>`).join('')}</div><div class="answer-bottom"><div><p class="answer-summary">${summary}</p><p class="context">${escape(unit)} • ${span()}${state.metric === 'mensal' ? ' • média mensal' : ''}</p></div><div class="answer-actions"><button class="outline-button primary" data-action="answer-evidence">Como chegamos nisso? ${icon('external')}</button><button class="outline-button" data-action="share">${icon('share')} Compartilhar</button></div></div></section>`;
