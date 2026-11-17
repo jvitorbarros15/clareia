@@ -1,6 +1,6 @@
 import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
-import {canonical,hash,cents,validCnpj,officialUrl,publicSupplier} from './model.ts';
+import {canonical,hash,cents,validCnpj,oddId,occurrenceId,officialUrl,publicSupplier} from './model.ts';
 import {pairOccurrences} from './reconcile.ts';
 import type {Scope,Expense,SourceRef,FinancialBasis} from './model.ts';
 
@@ -29,8 +29,8 @@ export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef,basis?:
   const money=(field:string)=>r[field]?.trim()?cents(r[field].trim().replace(',','.')):null;
   const net=money('vlrLiquido')!,face=money('vlrDocumento'),glosa=money('vlrGlosa');
   if(face!==null&&glosa!==null&&face-glosa!==net&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Equação financeira anual diverge');
-  const id=hash(canonical({personId,raw:r})),supplierId=(r.txtCNPJCPF||'').replace(/\D/g,'');const verified=validCnpj(supplierId),supplier=publicSupplier(r.txtFornecedor||'',supplierId);
-  return {id,personId,year,month,category:r.txtDescricao,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,lot:r.numLote||'',receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
+  const supplierId=(r.txtCNPJCPF||'').replace(/\D/g,''),verified=validCnpj(supplierId),id=occurrenceId(personId,r,verified,'txtCNPJCPF','txtFornecedor');const supplier=publicSupplier(r.txtFornecedor||'',supplierId);
+  return {id,personId,year,month,category:r.txtDescricao,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,...(oddId(supplierId)?{supplierIdOdd:true as const}:{}),documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,lot:r.numLote||'',receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }
 export async function parseAnnual(bytes:Uint8Array,scope:Scope,observe?:(row:AnnualRow)=>void):Promise<{rows:{raw:AnnualRow;row:number}[];scanned:number}> {
   const stream=Readable.from((function*(){for(let i=0;i<bytes.length;i+=65536)yield bytes.subarray(i,i+65536);})()).pipe(parse({columns:(headers:string[])=>{if(new Set(headers).size!==headers.length)throw new Error('Contrato CSV mudou: coluna duplicada');for(const field of ['ideCadastro','numAno','numMes','codLegislatura','txtDescricao','vlrLiquido','vlrDocumento','vlrGlosa','ideDocumento','txtFornecedor','txtCNPJCPF','urlDocumento','txtNumero','datEmissao','numLote'])if(!headers.includes(field))throw new Error('Contrato CSV mudou: coluna ausente '+field);return headers;},delimiter:';',bom:true,skip_empty_lines:true}));

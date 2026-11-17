@@ -61,7 +61,9 @@ O site publicado cobre os deputados da legislatura 57 em 2025. O banco local de 
 
 A segunda implementação ajuda a detectar diferenças de processamento. Ela compartilha regras metodológicas com o coletor e **não constitui uma revisão independente dessas regras**, nem comprova completude da fonte ou legitimidade de uma despesa.
 
-Fornecedores pessoa física são apresentados como “Fornecedor pessoa física”. Os originais ficam fora do Git e do diretório público. Na automação, originais arquivados e cópias do banco recebem criptografia AES-256-GCM, e o site gerado e o dump do banco passam por uma varredura de CPF antes da persistência da nova cópia.
+Fornecedores pessoa física são apresentados como “Fornecedor pessoa física”. Nomes de fornecedores sem CNPJ válido que não parecem de empresa não são exibidos, para proteger possíveis pessoas físicas. A regra roda na montagem do site (`src/build-site.ts`); os nomes ocultados e os mantidos pela regra de empresa vão para `output/review`, que não é publicado, e a lista de nomes aprovados fica em `config/supplier-names-public.json`.
+
+Os identificadores públicos das despesas são refeitos na montagem a partir de campos sem o fornecedor e só valem dentro de uma publicação: a mesma despesa pode ter outro id na publicação seguinte. Lotes já coletados com identificadores de fornecedor fora do formato (`supplierIdOdd`) não passam em nova auditoria, porque a regra de coleta mudou; os demais campos continuam sendo comparados. Os originais ficam fora do Git e do diretório público. Na automação, originais arquivados e cópias do banco recebem criptografia AES-256-GCM, e o site gerado e o dump do banco passam por uma varredura de CPF antes da persistência da nova cópia.
 
 Fontes utilizadas: [API de Dados Abertos da Câmara](https://dadosabertos.camara.leg.br/api/v2/api-docs) e [arquivo anual CEAP de 2025](https://www.camara.leg.br/cotas/Ano-2025.csv.zip). As [notas técnicas do piloto](real/README.md) registram a conciliação, capturas anteriores e limitações encontradas; os dados servidos em cada build são identificados pelo seu `manifest.json`.
 

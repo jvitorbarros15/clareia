@@ -720,7 +720,7 @@ check('panorama dialog reuses the record rows', async () => {
 check('supplier note names companies and individuals', async () => {
   const page = await at(1440);
   const body = clean(await page.evaluate(() => document.body.innerText));
-  assert.ok(body.includes("Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'."), 'N5 note');
+  assert.ok(body.includes("Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'. Nomes de fornecedores sem CNPJ válido que não parecem de empresa não são exibidos, para proteger possíveis pessoas físicas."), 'N5 note');
   assert.ok(!body.includes('Fornecedor pessoa física aparece sem nome'), 'old note gone');
   await page.close();
 });
