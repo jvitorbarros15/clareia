@@ -10,14 +10,20 @@ export type ExpenseLotRun={runId:string;manifest:{runId:string;status:string;rep
 
 const MONTHS=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 // The party the legislature's own events give for the expense period: only events up to the period's last day count, so a later switch never leaks in. Agreeing events give that party; otherwise the latest one, and only when every date is readable.
-function partyFromEvents(events:{original:{siglaPartido?:string|null;dataHora?:string|null}}[],end:string):{value:string;note:string}|null{
+// Parties that ceased to exist in 2023 and the day the TSE approved the merger (tse.jus.br news of Jun/2023 and Nov/2023).
+const MERGERS:Record<string,{to:string;on:string}>={PATRIOTA:{to:'PRD',on:'2023-11-09'},PSC:{to:'PODE',on:'2023-06-15'}};
+const monthYear=(day:string)=>`${MONTHS[Number(day.slice(5,7))-1]}/${day.slice(0,4)}`;
+function partyFromEvents(events:{original:{siglaPartido?:string|null;dataHora?:string|null}}[],start:string,end:string):{value:string;note:string}|null{
   const all=events.map(e=>({party:e.original.siglaPartido?.trim()||null,at:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(e.original.dataHora??'')?e.original.dataHora!.slice(0,16):null}));
   if(all.some(e=>!e.at))return null;
   const upto=all.filter(e=>e.at!<=end+'T23:59').sort((a,b)=>a.at!.localeCompare(b.at!));
   if(!upto.length||upto.some(e=>!e.party))return null;
-  if(new Set(upto.map(e=>e.party)).size===1)return {value:upto[0].party!,note:'partido dos eventos da legislatura'};
-  if(upto.at(-2)!.at===upto.at(-1)!.at&&upto.at(-2)!.party!==upto.at(-1)!.party)return null;
-  return {value:upto.at(-1)!.party!,note:`partido em ${MONTHS[Number(end.slice(5,7))-1]}/${end.slice(0,4)} (eventos da legislatura)`};
+  const last=upto.at(-1)!,day=last.at!.slice(0,10),agree=new Set(upto.map(e=>e.party)).size===1;
+  if(!agree&&upto.at(-2)!.at===last.at&&upto.at(-2)!.party!==last.party)return null;
+  const merger=MERGERS[last.party!];
+  if(merger&&day<merger.on)return {value:merger.to,note:`${last.party} ${day==='2023-02-01'?'na posse':'registrado'} (${monthYear(day)}); incorporado ao ${merger.to} em ${monthYear(merger.on)}`};
+  if(day<start)return {value:last.party!,note:`partido registrado em ${monthYear(day)} (eventos da legislatura)`};
+  return {value:last.party!,note:agree?'partido dos eventos da legislatura':`partido em ${monthYear(end)} (eventos da legislatura)`};
 }
 
 // Only audited lots of one universe, all of them, each once: a missing or repeated lot would silently change the totals.
@@ -37,7 +43,7 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   if(new Set(ids).size!==ids.length||ids.length!==first.universeSize||hash(canonical([...ids].sort((a,b)=>a-b)))!==first.universeSha256)throw Error('Pessoas dos lotes não formam o universo declarado');
   const temporal=ordered[0].input.temporal;
   if(hash(canonical(temporal))!==first.temporalSha256||temporal.historySha256!==hash(canonical(history)))throw Error('Histórico de pessoas diverge do usado na coleta');
-  const lastMonth=Math.max(...first.months),periodEnd=new Date(Date.UTC(first.year,lastMonth,0)).toISOString().slice(0,10);
+  const periodStart=`${first.year}-${String(Math.min(...first.months)).padStart(2,'0')}-01`,lastMonth=Math.max(...first.months),periodEnd=new Date(Date.UTC(first.year,lastMonth,0)).toISOString().slice(0,10);
   const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[];let cellTotal=0n;
   for(const l of ordered)for(const c of l.report.cells){
     if(c.status==='complete'||c.status==='no-expenses-confirmed'){
@@ -54,7 +60,7 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
     // The UF is fixed for the legislature, so any confirmed month serves. Without one, the UF the legislature's own events all agree on stands, marked; a month showing two UFs (changed/conflict) is never settled this way.
     const months=[...t.months].reverse(),temporalUf=months.find(m=>m.uf.status==='single')?.uf.value??null,contested=months.some(m=>m.uf.status==='changed'||m.uf.status==='conflict');
     const eventUfs=new Set(t.events.filter(e=>e.original.idLegislatura===temporal.scope.legislature).map(e=>e.original.siglaUf)),only=eventUfs.size===1?[...eventUfs][0]:null;
-    const fallback=temporalUf===null&&!contested&&only&&UFS.has(only)?only:null,uf=temporalUf??fallback,confirmed=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null,eventParty=confirmed===null?partyFromEvents(t.events.filter(e=>e.original.idLegislatura===temporal.scope.legislature),periodEnd):null,party=confirmed??eventParty?.value??null;
+    const fallback=temporalUf===null&&!contested&&only&&UFS.has(only)?only:null,uf=temporalUf??fallback,confirmed=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null,eventParty=confirmed===null?partyFromEvents(t.events.filter(e=>e.original.idLegislatura===temporal.scope.legislature),periodStart,periodEnd):null,party=confirmed??eventParty?.value??null;
     return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,...(fallback?{ufNote:'UF dos eventos da legislatura'}:{}),party,...(eventParty?{partyNote:eventParty.note}:{})};
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
