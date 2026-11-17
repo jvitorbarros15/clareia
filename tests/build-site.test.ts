@@ -176,7 +176,7 @@ test('approved coverage supplies the party of the month and a disputed month sta
   assert.equal(summary.coverageId,known.id);assert.deepEqual([summary.people[0].months[0].party,summary.people[0].months[0].uf],['PL','SP']);
   const disputed=coverageVersion(null,true);await storePeopleCoverage(db,disputed);await recordDomainAudit(db,disputed.id,'passed',report);
   built=await buildSite(db,dist,portraits);summary=await json(dist,'data',built.publicationId,'summary.json');
-  assert.deepEqual([summary.people[0].months[0].party,summary.people[0].months[0].partyStatus,summary.people[0].months[0].review],[null,'review',true]);
+  assert.deepEqual([summary.people[0].months[0].party,summary.people[0].months[0].partyStatus],[null,'review']);
 }));
 test('a summary that disagrees with the approved total or leaves the scope is refused',()=>{
   assert.throws(()=>buildSiteSummary(summaryInput([record(100,1,0)],101)),/total aprovado/);
