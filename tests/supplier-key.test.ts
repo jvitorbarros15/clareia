@@ -46,7 +46,7 @@ const ODD='1112345678901';
 test('a person-like name is withheld even with accents, and bare SA, ME, CIA or TELEF do not make a company',()=>{
   for(const name of ['MARIA LÚCIA DA SILVA','PATRÍCIA SOUZA','MARIA DE SA','JOAO DA SILVA ME','ANTONIO TELEFONE','JOSE CIA'])
     assert.equal(normalize(row(ODD,name),1,scope,source).supplier,'Fornecedor não identificado na fonte',name);
-  for(const name of ['CELULAR FUNCIONAL','EMPRESA TESTE LTDA','Tam Linhas Aéreas S.A','Gol Linhas Aereas S/A','Hotel Aloft','TELEFÔNICA BRASIL','Tonosol S.A. Aloft'])
+  for(const name of ['CELULAR FUNCIONAL','EMPRESA TESTE LTDA','Tam Linhas Aéreas S.A','Gol Linhas Aereas S/A','Hotel Aloft','TELEFÔNICA BRASIL','Tonosol S.A. Aloft','LEMON APARTMENTS SA'])
     assert.equal(normalize(row(ODD,name),1,scope,source).supplier,name,name);
 });
 test('the audit applies the same placeholder rule and sets the review flag',async()=>{

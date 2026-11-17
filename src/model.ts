@@ -31,7 +31,7 @@ export const oddId=(id:string)=>id.length>0&&id.length!==11&&!validCnpj(id);
 export function occurrenceId(personId:number,raw:Record<string,unknown>,verified:boolean,idField:string,nameField:string):string{
   return hash(canonical({personId,raw:verified?raw:{...raw,[idField]:null,[nameField]:null}}));
 }
-export const COMPANY_NAME=/(?<![\p{L}\p{N}])(LTDA|S\.A|S\/A|EIRELI|EPP|COMPANHIA|LINHAS A[ÉE]REAS|AIRLINES|HOTEL|TELEF[ÔO]NICA|CELULAR FUNCIONAL)(?![\p{L}\p{N}])/u;
+export const COMPANY_NAME=/(?<![\p{L}\p{N}])(LTDA|S\.A|S\/A|EIRELI|EPP|COMPANHIA|LINHAS A[ÉE]REAS|AIRLINES|HOTEL|APARTMENTS|TELEF[ÔO]NICA|CELULAR FUNCIONAL)(?![\p{L}\p{N}])/u;
 export function publicSupplier(name:string,rawId:string):{name:string;key:'cnpj'|'person'|'unknown'}{
   const id=rawId.replace(/\D/g,'');
   if(isPersonId(id))return {name:'Fornecedor pessoa física',key:'person'};
