@@ -17,10 +17,11 @@ export async function writeReview(publicationId:string,items:ReviewItem[]):Promi
   return items.length;
 }
 
-export type DuplicateItem={id:number;name:string;month:number;reason:string;records:number;cents:number};
-export const duplicateReviewItems=(version:Pick<Snapshot,'people'|'validation'>):DuplicateItem[]=>(version.validation.duplicateCompetences??[]).map(d=>({id:d.personId,name:version.people.find(p=>p.id===d.personId)?.name??'',month:d.month,reason:d.reason,records:d.records,cents:d.cents}));
+export type DuplicateItem={id:number;name:string;month:number;reason:string;records:number;cents:number;monthCents:number;url:string};
+export const duplicateReviewItems=(version:Pick<Snapshot,'people'|'validation'|'records'|'scope'>):DuplicateItem[]=>(version.validation.duplicateCompetences??[]).map(d=>({id:d.personId,name:version.people.find(p=>p.id===d.personId)?.name??'',month:d.month,reason:d.reason,records:d.records,cents:d.cents,monthCents:version.records.filter(r=>r.personId===d.personId&&r.month===d.month).reduce((n,r)=>n+r.cents,0),url:`https://www.camara.leg.br/deputados/${d.personId}?ano=${version.scope.year}`}));
 
-export const duplicateMarkdown=(publicationId:string,items:DuplicateItem[])=>[`# Possíveis duplicidades - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | mês ${i.month} | motivo: ${i.reason} | registros sinalizados: ${i.records} | R$ ${(i.cents/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`),''].join('\n');
+const brl=(cents:number)=>'R$ '+(cents/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+export const duplicateMarkdown=(publicationId:string,items:DuplicateItem[])=>[`# Possíveis duplicidades - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | mês ${i.month} | motivo: ${i.reason} | registros sinalizados: ${i.records} | ${brl(i.cents)} | total do mês publicado: ${brl(i.monthCents)} | ${i.url}`),''].join('\n');
 
 export async function writeDuplicateReview(publicationId:string,items:DuplicateItem[]):Promise<number>{
   const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-possiveis-duplicidades.md`);

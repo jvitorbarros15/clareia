@@ -40,7 +40,7 @@ function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:s
 }
 // Independent of markDuplicates: repeated rows stay published; identical ones get distinct ids by occurrence order.
 function flagRepeats(rs:Expense[]):Expense[]{
-  const ticket='PASSAGEM AÉREA - SIGEPA',same=(a:Expense,b:Expense)=>a.category===b.category&&a.documentId===b.documentId&&a.documentNumber===b.documentNumber&&a.cents===b.cents&&(a.category===ticket||canonical([a.date,a.lot,a.supplier,a.documentCents,a.disallowedCents])===canonical([b.date,b.lot,b.supplier,b.documentCents,b.disallowedCents]));
+  const ticket='PASSAGEM AÉREA - SIGEPA',blank=(s:string)=>s==='Não informado'?'':s,same=(a:Expense,b:Expense)=>a.category===b.category&&blank(a.documentId)===blank(b.documentId)&&blank(a.documentNumber)===blank(b.documentNumber)&&a.cents===b.cents&&(a.category===ticket||canonical([a.date,a.lot,a.supplier,a.documentCents,a.disallowedCents])===canonical([b.date,b.lot,b.supplier,b.documentCents,b.disallowedCents]));
   const used=new Map<string,number>();
   return rs.map(r=>{const n=used.get(r.id)??0;used.set(r.id,n+1);const id=n?hash(canonical({id:r.id,occurrence:n})):r.id;return {...r,id,supplierKey:r.supplierKey===r.id?id:r.supplierKey,...(rs.filter(o=>same(o,r)).length>1?{duplicateFlag:'possible' as const}:{})};});
 }
@@ -108,7 +108,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   const multiplicityReview=independentFlightMultiplicity(scope,annualStable?equationInputs:[]);
   if(report.equationRule!=='camara.ceap.correlated-net.v2'||canonical(report.equationDecisions)!==canonical(equationReview.decisions))fail('equation-review-evidence');
   if(canonical(report.equationHolds)!==canonical(equationReview.holds))fail('equation-review-holds');
-  if(report.multiplicityRule!=='camara.ceap.sigepa-preserve-hold.v2'||canonical(report.multiplicityDecisions)!==canonical(multiplicityReview.decisions))fail('multiplicity-review-evidence');
+  if(report.multiplicityRule!=='camara.ceap.sigepa-publish-flag.v3'||canonical(report.multiplicityDecisions)!==canonical(multiplicityReview.decisions))fail('multiplicity-review-evidence');
   if(report.portalRule!=='camara.ceap.sigepa-portal-ledger.v1'||typeof report.portalRequested!=='boolean')fail('portal-review-contract');
   const portalChecks:PortalCheck[]=[],portalCovered=new Set<string>();
   const permission=(kind:'annual'|'api',personId:number,r:RawRow)=>equationReview.permissions.get(hash(JSON.stringify([kind,personId,r.source.url,kind==='annual'?second.csvHash:r.source.sha256,r.row])));
@@ -130,14 +130,16 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
       const apiStable=digest(a.map(r=>({personId:c.personId,raw:r.raw})))===digest(b.map(r=>({personId:c.personId,raw:r.raw})));
       const budgetBlocked=annual.some(r=>equationReview.blockedKeys.has(hash(JSON.stringify(['annual',c.personId,r.source.url,second.csvHash,r.row]))))||b.some(r=>equationReview.blockedKeys.has(rowKey(r)));
       const foreignMonth=b.some(r=>Number(r.raw?.ano)!==c.year||Number(r.raw?.mes)!==c.month);
+      let portalDisagrees=false;
       const ticketRepeats=new Set<string>(),repeatedTicket=b.some(r=>{if(r.raw?.tipoDespesa!=='PASSAGEM AÉREA - SIGEPA')return false;const id=JSON.stringify([String(r.raw.codDocumento),String(r.raw.numDocumento),Number(r.raw.valorLiquido)]);if(ticketRepeats.has(id))return true;ticketRepeats.add(id);return false;});
       if(apiStable&&!foreignMonth&&!budgetBlocked&&unresolved.length&&report.portalRequested&&unresolved.every(r=>r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA')){
         const check=await independentPortalReview(c.personId,scope.year,c.month,scope.legislature,[first.rows,second.rows],b.filter(r=>r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA').map(r=>r.raw),async(pass,url)=>{const key=pass+':'+url,source=refs.get(key),bytes=html.get(key);if(!source||!bytes)return null;used.add(key);return {source,bytes};});
-        portalChecks.push(check);if(check.status==='matched')for(const r of unresolved)portalCovered.add(rowKey(r));
+        portalChecks.push(check);if(check.status==='matched')for(const r of unresolved)portalCovered.add(rowKey(r));if(check.status==='mismatch'||check.status==='changed')portalDisagrees=true;
       }
       if(!apiStable)reasons=['api-changed-between-passes'];
       else if(foreignMonth)reasons=['api-row-outside-competence'];
       else if(budgetBlocked)reasons=['installment-document-review'];
+      else if(portalDisagrees)reasons=['ambiguous-identical-occurrences'];
       else{
         dup=unresolved.some(r=>!portalCovered.has(rowKey(r)))||duplicates(annual)?'ambiguous-identical-occurrences':repeatedTicket||b.some(r=>(apiCounts.get(canonical(r.raw))??0)>1)?'sigepa-unit-unconfirmed':null;
         let ar:Expense[]=[],br:Expense[]=[];
@@ -151,9 +153,12 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
           else{
             records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))];
             if(dup)records=flagRepeats(records);
+            if(dup&&records.filter(r=>r.duplicateFlag==='possible').length<2){records=[];total=null;reasons=['ambiguous-identical-occurrences'];dup=null;}
+            else{
             records=records.map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));
             total=Number(records.reduce((n,r)=>n+BigInt(r.cents),0n));if(!Number.isSafeInteger(total))throw Error('Total independente fora da precisão segura');status=records.length?'complete':'no-expenses-confirmed';
             if(records.length&&c.exercise==='outside'){records=[];total=null;status='held-review';reasons=['expense-outside-exercise'];dup=null;}
+            }
           }
         }
       }
@@ -166,5 +171,5 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   if(used.size!==refs.size)fail('unreferenced-source');
   if(report.metrics.sourceBytes!==report.sources.reduce((n,s)=>n+s.bytes,0))fail('source-byte-count');
   if(findCpfs(JSON.stringify(report),known))fail('private-identifier');
-  return {schema:'clareia.expense-intermediate-audit.v1',status:failures.length?'failed':'passed',checkedAt:new Date().toISOString(),reportSha256:hash(canonical(report)),peopleVersion:hash(canonical(temporal)),proposalSha256,scope,competences:expectedKeys.length,failures,publicationEligible:false,note:'Releitura dos originais por implementação separada das mesmas regras do Clareia. Não é revisão independente da metodologia, confirmação da unidade SIGEPA ou prova de ausência de erro na origem. Casos retidos continuam retidos; não aprova publicação ou legitimidade.'};
+  return {schema:'clareia.expense-intermediate-audit.v1',status:failures.length?'failed':'passed',checkedAt:new Date().toISOString(),reportSha256:hash(canonical(report)),peopleVersion:hash(canonical(temporal)),proposalSha256,scope,competences:expectedKeys.length,failures,publicationEligible:false,note:'Releitura dos originais por implementação separada das mesmas regras do Clareia. Não é revisão independente da metodologia, confirmação da unidade SIGEPA ou prova de ausência de erro na origem. Meses com linhas repetidas são publicados e sinalizados como possível duplicidade, exceto quando o portal discorda da API; os demais casos retidos continuam retidos. Não aprova publicação ou legitimidade.'};
 }

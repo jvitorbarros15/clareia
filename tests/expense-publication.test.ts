@@ -118,7 +118,7 @@ test('a published month with possible duplicates is listed with its flagged reco
   const v=buildExpenseVersion([lot(0,[1,2],[{...cell(1,'complete',flagged),duplicateReason:'sigepa-unit-unconfirmed'},cell(2,'no-expenses-confirmed')]),lots()[1]],history,'t');
   assert.deepEqual(v.validation.duplicateCompetences,[{personId:1,month:1,reason:'sigepa-unit-unconfirmed',records:2,cents:200}]);
   assert.equal(v.validation.totalCents,205);assert.deepEqual(v.validation.heldMonths,{});
-  assert.deepEqual(duplicateReviewItems(v),[{id:1,name:'Pessoa 1',month:1,reason:'sigepa-unit-unconfirmed',records:2,cents:200}]);
-  assert.match(duplicateMarkdown('p',duplicateReviewItems(v)),/- 1 \| Pessoa 1 \| mês 1 \| motivo: sigepa-unit-unconfirmed \| registros sinalizados: 2 \| R\$ 2,00/);
+  assert.deepEqual(duplicateReviewItems(v),[{id:1,name:'Pessoa 1',month:1,reason:'sigepa-unit-unconfirmed',records:2,cents:200,monthCents:205,url:'https://www.camara.leg.br/deputados/1?ano=2025'}]);
+  assert.match(duplicateMarkdown('p',duplicateReviewItems(v)),/- 1 \| Pessoa 1 \| mês 1 \| motivo: sigepa-unit-unconfirmed \| registros sinalizados: 2 \| R\$ 2,00 \| total do mês publicado: R\$ 2,05 \| https:\/\/www\.camara\.leg\.br\/deputados\/1\?ano=2025/);
   const rows=csv(flagged).split('\r\n');assert.match(rows[0],/;"possivel_duplicidade"$/);assert.match(rows[1],/;"sim"$/);assert.match(rows[3],/;""$/);
 });

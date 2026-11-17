@@ -91,7 +91,7 @@ export function validCnpj(id:string):boolean {
 export type DuplicateReason='sigepa-unit-unconfirmed'|'ambiguous-identical-occurrences';
 // Repeated rows stay published, as the Câmara counts them: each gets a flag, and identical rows get ids told apart by occurrence order.
 export function markDuplicates(records:Expense[]):Expense[]{
-  const key=(r:Expense)=>canonical(r.category==='PASSAGEM AÉREA - SIGEPA'?[r.category,r.documentId,r.documentNumber,r.cents]:[r.category,r.documentId,r.documentNumber,r.cents,r.date,r.lot,r.supplier,r.documentCents,r.disallowedCents]);
+  const blank=(s:string)=>s==='Não informado'?'':s,key=(r:Expense)=>canonical(r.category==='PASSAGEM AÉREA - SIGEPA'?[r.category,blank(r.documentId),blank(r.documentNumber),r.cents]:[r.category,blank(r.documentId),blank(r.documentNumber),r.cents,r.date,r.lot,r.supplier,r.documentCents,r.disallowedCents]);
   const size=new Map<string,number>(),seen=new Map<string,number>();for(const r of records)size.set(key(r),(size.get(key(r))??0)+1);
   return records.map(r=>{const n=seen.get(r.id)??0;seen.set(r.id,n+1);const id=n?hash(canonical({id:r.id,occurrence:n})):r.id;return {...r,id,supplierKey:r.supplierKey===r.id?id:r.supplierKey,...(size.get(key(r))!>1?{duplicateFlag:'possible' as const}:{})};});
 }
