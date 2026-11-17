@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BASE,hash,normalize,stableDigest,isPersonId} from '../src/model.ts';
+import {BASE,hash,normalize,stableDigest,isPersonId,oddId} from '../src/model.ts';
 import {normalizeAnnual} from '../src/annual.ts';
 import type {Scope} from '../src/model.ts';
 
@@ -23,12 +23,16 @@ test('a verified CNPJ record keeps the id and supplier key it always had',()=>{
   assert.equal(r.supplierKey,hash('cnpj:'+CNPJ));assert.equal(r.supplierVerified,true);
   assert.notEqual(r.id,normalize(row(CNPJ,'OUTRO NOME'),1,scope,source).id);
 });
-test('an id that is not a clean CNPJ-sized number is a person',()=>{
-  for(const id of ['1114447773','111444777350','000'+CPF]){
+test('11 digits is a person; a valid CNPJ is a company even with a leading 000; anything else is withheld and flagged',()=>{
+  const company=normalize(row('00012345000165','BANCO TESTE'),1,scope,source);
+  assert.equal(company.supplier,'BANCO TESTE');assert.equal(company.supplierVerified,true);assert.equal(company.supplierIdOdd,undefined);
+  for(const id of ['1114447773','1112345678901','11111111111111','000'+CPF]){
     const r=normalize(row(id,'MARIA TESTE'),1,scope,source);
-    assert.equal(r.supplier,'Fornecedor pessoa física');assert.equal(r.supplierVerified,false);
+    assert.equal(r.supplier,'Fornecedor pessoa física');assert.equal(r.supplierVerified,false);assert.equal(r.supplierIdOdd,true);assert.equal(r.receipt,null);
   }
-  assert.equal(isPersonId(CNPJ),false);assert.equal(isPersonId(''),false);assert.equal(isPersonId('00011222333000'),false);
+  const person=normalize(row(CPF,'MARIA TESTE'),1,scope,source);assert.equal(person.supplier,'Fornecedor pessoa física');assert.equal(person.supplierIdOdd,undefined);
+  assert.equal(isPersonId(CPF),true);assert.equal(isPersonId(CNPJ),false);assert.equal(oddId(''),false);assert.equal(oddId(CNPJ),false);assert.equal(oddId('11111111111111'),true);
+  assert.equal(normalizeAnnual(annualRow('1112345678901','MARIA'),scope,source).supplierIdOdd,true);
 });
 test('rows that differ only in the supplier are refused instead of sharing an id',()=>{
   assert.throws(()=>stableDigest([{personId:1,raw:row(CPF,'A')},{personId:1,raw:row(OTHER_CPF,'B')}]),/só diferem no fornecedor/);

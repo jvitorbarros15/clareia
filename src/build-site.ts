@@ -67,9 +67,9 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const billList=billsVersion?await readBills(db,billsVersion.id):[],voteList=votesVersion?new Map((await readVotes(db,votesVersion.id)).map(v=>[v.id,v])):new Map();
   const ballotsOf=new Map<number,Awaited<ReturnType<typeof readBallots>>>(),voteTotals=new Map<number,Record<string,number>>(),votesHeld=new Map<number,number>();
   if(votesVersion)for(const id of active.scope.ids){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
-  // Only a verified CNPJ publishes its supplier key; for anyone else it is the occurrence hash of an older version, which may embed a CPF.
+  // Every published id is rebuilt from the redacted record, so nothing the source typed (CPF in a document number, supplier) sits in a hash. Only a verified CNPJ publishes its supplier key and page hash.
   // Records come from an approved version that may predate the redaction rule; the site never shows a CPF the source typed into free text.
-  const redacted={n:0},allRecords=(await readRecords(db,active.id)).map(r=>{const {supplierKey,...rest}=redactExpense(r,redacted);return r.supplierVerified?{...rest,supplierKey}:{...rest,id:publicId(r)};});
+  const redacted={n:0},oddIds=new Map<number,number>(),allRecords=(await readRecords(db,active.id)).map(r=>{if(r.supplierIdOdd)oddIds.set(r.personId,(oddIds.get(r.personId)??0)+1);const {supplierKey,supplierIdOdd:_odd,...rest}=redactExpense(r,redacted),pub={...rest,id:publicId(rest)};return r.supplierVerified?{...pub,supplierKey}:{...pub,source:{url:r.source.url,row:r.source.row,fetchedAt:r.source.fetchedAt}};});
   if(new Set(allRecords.map(r=>r.id)).size!==allRecords.length)throw new Error('Identificador público de despesa repetido');
   if(redacted.n)console.error(`CPF omitido em ${redacted.n} valores de despesas`);
   const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:allRecords,expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld,held:active.validation.heldCompetences??[],ceiling});
@@ -118,7 +118,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   checkLimits(files.length,Math.max(...sizes));
   await fs.rm(finalDir,{recursive:true,force:true});
   await fs.rename(outDir,finalDir);
-  return {publicationId,files:files.length,review:ufReviewItems(active.people)};
+  return {publicationId,files:files.length,review:[...ufReviewItems(active.people),...[...oddIds].map(([id,n])=>({id,name:active.people.find(p=>p.id===id)?.name??'',used:n+' registros',from:'identificador do fornecedor fora do formato'}))]};
 }
 
 // Reviewed display names for CNPJs, by supplierKey (config/supplier-names.json); anything else uses the spelling with the most records.
