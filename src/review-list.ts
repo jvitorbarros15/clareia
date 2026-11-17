@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type {Expense,Person} from './model.ts';
+import {SIGN_CATEGORIES} from './expense-publication.ts';
 
 export type ReviewItem={id:number;name:string;used:string;from:string};
 
@@ -26,10 +27,10 @@ export const signReviewItems=(records:Expense[],people:Person[]):SignItem[]=>rec
 });
 const brl=(c:number)=>'R$ '+(c/100).toFixed(2);
 export const signReviewMarkdown=(publicationId:string,items:SignItem[])=>{
-  const housing='COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA',sorted=[...items].sort((a,b)=>Number(a.category===housing)-Number(b.category===housing)||a.reason.localeCompare(b.reason,'pt')||a.id-b.id||a.month-b.month);
+  const housing=SIGN_CATEGORIES[0],sorted=[...items].sort((a,b)=>Number(a.category===housing)-Number(b.category===housing)||a.reason.localeCompare(b.reason,'pt')||a.id-b.id||a.month-b.month);
   const per=new Map<number,{name:string;count:number;cents:number}>();
-  for(const i of items){const g=per.get(i.id)??{name:i.name,count:0,cents:0};g.count++;g.cents+=i.cents;per.set(i.id,g);}
-  return [`# Sinal corrigido - ${publicationId}`,'','## Por deputado',...[...per].sort((a,b)=>a[0]-b[0]).map(([id,g])=>`- ${id} | ${g.name} | ${g.count} registros | ${brl(g.cents)}`),'','## Por registro (outras categorias e "a revisar" primeiro)',...sorted.map(i=>`- ${i.id} | ${i.name} | mês ${i.month} | ${i.category} | fonte ${brl(i.sourceCents)} -> publicado ${brl(i.cents)} | ${i.recordId} | ${i.reason}`),''].join('\n');
+  for(const i of items)if(i.reason===SIGN_REASON){const g=per.get(i.id)??{name:i.name,count:0,cents:0};g.count++;g.cents+=i.cents;per.set(i.id,g);}
+  return [`# Sinal corrigido - ${publicationId}`,'','## Por deputado (só corrigidos)',...[...per].sort((a,b)=>a[0]-b[0]).map(([id,g])=>`- ${id} | ${g.name} | ${g.count} registros | ${brl(g.cents)}`),`- sinal a revisar: ${items.filter(i=>i.reason!==SIGN_REASON).length} registros`,'','## Por registro (outras categorias e "a revisar" primeiro)',...sorted.map(i=>`- ${i.id} | ${i.name} | mês ${i.month} | ${i.category} | fonte ${brl(i.sourceCents)} -> publicado ${brl(i.cents)} | ${i.recordId} | ${i.reason}`),''].join('\n');
 };
 export async function writeSignReview(publicationId:string,items:SignItem[]):Promise<void>{
   const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-sinal-corrigido.md`);

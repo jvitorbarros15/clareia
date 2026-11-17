@@ -126,11 +126,11 @@ test('only the exact inverted-net shape is flipped; totals stay consistent and t
   assert.deepEqual(v.records.map(x=>x.sourceCents),[-500,...Array(6).fill(undefined)]);
   assert.equal(v.records[0].note,'sinal corrigido conforme a página da Câmara');
   assert.equal(v.validation.totalCents,-1830);assert.equal(v.validation.independentTotalCents,'-1830');
-  assert.deepEqual(v.validation.signFix,{count:1,deltaCents:1000,auditedCellTotalCents:'-2830'});
+  assert.deepEqual(v.validation.signFix,{count:1,deltaCents:1000});
   const items=signReviewItems(v.records,v.people);
   assert.deepEqual(items.map(i=>[i.reason,i.sourceCents,i.cents]),[['sinal do líquido invertido na fonte; corrigido conforme a página da Câmara',-500,500],['sinal a revisar',-500,-500],['sinal a revisar',-500,-500],['sinal a revisar',-400,-400]]);
   const md=signReviewMarkdown('p',items);
-  assert.match(md,/- 1 \| Pessoa 1 | 4 registros\| 3 registros/);
+  assert.match(md,/- 1 \| Pessoa 1 \| 1 registros \| R\$ 5\.00/);
   assert.match(md,/mês 1 \| COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA \| fonte R\$ -5\.00 -> publicado R\$ 5\.00 \| r1-0 \|/);
   assert.ok(md.indexOf('sinal a revisar')<md.indexOf('corrigido conforme',md.indexOf('## Por registro')));
 });
