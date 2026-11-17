@@ -10,6 +10,8 @@ import {redactCpf,redactExpense,scanCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary,buildSupplierSummary} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
+import type {ReviewItem} from './review-list.ts';
+import {ufReviewItems} from './review-list.ts';
 import {deputiesOf,resolveOptions,writePrerendered,writeStaticPages} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
 import {generateShareImages} from './share-images.ts';
@@ -43,7 +45,7 @@ async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const outside=all.filter(r=>!active.scope.ids.includes(r.personId)).length;
   if(outside)throw new Error(`${outside} registros fora do recorte da versão`);
 }
-export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number}>{
+export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number;review:ReviewItem[]}>{
   const siteOptions=resolveOptions(options);
   // Everything is built aside: a refusal at any step leaves the previous output in place.
   const outDir=finalDir+'.building';
@@ -110,5 +112,5 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   checkLimits(files.length,Math.max(...sizes));
   await fs.rm(finalDir,{recursive:true,force:true});
   await fs.rename(outDir,finalDir);
-  return {publicationId,files:files.length};
+  return {publicationId,files:files.length,review:ufReviewItems(active.people)};
 }

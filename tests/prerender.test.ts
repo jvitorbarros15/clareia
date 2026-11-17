@@ -15,7 +15,7 @@ import type {Deputy,Period} from '../src/prerender.ts';
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
 const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11]};
 const SITE='https://example.test';
-const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',party:'PL (atual)',partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,heldMonths:[],cents:123456789,hasCells:true,projects:7};
+const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,heldMonths:[],cents:123456789,hasCells:true,projects:7};
 const meta=(html:string,key:string)=>new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)">`).exec(html)?.[1];
 
 test('slugs follow the rule of real/app.js',()=>{
@@ -85,6 +85,7 @@ test('state pages are factual and cover all 27 UFs',()=>{
   const list:Deputy[]=[normal,{...normal,id:101,cents:1000,heldMonths:[1]},{...normal,id:102,uf:'BA'},{...normal,id:103,noExercise:true,cents:0}];
   assert.equal(inState(list,'SP').length,2);
   assert.equal(stateDescription('SP',list,period),`São Paulo: 2 deputados neste recorte. Cota total em Jan–Dez 2025: R$ 1.234.577,89 (valor exato). Inclui 1 deputado com total parcial; meses em revisão ficam fora da soma. Dados oficiais da Câmara dos Deputados.`);
+  assert.match(stateDescription('SP',[{...normal,ufNote:'UF dos eventos da legislatura'}],period),/Inclui 1 deputado com UF não confirmada mês a mês\./);
   assert.equal(stateDescription('AC',list,period),'Acre: nenhum deputado neste recorte. Indisponível não significa zero.');
   assert.equal(Object.keys(UFS).length,27);
   const html=renderState(shell,'SP',list,period,SITE);
