@@ -1,5 +1,5 @@
 import {UFS,canonical,hash,snapshotId} from './model.ts';
-import type {Expense,Person,Snapshot} from './model.ts';
+import type {DuplicateReason,Expense,Person,Snapshot} from './model.ts';
 import type {ExpenseBatch} from './expense-intermediate.ts';
 import type {HistoryReport} from './people-history.ts';
 import type {TemporalReport} from './people-temporal.ts';
@@ -34,12 +34,12 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   if(new Set(ids).size!==ids.length||ids.length!==first.universeSize||hash(canonical([...ids].sort((a,b)=>a-b)))!==first.universeSha256)throw Error('Pessoas dos lotes não formam o universo declarado');
   const temporal=ordered[0].input.temporal;
   if(hash(canonical(temporal))!==first.temporalSha256||temporal.historySha256!==hash(canonical(history)))throw Error('Histórico de pessoas diverge do usado na coleta');
-  const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[],duplicateCompetences:{personId:number;month:number;reason:string;records:number;cents:number}[]=[];let cellTotal=0n,fixCount=0,fixDelta=0n;
+  const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[],duplicateCompetences:{personId:number;month:number;reason:DuplicateReason}[]=[];let cellTotal=0n,fixCount=0,fixDelta=0n;
   for(const l of ordered)for(const c of l.report.cells){
     if(c.status==='complete'||c.status==='no-expenses-confirmed'){
       if(c.status==='no-expenses-confirmed'&&c.records.length)throw Error('Célula sem despesas com registros');
       const fixed=c.records.map(fixSign);records.push(...fixed);cellTotal+=BigInt(c.totalCents??0);for(const r of fixed)if(r.sourceCents!==undefined){fixCount++;fixDelta+=BigInt(r.cents-r.sourceCents);}
-      if(c.duplicateReason){const flagged=fixed.filter(r=>r.duplicateFlag==='possible');duplicateCompetences.push({personId:c.personId,month:c.month,reason:c.duplicateReason,records:flagged.length,cents:flagged.reduce((n,r)=>n+r.cents,0)});}
+      if(c.duplicateReason)duplicateCompetences.push({personId:c.personId,month:c.month,reason:c.duplicateReason});
     }else if(c.status==='held-review'||c.status==='source-failure'){if(c.records.length)throw Error('Célula retida com registros');heldMonths[c.personId]=(heldMonths[c.personId]??0)+1;heldCompetences.push({personId:c.personId,month:c.month,reasons:[...c.reasons].sort()});}
     else throw Error('Situação de célula desconhecida');
   }

@@ -24,7 +24,7 @@ const apiRow=(month=1,overrides:Record<string,unknown>={})=>({ano:2025,mes:month
 const columns='ideCadastro;numAno;numMes;codLegislatura;txtDescricao;vlrLiquido;vlrDocumento;vlrGlosa;ideDocumento;txtFornecedor;txtCNPJCPF;urlDocumento;txtNumero;datEmissao;numLote;numParcela';
 const annualLine=(id=1,month=1,category='COMBUSTÍVEIS',amount='10.21',doc='10')=>`${id};2025;${month};57;${category};${amount};${amount};0;${doc};Empresa;11222333000181;;N1;2025-01-02T00:00:00;1;0`;
 const annual=(lines=[annualLine()])=>zipSync({'Ano-2025.csv':strToU8(columns+'\n'+lines.join('\n')+'\n')},{mtime:'2025-01-01'});
-async function setup(t:test.TestContext,reply?:(url:string,pass:number)=>unknown,fullYear=false,portal=false,tune?:(t:TemporalReport)=>void){
+async function setup(t:test.TestContext,reply?:(url:string,pass:number)=>unknown,fullYear=false,portal=false,tune?:(t:TemporalReport)=>void,audited=true){
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-expense-batch-')),key=randomBytes(32);t.after(()=>fs.rm(dir,{recursive:true,force:true}));
   const capture=(pass:number)=>new PeopleCapture(path.join(dir,'pass-'+pass),key,async url=>{
     const u=new URL(url),override=reply?.(url,pass);
@@ -35,7 +35,7 @@ async function setup(t:test.TestContext,reply?:(url:string,pass:number)=>unknown
   if(fullYear)for(const p of selectedTemporal.people)p.months=selectedScope.months.map(month=>({...p.months[0],month,start:new Date(Date.UTC(2025,month-1,1)).toISOString().slice(0,19),end:new Date(Date.UTC(2025,month,1)).toISOString().slice(0,19)}));
   const one=capture(1),two=capture(2),report=await collectExpenseBatch(selectedScope,selectedTemporal,hash('proposal'),one,two,{wait:async()=>{},portal});
   const read=async(s:{pass:number;file:string})=>open(await fs.readFile(path.join(dir,'pass-'+s.pass,s.file)),key);
-  assert.deepEqual((await auditExpenseBatch(report,selectedTemporal,selectedScope,hash('proposal'),read)).failures,[]);
+  if(audited)assert.deepEqual((await auditExpenseBatch(report,selectedTemporal,selectedScope,hash('proposal'),read)).failures,[]);
   return {dir,key,report,one,two,read,selectedScope,selectedTemporal};
 }
 test('expanded scope accepts arbitrary IDs/months and rejects duplicates, future months and query changes',()=>{
@@ -92,7 +92,7 @@ test('a matched official portal ledger publishes API-only SIGEPA duplicates flag
 test('a portal that disagrees or changes keeps the unresolved SIGEPA month held; an unavailable one publishes it flagged',async t=>{
   for(const mode of ['missing','changed','mismatch','no-identity'] as const){
     const r=await setup(t,(url,pass)=>url.endsWith('.zip')?mode==='no-identity'?annual():zipSync({'Ano-2025.csv':strToU8(columns+';nuDeputadoId\n'+annualLine()+';99\n')}):url.includes('/analitico?')?mode==='missing'&&pass===2?new Response('',{status:404}):new Response(portalHtml(mode==='mismatch'?[{}]:mode==='changed'&&pass===2?[{net:1022},{}]:[{},{}])):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(),apiRow(1,{codDocumento:'11',tipoDespesa:'PASSAGEM AÉREA - SIGEPA'}),apiRow(1,{codDocumento:'11',tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})],links:[]}:undefined,false,true);
-    const disagree=mode==='changed'||mode==='mismatch',held=r.report.cells[0];if(disagree){assert.equal(held.status,'held-review');assert.deepEqual(held.reasons,['ambiguous-identical-occurrences']);assert.deepEqual(held.records,[]);assert.equal(held.totalCents,null);assert.equal(held.duplicateReason,undefined);}else{assert.equal(held.status,'complete');assert.equal(held.duplicateReason,'ambiguous-identical-occurrences');}
+    const disagree=mode==='changed'||mode==='mismatch',held=r.report.cells[0];if(disagree){assert.equal(held.status,'held-review');assert.deepEqual(held.reasons,['portal-disagrees']);assert.deepEqual(held.records,[]);assert.equal(held.totalCents,null);assert.equal(held.duplicateReason,undefined);}else{assert.equal(held.status,'complete');assert.equal(held.duplicateReason,'ambiguous-identical-occurrences');}
     assert.equal(r.report.portalChecks[0].status,mode==='changed'?'changed':mode==='mismatch'?'mismatch':'unavailable');
   }
 });
@@ -146,7 +146,7 @@ test('independent financial audit rejects altered cents, false empty status, mis
   await assert.rejects(auditExpenseBatch(r.report,temporal,scope,hash('proposal'),async()=>strToU8('tampered')),/Hash/);
 });
 test('retired equation and SIGEPA policies are refused even if their content hash is recomputed',async t=>{
-  const r=await setup(t);Object.assign(r.report,{equationRule:'camara.ceap.correlated-net.v1',multiplicityRule:'camara.ceap.sigepa-annual-routes.v1'});r.report.contentSha256=expenseBatchContentId(r.report);const audit=await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read);assert.equal(audit.status,'failed');for(const code of ['equation-review-evidence','multiplicity-review-evidence'])assert.ok(audit.failures.some(f=>f.code===code));
+  const r=await setup(t);for(const multiplicityRule of ['camara.ceap.sigepa-annual-routes.v1','camara.ceap.sigepa-preserve-hold.v2']){Object.assign(r.report,{equationRule:'camara.ceap.correlated-net.v1',multiplicityRule});r.report.contentSha256=expenseBatchContentId(r.report);const audit=await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read);assert.equal(audit.status,'failed');for(const code of ['equation-review-evidence','multiplicity-review-evidence'])assert.ok(audit.failures.some(f=>f.code===code));}
 });
 test('a document numbered with a known private identifier is hidden, never written',async t=>{
   const r=await setup(t,url=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{numDocumento:'12345678901',cnpjCpfFornecedor:'12345678901'})],links:[]}:url.endsWith('.zip')?annual([annualLine().replace(';N1;',';12345678901;').replace('11222333000181','12345678901')]):undefined);
@@ -214,9 +214,9 @@ test('a SIGEPA ticket with a blank document is flagged when the API repeats it',
 });
 test('an offline re-projection with a missing preserved page fails instead of holding the month quietly',async t=>{
   const r=await setup(t),offline=(pass:number)=>new PeopleCapture(path.join(r.dir,'pass-'+pass),r.key,async()=>new Response('',{status:404}),async()=>{});
-  const ok=await collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true});assert.equal(ok.metrics.requests,0);
+  const ok=await collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true,previous:r.report});assert.equal(ok.metrics.requests,0);
   await fs.rm(path.join(r.dir,'pass-2',hash(expenseUrl(scope,1,1,2))+'.sealed'));
-  await assert.rejects(collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true}),/offline/);
+  await assert.rejects(collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true,previous:r.report}),/offline/);
 });
 test('the batch date is the latest capture time, so an offline re-projection keeps the original collection date',async t=>{
   const r=await setup(t),offline=(pass:number)=>new PeopleCapture(path.join(r.dir,'pass-'+pass),r.key,async()=>{throw Error('network forbidden');},async()=>{});
@@ -227,5 +227,29 @@ test('the batch date is the latest capture time, so an offline re-projection kee
 test('annual rows that differ only in the supplier stay held, while identical rows do not',async t=>{
   const line=(supplier:string,id:string)=>annualLine().replace('Empresa;11222333000181',`${supplier};${id}`);
   const {report}=await setup(t,url=>url.endsWith('.zip')?annual([line('A','12345678909'),line('B','98765432100')]):undefined);
-  assert.equal(cell(report).status,'held-review');assert.deepEqual(cell(report).reasons,['ambiguous-identical-occurrences']);assert.equal(cell(report).duplicateReason,undefined);
+  assert.equal(cell(report).status,'held-review');assert.deepEqual(cell(report).reasons,['supplier-only-difference']);assert.equal(cell(report).duplicateReason,undefined);
+});
+
+test('an unexpected error while checking a month holds it as a processing error, never as a duplicate',async t=>{
+  const {report}=await setup(t,firstMonth([null]),false,false,undefined,false);
+  assert.equal(cell(report).status,'held-review');assert.deepEqual(cell(report).reasons,['processing-error']);assert.equal(cell(report).duplicateReason,undefined);
+});
+test('a SIGEPA ticket with a blank document number is flagged when the API repeats it',async t=>{
+  const {report}=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,SIG).replace(';N1;',';;')]):firstMonth([apiRow(1,{tipoDespesa:SIG,numDocumento:'',numRessarcimento:'a'}),apiRow(1,{tipoDespesa:SIG,numDocumento:'',numRessarcimento:'b'})])(url));
+  const c=cell(report);assert.equal(c.status,'complete');assert.equal(c.duplicateReason,'sigepa-unit-unconfirmed');assert.equal(c.records.length,2);assert.ok(c.records.every((x:any)=>x.duplicateFlag==='possible'));
+});
+test('supplier-only rows plus a failing equation hold the same way in the collector and the audit',async t=>{
+  const line=(supplier:string,id:string)=>annualLine().replace('Empresa;11222333000181',`${supplier};${id}`);
+  const {report}=await setup(t,url=>url.endsWith('.zip')?annual([line('A','12345678909'),line('B','98765432100')]):firstMonth([apiRow(1,{valorDocumento:11})])(url));
+  assert.deepEqual(cell(report).reasons,['financial-normalization-failed']);
+});
+test('an outside-exercise month with repeated rows is held for the exercise, in the collector and the audit',async t=>{
+  const {report}=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(),annualLine()]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(),apiRow()],links:[]}:undefined,false,false,tr=>{tr.people[0].months[0].exercise='outside';});
+  assert.deepEqual(cell(report).reasons,['expense-outside-exercise']);assert.equal(cell(report).duplicateReason,undefined);assert.deepEqual(cell(report).records,[]);
+});
+test('an offline re-projection fails only on a failure the previous report did not have',async t=>{
+  const r=await setup(t,(url,pass)=>url.includes('/1/despesas')&&url.includes('mes=2&')&&pass===2?new Response('',{status:404}):undefined),offline=(pass:number)=>new PeopleCapture(path.join(r.dir,'pass-'+pass),r.key,async()=>new Response('',{status:404}),async()=>{});
+  assert.equal(cell(r.report,1,2).status,'source-failure');
+  const again=await collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true,previous:r.report});assert.equal(cell(again,1,2).status,'source-failure');
+  await assert.rejects(collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true}),/offline/);
 });

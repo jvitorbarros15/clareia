@@ -1,14 +1,12 @@
 import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
-import {canonical,hash,cents,validCnpj,oddId,occurrenceId,officialUrl,publicSupplier} from './model.ts';
+import {blank,canonical,hash,cents,validCnpj,oddId,occurrenceId,officialUrl,publicSupplier} from './model.ts';
 import {pairOccurrences} from './reconcile.ts';
 import type {Scope,Expense,SourceRef,FinancialBasis} from './model.ts';
 
 // Which record types may exist in one source only. Rule and rationale: real/README.md.
 const ANNUAL_ONLY=new Set(['TELEFONIA','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA']),API_ONLY=new Set(['PASSAGEM AÉREA - SIGEPA']);
-// normalizeAnnual fills blanks with this label; the API keeps them empty, and a blank must not read as a conflict.
-const raw=(text:string)=>text==='Não informado'?'':text;
-const occurrence=(r:Expense)=>({personId:r.personId,month:r.month,documentId:raw(r.documentId),category:r.category,cents:BigInt(r.cents),number:raw(r.documentNumber),date:r.date?.slice(0,10)||null,lot:r.lot||'',record:r});
+const occurrence=(r:Expense)=>({personId:r.personId,month:r.month,documentId:blank(r.documentId),category:r.category,cents:BigInt(r.cents),number:blank(r.documentNumber),date:r.date?.slice(0,10)||null,lot:r.lot||'',record:r});
 export function unionRecords(annual:Expense[],api:Expense[]) {
   const pairing=pairOccurrences(annual.map(occurrence),api.map(occurrence));
   if(pairing.fieldMismatches.length)throw new Error(`${pairing.fieldMismatches.length} pares divergem em número ou data; publicação retida`);

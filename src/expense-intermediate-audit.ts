@@ -38,9 +38,11 @@ export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csv
   const occurrence=hash(canonical({personId:id,raw:verified?r:{...r,[annual?'txtCNPJCPF':'cnpjCpfFornecedor']:null,[annual?'txtFornecedor':'nomeFornecedor']:null}}));
   return {id:occurrence,personId:id,year,month,category,supplier:identity.length===11?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,...(odd?{supplierIdOdd:true as const}:{}),documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
 }
+// A blank document is 'Não informado' in the annual file and '' in the API.
+const blank=(s:string)=>s==='Não informado'?'':s;
 // Independent of markDuplicates: repeated rows stay published; identical ones get distinct ids by occurrence order.
 function flagRepeats(rs:Expense[]):Expense[]{
-  const ticket='PASSAGEM AÉREA - SIGEPA',blank=(s:string)=>s==='Não informado'?'':s,same=(a:Expense,b:Expense)=>a.category===b.category&&blank(a.documentId)===blank(b.documentId)&&blank(a.documentNumber)===blank(b.documentNumber)&&a.cents===b.cents&&(a.category===ticket||canonical([a.date,a.lot,a.supplier,a.documentCents,a.disallowedCents])===canonical([b.date,b.lot,b.supplier,b.documentCents,b.disallowedCents]));
+  const ticket='PASSAGEM AÉREA - SIGEPA',same=(a:Expense,b:Expense)=>a.category===b.category&&blank(a.documentId)===blank(b.documentId)&&blank(a.documentNumber)===blank(b.documentNumber)&&a.cents===b.cents&&(a.category===ticket||canonical([a.date,a.lot,a.supplier,a.documentCents,a.disallowedCents])===canonical([b.date,b.lot,b.supplier,b.documentCents,b.disallowedCents]));
   const used=new Map<string,number>();
   return rs.map(r=>{const n=used.get(r.id)??0;used.set(r.id,n+1);const id=n?hash(canonical({id:r.id,occurrence:n})):r.id;return {...r,id,...(r.supplierKey===r.id?{supplierKey:id}:{}),...(rs.filter(o=>same(o,r)).length>1?{duplicateFlag:'possible' as const}:{})};});
 }
@@ -139,14 +141,14 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
       if(!apiStable)reasons=['api-changed-between-passes'];
       else if(foreignMonth)reasons=['api-row-outside-competence'];
       else if(budgetBlocked)reasons=['installment-document-review'];
-      else if(portalDisagrees)reasons=['ambiguous-identical-occurrences'];
+      else if(portalDisagrees)reasons=['portal-disagrees'];
       else{
         dup=unresolved.some(r=>!portalCovered.has(rowKey(r)))||duplicates(annual)?'ambiguous-identical-occurrences':repeatedTicket||b.some(r=>(apiCounts.get(canonical(r.raw))??0)>1)?'sigepa-unit-unconfirmed':null;
         let ar:Expense[]=[],br:Expense[]=[];
         try{ar=annual.map(r=>project(r,c.personId,scope,'annual',second.csvHash,permission('annual',c.personId,r)));br=b.map(r=>project(r,c.personId,scope,'api',undefined,permission('api',c.personId,r)));}catch{reasons=['financial-normalization-failed'];}
-        if(!reasons.length){const first=new Map<string,string>();annual.forEach((r,i)=>{const raw=canonical(r.raw),seen=first.get(ar[i].id);if(seen!==undefined&&seen!==raw){reasons=['ambiguous-identical-occurrences'];dup=null;}first.set(ar[i].id,raw);});}
+        if(!reasons.length){const first=new Map<string,string>();annual.forEach((r,i)=>{const raw=canonical(r.raw),seen=first.get(ar[i].id);if(seen!==undefined&&seen!==raw){reasons=['supplier-only-difference'];dup=null;}first.set(ar[i].id,raw);});}
         if(!reasons.length){
-          const blank=(s:string)=>s==='Não informado'?'':s,key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
+          const key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
           for(const r of ar){const list=pool.get(key(r));if(list?.length)matches.push({a:r,b:list.shift()!});else left.push(r);}
           const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right)};
@@ -154,12 +156,10 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
           else{
             records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))];
             if(dup)records=flagRepeats(records);
-            if(dup&&records.filter(r=>r.duplicateFlag==='possible').length<2){records=[];total=null;reasons=['ambiguous-identical-occurrences'];dup=null;}
-            else{
             records=records.map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));
             total=Number(records.reduce((n,r)=>n+BigInt(r.cents),0n));if(!Number.isSafeInteger(total))throw Error('Total independente fora da precisão segura');status=records.length?'complete':'no-expenses-confirmed';
             if(records.length&&c.exercise==='outside'){records=[];total=null;status='held-review';reasons=['expense-outside-exercise'];dup=null;}
-            }
+            else if(dup&&records.filter(r=>r.duplicateFlag==='possible').length<2){records=[];total=null;status='held-review';reasons=['duplicate-unconfirmed'];dup=null;}
           }
         }
       }

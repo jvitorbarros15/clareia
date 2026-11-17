@@ -47,7 +47,7 @@ try{
   await fs.writeFile(path.join(root,'run.json'),JSON.stringify({...manifest,status:'collecting'},null,2));
   try{
     const offline=args.includes('--offline'),capture=(pass:number)=>new PeopleCapture(path.join(root,'pass-'+pass),key,offline?async()=>new Response('',{status:404}):undefined);
-    const report=await collectExpenseBatch(scope,temporal,hash(canonical(proposal)),capture(1),capture(2),{workers,portal:portalRequested,offline,wait:offline?async()=>{}:undefined,progress:(pass,done,total)=>{if(done%12===0||done===total)console.log(`Despesas 2025: passe ${pass}, ${done}/${total} competências`);}});
+    const report=await collectExpenseBatch(scope,temporal,hash(canonical(proposal)),capture(1),capture(2),{workers,portal:portalRequested,offline,previous:offline?await fs.readFile(path.join(root,'batch.json'),'utf8').then(JSON.parse).catch(()=>undefined):undefined,wait:offline?async()=>{}:undefined,progress:(pass,done,total)=>{if(done%12===0||done===total)console.log(`Despesas 2025: passe ${pass}, ${done}/${total} competências`);}});
     const version=hash(canonical(report)),folder=path.join(root,'reports');await fs.mkdir(folder,{recursive:true});
     await fs.writeFile(path.join(folder,version+'.batch.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(root,'batch.json'),JSON.stringify(report,null,2));
     const coverage=report.cells.reduce<Record<string,number>>((out,c)=>{out[c.status]=(out[c.status]||0)+1;return out;},{});
