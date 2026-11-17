@@ -39,7 +39,7 @@ A versão preliminar baseada apenas na API foi preservada no banco, mas retida n
 
 ### As 15 ocorrências, registro por registro
 
-`npm run verify:api-annual` compara as páginas da API e o CSV preservados na execução publicada (`data/runs/9d9bdb37-…`), sem reutilizar o normalizador. Resultado: 179 pares exatos (pessoa, competência, documento, categoria e valor líquido; número, emissão e lote também conferem), 15 ocorrências só no arquivo, nenhuma só na API.
+No piloto, um script de conferência (removido depois) comparou as páginas da API e o CSV preservados na execução publicada, sem reutilizar o normalizador. Resultado: 179 pares exatos (pessoa, competência, documento, categoria e valor líquido; número, emissão e lote também conferem), 15 ocorrências só no arquivo, nenhuma só na API.
 
 | Grupo no arquivo anual | Ocorrências | Soma líquida | Característica |
 |---|---:|---:|---|
@@ -88,7 +88,7 @@ Conferência de 04/11/2026 pelas rotas do servidor: as duas versões do arquivo 
 
 ## Retomada e evidência
 
-Cada execução tem `data/runs/<run-id>/manifest.json`, respostas JSON originais, metadados, dois ZIPs anuais e eventuais relatórios de falha. Os arquivos brutos podem conter identificadores pessoais e **não são versionados nem servidos pelo site**.
+As coletas atuais ficam em `data/private/`, com as respostas originais, os metadados e os relatórios de cada execução. Os arquivos brutos podem conter identificadores pessoais e **não são versionados nem servidos pelo site**.
 
 Cada registro público aponta para o arquivo original, hash do CSV e posição da linha sem o cabeçalho, começando em zero. O comprovante é um link informado pela fonte, não uma auditoria do documento.
 
@@ -97,12 +97,6 @@ Cada registro público aponta para o arquivo original, hash do CSV e posição d
 ```sh
 npm run typecheck
 npm test
-```
-
-Com o servidor desligado:
-
-```sh
-npm run verify:api-annual
 ```
 
 Com o servidor ativo:
@@ -123,7 +117,8 @@ Relatórios e screenshots ficam em `output/qa/`, ignorado pelo Git. Se a reconci
 - `data/<publicacao>/index.json`: recorte, pessoas, conferências e deputados sem dados.
 - `data/<publicacao>/deputados/<id>/despesas.json` e `.csv`: registros de cada deputado, com IDs e proveniência.
 - Retratos oficiais preservados em `real/portraits/`; origem e data em `sources.json`. `npm run cache:portraits` atualiza as imagens com o servidor ativo.
-- [Arquivo anual oficial](https://www.camara.leg.br/cotas/Ano-2025.csv.zip)- [Significado dos campos CEAP](https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html)
+- [Arquivo anual oficial](https://www.camara.leg.br/cotas/Ano-2025.csv.zip)
+- [Significado dos campos CEAP](https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html)
 - [Contrato da API](https://dadosabertos.camara.leg.br/api/v2/api-docs)
 
 ## Limites e próximos passos

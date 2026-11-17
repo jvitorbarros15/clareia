@@ -41,7 +41,7 @@ A interface combina direção editorial, retratos, gráficos interativos e a per
 
 ### Cobertura atual
 
-Esta `main` contém um **piloto com dados reais de três deputados, em janeiro e fevereiro de 2025**, na legislatura 57.
+O site publicado cobre os deputados da legislatura 57 em 2025. O banco local de desenvolvimento usa um recorte de três deputados, em janeiro e fevereiro de 2025.
 
 - A amostra é técnica: as ordenações não representam um ranking nacional.
 - Os valores medem despesas registradas na CEAP no período, não o custo total nem a qualidade de um mandato.
@@ -91,7 +91,7 @@ Abra **[http://127.0.0.1:4174](http://127.0.0.1:4174)**.
 
 Cobertura de pessoas, projetos, votações e emendas seguem o mesmo princípio, com comandos próprios: `collect:people`, `collect:bills`, `collect:votes` e `collect:amendments` geram e auditam a coleta; `publish:people`, `publish:bills`, `publish:votes` e `publish:amendments` aceitam `--dry-run` para conferir e `--approve` para ativar. Sem `DATABASE_URL`, os comandos de publicação exigem `--local`.
 
-O banco local fica em `data/local/postgres`; as capturas da coleta, em `data/runs/`. Ambos são ignorados pelo Git. Após editar a interface, execute `npm run build:site` novamente e recarregue a página. Interrompa o servidor antes de repetir a sequência de coleta, auditoria e build.
+O banco local fica em `data/local/postgres`; as capturas da coleta, em `data/private/`. Ambos são ignorados pelo Git. Após editar a interface, execute `npm run build:site` novamente e recarregue a página. Interrompa o servidor antes de repetir a sequência de coleta, auditoria e build.
 
 ### Configuração opcional
 
@@ -118,7 +118,6 @@ Para conferir os dados locais coletados:
 
 ```sh
 npm run verify:expenses:intermediate -- --local --run ID
-npm run verify:api-annual
 ```
 
 Para testar a interface, instale a dependência opcional de navegador e mantenha `npm run dev` ativo em outro terminal:
