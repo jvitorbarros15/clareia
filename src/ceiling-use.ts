@@ -11,8 +11,8 @@ export type CeilingUse=
 export function ceilingUse(months:UseMonth[],ceiling:UseCeiling|null,coverageApproved:boolean):CeilingUse{
   const counted:CountedMonth[]=[],excluded:Excluded[]=[],outside:number[]=[],missing:number[]=[];
   for(const m of months){
-    if(coverageApproved&&m.exercise==='outside'&&m.records===0){outside.push(m.month);continue;}
     if(m.held){excluded.push({month:m.month,reason:'held'});continue;}
+    if(coverageApproved&&m.exercise==='outside'&&m.records===0){outside.push(m.month);continue;}
     if(coverageApproved&&m.exercise==='partial'){excluded.push({month:m.month,reason:'partial'});continue;}
     // Only a month confirmed as fully in office has a known ceiling; anything else leaves the figure unconfirmed.
     if(coverageApproved&&m.exercise!=='full'){missing.push(m.month);continue;}
