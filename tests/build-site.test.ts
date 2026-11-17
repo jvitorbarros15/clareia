@@ -12,7 +12,7 @@ import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {storePeopleCoverage} from '../src/people-publication.ts';
 import type {PeopleCoverage} from '../src/people-publication.ts';
-import {assertSuppliersMatchSummary,buildSiteSummary,buildSupplierSummary} from '../src/site-summary.ts';
+import {assertNamesInData,assertSuppliersMatchSummary,buildSiteSummary,buildSupplierSummary} from '../src/site-summary.ts';
 import {canonical,hash} from '../src/model.ts';
 
 function record(cents:number,personId:number,index:number):Expense{
@@ -215,32 +215,52 @@ test('supplier rows that disagree with the monthly cells are refused',()=>{
   assert.throws(()=>assertSuppliersMatchSummary(summary,missing),/pessoas do resumo/);
   assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,publicationId:'x'}),/outra versão/);
 });
-test('a CNPJ with many spellings is one supplier named by its largest spelling, and an override wins',()=>{
-  const cnpj=(cents:number,i:number,supplier:string,date:string,key='K1'):Expense=>({...record(cents,1,i),supplier,supplierKey:key,supplierVerified:true,date});
-  const records=[cnpj(100,0,'TAM','2025-01-05T10:00:00'),cnpj(200,1,'LATAM Airlines Brasil','2025-01-20T10:00:00'),cnpj(300,2,'Cia Aérea - TAM','2025-01-10T10:00:00')],summary=buildSiteSummary(summaryInput(records,600));
+const K=(c:string)=>c.repeat(64),cnpj=(cents:number,i:number,supplier:string,date:string|null='2025-01-05',key=K('a')):Expense=>({...record(cents,1,i),supplier,supplierKey:key,supplierVerified:true,date});
+const supplierNamesOf=(records:Expense[],names={})=>buildSupplierSummary(buildSiteSummary(summaryInput(records,records.reduce((n,r)=>n+r.cents,0))),records,names).suppliers;
+test('a CNPJ with many spellings is one supplier named by its most frequent spelling, and an override wins',()=>{
+  const records=[cnpj(100,0,'TAM','2025-01-05T10:00:00'),cnpj(200,1,'LATAM Airlines Brasil','2025-01-20T10:00:00'),cnpj(300,2,'Cia Aérea - TAM','2025-01-10T10:00:00'),cnpj(50,3,'TAM','2025-01-11T10:00:00')],summary=buildSiteSummary(summaryInput(records,650));
   const grouped=buildSupplierSummary(summary,records);
-  assert.deepEqual(grouped.suppliers,['Cia Aérea - TAM']);
-  assert.deepEqual(grouped.people['1'],[[1,0,0,600,3]]);
-  assert.deepEqual(grouped.aliases,{K1:0});
-  assert.deepEqual(buildSupplierSummary(summary,records,{K1:{name:'Latam'}}).suppliers,['Latam']);
-  const tie=[cnpj(100,0,'B','2025-01-05'),cnpj(100,1,'A','2025-01-05')],stray=[cnpj(500,0,'EMPRESA LTDA','2025-01-05'),cnpj(10,1,'FULANO DE TAL','2025-02-05')];
-  assert.deepEqual(buildSupplierSummary(buildSiteSummary(summaryInput(stray,510)),stray).suppliers,['EMPRESA LTDA']);
-  assert.deepEqual(buildSupplierSummary(buildSiteSummary(summaryInput(tie,200)),tie).suppliers,['A']);
+  assert.deepEqual(grouped.suppliers,['TAM']);
+  assert.deepEqual(grouped.people['1'],[[1,0,0,650,4]]);
+  assert.deepEqual(grouped.aliases,{[K('a')]:0});
+  assert.deepEqual(buildSupplierSummary(summary,records,{[K('a')]:{name:'Latam'}}).suppliers,['Latam']);
+});
+test('the display name falls back by records, absolute value, date and then alphabet, and a single-spelling CNPJ stays out of aliases',()=>{
+  assert.deepEqual(supplierNamesOf([cnpj(1000,0,'ONE'),cnpj(10,1,'TWO'),cnpj(10,2,'TWO')]),['TWO']);
+  assert.deepEqual(supplierNamesOf([cnpj(-500,0,'EMPRESA LTDA'),cnpj(-100,1,'EMPRESA LTDA'),cnpj(10,2,'FULANO DE TAL')]),['EMPRESA LTDA']);
+  assert.deepEqual(supplierNamesOf([cnpj(-500,0,'S1'),cnpj(100,1,'S2')]),['S1']);
+  assert.deepEqual(supplierNamesOf([cnpj(100,0,'OLD','2025-01-01'),cnpj(100,1,'NEW','2025-02-01')]),['NEW']);
+  assert.deepEqual(supplierNamesOf([cnpj(100,0,'B'),cnpj(100,1,'A')]),['A']);
+  const one=[cnpj(100,0,'SOZINHO'),cnpj(100,1,'SOZINHO')];
+  assert.deepEqual(buildSupplierSummary(buildSiteSummary(summaryInput(one,200)),one).aliases,{});
 });
 test('the same name under two CNPJs stays two suppliers numbered by key, a typed-name entry keeps the plain name, and a person is one line',()=>{
-  const cnpj=(cents:number,i:number,key:string):Expense=>({...record(cents,1,i),supplier:'POSTO',supplierKey:key,supplierVerified:true}),person=(cents:number,i:number):Expense=>({...record(cents,1,i),supplier:'Fornecedor pessoa física',supplierKey:'p'+i});
-  const records=[cnpj(100,0,'A'),cnpj(300,1,'B'),{...record(50,1,2),supplier:'POSTO'},person(10,3),person(20,4)],summary=buildSiteSummary(summaryInput(records,480));
+  const posto=(cents:number,i:number,key:string)=>cnpj(cents,i,'POSTO',null,key),person=(cents:number,i:number):Expense=>({...record(cents,1,i),supplier:'Fornecedor pessoa física',supplierKey:'p'+i});
+  const records=[posto(100,0,K('a')),posto(300,1,K('b')),{...record(50,1,2),supplier:'POSTO'},person(10,3),person(20,4)],summary=buildSiteSummary(summaryInput(records,480));
   const grouped=buildSupplierSummary(summary,records);
   assert.deepEqual(grouped.suppliers,['Fornecedor pessoa física','POSTO','POSTO · 2','POSTO · 3']);
   assert.deepEqual(grouped.people['1'],[[1,0,0,30,2],[1,0,1,50,1],[1,0,2,100,1],[1,0,3,300,1]]);
-  assert.deepEqual(grouped.aliases,{A:2,B:3});
-  const cells=grouped.people['1'].reduce((n,c)=>n+c[3],0);assert.equal(cells,480);
+  assert.deepEqual(grouped.aliases,{[K('a')]:2,[K('b')]:3});
+  const taken=[posto(100,0,K('a')),posto(100,1,K('b')),{...record(50,1,2),supplier:'POSTO · 2'}];
+  assert.deepEqual(supplierNamesOf(taken),['POSTO','POSTO · 2','POSTO · 3']);
 });
-test('supplier checks refuse repeated names, unused suppliers and CPFs in a name',()=>{
-  const records=[record(100,1,0),{...record(50,1,1),supplier:'Outro'}],summary=buildSiteSummary(summaryInput(records,150)),good=buildSupplierSummary(summary,records);
+test('reviewed names with a bad key, an absent CNPJ, a repeated name or a typed-name clash are refused',()=>{
+  const records=[cnpj(100,0,'A',null,K('a')),cnpj(100,1,'B',null,K('b')),{...record(50,1,2),supplier:'Latam'}];
+  assert.throws(()=>supplierNamesOf(records,{x:{name:'Z'}}),/Chave de nome/);
+  assert.throws(()=>assertNamesInData({[K('c')]:{name:'Z'}},records),/ausente dos dados/);
+  assert.doesNotThrow(()=>assertNamesInData({[K('a')]:{name:'Z'}},records));
+  assert.throws(()=>supplierNamesOf(records,{[K('a')]:{name:'Z'},[K('b')]:{name:'Z'}}),/repetidos/);
+  assert.throws(()=>supplierNamesOf(records,{[K('a')]:{name:'Latam'}}),/digitado sem CNPJ/);
+});
+test('supplier checks refuse repeated names, unused suppliers, CPFs in a name and indexes out of range',()=>{
+  const records=[cnpj(100,0,'A',null,K('a')),{...record(50,1,1),supplier:'Outro'}],summary=buildSiteSummary(summaryInput(records,150)),good=buildSupplierSummary(summary,records);
   assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,suppliers:['Fornecedor','Fornecedor']}),/repetidos/);
   assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,suppliers:[...good.suppliers,'Sobra']}),/sem células/);
   assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,suppliers:['Fornecedor','Fulano 123.456.789-09']}),/Identificador privado/);
+  assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,aliases:{[K('a')]:9}}),/Apelido de fornecedor fora/);
+  assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,aliases:{x:0}}),/Chave de apelido/);
+  const wild=structuredClone(good);wild.people['1'][0][2]=9;
+  assert.throws(()=>assertSuppliersMatchSummary(summary,wild),/Fornecedor fora da lista/);
 });
 test('a private supplier keeps its label in the supplier file',()=>setup(async(db,dist,portraits)=>{
   const a=version([{...record(100,1,0),supplier:'Fornecedor pessoa física'}]);

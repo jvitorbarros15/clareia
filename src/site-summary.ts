@@ -13,7 +13,7 @@ export type PersonSummary={id:number;name:string;photo:string|null;cents:number;
 export type SiteSummary={schema:'clareia.site-summary.v1';publicationId:string;coverageId:string|null;billsId:string|null;billsYears:number[];votesId:string|null;votesYears:number[];ceiling:SiteCeiling|null;scope:Scope;totalCents:number;records:number;categories:string[];people:PersonSummary[]};
 // aliases: supplierKey -> supplier index, only for CNPJs whose records carry a spelling other than the display name; the page resolves a record's name through it.
 export type SupplierSummary={schema:'clareia.supplier-summary.v1';publicationId:string;categories:string[];suppliers:string[];aliases:Record<string,number>;people:Record<string,SupplierCell[]>};
-export type SupplierNames=Record<string,{name:string;spellings?:string[]}>;
+export type SupplierNames=Record<string,{name:string}>;
 
 const safe=(n:bigint):number=>{if(n>BigInt(Number.MAX_SAFE_INTEGER)||n<BigInt(Number.MIN_SAFE_INTEGER))throw new Error('Total do resumo fora da precisão segura');return Number(n);};
 const sum=(rows:Expense[]):number=>safe(rows.reduce((n,r)=>n+BigInt(r.cents),0n));
@@ -57,18 +57,34 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
   return {schema:'clareia.site-summary.v1',publicationId,coverageId,billsId,billsYears:input.billsYears??[],votesId:input.votesId??null,votesYears:input.votesYears??[],ceiling,scope,totalCents,records:records.length,categories:categoryList,people:summaries};
 }
 
-// A validated CNPJ is one supplier whatever its spelling; the rest are grouped by typed name. Display name: reviewed override, else the spelling with the largest total value (then most records, latest date, alphabetical), so a stray typed name cannot become the label.
+// A validated CNPJ is one supplier whatever its spelling; the rest are grouped by typed name. Display name: reviewed override, else the spelling with the most records (then largest absolute value, latest date, alphabetical), so a stray typed name cannot easily become the label.
 const entryOf=(r:Expense):string=>r.supplierVerified?'k:'+r.supplierKey:'n:'+r.supplier;
+const KEY=/^[0-9a-f]{64}$/;
+function assertNames(names:SupplierNames,records:Expense[]):void{
+  const typed=new Set(records.filter(r=>!r.supplierVerified).map(r=>r.supplier)),used=new Set<string>();
+  for(const [key,{name}] of Object.entries(names)){
+    if(!KEY.test(key))throw new Error('Chave de nome revisado inválida');
+    if(used.has(name))throw new Error('Nomes revisados repetidos: '+name);
+    if(typed.has(name))throw new Error('Nome revisado igual a um nome digitado sem CNPJ: '+name);
+    used.add(name);
+  }
+}
+// Only meaningful on the full data: a partial build legitimately lacks most reviewed CNPJs.
+export function assertNamesInData(names:SupplierNames,records:Expense[]):void{
+  const verified=new Set(records.filter(r=>r.supplierVerified).map(r=>r.supplierKey));
+  for(const key of Object.keys(names))if(!verified.has(key))throw new Error('Nome revisado de um CNPJ ausente dos dados: '+key);
+}
 export function supplierDisplayNames(records:Expense[],names:SupplierNames={}):Map<string,string>{
+  assertNames(names,records);
   const entries=[...group(records,entryOf)].map(([id,list])=>{
-    const spellings=new Map<string,{cents:number;n:number;date:string}>(),verified=list[0].supplierVerified;
-    for(const r of list){const t=spellings.get(r.supplier)??{cents:0,n:0,date:''};t.cents+=r.cents;t.n++;if((r.date??'')>t.date)t.date=r.date??'';spellings.set(r.supplier,t);}
-    const main=[...spellings].sort(([a,x],[b,y])=>y.cents-x.cents||y.n-x.n||(y.date>x.date?1:y.date<x.date?-1:0)||(a<b?-1:a>b?1:0))[0][0];
-    return {id,verified,name:verified?names[list[0].supplierKey]?.name??main:list[0].supplier};
+    const spellings=new Map<string,{abs:number;n:number;date:string}>(),verified=list[0].supplierVerified;
+    for(const r of list){const t=spellings.get(r.supplier)??{abs:0,n:0,date:''};t.abs+=Math.abs(r.cents);t.n++;if((r.date??'')>t.date)t.date=r.date??'';spellings.set(r.supplier,t);}
+    const main=[...spellings].sort(([a,x],[b,y])=>y.n-x.n||y.abs-x.abs||(y.date>x.date?1:y.date<x.date?-1:0)||(a<b?-1:a>b?1:0))[0][0];
+    return {id,verified,name:verified?(Object.hasOwn(names,list[0].supplierKey)?names[list[0].supplierKey].name:main):list[0].supplier};
   });
   const byName=new Map<string,typeof entries>(),taken=new Set(entries.map(e=>e.name)),out=new Map<string,string>();
   for(const e of entries){const list=byName.get(e.name);if(list)list.push(e);else byName.set(e.name,[e]);}
-  // Same name, different CNPJ: typed-name entries keep the plain name, then CNPJs in supplierKey order, so a supplier keeps its number; the others get " · 2", " · 3"…
+  // Same name, different CNPJ: typed-name entries keep the plain name, then CNPJs in supplierKey order (deterministic within a publication, not guaranteed across publications); the others get " · 2", " · 3"…
   for(const [name,same] of byName){
     same.sort((a,b)=>Number(a.verified)-Number(b.verified)||(a.id<b.id?-1:1));
     let n=1;
@@ -99,6 +115,7 @@ export function assertSuppliersMatchSummary(summary:SiteSummary,suppliers:Suppli
   if(Object.keys(suppliers.people).length!==summary.people.length)throw new Error('Fornecedores divergem das pessoas do resumo');
   if(new Set(suppliers.suppliers).size!==suppliers.suppliers.length)throw new Error('Nomes de fornecedores repetidos');
   if(suppliers.suppliers.some(n=>maskPersonalId(n)!==n))throw new Error('Identificador privado no nome de um fornecedor');
+  if(Object.keys(suppliers.aliases).some(k=>!KEY.test(k)))throw new Error('Chave de apelido de fornecedor inválida');
   if(Object.values(suppliers.aliases).some(i=>!Number.isInteger(i)||i<0||i>=suppliers.suppliers.length))throw new Error('Apelido de fornecedor fora da lista');
   const used=new Set<number>();
   for(const person of summary.people){

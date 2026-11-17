@@ -14,7 +14,7 @@ const MONTH_ABBR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','N
 const ICON='/icon-512.png';
 export const SHARE_WIDTH=1200,SHARE_HEIGHT=630;
 
-export type SiteOptions={siteUrl?:string;sitemap?:boolean;noindex?:boolean;shareImages?:boolean};
+export type SiteOptions={siteUrl?:string;sitemap?:boolean;noindex?:boolean;shareImages?:boolean;fullData?:boolean};
 export type ResolvedOptions={siteUrl:string;sitemap:boolean;noindex:boolean;shareImages:boolean};
 
 export function resolveOptions(options:SiteOptions={}):ResolvedOptions{
