@@ -28,7 +28,11 @@ test('11 digits is a person; a valid CNPJ is a company even with a leading 000; 
   assert.equal(company.supplier,'BANCO TESTE');assert.equal(company.supplierVerified,true);assert.equal(company.supplierIdOdd,undefined);
   for(const id of ['1114447773','1112345678901','11111111111111','000'+CPF]){
     const r=normalize(row(id,'MARIA TESTE'),1,scope,source);
-    assert.equal(r.supplier,'Fornecedor pessoa física');assert.equal(r.supplierVerified,false);assert.equal(r.supplierIdOdd,true);assert.equal(r.receipt,null);
+    assert.equal(r.supplier,'Fornecedor não identificado na fonte');assert.equal(r.supplierVerified,false);assert.equal(r.supplierIdOdd,true);assert.equal(r.receipt,null);
+  }
+  for(const name of ['CELULAR FUNCIONAL','EMPRESA TESTE LTDA','Tam Linhas Aéreas S.A']){
+    const r=normalize({...row('1112345678901',name),urlDocumento:'https://www.camara.leg.br/x.pdf'},1,scope,source);
+    assert.equal(r.supplier,name);assert.equal(r.supplierVerified,false);assert.equal(r.supplierIdOdd,true);assert.ok(r.receipt);
   }
   const person=normalize(row(CPF,'MARIA TESTE'),1,scope,source);assert.equal(person.supplier,'Fornecedor pessoa física');assert.equal(person.supplierIdOdd,undefined);
   assert.equal(isPersonId(CPF),true);assert.equal(isPersonId(CNPJ),false);assert.equal(oddId(''),false);assert.equal(oddId(CNPJ),false);assert.equal(oddId('11111111111111'),true);

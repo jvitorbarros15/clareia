@@ -24,16 +24,19 @@ export function snapshotId(snapshot:object):string{
 // Some suppliers are individuals with a CPF inside the trade name; it never reaches a published record.
 export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
 // An individual paid by the quota is not a public figure: the name stays out until a legal opinion says otherwise.
-// 11 digits is a CPF. Any other id that is not a valid CNPJ (short, padded, letters stripped) is withheld like a person and listed for review.
+// 11 digits is a CPF. Any other id that is not a valid CNPJ (short, padded, letters stripped) is listed for review, and its name stays only if it looks like a company.
 export const isPersonId=(id:string)=>id.length===11;
 export const oddId=(id:string)=>id.length>0&&id.length!==11&&!validCnpj(id);
 // The occurrence id is an unsalted hash, so for anyone but a verified CNPJ the supplier id and name stay out of it: a guessed name would otherwise let the ~10^9 CPFs be tried against the published id.
 export function occurrenceId(personId:number,raw:Record<string,unknown>,verified:boolean,idField:string,nameField:string):string{
   return hash(canonical({personId,raw:verified?raw:{...raw,[idField]:null,[nameField]:null}}));
 }
+export const COMPANY_NAME=/\b(LTDA|S\.A|SA|S\/A|EIRELI|EPP|ME|CIA|COMPANHIA|LINHAS A[ÉE]REAS|AIRLINES|HOTEL|TELEF\w*|CELULAR FUNCIONAL)\b/;
 export function publicSupplier(name:string,rawId:string):{name:string;key:'cnpj'|'person'|'unknown'}{
   const id=rawId.replace(/\D/g,'');
-  if(isPersonId(id)||oddId(id))return {name:'Fornecedor pessoa física',key:'person'};
+  if(isPersonId(id))return {name:'Fornecedor pessoa física',key:'person'};
+  // Placeholder ids are shared by unrelated suppliers: the typed name stays only when it looks like a company; key 'person' also keeps the receipt link out.
+  if(oddId(id)&&!COMPANY_NAME.test(name.toUpperCase()))return {name:'Fornecedor não identificado na fonte',key:'person'};
   return {name:maskPersonalId(name||'Fornecedor não informado'),key:validCnpj(id)?'cnpj':'unknown'};
 }
 // The Câmara API drops connections for tens of seconds at a time; a run is long, so retries wait long.
