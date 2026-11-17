@@ -67,9 +67,9 @@ export type Person={id:number;name:string;photo:string|null;sourceUrl:string;pro
 export const UFS=new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
 export type SourceRef={url:string;sha256?:string;row:number;fetchedAt:string};
 export type FinancialBasis='reported-installment'|'balanced-document-split';
-export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey?:string;supplierVerified:boolean;supplierIdOdd?:true;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis;sourceCents?:number;note?:string};
+export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey?:string;supplierVerified:boolean;supplierIdOdd?:true;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis;sourceCents?:number;note?:string;duplicateFlag?:'possible'};
 export type Page={url:string;sha256:string;file:string;fetchedAt:string;pass:number;count:number|null};
-export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];signFix?:{count:number;deltaCents:number};lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
+export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];duplicateCompetences?:{personId:number;month:number;reason:DuplicateReason}[];signFix?:{count:number;deltaCents:number};lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
 
 export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|null {
   try {const u=new URL(input);if(u.protocol!=='https:'&&u.protocol!=='http:')return null;
@@ -94,6 +94,15 @@ export function validCnpj(id:string):boolean {
   if(!/^\d{14}$/.test(id)||/^(\d)\1+$/.test(id))return false;
   const check=(s:string)=>{let weight=s.length-7;const sum=[...s].reduce((n,c)=>{n+=Number(c)*weight;weight=weight===2?9:weight-1;return n;},0);const mod=sum%11;return mod<2?0:11-mod;};
   return check(id.slice(0,12))===Number(id[12])&&check(id.slice(0,13))===Number(id[13]);
+}
+// A blank document is 'Não informado' in the annual file and '' in the API.
+export const blank=(s:string)=>s==='Não informado'?'':s;
+export type DuplicateReason='sigepa-unit-unconfirmed'|'ambiguous-identical-occurrences';
+// Repeated rows stay published, as the Câmara counts them: each gets a flag, and identical rows get ids told apart by occurrence order.
+export function markDuplicates(records:Expense[]):Expense[]{
+  const key=(r:Expense)=>canonical(r.category==='PASSAGEM AÉREA - SIGEPA'?[r.category,blank(r.documentId),blank(r.documentNumber),r.cents]:[r.category,blank(r.documentId),blank(r.documentNumber),r.cents,r.date,r.lot,r.supplier,r.documentCents,r.disallowedCents]);
+  const size=new Map<string,number>(),seen=new Map<string,number>();for(const r of records)size.set(key(r),(size.get(key(r))??0)+1);
+  return records.map(r=>{const n=seen.get(r.id)??0;seen.set(r.id,n+1);const id=n?hash(canonical({id:r.id,occurrence:n})):r.id;return {...r,id,...(r.supplierKey===r.id?{supplierKey:id}:{}),...(size.get(key(r))!>1?{duplicateFlag:'possible' as const}:{})};});
 }
 export function stableDigest(rows:{personId:number;raw:unknown}[]):string {
   const keys=rows.map(({personId,raw})=>canonical({personId,raw})).sort();

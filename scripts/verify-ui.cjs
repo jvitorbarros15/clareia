@@ -2305,6 +2305,21 @@ check('static pages load at their own URLs and the footer links reach them', asy
   await page.close();
 });
 
+check('the record detail shows the possible-duplicate line only for a flagged record', async () => {
+  const open = async flag => {
+    const page = await at(1440, { before: flag ? page => page.route(/despesas\.json/, async route => { const res = await route.fetch(), rows = await res.json(); await route.fulfill({ response: res, json: Array.isArray(rows) ? rows.map(r => ({ ...r, duplicateFlag: 'possible' })) : rows }); }) : undefined });
+    await page.locator('.bar-row').first().click();
+    await page.waitForSelector('#detail[open]');
+    await page.locator('#detail [data-action=records]').click();
+    await page.locator('#detail .record-row').first().click();
+    await page.waitForFunction(() => document.querySelector('#detail-title').textContent === 'O registro por trás do valor');
+    return clean(await page.locator('#detail').innerText());
+  };
+  const line = 'Possível duplicidade: a fonte traz outro lançamento com o mesmo documento e valor. Somamos todos, como a Câmara.';
+  assert.ok((await open(true)).includes(line), 'flagged record shows the line');
+  assert.ok(!(await open(false)).includes('Possível duplicidade'), 'an unflagged record does not');
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
   let failed = 0, ran = 0;

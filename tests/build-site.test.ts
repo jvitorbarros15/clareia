@@ -365,3 +365,10 @@ test('an unverified typed name is withheld at build unless it looks like a compa
     assert.match(md,/## Nomes mantidos pela regra de empresa\s+- EMPRESA TESTE LTDA \| 1 registros/);
   }
 }));
+test('identical flagged rows keep distinct public ids, the flag and the CSV column, and their withheld name',()=>setup(async(db,dist,portraits)=>{
+  const row=(i:number)=>({...record(100,1,i),supplier:'MARIA TESTE',documentId:'D',duplicateFlag:'possible' as const,id:hash('same-'+i)});
+  const a=version([row(0),row(1),row(2)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const built=await buildSite(db,dist,portraits,{approvedNames:[]}),base=path.join(dist,'data',built.publicationId),rows=await json(base,'deputados','1','despesas.json') as Expense[];
+  assert.equal(new Set(rows.map(r=>r.id)).size,3);assert.ok(rows.every(r=>r.duplicateFlag==='possible'&&r.supplier==='Nome não exibido pelo Clareia'));
+  const lines=(await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')).split('\r\n');assert.match(lines[0],/;"sinal_corrigido";"possivel_duplicidade"$/);assert.match(lines[1],/;"";"sim"$/);
+}));

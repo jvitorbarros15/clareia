@@ -2,7 +2,7 @@ import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
 import {unzipSync} from 'fflate';
 import {BASE,canonical,hash} from './model.ts';
-import type {Expense,Scope,FinancialBasis} from './model.ts';
+import type {Expense,Scope,FinancialBasis,DuplicateReason} from './model.ts';
 import type {ExpenseBatch,ExpenseSource} from './expense-intermediate.ts';
 import type {TemporalReport} from './people-temporal.ts';
 import {findCpfs} from './cpf-scan.ts';
@@ -37,6 +37,14 @@ export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csv
   let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(identity.length!==11&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
   const occurrence=hash(canonical({personId:id,raw:verified?r:{...r,[annual?'txtCNPJCPF':'cnpjCpfFornecedor']:null,[annual?'txtFornecedor':'nomeFornecedor']:null}}));
   return {id:occurrence,personId:id,year,month,category,supplier:identity.length===11?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,...(odd?{supplierIdOdd:true as const}:{}),documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
+}
+// A blank document is 'Não informado' in the annual file and '' in the API.
+const blank=(s:string)=>s==='Não informado'?'':s;
+// Independent of markDuplicates: repeated rows stay published; identical ones get distinct ids by occurrence order.
+function flagRepeats(rs:Expense[]):Expense[]{
+  const ticket='PASSAGEM AÉREA - SIGEPA',same=(a:Expense,b:Expense)=>a.category===b.category&&blank(a.documentId)===blank(b.documentId)&&blank(a.documentNumber)===blank(b.documentNumber)&&a.cents===b.cents&&(a.category===ticket||canonical([a.date,a.lot,a.supplier,a.documentCents,a.disallowedCents])===canonical([b.date,b.lot,b.supplier,b.documentCents,b.disallowedCents]));
+  const used=new Map<string,number>();
+  return rs.map(r=>{const n=used.get(r.id)??0;used.set(r.id,n+1);const id=n?hash(canonical({id:r.id,occurrence:n})):r.id;return {...r,id,...(r.supplierKey===r.id?{supplierKey:id}:{}),...(rs.filter(o=>same(o,r)).length>1?{duplicateFlag:'possible' as const}:{})};});
 }
 // This verifier reads sources and independently projects records, paginates,
 // parses money and pairs occurrences. It does not import collection, financial
@@ -102,7 +110,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   const multiplicityReview=independentFlightMultiplicity(scope,annualStable?equationInputs:[]);
   if(report.equationRule!=='camara.ceap.correlated-net.v2'||canonical(report.equationDecisions)!==canonical(equationReview.decisions))fail('equation-review-evidence');
   if(canonical(report.equationHolds)!==canonical(equationReview.holds))fail('equation-review-holds');
-  if(report.multiplicityRule!=='camara.ceap.sigepa-preserve-hold.v2'||canonical(report.multiplicityDecisions)!==canonical(multiplicityReview.decisions))fail('multiplicity-review-evidence');
+  if(report.multiplicityRule!=='camara.ceap.sigepa-publish-flag.v3'||canonical(report.multiplicityDecisions)!==canonical(multiplicityReview.decisions))fail('multiplicity-review-evidence');
   if(report.portalRule!=='camara.ceap.sigepa-portal-ledger.v1'||typeof report.portalRequested!=='boolean')fail('portal-review-contract');
   const portalChecks:PortalCheck[]=[],portalCovered=new Set<string>();
   const permission=(kind:'annual'|'api',personId:number,r:RawRow)=>equationReview.permissions.get(hash(JSON.stringify([kind,personId,r.source.url,kind==='annual'?second.csvHash:r.source.sha256,r.row])));
@@ -112,7 +120,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
     if(!coverage||c.year!==scope.year||canonical([c.exercise,c.party,c.uf])!==canonical([coverage.exercise,coverage.party,coverage.uf]))fail('temporal-coverage',c);
     const [one,two]=reads.get(c.personId+':'+c.month)??[api(c.personId,c.month,1),api(c.personId,c.month,2)],annual=annualRowsByCell.get(c.personId+':'+c.month)??[];
     if(c.annualCount!==annual.length||canonical(c.api)!==canonical([one,two].map(p=>({count:p.count,pages:p.pages}))))fail('source-counts-or-pages',c);
-    let reasons:string[]=[],records:Expense[]=[],total:number|null=null,diagnostics:typeof c.diagnostics=null,status:typeof c.status='held-review';
+    let reasons:string[]=[],records:Expense[]=[],total:number|null=null,diagnostics:typeof c.diagnostics=null,status:typeof c.status='held-review',dup:DuplicateReason|null=null;
     if(one.rows===null)reasons.push('api-source-failure-pass-1');if(two.rows===null)reasons.push('api-source-failure-pass-2');
     if(reasons.length)status='source-failure';
     else if(!annualStable)reasons=['annual-changed-between-passes'];
@@ -124,37 +132,41 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
       const apiStable=digest(a.map(r=>({personId:c.personId,raw:r.raw})))===digest(b.map(r=>({personId:c.personId,raw:r.raw})));
       const budgetBlocked=annual.some(r=>equationReview.blockedKeys.has(hash(JSON.stringify(['annual',c.personId,r.source.url,second.csvHash,r.row]))))||b.some(r=>equationReview.blockedKeys.has(rowKey(r)));
       const foreignMonth=b.some(r=>Number(r.raw?.ano)!==c.year||Number(r.raw?.mes)!==c.month);
+      let portalDisagrees=false;
       const ticketRepeats=new Set<string>(),repeatedTicket=b.some(r=>{if(r.raw?.tipoDespesa!=='PASSAGEM AÉREA - SIGEPA')return false;const id=JSON.stringify([String(r.raw.codDocumento),String(r.raw.numDocumento),Number(r.raw.valorLiquido)]);if(ticketRepeats.has(id))return true;ticketRepeats.add(id);return false;});
       if(apiStable&&!foreignMonth&&!budgetBlocked&&unresolved.length&&report.portalRequested&&unresolved.every(r=>r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA')){
         const check=await independentPortalReview(c.personId,scope.year,c.month,scope.legislature,[first.rows,second.rows],b.filter(r=>r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA').map(r=>r.raw),async(pass,url)=>{const key=pass+':'+url,source=refs.get(key),bytes=html.get(key);if(!source||!bytes)return null;used.add(key);return {source,bytes};});
-        portalChecks.push(check);if(check.status==='matched')for(const r of unresolved)portalCovered.add(rowKey(r));
+        portalChecks.push(check);if(check.status==='matched')for(const r of unresolved)portalCovered.add(rowKey(r));if(check.status==='mismatch'||check.status==='changed')portalDisagrees=true;
       }
       if(!apiStable)reasons=['api-changed-between-passes'];
       else if(foreignMonth)reasons=['api-row-outside-competence'];
       else if(budgetBlocked)reasons=['installment-document-review'];
-      else if(unresolved.some(r=>!portalCovered.has(rowKey(r))))reasons=['ambiguous-identical-occurrences'];
-      else if(duplicates(annual))reasons=['ambiguous-identical-occurrences'];
-      else if(repeatedTicket||b.some(r=>(apiCounts.get(canonical(r.raw))??0)>1))reasons=['sigepa-unit-unconfirmed'];
+      else if(portalDisagrees)reasons=['portal-disagrees'];
       else{
+        dup=unresolved.some(r=>!portalCovered.has(rowKey(r)))||duplicates(annual)?'ambiguous-identical-occurrences':repeatedTicket||b.some(r=>(apiCounts.get(canonical(r.raw))??0)>1)?'sigepa-unit-unconfirmed':null;
         let ar:Expense[]=[],br:Expense[]=[];
         try{ar=annual.map(r=>project(r,c.personId,scope,'annual',second.csvHash,permission('annual',c.personId,r)));br=b.map(r=>project(r,c.personId,scope,'api',undefined,permission('api',c.personId,r)));}catch{reasons=['financial-normalization-failed'];}
+        if(!reasons.length){const first=new Map<string,string>();annual.forEach((r,i)=>{const raw=canonical(r.raw),seen=first.get(ar[i].id);if(seen!==undefined&&seen!==raw){reasons=['supplier-only-difference'];dup=null;}first.set(ar[i].id,raw);});}
         if(!reasons.length){
-          const blank=(s:string)=>s==='Não informado'?'':s,key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
+          const key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
           for(const r of ar){const list=pool.get(key(r));if(list?.length)matches.push({a:r,b:list.shift()!});else left.push(r);}
           const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right)};
           if(matches.some(({a,b})=>blank(a.documentNumber)!==blank(b.documentNumber)||(a.date?.slice(0,10)||null)!==(b.date?.slice(0,10)||null)||(a.lot||'')!==(b.lot||''))||left.some(r=>!['TELEFONIA','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA'].includes(r.category))||right.some(r=>r.category!=='PASSAGEM AÉREA - SIGEPA'))reasons=['unreconciled-source-occurrences'];
           else{
-            records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))].map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));
+            records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))];
+            if(dup)records=flagRepeats(records);
+            records=records.map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));
             total=Number(records.reduce((n,r)=>n+BigInt(r.cents),0n));if(!Number.isSafeInteger(total))throw Error('Total independente fora da precisão segura');status=records.length?'complete':'no-expenses-confirmed';
-            if(records.length&&c.exercise==='outside'){records=[];total=null;status='held-review';reasons=['expense-outside-exercise'];}
+            if(records.length&&c.exercise==='outside'){records=[];total=null;status='held-review';reasons=['expense-outside-exercise'];dup=null;}
+            else if(dup&&records.filter(r=>r.duplicateFlag==='possible').length<2){records=[];total=null;status='held-review';reasons=['duplicate-unconfirmed'];dup=null;}
           }
         }
       }
     }
     // Lots collected before the id rule changed hold old ids for suppliers that are not verified CNPJs; everything else, the review flag included, is still compared.
     const financial=(rows:any[])=>rows.map(({id:_id,supplierKey:_key,...rest})=>rest.supplierVerified?{id:_id,supplierKey:_key,...rest}:rest);
-    if(canonical({status,reasons,records:financial(records),totalCents:total,diagnostics})!==canonical({status:c.status,reasons:c.reasons,records:financial(c.records),totalCents:c.totalCents,diagnostics:c.diagnostics}))fail('financial-records-coverage-or-union',c);
+    if(canonical({status,reasons,records:financial(records),totalCents:total,diagnostics,dup:reasons.length?null:dup})!==canonical({status:c.status,reasons:c.reasons,records:financial(c.records),totalCents:c.totalCents,diagnostics:c.diagnostics,dup:c.duplicateReason??null}))fail('financial-records-coverage-or-union',c);
     if(total===null)allComplete=false;else grand+=BigInt(total);
   }
   if(canonical(report.portalChecks)!==canonical(portalChecks))fail('portal-review-evidence');
@@ -162,5 +174,5 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   if(used.size!==refs.size)fail('unreferenced-source');
   if(report.metrics.sourceBytes!==report.sources.reduce((n,s)=>n+s.bytes,0))fail('source-byte-count');
   if(findCpfs(JSON.stringify(report),known))fail('private-identifier');
-  return {schema:'clareia.expense-intermediate-audit.v1',status:failures.length?'failed':'passed',checkedAt:new Date().toISOString(),reportSha256:hash(canonical(report)),peopleVersion:hash(canonical(temporal)),proposalSha256,scope,competences:expectedKeys.length,failures,publicationEligible:false,note:'Releitura dos originais por implementação separada das mesmas regras do Clareia. Não é revisão independente da metodologia, confirmação da unidade SIGEPA ou prova de ausência de erro na origem. Casos retidos continuam retidos; não aprova publicação ou legitimidade.'};
+  return {schema:'clareia.expense-intermediate-audit.v1',status:failures.length?'failed':'passed',checkedAt:new Date().toISOString(),reportSha256:hash(canonical(report)),peopleVersion:hash(canonical(temporal)),proposalSha256,scope,competences:expectedKeys.length,failures,publicationEligible:false,note:'Releitura dos originais por implementação separada das mesmas regras do Clareia. Não é revisão independente da metodologia, confirmação da unidade SIGEPA ou prova de ausência de erro na origem. Meses com linhas repetidas são publicados e sinalizados como possível duplicidade, exceto quando o portal discorda da API; os demais casos retidos continuam retidos. Não aprova publicação ou legitimidade.'};
 }

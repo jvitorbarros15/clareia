@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type {Expense,Person} from './model.ts';
+import type {Expense,Person,Snapshot} from './model.ts';
 import {SIGN_CATEGORIES} from './expense-publication.ts';
 
 export type ReviewItem={id:number;name:string;used:string;from:string};
@@ -18,6 +18,19 @@ export async function writeReview(publicationId:string,items:ReviewItem[],names:
   const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-pendencias-revisao.md`);
   await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,reviewMarkdown(publicationId,items,names));
   console.error(`Pendências para revisão: ${items.length} em ${file}; nomes ocultados: ${names.withheld.length}`);
+  return items.length;
+}
+
+export type DuplicateItem={id:number;name:string;month:number;reason:string;records:number;cents:number;monthCents:number;portal:string;url:string};
+export const duplicateReviewItems=(version:Pick<Snapshot,'people'|'validation'|'records'|'scope'>,portalChecks:{personId:number;month:number;status:string}[]=[]):DuplicateItem[]=>(version.validation.duplicateCompetences??[]).map(d=>{const month=version.records.filter(r=>r.personId===d.personId&&r.month===d.month),flagged=month.filter(r=>r.duplicateFlag==='possible');return {id:d.personId,name:version.people.find(p=>p.id===d.personId)?.name??'',month:d.month,reason:d.reason,records:flagged.length,cents:flagged.reduce((n,r)=>n+r.cents,0),monthCents:month.reduce((n,r)=>n+r.cents,0),portal:portalChecks.find(p=>p.personId===d.personId&&p.month===d.month)?.status??'não pedido',url:`https://www.camara.leg.br/deputados/${d.personId}?ano=${version.scope.year}`};});
+
+const brlPt=(cents:number)=>'R$ '+(cents/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+export const duplicateMarkdown=(publicationId:string,items:DuplicateItem[])=>[`# Possíveis duplicidades - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | mês ${i.month} | motivo: ${i.reason} | registros sinalizados: ${i.records} | ${brlPt(i.cents)} | total do mês publicado: ${brlPt(i.monthCents)} | portal: ${i.portal} | ${i.url}`),''].join('\n');
+
+export async function writeDuplicateReview(publicationId:string,items:DuplicateItem[]):Promise<number>{
+  const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-possiveis-duplicidades.md`);
+  await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,duplicateMarkdown(publicationId,items));
+  console.error(`Possíveis duplicidades: ${items.length} meses em ${file}`);
   return items.length;
 }
 

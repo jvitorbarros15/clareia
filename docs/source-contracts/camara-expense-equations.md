@@ -43,9 +43,9 @@ A projeção SIGEPA da API não inclui todos os campos do anual. Para um grupo d
 - N trechos preenchidos e distintos, ignorando somente diferenças de espaço e caixa. Mudança cosmética não distingue ocorrência.
 - As N posições da API preservadas, com mesmo multiconjunto nos passes de 100/25 itens; sem duplicação de referência.
 
-As N linhas originais são preservadas, sem virarem N+N nem serem reduzidas a uma. Nomes de passageiros e trechos não são copiados para o relatório: ele registra quantidade e referências por hash. Isso não confirma N débitos distintos. A política atual `camara.ceap.sigepa-preserve-hold.v2` mantém a competência retida, mesmo com a conferência de trechos ou portal aprovada, até confirmação oficial da unidade de contagem.
+As N linhas originais são preservadas, sem virarem N+N nem serem reduzidas a uma. Nomes de passageiros e trechos não são copiados para o relatório: ele registra quantidade e referências por hash. Isso não confirma N débitos distintos. A política atual `camara.ceap.sigepa-publish-flag.v3` publica todas as linhas da competência, como a Câmara as conta, e marca as repetidas como possível duplicidade, até confirmação oficial da unidade de contagem; a retenção só ocorre se o portal discordar da API (`portal-disagrees`).
 
-Se o anual não trouxer esses N trechos, a quantidade divergir, outro campo anual diferir ou a categoria for outra, esta conferência não explica a repetição. O [relatório SIGEPA](camara-cota-portal.md) pode fornecer evidência adicional, mas tampouco libera a soma das repetições. Isso não prova cobrança indevida nem autoriza apagar a linha.
+Se o anual não trouxer esses N trechos, a quantidade divergir, outro campo anual diferir ou a categoria for outra, esta conferência não explica a repetição. O [relatório SIGEPA](camara-cota-portal.md) pode fornecer evidência adicional, mas não decide sozinho: as repetições são somadas e sinalizadas (v3). Isso não prova cobrança indevida nem autoriza apagar a linha.
 
 ## Implementação e auditoria
 

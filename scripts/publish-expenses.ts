@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {signReviewItems,ufReviewItems,writeReview,writeSignReview} from '../src/review-list.ts';
+import {duplicateReviewItems,signReviewItems,ufReviewItems,writeDuplicateReview,writeReview,writeSignReview} from '../src/review-list.ts';
 import {withLock} from '../src/lock.ts';
 import {auditExpenseVersion,buildExpenseVersion} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
@@ -21,8 +21,9 @@ const lots:ExpenseLotRun[]=await Promise.all(runs.map(async runId=>{const folder
 const history=await load(path.join('data/private/people-history',historyRun),'history.json');
 const version=buildExpenseVersion(lots,history,new Date().toISOString());
 await writeReview(version.id,ufReviewItems(version.people));await writeSignReview(version.id,signReviewItems(version.records,version.people));
+await writeDuplicateReview(version.id,duplicateReviewItems(version,lots.flatMap(l=>l.report.portalChecks)));
 const held=version.validation.heldMonths??{};
-const summary={id:version.id,deputies:version.scope.ids.length,records:version.records.length,totalCents:version.validation.totalCents,heldCompetences:Object.values(held).reduce((a,b)=>a+b,0),deputiesWithHeld:Object.keys(held).length,lots:runs.length};
+const summary={id:version.id,deputies:version.scope.ids.length,duplicateMonths:version.validation.duplicateCompetences?.length??0,records:version.records.length,totalCents:version.validation.totalCents,heldCompetences:Object.values(held).reduce((a,b)=>a+b,0),deputiesWithHeld:Object.keys(held).length,lots:runs.length};
 if(dryRun){console.log(JSON.stringify({...summary,stored:false},null,2));process.exit(0);}
 await withLock(async()=>{
   const db=await openDB();
