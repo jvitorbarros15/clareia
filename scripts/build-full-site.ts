@@ -56,8 +56,8 @@ try{
   await storeBillsVersion(db,billsVersion);await approve('projetos',billsVersion.id,await auditBillsVersion(db,billsVersion.id,bills.map(b=>b.report)));
   await storeVotesVersion(db,votesVersion);await approve('votacoes',votesVersion.id,await auditVotesVersion(db,votesVersion.id));
   for(const [domain,id] of [['despesas',expenses.id],['pessoas',coverage.id],['projetos',billsVersion.id],['votacoes',votesVersion.id]] as const)if((await activePublication(db,domain))?.id!==id)throw new Error(`Versão de ${domain} não ficou ativa`);
-  const {review,...built}=await buildSite(db,out,portraits,siteOptions,ceiling),have=await Promise.all(expenses.scope.ids.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
-  await writeReview(built.publicationId,review);await writeSignReview(built.publicationId,signReviewItems(expenses.records,expenses.people));
+  const {review,withheld,...built}=await buildSite(db,out,portraits,siteOptions,ceiling),have=await Promise.all(expenses.scope.ids.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
+  await writeReview(built.publicationId,review,withheld);await writeSignReview(built.publicationId,signReviewItems(expenses.records,expenses.people));
   const headersFile=path.join(out,'_headers');
   if(args.includes('--noindex'))await fs.writeFile(headersFile,addNoindex(await fs.readFile(headersFile,'utf8')));
   assertHeaders(await fs.readFile(headersFile,'utf8'),args.includes('--noindex'));
