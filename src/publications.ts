@@ -54,10 +54,6 @@ export async function recordDomainAudit(db:DB,id:string,status:'passed'|'failed'
   await db.query('INSERT INTO publication_audits VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(publication_id) DO UPDATE SET status=excluded.status, checked_at=excluded.checked_at, report=excluded.report',[id,status,report.checkedAt,JSON.stringify(report)]);
   await refreshActive(db,await domainOf(db,id));
 }
-export async function withholdPublication(db:DB,id:string,reason:string):Promise<void>{
-  await db.query('INSERT INTO withheld_publications VALUES($1,$2) ON CONFLICT(publication_id) DO UPDATE SET reason=excluded.reason',[id,reason]);
-  await refreshActive(db,await domainOf(db,id));
-}
 const toPublication=(row:Row):Publication=>({...row.body,domain:row.domain});
 export async function activePublication(db:DB,domain:Domain):Promise<Publication|null>{
   const r=await db.query<Row>('SELECT p.domain,p.body FROM publications p JOIN active_publication a ON a.publication_id=p.id WHERE a.domain=$1',[domain]);
