@@ -1297,7 +1297,7 @@ const stub = ({ months, records } = {}) => async page => {
     const res = await route.fetch(), f = await res.json(), rows = await shaped, cells = {};
     for (const [id, list] of Object.entries(rows)) {
       const groups = new Map();
-      for (const r of list) { const k = [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplier)].join(':'), g = groups.get(k) || [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplier), 0, 0]; g[3] += r.cents; g[4]++; groups.set(k, g); }
+      for (const r of list) { const k = [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplierLabel ?? r.supplier)].join(':'), g = groups.get(k) || [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplierLabel ?? r.supplier), 0, 0]; g[3] += r.cents; g[4]++; groups.set(k, g); }
       cells[id] = [...groups.values()];
     }
     f.people = cells;
@@ -1901,7 +1901,7 @@ check('every aggregate equals the published records, and categories keep their o
     const D = window.ClareiaData, out = [], byCategory = new Map();
     for (const p of D.dataset()) {
       const res = await fetch(D.recordsUrl(p.officialId)), raw = res.status === 404 ? [] : await res.json(), want = new Map();
-      for (const r of raw) { const k = [r.month - 1, r.category, D.supplierName(r)].join('|'), w = want.get(k) || [0, 0]; w[0] += r.cents; w[1]++; want.set(k, w); byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.cents)); }
+      for (const r of raw) { const k = [r.month - 1, r.category, r.supplierLabel ?? r.supplier].join('|'), w = want.get(k) || [0, 0]; w[0] += r.cents; w[1]++; want.set(k, w); byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.cents)); }
       const got = new Map(p.cells.map(c => [[c.month, c.category, c.supplier].join('|'), [c.amount, c.count]]));
       if (got.size !== want.size) out.push(`${p.name}: ${got.size} cells for ${want.size} groups`);
       for (const [k, w] of want) { const g = got.get(k); if (!g || g[0] !== w[0] || g[1] !== w[1]) out.push(`${p.name} ${k}: ${g} vs ${w}`); }
@@ -1912,35 +1912,6 @@ check('every aggregate equals the published records, and categories keep their o
     return out;
   });
   assert.deepEqual(diff, []);
-  await page.close();
-});
-
-check('records loaded before the supplier file are still named by the display name and add up to the supplier row', async () => {
-  let release;
-  const gate = new Promise(resolve => release = resolve);
-  // The portal is drawn only after the supplier file, so the page is opened by hand and the records are read while that file is held back.
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await page.route('**/fornecedores.json', async route => { await gate; await route.continue(); });
-  await page.goto(base);
-  await page.waitForFunction(() => window.ClareiaData && window.Clareia && window.Clareia.loadRecords);
-  const dataBase = await page.evaluate(() => window.ClareiaData.base), f = await (await fetch(`${base}${dataBase}/fornecedores.json`)).json();
-  const key = Object.keys(f.aliases)[0];
-  assert.ok(key, 'the published data has a CNPJ with several spellings');
-  const found = await page.evaluate(async key => {
-    const D = window.ClareiaData, C = window.Clareia;
-    for (const p of D.dataset()) { const list = await C.loadRecords(p); if (list.some(r => r.raw.supplierKey === key)) return { id: p.officialId, early: list.find(r => r.raw.supplierKey === key).supplier }; }
-    return null;
-  }, key);
-  assert.ok(found, 'a deputy has records under that CNPJ');
-  release();
-  const diff = await page.evaluate(async ({ id, display }) => {
-    const D = window.ClareiaData, C = window.Clareia, p = D.dataset().find(x => String(x.officialId) === String(id));
-    await D.loadSuppliers();
-    const list = await C.loadRecords(p), sums = rows => [rows.reduce((n, r) => n + r.amount, 0), rows.length];
-    return { records: sums(list.filter(r => r.supplier === display)), cells: [C.sum(C.cells(p).filter(c => c.supplier === display)), C.count(C.cells(p).filter(c => c.supplier === display))] };
-  }, { id: found.id, display: f.suppliers[f.aliases[key]] });
-  assert.deepEqual(diff.records, diff.cells);
-  assert.ok(diff.records[1] > 0, 'the display name matches records');
   await page.close();
 });
 

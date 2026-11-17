@@ -43,10 +43,9 @@
     const gate = document.createElement('div');
     gate.className = 'supplier-pending';
     gate.innerHTML = '<p class="loading-note" role="status">Carregando gastos por categoria e fornecedor…</p>';
-    let suppliersPromise = null, suppliersDone = false, supplierNames = [], supplierAliases = {};
+    let suppliersPromise = null, suppliersDone = false;
     const loadSuppliers = () => suppliersPromise ??= json(`${base}/fornecedores.json`).then(suppliers => {
       if (suppliers.publicationId !== summary.publicationId) throw new Error(VERSION_ERROR);
-      supplierNames = suppliers.suppliers; supplierAliases = suppliers.aliases;
       for (const p of people) p.cells = (suppliers.people[p.officialId] ?? []).map(([month, category, supplier, cents, count]) => ({ month: month - 1, category: suppliers.categories[category], supplier: suppliers.suppliers[supplier], amount: cents, count }));
       const byCategory = new Map();
       for (const p of people) for (const r of p.cells) byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.amount));
@@ -57,7 +56,7 @@
       gate.innerHTML = `<p class="loading-note" role="alert">Gastos por fornecedor indisponíveis. ${error.message === VERSION_ERROR ? 'Nenhum valor foi estimado.' : 'Tente novamente mais tarde.'}</p>`;
       throw error;
     });
-    window.ClareiaData = { ceiling: summary.ceiling ?? null, coverageApproved: Boolean(summary.coverageId), billsApproved: Boolean(summary.billsId), votesApproved: Boolean(summary.votesId), billsYears: summary.billsYears || [], votesYears: summary.votesYears || [], activitySummary: id => summary.people.find(p => String(p.id) === String(id)), activityUrl: id => `${base}/atividade/${id}.json`, recordsUrl: id => `${base}/deputados/${id}/despesas.json`, label, dataset: () => people, categories, monthNames, index, base, year: String(index.scope.year), coverage: index.scope.months.map(m => m - 1), suppliersLoaded: () => suppliersDone, loadSuppliers, supplierName: x => Object.hasOwn(supplierAliases, x.supplierKey) ? supplierNames[supplierAliases[x.supplierKey]] : x.supplier };
+    window.ClareiaData = { ceiling: summary.ceiling ?? null, coverageApproved: Boolean(summary.coverageId), billsApproved: Boolean(summary.billsId), votesApproved: Boolean(summary.votesId), billsYears: summary.billsYears || [], votesYears: summary.votesYears || [], activitySummary: id => summary.people.find(p => String(p.id) === String(id)), activityUrl: id => `${base}/atividade/${id}.json`, recordsUrl: id => `${base}/deputados/${id}/despesas.json`, label, dataset: () => people, categories, monthNames, index, base, year: String(index.scope.year), coverage: index.scope.months.map(m => m - 1), suppliersLoaded: () => suppliersDone, loadSuppliers };
     await load('/app.js');
     document.getElementById('main').append(gate);
     // The supplier file is needed by the sections below the ranking: it starts when they come near the viewport, or at once for a deep link.

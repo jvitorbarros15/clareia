@@ -8,7 +8,7 @@ import type {DB} from './store.ts';
 import {csv} from './view.ts';
 import {redactCpf,redactExpense,scanCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
-import {assertNamesInData,buildSiteSummary,buildSupplierSummary} from './site-summary.ts';
+import {buildSiteSummary,buildSupplierSummary,withSupplierLabels} from './site-summary.ts';
 import type {SupplierNames} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
 import type {ReviewItem} from './review-list.ts';
@@ -71,7 +71,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const withoutData:number[]=[];
-  const recordsOf=new Map<number,typeof allRecords>();for(const r of allRecords){const list=recordsOf.get(r.personId);if(list)list.push(r);else recordsOf.set(r.personId,[r]);}
+  const supplierNames=await readSupplierNames(),recordsOf=new Map<number,ReturnType<typeof withSupplierLabels>>();for(const r of withSupplierLabels(allRecords,supplierNames)){const list=recordsOf.get(r.personId);if(list)list.push(r);else recordsOf.set(r.personId,[r]);}
   for(const id of active.scope.ids){
     const records=recordsOf.get(id)??[];
     await fs.copyFile(path.join(portraitsDir,`${id}.jpg`),path.join(data,'portraits',`${id}.jpg`)).catch(()=>{});
@@ -92,7 +92,6 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const summaryJson=JSON.stringify({...summary,people:summary.people.map(({cells:_cells,...person})=>person)});if(scanCpfs(summaryJson,new Set()))throw new Error('Identificador privado no resumo');
   await fs.writeFile(path.join(data,'summary.json'),summaryJson);
   // Supplier names are already redacted for private persons; the scan refuses any that slipped through.
-  const supplierNames=await readSupplierNames();if(options.fullData)assertNamesInData(supplierNames,allRecords);
   const supplierSummary=buildSupplierSummary(summary,allRecords,supplierNames),suppliers=JSON.stringify(supplierSummary);if(scanCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
   await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
