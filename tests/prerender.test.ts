@@ -9,7 +9,7 @@ import {buildSite} from '../src/build-site.ts';
 import {createApp} from '../src/app.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
-import {loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
+import {deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
 
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
@@ -224,4 +224,16 @@ test('the about and methodology texts name the project, not a person, and carry 
 
 test('a party taken from the events is shown with its note',()=>{
   assert.match(deputyDescription({...normal,party:'PP',partyNote:'partido dos eventos da legislatura'},period),/PP \(partido dos eventos da legislatura\)/);
+});
+
+const shown=(status:string|null,party='PP',note='partido registrado em fev/2023 (eventos da legislatura)')=>{
+  const month=status?[{month:1,partyStatus:status,party:status==='single'?'PL':null,partyValues:[],exercise:'unknown',records:0,cents:0,held:false}]:[];
+  const d=deputiesOf({ids:[1],people:[{id:1,name:'A',photo:null,sourceUrl:'',profileFetchedAt:'',uf:'SP',party,partyNote:note}],summary:{coverageId:status===null?null:'c',people:[{id:1,months:month}],ceiling:null} as any,suppliers:{people:{}} as any,months:[1]})[0];
+  return [d.party,d.partyNote];
+};
+test('the events party shows only when the coverage has nothing better: confirmed and in-review win over the note',()=>{
+  assert.deepEqual(shown('unknown'),['PP','partido registrado em fev/2023 (eventos da legislatura)']);
+  assert.deepEqual(shown('review'),['Partido em revisão',null]);
+  assert.deepEqual(shown('single'),['PL',null]);
+  assert.deepEqual(shown(null),['PP','partido registrado em fev/2023 (eventos da legislatura)']);
 });

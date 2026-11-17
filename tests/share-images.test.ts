@@ -158,7 +158,8 @@ test('real renderer: exact sizes, long name, no portrait, and a layout that does
   try{renderer=await openRenderer(assets,1);}catch(e){t.skip(String((e as Error).message));return;}
   try{
     const long={...normal,id:103,name:'Francisco Pereira Gonçalves de Albuquerque Montenegro Cavalcanti da Rocha Lima Sobrinho',heldMonths:[2,3]};
-    for(const d of [normal,partial,none,long])for(const format of ['wide','square'] as const){
+    const merged={...long,id:104,ufNote:'UF dos eventos da legislatura',party:'SOLIDARIEDADE',partyNote:'PROS registrado em fev/2023; partido extinto, sucedido pelo SOLIDARIEDADE (fev/2023)'};
+    for(const d of [normal,partial,none,long,merged])for(const format of ['wide','square'] as const){
       const bytes=await renderer.render({fact:shareFactOf(d,period),format,portrait:null});
       assert.deepEqual(jpegSize(bytes),{width:FORMATS[format].width,height:FORMATS[format].height});
     }

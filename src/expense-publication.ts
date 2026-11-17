@@ -9,21 +9,25 @@ import type {DB} from './store.ts';
 export type ExpenseLotRun={runId:string;manifest:{runId:string;status:string;reportSha256:string;proposalSha256:string;inputSha256:string};input:{schema:string;proposal:any;temporal:TemporalReport};report:ExpenseBatch;audit:{status:string;reportSha256:string;proposalSha256:string;checkedAt:string;competences:number}};
 
 const MONTHS=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-// The party the legislature's own events give for the expense period: only events up to the period's last day count, so a later switch never leaks in. Agreeing events give that party; otherwise the latest one, and only when every date is readable.
-// Parties that ceased to exist in 2023 and the day the TSE approved the merger (tse.jus.br news of Jun/2023 and Nov/2023).
-const MERGERS:Record<string,{to:string;on:string}>={PATRIOTA:{to:'PRD',on:'2023-11-09'},PSC:{to:'PODE',on:'2023-06-15'}};
+// Parties that ceased to exist in 2023, the party that succeeded them and the day the TSE approved it (Câmara events keep the old label afterwards).
+const MERGERS:Record<string,{to:string;on:string}>={PATRIOTA:{to:'PRD',on:'2023-11-09'},PTB:{to:'PRD',on:'2023-11-09'},PSC:{to:'PODE',on:'2023-06-15'},PROS:{to:'SOLIDARIEDADE',on:'2023-02-14'}};
 const monthYear=(day:string)=>`${MONTHS[Number(day.slice(5,7))-1]}/${day.slice(0,4)}`;
-function partyFromEvents(events:{original:{siglaPartido?:string|null;dataHora?:string|null}}[],start:string,end:string):{value:string;note:string}|null{
-  const all=events.map(e=>({party:e.original.siglaPartido?.trim()||null,at:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(e.original.dataHora??'')?e.original.dataHora!.slice(0,16):null}));
-  if(all.some(e=>!e.at))return null;
-  const upto=all.filter(e=>e.at!<=end+'T23:59').sort((a,b)=>a.at!.localeCompare(b.at!));
-  if(!upto.length||upto.some(e=>!e.party))return null;
-  const last=upto.at(-1)!,day=last.at!.slice(0,10),agree=new Set(upto.map(e=>e.party)).size===1;
-  if(!agree&&upto.at(-2)!.at===last.at&&upto.at(-2)!.party!==last.party)return null;
-  const merger=MERGERS[last.party!];
-  if(merger&&day<merger.on)return {value:merger.to,note:`${last.party} ${day==='2023-02-01'?'na posse':'registrado'} (${monthYear(day)}); incorporado ao ${merger.to} em ${monthYear(merger.on)}`};
-  if(day<start)return {value:last.party!,note:`partido registrado em ${monthYear(day)} (eventos da legislatura)`};
-  return {value:last.party!,note:agree?'partido dos eventos da legislatura':`partido em ${monthYear(end)} (eventos da legislatura)`};
+type PartyEvent={time:string|null;original:{idLegislatura:number;siglaPartido?:string|null}};
+// The party the legislature's own events give for the expense period: only events up to the period's last day count, so a later switch never leaks in. Without a party, note says why.
+export function partyFromEvents(events:PartyEvent[],legislature:number,start:string,end:string):{value:string|null;note:string}{
+  const none=(note:string)=>({value:null,note});
+  if(events.some(e=>e.original.idLegislatura!==legislature&&e.time&&e.time>=start&&e.time<=end+'T23:59:59'))return none('evento de outra legislatura dentro do período');
+  const own=events.filter(e=>e.original.idLegislatura===legislature);
+  if(own.some(e=>!e.time))return none('evento sem data válida');
+  const upto=own.filter(e=>e.time!<=end+'T23:59:59').sort((a,b)=>a.time!.localeCompare(b.time!));
+  if(!upto.length)return none('sem eventos até o fim do período');
+  if(upto.some(e=>!e.original.siglaPartido?.trim()))return none('evento sem partido');
+  const party=(e:PartyEvent)=>e.original.siglaPartido!.trim(),last=upto.at(-1)!,day=last.time!.slice(0,10);
+  if(new Set(upto.filter(e=>e.time===last.time).map(party)).size>1)return none('eventos de partidos diferentes no mesmo instante');
+  const merger=MERGERS[party(last)];
+  if(merger&&merger.on<=end)return {value:merger.to,note:`${party(last)} registrado em ${monthYear(day)}; partido extinto, sucedido pelo ${merger.to} (${monthYear(merger.on)})`};
+  const agree=new Set(upto.map(party)).size===1&&day>=start;
+  return {value:party(last),note:agree?'partido dos eventos da legislatura':`partido registrado em ${monthYear(day)} (eventos da legislatura)`};
 }
 
 // Only audited lots of one universe, all of them, each once: a missing or repeated lot would silently change the totals.
@@ -60,7 +64,7 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
     // The UF is fixed for the legislature, so any confirmed month serves. Without one, the UF the legislature's own events all agree on stands, marked; a month showing two UFs (changed/conflict) is never settled this way.
     const months=[...t.months].reverse(),temporalUf=months.find(m=>m.uf.status==='single')?.uf.value??null,contested=months.some(m=>m.uf.status==='changed'||m.uf.status==='conflict');
     const eventUfs=new Set(t.events.filter(e=>e.original.idLegislatura===temporal.scope.legislature).map(e=>e.original.siglaUf)),only=eventUfs.size===1?[...eventUfs][0]:null;
-    const fallback=temporalUf===null&&!contested&&only&&UFS.has(only)?only:null,uf=temporalUf??fallback,confirmed=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null,eventParty=confirmed===null?partyFromEvents(t.events.filter(e=>e.original.idLegislatura===temporal.scope.legislature),periodStart,periodEnd):null,party=confirmed??eventParty?.value??null;
+    const fallback=temporalUf===null&&!contested&&only&&UFS.has(only)?only:null,uf=temporalUf??fallback,confirmed=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null,partyContested=months.some(m=>m.year===first.year&&(m.party.status==='changed'||m.party.status==='conflict')),eventParty=confirmed!==null?null:partyContested?{value:null,note:'mês do ano com partido em disputa'}:partyFromEvents(t.events,temporal.scope.legislature,periodStart,periodEnd),party=confirmed??eventParty?.value??null;
     return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,...(fallback?{ufNote:'UF dos eventos da legislatura'}:{}),party,...(eventParty?{partyNote:eventParty.note}:{})};
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {canonical,hash,snapshotId} from '../src/model.ts';
 import type {Expense} from '../src/model.ts';
-import {buildExpenseVersion} from '../src/expense-publication.ts';
+import {buildExpenseVersion,partyFromEvents} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
 
 const history={people:[1,2,3].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-07T00:00:00Z'}}}))} as any;
@@ -112,38 +112,43 @@ test('a confirmed month keeps its uf over the events and is not marked',()=>{
   assert.deepEqual(withFirst([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[ev(57,'RS')]).slice(0,2),['SP',null]);
 });
 
-const pev=(siglaPartido:string|null,dataHora:string|null,idLegislatura=57)=>({original:{idLegislatura,siglaPartido,dataHora}});
+const pev=(siglaPartido:string|null,dataHora:string,idLegislatura=57)=>({time:dataHora?dataHora+':00':null,original:{idLegislatura,siglaPartido,dataHora}});
 const noParty=[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'unknown',value:null}}];
-const partyOf=(months:any[],events:any[])=>{const v=withFirstPeople(months,events);return [v[0].party,v[0].partyNote??null,v[1].party,v[1].partyNote??null];};
+const partyOf=(months:any[],events:any[])=>{const v=withFirstPeople(months,events);return [v[0].party,v[0].partyNote??null];};
+const direct=(events:any[],end='2025-12-31')=>{const r=partyFromEvents(events,57,'2025-01-01',end);return [r.value,r.note];};
 function withFirstPeople(months:any[],events:any[]){
   const changed=structuredClone(lots()),t=changed[0].input.temporal,h=structuredClone(history);t.people[0].months=months;t.people[0].events=events;t.historySha256=hash(canonical(h));
   for(const l of changed){const p=l.input.proposal;l.input.temporal=t;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
   return buildExpenseVersion(changed,h,'t').people;
 }
-test('without a confirmed party month, events that agree give the party, marked; other legislatures are ignored',()=>{
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PL','2025-01-05T10:00'),pev('PT','2019-01-01T10:00',56)]).slice(0,2),['PL','partido dos eventos da legislatura']);
+test('events that agree inside the period give the party; other legislatures outside the period are ignored',()=>{
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PL','2025-01-05T10:00'),pev('PT','2019-01-01T10:00',56)]),['PL','partido dos eventos da legislatura']);
 });
-test('events that switch party give the latest one up to the end of the scope, with its month',()=>{
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-01-10T10:00'),pev('PP','2025-01-20T10:00')]).slice(0,2),['PP','partido em jan/2025 (eventos da legislatura)']);
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-01-10T10:00'),pev('PT','2025-02-10T10:00')]).slice(0,2),['PP','partido em jan/2025 (eventos da legislatura)']);
+test('a deciding event before the period start, or a switch, is noted with the deciding event month',()=>{
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PL','2024-05-01T10:00')]),['PL','partido registrado em mai/2024 (eventos da legislatura)']);
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-01-10T10:00'),pev('PT','2025-02-10T10:00')]),['PP','partido registrado em jan/2025 (eventos da legislatura)']);
 });
-test('no events, a missing party or an unreadable date leave the party empty',()=>{
-  assert.deepEqual(partyOf(noParty,[]).slice(0,2),[null,null]);
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev(null,'2024-05-01T10:00')]).slice(0,2),[null,null]);
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP',null)]).slice(0,2),[null,null]);
+test('a switch after the expense period keeps the earlier party; with no earlier event the party stays empty with its reason',()=>{
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-06-10T10:00')]),['PL','partido registrado em fev/2023 (eventos da legislatura)']);
+  assert.deepEqual(partyOf(noParty,[pev('PP','2025-06-10T10:00')]),[null,'sem eventos até o fim do período']);
 });
-test('a confirmed party month keeps its party over the events and is not marked',()=>{
-  assert.deepEqual(partyOf([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[pev('PL','2023-02-01T10:00')]).slice(0,2),['X',null]);
+test('a confirmed party month keeps its party over the events; a contested month gives no fallback',()=>{
+  assert.deepEqual(partyOf([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[pev('PL','2023-02-01T10:00')]),['X',null]);
+  assert.deepEqual(partyOf([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'changed',value:null}}],[pev('PL','2023-02-01T10:00')]),[null,'mês do ano com partido em disputa']);
 });
-test('a switch after the expense period keeps the earlier party, marked as unanimous up to the period end',()=>{
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-06-10T10:00')]).slice(0,2),['PL','partido registrado em fev/2023 (eventos da legislatura)']);
-  assert.deepEqual(partyOf(noParty,[pev('PP','2025-06-10T10:00')]).slice(0,2),[null,null]);
+test('three events at the same instant with more than one party give no party',()=>{
+  assert.equal(direct([pev('PL','2025-03-01T10:00'),pev('PP','2025-03-01T10:00'),pev('PP','2025-03-01T10:00')])[0],null);
 });
-test('a deciding event before the period start is noted as registered on its own date',()=>{
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PL','2024-05-01T10:00')]).slice(0,2),['PL','partido registrado em mai/2024 (eventos da legislatura)']);
+test('an event of another legislature inside the period gives no party',()=>{
+  assert.equal(direct([pev('PL','2023-02-01T10:00'),pev('PP','2025-08-01T10:00',58)])[0],null);
 });
-test('a party merged away before the period is shown as its successor, with the original in the note',()=>{
-  assert.deepEqual(partyOf(noParty,[pev('PATRIOTA','2023-02-01T10:00')]).slice(0,2),['PRD','PATRIOTA na posse (fev/2023); incorporado ao PRD em nov/2023']);
-  assert.deepEqual(partyOf(noParty,[pev('PSC','2023-03-10T10:00')]).slice(0,2),['PODE','PSC registrado (mar/2023); incorporado ao PODE em jun/2023']);
-  assert.deepEqual(partyOf([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'PATRIOTA'}}],[]).slice(0,2),['PATRIOTA',null]);
+test('a merged-away label becomes its successor even when the event is dated after the merger',()=>{
+  assert.deepEqual(direct([pev('PATRIOTA','2023-02-01T10:00')]),['PRD','PATRIOTA registrado em fev/2023; partido extinto, sucedido pelo PRD (nov/2023)']);
+  assert.deepEqual(direct([pev('PSC','2025-02-26T10:00')]),['PODE','PSC registrado em fev/2025; partido extinto, sucedido pelo PODE (jun/2023)']);
+});
+test('a merger approved after the period end keeps the old label',()=>{
+  assert.deepEqual(direct([pev('PSC','2023-03-10T10:00')],'2023-05-31'),['PSC','partido registrado em mar/2023 (eventos da legislatura)']);
+});
+test('a confirmed month is never mapped through a merger',()=>{
+  assert.deepEqual(partyOf([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'PATRIOTA'}}],[]),['PATRIOTA',null]);
 });
