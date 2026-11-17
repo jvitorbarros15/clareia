@@ -12,7 +12,7 @@ import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {storePeopleCoverage} from '../src/people-publication.ts';
 import type {PeopleCoverage} from '../src/people-publication.ts';
-import {assertSuppliersMatchSummary,buildSiteSummary,buildSupplierSummary} from '../src/site-summary.ts';
+import {assertSuppliersMatchSummary,buildSiteSummary,buildSupplierSummary,withSupplierLabels} from '../src/site-summary.ts';
 import {canonical,hash} from '../src/model.ts';
 
 function record(cents:number,personId:number,index:number):Expense{
@@ -214,6 +214,46 @@ test('supplier rows that disagree with the monthly cells are refused',()=>{
   const missing=structuredClone(good);delete missing.people['2'];
   assert.throws(()=>assertSuppliersMatchSummary(summary,missing),/pessoas do resumo/);
   assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,publicationId:'x'}),/outra versão/);
+});
+const K=(c:string)=>c.repeat(64),cnpj=(cents:number,i:number,supplier:string,date:string|null='2025-01-05',key=K('a')):Expense=>({...record(cents,1,i),supplier,supplierKey:key,supplierVerified:true,date});
+const supplierNamesOf=(records:Expense[],names={})=>buildSupplierSummary(buildSiteSummary(summaryInput(records,records.reduce((n,r)=>n+r.cents,0))),records,names).suppliers;
+test('a CNPJ with many spellings is one supplier named by its most frequent spelling, and an override wins',()=>{
+  const records=[cnpj(100,0,'TAM','2025-01-05T10:00:00'),cnpj(200,1,'LATAM Airlines Brasil','2025-01-20T10:00:00'),cnpj(300,2,'Cia Aérea - TAM','2025-01-10T10:00:00'),cnpj(50,3,'TAM','2025-01-11T10:00:00')],summary=buildSiteSummary(summaryInput(records,650));
+  const grouped=buildSupplierSummary(summary,records);
+  assert.deepEqual(grouped.suppliers,['TAM']);
+  assert.deepEqual(grouped.people['1'],[[1,0,0,650,4]]);
+  assert.deepEqual(withSupplierLabels(records).map(r=>r.supplierLabel),[undefined,'TAM','TAM',undefined]);
+  assert.deepEqual(buildSupplierSummary(summary,records,{[K('a')]:{name:'Latam'}}).suppliers,['Latam']);
+});
+test('the display name falls back by records, absolute value, date and then alphabet, and a single-spelling CNPJ gets no label',()=>{
+  assert.deepEqual(supplierNamesOf([cnpj(1000,0,'ONE'),cnpj(10,1,'TWO'),cnpj(10,2,'TWO')]),['TWO']);
+  assert.deepEqual(supplierNamesOf([cnpj(-500,0,'EMPRESA LTDA'),cnpj(-100,1,'EMPRESA LTDA'),cnpj(10,2,'FULANO DE TAL')]),['EMPRESA LTDA']);
+  assert.deepEqual(supplierNamesOf([cnpj(-500,0,'S1'),cnpj(100,1,'S2')]),['S1']);
+  assert.deepEqual(supplierNamesOf([cnpj(100,0,'OLD','2025-01-01'),cnpj(100,1,'NEW','2025-02-01')]),['NEW']);
+  assert.deepEqual(supplierNamesOf([cnpj(100,0,'B'),cnpj(100,1,'A')]),['A']);
+  const one=[cnpj(100,0,'SOZINHO'),cnpj(100,1,'SOZINHO')];
+  assert.ok(withSupplierLabels(one).every(r=>!('supplierLabel' in r)));
+});
+test('the same name under two CNPJs stays two suppliers numbered by key, a typed-name entry keeps the plain name, and a person is one line',()=>{
+  const posto=(cents:number,i:number,key:string)=>cnpj(cents,i,'POSTO',null,key),person=(cents:number,i:number):Expense=>({...record(cents,1,i),supplier:'Fornecedor pessoa física',supplierKey:'p'+i});
+  const records=[posto(100,0,K('a')),posto(300,1,K('b')),{...record(50,1,2),supplier:'POSTO'},person(10,3),person(20,4)],summary=buildSiteSummary(summaryInput(records,480));
+  const grouped=buildSupplierSummary(summary,records);
+  assert.deepEqual(grouped.suppliers,['Fornecedor pessoa física','POSTO','POSTO · 2','POSTO · 3']);
+  assert.deepEqual(grouped.people['1'],[[1,0,0,30,2],[1,0,1,50,1],[1,0,2,100,1],[1,0,3,300,1]]);
+  assert.deepEqual(withSupplierLabels(records).map(r=>r.supplierLabel),['POSTO · 2','POSTO · 3',undefined,undefined,undefined]);
+  const taken=[posto(100,0,K('a')),posto(100,1,K('b')),{...record(50,1,2),supplier:'POSTO · 2'}];
+  assert.deepEqual(supplierNamesOf(taken),['POSTO','POSTO · 2','POSTO · 3']);
+});
+test('reviewed names with a bad key or a clash with another supplier are refused',()=>{
+  const records=[cnpj(100,0,'A',null,K('a')),cnpj(100,1,'B',null,K('b')),{...record(50,1,2),supplier:'Latam'}];
+  assert.throws(()=>supplierNamesOf(records,{x:{name:'Z'}}),/Chave de nome/);
+  assert.throws(()=>supplierNamesOf(records,{[K('a')]:{name:'Z'},[K('b')]:{name:'Z'}}),/colide/);
+  assert.throws(()=>supplierNamesOf(records,{[K('a')]:{name:'Latam'}}),/colide/);
+  assert.throws(()=>supplierNamesOf(records,{[K('b')]:{name:'A'}}),/colide/);
+});
+test('supplier checks refuse a CPF in a name',()=>{
+  const records=[cnpj(100,0,'A',null,K('a')),{...record(50,1,1),supplier:'Outro'}],summary=buildSiteSummary(summaryInput(records,150)),good=buildSupplierSummary(summary,records);
+  assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,suppliers:['Fornecedor','Fulano 123.456.789-09']}),/Identificador privado/);
 });
 test('a private supplier keeps its label in the supplier file',()=>setup(async(db,dist,portraits)=>{
   const a=version([{...record(100,1,0),supplier:'Fornecedor pessoa física'}]);
