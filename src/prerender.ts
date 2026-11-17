@@ -81,8 +81,8 @@ export function inState(deputies:Deputy[],uf:string):Deputy[]{return deputies.fi
 export function stateDescription(uf:string,deputies:Deputy[],period:Period):string{
   const people=inState(deputies,uf);
   if(!people.length)return `${UFS[uf]}: nenhum deputado neste recorte. Indisponível não significa zero.`;
-  const partial=people.filter(p=>p.heldMonths.length).length;
-  return [`${UFS[uf]}: ${people.length} ${people.length===1?'deputado':'deputados'} neste recorte.`,`Cota total em ${spanOf(period)}: ${money(people.reduce((n,p)=>n+p.cents,0))} (valor exato).`,partial?`Inclui ${partial} ${partial===1?'deputado com total parcial':'deputados com total parcial'}; meses em revisão ficam fora da soma.`:'','Dados oficiais da Câmara dos Deputados.'].filter(Boolean).join(' ');
+  const partial=people.filter(p=>p.heldMonths.length).length,unconfirmed=people.filter(p=>p.ufNote).length;
+  return [`${UFS[uf]}: ${people.length} ${people.length===1?'deputado':'deputados'} neste recorte.`,`Cota total em ${spanOf(period)}: ${money(people.reduce((n,p)=>n+p.cents,0))} (valor exato).`,partial?`Inclui ${partial} ${partial===1?'deputado com total parcial':'deputados com total parcial'}; meses em revisão ficam fora da soma.`:'',unconfirmed?`Inclui ${unconfirmed} ${unconfirmed===1?'deputado':'deputados'} com UF não confirmada mês a mês.`:'','Dados oficiais da Câmara dos Deputados.'].filter(Boolean).join(' ');
 }
 
 type Image={url:string;width?:number;height?:number;alt:string;large?:boolean};

@@ -1,4 +1,4 @@
-import {canonical,hash,snapshotId} from './model.ts';
+import {UFS,canonical,hash,snapshotId} from './model.ts';
 import type {Expense,Person,Snapshot} from './model.ts';
 import type {ExpenseBatch} from './expense-intermediate.ts';
 import type {HistoryReport} from './people-history.ts';
@@ -38,9 +38,11 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   const people:Person[]=ids.map(id=>{
     const h=history.people.find(p=>p.id===id),t=temporal.people.find(p=>p.id===id);
     if(!h?.profile||!t)throw Error(`Cadastro ausente para ${id}`);
-    // The UF a deputy represents is fixed for the legislature, so any month of it serves; when none is confirmed the registration's UF stands, marked. The party must be one of the publication year.
-    const months=[...t.months].reverse(),temporalUf=months.find(m=>m.uf.status==='single')?.uf.value??null,uf=temporalUf??h.profile.uf??null,party=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null;
-    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,...(temporalUf===null&&uf?{ufNote:'UF do cadastro da Câmara'}:{}),party};
+    // The UF is fixed for the legislature, so any confirmed month serves. Without one, the UF the legislature's own events all agree on stands, marked; a month showing two UFs (changed/conflict) is never settled this way.
+    const months=[...t.months].reverse(),temporalUf=months.find(m=>m.uf.status==='single')?.uf.value??null,contested=months.some(m=>m.uf.status==='changed'||m.uf.status==='conflict');
+    const eventUfs=new Set(t.events.filter(e=>e.original.idLegislatura===temporal.scope.legislature).map(e=>e.original.siglaUf)),only=eventUfs.size===1?[...eventUfs][0]:null;
+    const fallback=temporalUf===null&&!contested&&only&&UFS.has(only)?only:null,uf=temporalUf??fallback,party=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null;
+    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,...(fallback?{ufNote:'UF dos eventos da legislatura'}:{}),party};
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
   const body={metric:'camara.ceap.valor-liquido-uniao-fontes.v1',scope:{year:first.year,months:first.months,ids,legislature:temporal.scope.legislature},people,records,collectedAt,publishedAt:now,pages:[],

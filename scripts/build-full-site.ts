@@ -63,5 +63,5 @@ try{
   assertHeaders(await fs.readFile(headersFile,'utf8'),args.includes('--noindex'));
   const expectedMissing=expenses.scope.ids.filter(id=>!history.people.find((p:{id:number})=>p.id===id)?.profile?.photo).length;
   if(noPortrait>expectedMissing&&!args.includes('--allow-missing-portraits'))throw new Error(`Faltam ${noPortrait-expectedMissing} retratos de quem tem foto oficial (${noPortrait} ausentes, ${expectedMissing} sem foto no cadastro). Use --allow-missing-portraits só em montagens locais.`);
-  console.log(JSON.stringify({...summary,...built,noPortrait,noindex:args.includes('--noindex')}));
+  console.log(JSON.stringify({...summary,...built,ufPendencias:review.length,noPortrait,noindex:args.includes('--noindex')}));
 }finally{await db.close();}

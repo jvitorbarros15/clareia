@@ -6,7 +6,7 @@ import {buildExpenseVersion} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
 
 const history={people:[1,2,3].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-07T00:00:00Z'}}}))} as any;
-const temporal={historySha256:hash(canonical(history)),scope:{legislature:57},people:[1,2,3].map(id=>({id,months:[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}]}))} as any;
+const temporal={historySha256:hash(canonical(history)),scope:{legislature:57},people:[1,2,3].map(id=>({id,events:[],months:[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}]}))} as any;
 const record=(personId:number,cents:number,i:number):Expense=>({id:`r${personId}-${i}`,personId,year:2025,month:1,category:'C',supplier:'S',supplierKey:'k',supplierVerified:false,documentId:'1',documentNumber:'1',date:null,receipt:null,cents,documentCents:cents,disallowedCents:0,source:{url:'https://www.camara.leg.br/cotas/Ano-2025.csv.zip',sha256:'s',row:i,fetchedAt:'2026-11-09T00:00:00Z'}});
 const universe=[1,2,3];
 function lot(n:number,ids:number[],cells:any[]):ExpenseLotRun{
@@ -90,10 +90,24 @@ test('a party change in the year keeps the uf of the latest month where the uf i
   assert.deepEqual([v.people[0].uf,v.people[0].party],['SP','X']);
 });
 
-test('without a confirmed month the registration uf is used and marked, a confirmed one is not',()=>{
-  const changed=structuredClone(lots());
-  const withUf=structuredClone(history);withUf.people[0].profile.uf='RS';const t=changed[0].input.temporal;t.historySha256=hash(canonical(withUf));t.people[0].months=[{year:2025,month:1,uf:{status:'unknown',value:null},party:{status:'single',value:'X'}}] as any;
-  for(const l of changed){l.input.temporal=t;const p=l.input.proposal;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
-  const v=buildExpenseVersion(changed,withUf,'t');
-  assert.deepEqual(v.people.map(p=>[p.uf,p.ufNote??null]),[['RS','UF do cadastro da Câmara'],['SP',null],['SP',null]]);
+const ev=(idLegislatura:number,siglaUf:string)=>({original:{idLegislatura,siglaUf}});
+function withFirst(months:any[],events:any[]){
+  const changed=structuredClone(lots()),t=changed[0].input.temporal,h=structuredClone(history);t.people[0].months=months;t.people[0].events=events;t.historySha256=hash(canonical(h));
+  for(const l of changed){const p=l.input.proposal;l.input.temporal=t;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
+  const v=buildExpenseVersion(changed,h,'t');return [v.people[0].uf,v.people[0].ufNote??null,v.people[1].uf,v.people[1].ufNote??null];
+}
+const unknown=[{year:2025,month:1,uf:{status:'unknown',value:null},party:{status:'single',value:'X'}}];
+test('without a confirmed month the uf all legislature events agree on is used and marked; other legislatures are ignored',()=>{
+  assert.deepEqual(withFirst(unknown,[ev(57,'RS'),ev(57,'RS'),ev(58,'PR')]),['RS','UF dos eventos da legislatura','SP',null]);
+});
+test('events of the legislature that disagree, or none, leave the uf empty',()=>{
+  assert.deepEqual(withFirst(unknown,[ev(57,'RS'),ev(57,'SC')]).slice(0,2),[null,null]);
+  assert.deepEqual(withFirst(unknown,[ev(56,'RS')]).slice(0,2),[null,null]);
+});
+test('a month showing two UFs is never settled by the events',()=>{
+  assert.deepEqual(withFirst([{year:2025,month:1,uf:{status:'changed',value:null},party:{status:'single',value:'X'}}],[ev(57,'RS')]).slice(0,2),[null,null]);
+  assert.deepEqual(withFirst([{year:2025,month:1,uf:{status:'conflict',value:null},party:{status:'single',value:'X'}}],[ev(57,'RS')]).slice(0,2),[null,null]);
+});
+test('a confirmed month keeps its uf over the events and is not marked',()=>{
+  assert.deepEqual(withFirst([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[ev(57,'RS')]).slice(0,2),['SP',null]);
 });

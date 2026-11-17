@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {z} from 'zod';
-import {BASE,canonical,hash,officialUrl,UFS} from './model.ts';
+import {BASE,canonical,hash,officialUrl} from './model.ts';
 import {PeopleCapture,inspectSample,inspectPeopleContract,parseDiscoveryScope} from './people-discovery.ts';
 import type {Capture,DiscoveryScope,DiscoveryReport} from './people-discovery.ts';
 import {findCpfs} from './cpf-scan.ts';
@@ -9,7 +9,7 @@ import {findCpfs} from './cpf-scan.ts';
 export type HistoryEvent=ReturnType<typeof inspectSample>['events'][number];
 export type HistorySource=Capture&{pass:1|2};
 export type HistoryPerson={
-  id:number;profile:{name:string;photo:string|null;uf:string|null;source:HistorySource}|null;
+  id:number;profile:{name:string;photo:string|null;source:HistorySource}|null;
   events:HistoryEvent[];sources:HistorySource[];
   status:'stable'|'changed'|'failed';issues:string[];
 };
@@ -22,7 +22,7 @@ export type HistoryReport={
   people:HistoryPerson[];sources:HistorySource[];
   coverage:{expected:number;stable:number;changed:number;failed:number};
 };
-const profileSchema=z.object({dados:z.object({id:z.number().int().positive(),ultimoStatus:z.object({nome:z.string().min(1),urlFoto:z.string().nullable(),siglaUf:z.string().nullish()})})});
+const profileSchema=z.object({dados:z.object({id:z.number().int().positive(),ultimoStatus:z.object({nome:z.string().min(1),urlFoto:z.string().nullable()})})});
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 const digestEvents=(events:HistoryEvent[])=>hash(events.map(e=>canonical(e)).sort().join('\n'));
@@ -58,7 +58,7 @@ export async function collectHistory(discovery:DiscoveryReport,pass1:PeopleCaptu
             const {data:raw,source}=await capture.json(`${BASE}/deputados/${id}`),profile=profileSchema.safeParse(raw);
             if(typeof raw.dados?.cpf==='string'){const digits=raw.dados.cpf.replace(/\D/g,'');if(digits.length===11)knownPrivateIds.add(hash(digits));}
             if(!profile.success||profile.data.dados.id!==id)throw new Error('Cadastro incompatível');
-            current.profile={name:profile.data.dados.ultimoStatus.nome,photo:profile.data.dados.ultimoStatus.urlFoto?officialUrl(profile.data.dados.ultimoStatus.urlFoto!,'photo'):null,uf:UFS.has(profile.data.dados.ultimoStatus.siglaUf??'')?profile.data.dados.ultimoStatus.siglaUf!:null,source:{...source,pass}};
+            current.profile={name:profile.data.dados.ultimoStatus.nome,photo:profile.data.dados.ultimoStatus.urlFoto?officialUrl(profile.data.dados.ultimoStatus.urlFoto!,'photo'):null,source:{...source,pass}};
           }
           const {data:raw,source}=await capture.json(`${BASE}/deputados/${id}/historico`);
           current.sources.push({...source,pass});

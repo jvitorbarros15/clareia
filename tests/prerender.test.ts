@@ -85,6 +85,7 @@ test('state pages are factual and cover all 27 UFs',()=>{
   const list:Deputy[]=[normal,{...normal,id:101,cents:1000,heldMonths:[1]},{...normal,id:102,uf:'BA'},{...normal,id:103,noExercise:true,cents:0}];
   assert.equal(inState(list,'SP').length,2);
   assert.equal(stateDescription('SP',list,period),`São Paulo: 2 deputados neste recorte. Cota total em Jan–Dez 2025: R$ 1.234.577,89 (valor exato). Inclui 1 deputado com total parcial; meses em revisão ficam fora da soma. Dados oficiais da Câmara dos Deputados.`);
+  assert.match(stateDescription('SP',[{...normal,ufNote:'UF dos eventos da legislatura'}],period),/Inclui 1 deputado com UF não confirmada mês a mês\./);
   assert.equal(stateDescription('AC',list,period),'Acre: nenhum deputado neste recorte. Indisponível não significa zero.');
   assert.equal(Object.keys(UFS).length,27);
   const html=renderState(shell,'SP',list,period,SITE);

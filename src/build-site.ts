@@ -112,5 +112,5 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   checkLimits(files.length,Math.max(...sizes));
   await fs.rm(finalDir,{recursive:true,force:true});
   await fs.rename(outDir,finalDir);
-  return {publicationId,files:files.length,review:ufReviewItems(summary,active.people)};
+  return {publicationId,files:files.length,review:ufReviewItems(active.people)};
 }
