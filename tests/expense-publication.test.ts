@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {canonical,hash,snapshotId} from '../src/model.ts';
 import type {Expense} from '../src/model.ts';
-import {buildExpenseVersion} from '../src/expense-publication.ts';
-import {signReviewItems} from '../src/review-list.ts';
+import {auditExpenseVersion,buildExpenseVersion,fixSign} from '../src/expense-publication.ts';
+import {signReviewItems,signReviewMarkdown} from '../src/review-list.ts';
+import {csv} from '../src/view.ts';
+import {openDB} from '../src/store.ts';
+import {publishDomain} from '../src/publications.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
 
 const history={people:[1,2,3].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-07T00:00:00Z'}}}))} as any;
@@ -113,13 +116,39 @@ test('a confirmed month keeps its uf over the events and is not marked',()=>{
   assert.deepEqual(withFirst([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[ev(57,'RS')]).slice(0,2),['SP',null]);
 });
 
+const HOUSING='COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA';
+const sr=(cents:number,doc:number|null,glosa:number|null,i:number,extra:object={})=>({...record(1,cents,i),category:HOUSING,documentCents:doc,disallowedCents:glosa,...extra});
+const build=(recs:Expense[])=>buildExpenseVersion([lot(0,[1,2],[cell(1,'complete',recs),cell(2,'held-review')]),lots()[1]],history,'t');
 test('only the exact inverted-net shape is flipped; totals stay consistent and the source net is kept',()=>{
-  const r=(cents:number,doc:number|null,glosa:number|null,i:number)=>({...record(1,cents,i),documentCents:doc,disallowedCents:glosa});
-  const recs=[r(-500,500,null,0),r(-500,500,0,1),r(-500,500,100,2),r(-500,-500,null,3),r(-400,500,null,4),r(-500,-500,0,5),r(70,100,30,6)];
-  const v=buildExpenseVersion([lot(0,[1,2],[cell(1,'complete',recs),cell(2,'held-review')]),lots()[1]],history,'t');
+  const recs=[sr(-500,500,null,0),sr(-500,500,0,1),sr(-500,500,100,2),sr(-500,-500,null,3),sr(-400,500,null,4),sr(-500,-500,0,5),sr(70,100,30,6)];
+  const v=build(recs);
   assert.deepEqual(v.records.map(x=>x.cents),[500,-500,-500,-500,-400,-500,70]);
   assert.deepEqual(v.records.map(x=>x.sourceCents),[-500,...Array(6).fill(undefined)]);
   assert.equal(v.records[0].note,'sinal corrigido conforme a página da Câmara');
-  assert.equal(v.validation.totalCents,-1830);assert.equal(v.validation.independentTotalCents,String(v.validation.totalCents));
-  assert.deepEqual(signReviewItems(v.records,v.people),[{id:1,name:'Pessoa 1',count:1,cents:500,reason:'sinal do líquido invertido na fonte; corrigido conforme a página da Câmara'}]);
+  assert.equal(v.validation.totalCents,-1830);assert.equal(v.validation.independentTotalCents,'-1830');
+  assert.deepEqual(v.validation.signFix,{count:1,deltaCents:1000,auditedCellTotalCents:'-2830'});
+  const items=signReviewItems(v.records,v.people);
+  assert.deepEqual(items.map(i=>[i.reason,i.sourceCents,i.cents]),[['sinal do líquido invertido na fonte; corrigido conforme a página da Câmara',-500,500],['sinal a revisar',-500,-500],['sinal a revisar',-500,-500],['sinal a revisar',-400,-400]]);
+  const md=signReviewMarkdown('p',items);
+  assert.match(md,/- 1 \| Pessoa 1 | 4 registros\| 3 registros/);
+  assert.match(md,/mês 1 \| COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA \| fonte R\$ -5\.00 -> publicado R\$ 5\.00 \| r1-0 \|/);
+  assert.ok(md.indexOf('sinal a revisar')<md.indexOf('corrigido conforme',md.indexOf('## Por registro')));
+});
+test('the shape in another category stops the build; a financial basis is left alone; running twice does not flip back',()=>{
+  assert.throws(()=>build([sr(-500,500,null,0,{category:'COMBUSTÍVEIS E LUBRIFICANTES.'})]),/categoria não prevista/);
+  const kept=build([sr(-500,500,null,0,{financialBasis:'reported-installment'})]);assert.equal(kept.records[0].cents,-500);assert.equal(kept.records[0].sourceCents,undefined);
+  const once=build([sr(-500,500,null,0)]).records[0];assert.deepEqual(fixSign(once),once);
+});
+test('the audit recomputes the correction from the stored records and the lots',async()=>{
+  const recs=[sr(-500,500,null,0),sr(-300,-300,0,1)],ls=[lot(0,[1,2],[cell(1,'complete',recs),cell(2,'held-review')]),lots()[1]],v=buildExpenseVersion(ls,history,'t'),db=await openDB(true);
+  try{
+    await publishDomain(db,'despesas',v);
+    assert.equal((await auditExpenseVersion(db,v,ls)).status,'passed');
+    const wrong={...v,validation:{...v.validation,signFix:{...v.validation.signFix!,deltaCents:v.validation.signFix!.deltaCents+1}}};
+    assert.deepEqual((await auditExpenseVersion(db,wrong,ls)).failures,['sign-correction']);
+  }finally{await db.close();}
+});
+test('the CSV marks corrected records in a last column',()=>{
+  const [a,b]=build([sr(-500,500,null,0),sr(100,100,0,1)]).records,lines=csv([a,b]).split('\r\n');
+  assert.match(lines[0],/;"sinal_corrigido"$/);assert.match(lines[1],/;"sim"$/);assert.match(lines[2],/;""$/);
 });

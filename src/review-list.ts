@@ -17,14 +17,22 @@ export async function writeReview(publicationId:string,items:ReviewItem[]):Promi
   return items.length;
 }
 
-export const signReviewItems=(records:Expense[],people:Person[])=>{
-  const by=new Map<number,{count:number;cents:number}>();
-  for(const r of records)if(r.sourceCents!==undefined){const g=by.get(r.personId)??{count:0,cents:0};g.count++;g.cents+=r.cents;by.set(r.personId,g);}
-  return [...by].sort((a,b)=>a[0]-b[0]).map(([id,g])=>({id,name:people.find(p=>p.id===id)?.name??'',...g,reason:'sinal do líquido invertido na fonte; corrigido conforme a página da Câmara'}));
+const SIGN_REASON='sinal do líquido invertido na fonte; corrigido conforme a página da Câmara';
+export type SignItem={id:number;name:string;month:number;category:string;recordId:string;sourceCents:number;cents:number;reason:string};
+// Corrected records, plus any negative net on a positive document that was not corrected (those need a human).
+export const signReviewItems=(records:Expense[],people:Person[]):SignItem[]=>records.flatMap(r=>{
+  const reason=r.sourceCents!==undefined?SIGN_REASON:r.cents<0&&r.documentCents!==null&&r.documentCents>0?'sinal a revisar':null;
+  return reason?[{id:r.personId,name:people.find(p=>p.id===r.personId)?.name??'',month:r.month,category:r.category,recordId:r.id,sourceCents:r.sourceCents??r.cents,cents:r.cents,reason}]:[];
+});
+const brl=(c:number)=>'R$ '+(c/100).toFixed(2);
+export const signReviewMarkdown=(publicationId:string,items:SignItem[])=>{
+  const housing='COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA',sorted=[...items].sort((a,b)=>Number(a.category===housing)-Number(b.category===housing)||a.reason.localeCompare(b.reason,'pt')||a.id-b.id||a.month-b.month);
+  const per=new Map<number,{name:string;count:number;cents:number}>();
+  for(const i of items){const g=per.get(i.id)??{name:i.name,count:0,cents:0};g.count++;g.cents+=i.cents;per.set(i.id,g);}
+  return [`# Sinal corrigido - ${publicationId}`,'','## Por deputado',...[...per].sort((a,b)=>a[0]-b[0]).map(([id,g])=>`- ${id} | ${g.name} | ${g.count} registros | ${brl(g.cents)}`),'','## Por registro (outras categorias e "a revisar" primeiro)',...sorted.map(i=>`- ${i.id} | ${i.name} | mês ${i.month} | ${i.category} | fonte ${brl(i.sourceCents)} -> publicado ${brl(i.cents)} | ${i.recordId} | ${i.reason}`),''].join('\n');
 };
-export const signReviewMarkdown=(publicationId:string,items:ReturnType<typeof signReviewItems>)=>[`# Sinal corrigido - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | ${i.count} registros | R$ ${(i.cents/100).toFixed(2)} | ${i.reason}`),''].join('\n')+'\n';
-export async function writeSignReview(publicationId:string,items:ReturnType<typeof signReviewItems>):Promise<void>{
+export async function writeSignReview(publicationId:string,items:SignItem[]):Promise<void>{
   const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-sinal-corrigido.md`);
   await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,signReviewMarkdown(publicationId,items));
-  console.error(`Sinal corrigido: ${items.length} deputados em ${file}`);
+  console.error(`Sinal corrigido: ${items.length} registros em ${file}`);
 }
