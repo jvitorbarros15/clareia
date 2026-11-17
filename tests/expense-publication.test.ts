@@ -124,7 +124,8 @@ test('without a confirmed party month, events that agree give the party, marked;
   assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PL','2024-05-01T10:00'),pev('PT','2019-01-01T10:00',56)]).slice(0,2),['PL','partido dos eventos da legislatura']);
 });
 test('events that switch party give the latest one up to the end of the scope, with its month',()=>{
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2024-05-10T10:00'),pev('PP','2024-06-10T10:00')]).slice(0,2),['PP','último partido nos eventos (desde mai/2024)']);
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2024-05-10T10:00'),pev('PP','2024-06-10T10:00')]).slice(0,2),['PP','partido em jan/2025 (eventos da legislatura)']);
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2024-05-10T10:00'),pev('PT','2025-02-10T10:00')]).slice(0,2),['PP','partido em jan/2025 (eventos da legislatura)']);
 });
 test('no events, a missing party or an unreadable date leave the party empty',()=>{
   assert.deepEqual(partyOf(noParty,[]).slice(0,2),[null,null]);
@@ -133,4 +134,8 @@ test('no events, a missing party or an unreadable date leave the party empty',()
 });
 test('a confirmed party month keeps its party over the events and is not marked',()=>{
   assert.deepEqual(partyOf([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[pev('PL','2023-02-01T10:00')]).slice(0,2),['X',null]);
+});
+test('a switch after the expense period keeps the earlier party, marked as unanimous up to the period end',()=>{
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-06-10T10:00')]).slice(0,2),['PL','partido dos eventos da legislatura']);
+  assert.deepEqual(partyOf(noParty,[pev('PP','2025-06-10T10:00')]).slice(0,2),[null,null]);
 });
