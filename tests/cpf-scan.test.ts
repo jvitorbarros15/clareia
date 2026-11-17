@@ -4,8 +4,7 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {strToU8,zipSync} from 'fflate';
-import {findCpfs,knownCpfs,loadAllowlist,redactCpf,redactExpense,scanCpfs,scanFiles,validCpf} from '../src/cpf-scan.ts';
+import {findCpfs,loadAllowlist,redactCpf,redactExpense,scanCpfs,scanFiles,validCpf} from '../src/cpf-scan.ts';
 import {publicSupplier} from '../src/model.ts';
 
 const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
@@ -42,15 +41,6 @@ test('eleven plain digits only count when seen as a CPF in this run',()=>{
 });
 test('a longer number is not read as a CPF',()=>{
   assert.equal(findCpfs('doc 911144477735',new Set([sha256('11144477735')])),0);
-});
-test('knownCpfs reads API pages and the annual file column',async t=>{
-  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-cpf-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));
-  await fs.writeFile(path.join(directory,'a.json'),JSON.stringify({dados:{cpf:'52998224725'}}));
-  await fs.writeFile(path.join(directory,'b.json'),JSON.stringify({dados:[{cnpjCpfFornecedor:'11144477735'},{cnpjCpfFornecedor:'11222333000181'}]}));
-  const csv='txtNumero;txtCNPJCPF\n12345678901;39053344705\n1;11222333000181\n';
-  await fs.writeFile(path.join(directory,'annual-2.csv.zip'),zipSync({'Ano-2025.csv':strToU8(csv)}));
-  const known=await knownCpfs(directory);
-  assert.deepEqual([...known].sort(),['52998224725','11144477735','39053344705'].map(sha256).sort());
 });
 test('scanFiles reports the file and count, walks folders and skips images',async t=>{
   const directory=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-cpf-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));

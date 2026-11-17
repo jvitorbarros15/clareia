@@ -1,8 +1,6 @@
 import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {parse} from 'csv-parse/sync';
-import {unzipSync} from 'fflate';
 
 const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
 const SKIP=new Set(['.jpg','.jpeg','.png','.zip','.woff2']);
@@ -49,21 +47,6 @@ export async function loadAllowlist(file:string):Promise<Set<string>>{
   const entries=(JSON.parse(await fs.readFile(file,'utf8')) as {entries:{sha256:string;reason:string}[]}).entries;
   for(const e of entries)if(!/^[0-9a-f]{64}$/.test(e.sha256)||typeof e.reason!=='string'||e.reason.trim().length<10)throw new Error('Entrada da lista de exceções de CPF sem hash válido ou sem motivo');
   return new Set(entries.map(e=>e.sha256));
-}
-export async function knownCpfs(directory:string):Promise<Set<string>>{
-  const known=new Set<string>();
-  const add=(value:string)=>{const digits=value.replace(/\D/g,'');if(digits.length===11)known.add(sha256(digits));};
-  for(const file of await fs.readdir(directory)){
-    if(!file.endsWith('.json'))continue;
-    const text=await fs.readFile(path.join(directory,file),'utf8');
-    for(const m of text.matchAll(/"(?:cpf|cnpjCpfFornecedor)":"([^"]*)"/g))add(m[1]);
-  }
-  const archive=await fs.readFile(path.join(directory,'annual-2.csv.zip')).catch(()=>null);
-  if(archive)for(const bytes of Object.values(unzipSync(archive))){
-    const rows=parse(Buffer.from(bytes),{columns:true,delimiter:';',bom:true,relax_quotes:true,relax_column_count:true}) as {txtCNPJCPF?:string}[];
-    for(const row of rows)add(row.txtCNPJCPF||'');
-  }
-  return known;
 }
 async function walk(target:string):Promise<string[]>{
   if(!(await fs.stat(target)).isDirectory())return [target];

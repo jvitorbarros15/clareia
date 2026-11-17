@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 export const BASE = 'https://dadosabertos.camara.leg.br/api/v2';
-export const METRIC = 'camara.ceap.valor-liquido-api.v1';
 export const hash = (text: string | Uint8Array) => createHash('sha256').update(text).digest('hex');
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
@@ -42,11 +41,6 @@ export function publicSupplier(name:string,rawId:string):{name:string;key:'cnpj'
 // The Câmara API drops connections for tens of seconds at a time; a run is long, so retries wait long.
 export const RETRY_WAITS=[2000,5000,15000,30000];
 export const retryWait=(attempt:number)=>Math.round(RETRY_WAITS[attempt]*(0.75+Math.random()/2));
-export function sourceError(url:string,error:unknown):Error{
-  const e=error as {message?:string;cause?:{code?:string;message?:string}}|undefined;
-  const cause=e?.cause?.code||e?.cause?.message;
-  return new Error(`${url}: ${e?.message??String(error)}${cause?` (${cause})`:''}`,{cause:error});
-}
 export async function readLimited(response:Response,limit:number):Promise<Uint8Array> {
   if(Number(response.headers.get('content-length'))>limit)throw new Error('Resposta excede limite');
   const parts:Uint8Array[]=[];let size=0;
@@ -70,16 +64,15 @@ export const expenseSchema=z.object({
   cnpjCpfFornecedor:z.string().nullable(),dataDocumento:z.string().nullable(),urlDocumento:z.string().nullable(),
   valorDocumento:z.number(),valorGlosa:z.number().nullable(),valorLiquido:z.number()
 }).passthrough();
-export const envelopeSchema=z.object({dados:z.array(z.unknown()),links:z.array(z.object({rel:z.string(),href:z.string()}))});
 export type Scope={year:number;months:number[];ids:number[];legislature:number};
 // uf: temporal single-month UF, else the UF unanimous across the legislature's events, else null. party: the Câmara's status at collection time (statusDate), not a historical attribution.
 export type Person={id:number;name:string;photo:string|null;sourceUrl:string;profileFetchedAt:string;uf?:string|null;ufNote?:string|null;party?:string|null;statusDate?:string|null};
 export const UFS=new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
 export type SourceRef={url:string;sha256?:string;row:number;fetchedAt:string};
 export type FinancialBasis='reported-installment'|'balanced-document-split';
-export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey?:string;supplierVerified:boolean;supplierIdOdd?:true;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis};
+export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey?:string;supplierVerified:boolean;supplierIdOdd?:true;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis;sourceCents?:number;note?:string};
 export type Page={url:string;sha256:string;file:string;fetchedAt:string;pass:number;count:number|null};
-export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
+export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];signFix?:{count:number;deltaCents:number};lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
 
 export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|null {
   try {const u=new URL(input);if(u.protocol!=='https:'&&u.protocol!=='http:')return null;

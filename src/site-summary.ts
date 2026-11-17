@@ -4,7 +4,7 @@ import type {CoverageRow} from './people-publication.ts';
 import type {BillPerson} from './bills.ts';
 import type {SiteCeiling} from './ceiling-site.ts';
 
-export type MonthSummary={month:number;cents:number;records:number;exercise:string|null;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean;partialScope:boolean;held:boolean};
+export type MonthSummary={month:number;cents:number;records:number;exercise:string|null;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;held:boolean};
 // [month, category index, cents, records]
 export type Cell=[number,number,number,number];
 // [month, category index, supplier index, cents, records]
@@ -42,7 +42,7 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
     const months=[...scope.months].sort((a,b)=>a-b).map<MonthSummary>(month=>{
       const rows=own.filter(r=>r.month===month),row=attribution.get(id+':'+scope.year+':'+month);
       if(heldKeys.has(id+':'+month)&&rows.length)throw new Error('Competência retida com registros');
-      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,review:row?.review??false,partialScope:row?.partialScope??false,held:heldKeys.has(id+':'+month)};
+      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,held:heldKeys.has(id+':'+month)};
     });
     // With an approved version, a deputy absent from it has zero counted bills; without one the count is unknown.
     const counted=billsOf.get(id);

@@ -16,7 +16,6 @@
   const state = {
     highlightCategory: null, othersOpen: false, catsOpen: false, mapLimit: MAP_STEP, rosterLimit: ROSTER_STEP, supplierLimit: 8, supplierQuery: '', month: COVER, mapUF: null, mapMetric: 'total', from: 1, to: COVERAGE.length, a: C.byTotal()[0].id, b: C.byTotal()[1].id, topic: 'Todos', stage: 'Todos', projectQuery: '', voter: C.byTotal()[0].id, timeline: C.byTotal()[0].id, rosterQuery: '', rosterUF:'Todos', rosterParty:'Todos',
     favorites: new Set((Array.isArray(read('clareia-favorites', [])) ? read('clareia-favorites', []) : []).filter(id => C.person(id))),
-    projects: new Set((Array.isArray(read('clareia-projects', [])) ? read('clareia-projects', []) : []).filter(id => ['01', '02', '03', '04'].includes(id))),
     motion: !reduced.matches
   };
   const UF = {
@@ -26,7 +25,6 @@
     MS:['Mato Grosso do Sul',4,4], MG:['Minas Gerais',8,4], ES:['Espírito Santo',10,4], SP:['São Paulo',7,5], RJ:['Rio de Janeiro',9,5],
     PR:['Paraná',5,5], SC:['Santa Catarina',6,6], RS:['Rio Grande do Sul',5,7]
   };
-  const projects = [], votes = [];
   const color = ['var(--accent)','#c2731a','var(--chart3)'];
   const lab = C.label;
   // catText and scopeText return HTML-safe text: every use is inside innerHTML.
@@ -164,7 +162,7 @@
     if(state.mapMetric==='average'){const comparable=people.filter(C.comparable);return comparable.length?C.sum(comparable.flatMap(C.cells))/comparable.length:null;}
     return C.sum(people.flatMap(C.cells));
   }
-  function mapFormat(value) {return state.mapMetric==='projects'?number(value)+' projetos':money(value);}
+  function mapFormat(value) {return money(value);}
   function mapControls() {
     return `<div class="map-metrics"><div class="map-metric-row"><span id="map-metric-label">Colorir por</span><div class="map-segment" role="group" aria-labelledby="map-metric-label">${[['total','Total de despesas'],['average','Por representante']].map(([value,label])=>`<button type="button" data-p="map-metric" data-value="${value}" aria-pressed="${state.mapMetric===value}">${label}</button>`).join('')}</div></div><p class="p-small">Mais intenso = maior valor neste recorte. Ausência de dados tem preenchimento distinto. ${C.state.category==='Todas'?'Todas as categorias':catText(C.state.category)}. ${C.span()}.</p><button class="p-link" data-p="map-evidence">Como chegamos nisso? →</button></div>`;
   }
@@ -190,7 +188,7 @@
     if(!state.mapUF)return `<p class="p-kicker">Brasil</p><h3>Escolha um estado.</h3><p class="p-small">Toque num estado do mapa, ou use a lista, para conhecer os deputados dele neste recorte. A UF indica o estado de representação, não o local onde a despesa ocorreu.</p>`;
     const ppl=C.all().filter(p=>!p.noExercise&&p.uf===state.mapUF), total=C.sum(ppl.flatMap(C.cells));
     return `<p class="p-kicker">${state.mapUF} / ${UF[state.mapUF][0]}</p><h3>${ppl.length?'Conheça quem está no seu recorte.':'Ainda não há dados neste recorte.'}</h3><p class="p-small">A UF indica o estado de representação. Não é o local onde a despesa ocorreu.</p>
-      ${ppl.length?`<div class="atlas-numbers"><div><strong>${ppl.length}</strong><span>${ppl.length===1?'deputado neste recorte':'deputados neste recorte'}</span></div><div><strong>${mapFormat(mapValue(state.mapUF))}</strong><span>${state.mapMetric==='projects'?'projetos apresentados':state.mapMetric==='average'?'cota por representante':'cota total'} · ${C.span()}${editorial&&state.mapMetric!=='projects'?' · valor exato':''}</span></div></div>${ufNoteLine(ppl)}<div class="atlas-people">${[...ppl].sort(byName).slice(0,state.mapLimit).map(p=>`<div>${C.avatar(p)}<button data-action="profile" data-id="${p.id}"><b>${esc(p.name)}</b><small>Deputado(a) federal · ${esc([p.uf,p.ufNote].filter(Boolean).join(" · "))}</small></button>${followButton(p.id)}</div>`).join('')}</div>${C.listMore(ppl.length,state.mapLimit,MAP_STEP,'map','deputados')}<button class="p-primary" data-p="apply-state">Explorar ${UF[state.mapUF][0]} ${icon('arrow')}</button>`:`<div class="map-empty">${icon('database')}<p>Indisponível não significa zero.</p><span>Nenhum deputado desta amostra representa este estado.</span></div>`}`;
+      ${ppl.length?`<div class="atlas-numbers"><div><strong>${ppl.length}</strong><span>${ppl.length===1?'deputado neste recorte':'deputados neste recorte'}</span></div><div><strong>${mapFormat(mapValue(state.mapUF))}</strong><span>${state.mapMetric==='average'?'cota por representante':'cota total'} · ${C.span()}${editorial?' · valor exato':''}</span></div></div>${ufNoteLine(ppl)}<div class="atlas-people">${[...ppl].sort(byName).slice(0,state.mapLimit).map(p=>`<div>${C.avatar(p)}<button data-action="profile" data-id="${p.id}"><b>${esc(p.name)}</b><small>Deputado(a) federal · ${esc([p.uf,p.ufNote].filter(Boolean).join(" · "))}</small></button>${followButton(p.id)}</div>`).join('')}</div>${C.listMore(ppl.length,state.mapLimit,MAP_STEP,'map','deputados')}<button class="p-primary" data-p="apply-state">Explorar ${UF[state.mapUF][0]} ${icon('arrow')}</button>`:`<div class="map-empty">${icon('database')}<p>Indisponível não significa zero.</p><span>Nenhum deputado desta amostra representa este estado.</span></div>`}`;
   }
   function atlas() {
     return `${intro('03','Atlas de representantes','O Brasil, mais perto.','Escolha um estado. Descubra as pessoas por trás dos números e leve o recorte para o restante da página.',badge(`27 UFs · ${new Set(C.all().map(p=>p.uf).filter(Boolean)).size} com deputados neste recorte`))}<div class="atlas-grid"><div class="map-canvas"><div class="map-topline"><span>BRASIL / UNIDADES FEDERATIVAS</span><button data-p="map-reset">Visão inicial ↺</button></div>${mapControls()}${tileMap()}<div class="map-key"><span><i class="filled"></i>Com dados</span><span><i></i>Sem dados</span>${Object.keys(UF).some(uf=>mapValue(uf)<0)?'<span><i class="negative"></i>Valor líquido negativo</span>':''}</div><p class="p-small">Mapa esquemático por UF, não geográfico.</p>${ufNoteLine(C.all().filter(p=>!p.noExercise))}<label class="map-select">Escolher estado<select id="map-select"><option value="" ${state.mapUF?'':'selected'}>Escolha um estado</option>${Object.entries(UF).sort((a,b)=>a[1][0].localeCompare(b[1][0],'pt-BR')).map(([uf,[name]])=>`<option value="${uf}" ${state.mapUF===uf?'selected':''}>${name}</option>`).join('')}</select></label></div><div class="atlas-detail" id="atlas-detail" aria-live="polite">${atlasDetail()}</div></div>`;
@@ -214,7 +212,6 @@
   function directory() {
     return `<div class="directory-heading"><h3>Encontre um representante</h3><span>${C.all().length} deputados · ${C.span()}</span></div><div class="directory-controls"><label><span class="sr-only">Nome do representante</span><input id="roster-query" placeholder="Buscar por nome" value="${esc(state.rosterQuery)}"></label></div><div class="directory-grid" id="directory-grid" aria-live="polite">${directoryCards()}</div>`;
   }
-  function projectCards() { return ''; }
 
   const activityCache=new Map();
   const activityData=id=>{if(!activityCache.has(id))activityCache.set(id,fetch(window.ClareiaData.activityUrl(id)).then(r=>{if(!r.ok)throw new Error();return r.json();}).catch(error=>{activityCache.delete(id);throw error;}));return activityCache.get(id);};
@@ -248,7 +245,6 @@
     return `${intro('05','Além da quantidade','Ideias em movimento.','Apresentar um projeto é só o começo. Explore a proposta, a autoria e cada etapa do caminho.',badge('Próxima etapa'))}<div class="empty-state real-pending"><b>Projetos de lei ainda não foram coletados.</b><p>A próxima etapa traz PL, PLP e PEC da Câmara, separando autoria principal de coautoria e mostrando quais viraram lei. Nenhum número aparece aqui antes de ser conferido com a fonte oficial.</p></div>`;
   }
 
-  function voteCards() { return ''; }
 
   function voteSection() {
     if(window.ClareiaData.votesApproved){queueMicrotask(hydrateActivity);return `${intro('06','O voto e seu contexto','Como decidiram?',`Votações nominais de ${window.ClareiaData.votesYears.join(', ')}. Voto registrado não é presença nem falta.`)}${activitySelect('votes')}<div id="votes-list" aria-live="polite"><p class="p-small">Carregando…</p></div>`;}
@@ -269,7 +265,7 @@
     return state.favorites.size?`<div class="saved-people">${[...state.favorites].map(id=>{const p=C.person(id);return `<div>${C.avatar(p)}<button data-action="profile" data-id="${id}"><b>${esc(p.name)}</b><small>${esc([p.uf,p.ufNote].filter(Boolean).join(" · "))} · abrir perfil</small></button>${followButton(id)}</div>`;}).join('')}</div>`:`<div class="saved-empty"><span class="saved-orbit" aria-hidden="true">+</span><h3>Comece por uma pessoa.</h3><p>Salve um perfil e volte para explorar sua atividade.</p><button class="p-primary" data-p-follow="${C.byTotal()[0].id}">Acompanhar ${esc(C.byTotal()[0].name)} +</button></div>`;
   }
   function following() {
-    return `${intro('08','A política continua','Acompanhe o que muda.','Construa sua própria lista de acompanhamento. Os favoritos ficam salvos apenas neste navegador.')}<div class="following-grid"><div class="timeline-panel"><div class="timeline-heading"><h3>Linha do tempo do mandato</h3><label class="sr-only" for="timeline-person">Pessoa da linha do tempo</label><select id="timeline-person">${peopleOptions(state.timeline,false)}</select>${personFilter('timeline-person')}</div><div class="timeline">${timeline()}</div><p class="p-small">Linha do tempo desta versão publicada.</p></div><aside class="saved-panel"><div class="saved-heading"><h3>Meu acompanhamento</h3><span>${state.favorites.size}</span></div><div id="saved-list">${savedList()}</div><div class="saved-projects"><span>Projetos acompanhados</span><b>${state.projects.size}</b>${state.projects.size?`<div>${[...state.projects].map(id=>`<button data-p-project="${id}">DEMO ${id} ↗︎</button>`).join('')}</div>`:''}</div><button class="outline-button weekly-button" data-p="brief" ${!state.favorites.size?'disabled':''}>Abrir resumo dos acompanhados ${icon('arrow')}</button><p class="p-small">Sem cadastro. Nenhum e-mail ou alerta externo é enviado.</p></aside></div>`;
+    return `${intro('08','A política continua','Acompanhe o que muda.','Construa sua própria lista de acompanhamento. Os favoritos ficam salvos apenas neste navegador.')}<div class="following-grid"><div class="timeline-panel"><div class="timeline-heading"><h3>Linha do tempo do mandato</h3><label class="sr-only" for="timeline-person">Pessoa da linha do tempo</label><select id="timeline-person">${peopleOptions(state.timeline,false)}</select>${personFilter('timeline-person')}</div><div class="timeline">${timeline()}</div><p class="p-small">Linha do tempo desta versão publicada.</p></div><aside class="saved-panel"><div class="saved-heading"><h3>Meu acompanhamento</h3><span>${state.favorites.size}</span></div><div id="saved-list">${savedList()}</div><button class="outline-button weekly-button" data-p="brief" ${!state.favorites.size?'disabled':''}>Abrir resumo dos acompanhados ${icon('arrow')}</button><p class="p-small">Sem cadastro. Nenhum e-mail ou alerta externo é enviado.</p></aside></div>`;
   }
   function closing() {
     return `<div class="closing-top">${label('09','A sua próxima pergunta')}<h2>Curiosidade é <br>um bom começo.</h2><p>Você não precisa conhecer o vocabulário do Congresso. <br>Comece com uma pergunta. Termine nos registros.</p><div class="closing-questions">${['Quem mais gastou por mês?',`Compare ${C.byTotal()[0].name.split(' ')[0]} e ${C.byTotal()[1].name.split(' ')[0]}`,'Quem gastou menos?'].map(q=>`<button data-question="${esc(q)}">${esc(q)}${icon('arrow')}</button>`).join('')}</div></div><div class="trust-row"><div><span>01</span><h3>Fonte à vista</h3><p>Cada número tem um caminho até os registros.</p></div><div><span>02</span><h3>Contexto primeiro</h3><p>Período, cobertura e definição acompanham a comparação.</p></div><div><span>03</span><h3>Limites explícitos</h3><p>Ausência de dados nunca vira zero ou uma resposta inventada.</p></div></div><button class="p-link" data-action="methodology">Conheça a metodologia ${ext()}</button>`;
@@ -389,9 +385,7 @@
     const names=[...by.keys()].sort((a,b)=>by.get(b).total-by.get(a).total||a.localeCompare(b,'pt-BR'));
     C.showDialog('Da categoria ao fornecedor',`<p class="records-note">${esc(lab(category))} · ${scopeText(periodText())}</p><p class="records-note">Nome na fonte: ${esc(category)}</p><div class="calculation-result">${money(C.sum(rows))}<small>Soma dos registros da categoria selecionada</small></div><div class="supplier-list">${names.map(name=>`<button data-p-supplier="${esc(name)}" data-category="${esc(category)}"><span>${esc(name)}<small>${by.get(name).count} registros oficiais</small></span><b>${money(by.get(name).total)}</b>↗︎</button>`).join('')||'<p>Sem registros neste recorte.</p>'}</div><p class="fixture-note">Clique no fornecedor para abrir os registros. Na produção, o vínculo dependerá do identificador oficial; nomes parecidos não bastam.</p>`);
   }
-  function projectDetail() {}
 
-  function voteDetail() {}
 
   function dossier() { C.showDialog('Ainda não coletado','<p>Eleições, patrimônio e emendas ainda não foram coletados e conferidos.</p>'); }
 
@@ -409,7 +403,7 @@
   document.addEventListener('clareia:reset',()=>{state.month=COVER;state.highlightCategory=null;state.othersOpen=false;state.catsOpen=false;state.mapUF=null;syncEstado();state.mapMetric='total';state.from=1;state.to=COVERAGE.length;});
   document.addEventListener('clareia:change',updateAll);
   document.addEventListener('click',e=>{
-    const b=e.target.closest('[data-p-highlight],[data-p],[data-p-follow],[data-p-uf],[data-p-category],[data-p-supplier],[data-p-evidence-person],[data-p-drill],[data-p-month],[data-p-metric],[data-p-topic],[data-p-project],[data-p-project-save],[data-p-vote],[data-p-dossier],[data-p-event],[data-p-summary],[data-p-ask],[data-p-add-compare]');if(!b)return;
+    const b=e.target.closest('[data-p-highlight],[data-p],[data-p-follow],[data-p-uf],[data-p-category],[data-p-supplier],[data-p-evidence-person],[data-p-drill],[data-p-month],[data-p-metric],[data-p-topic],[data-p-dossier],[data-p-event],[data-p-summary],[data-p-ask],[data-p-add-compare]');if(!b)return;
     if(b.dataset.pHighlight===OTHERS){state.othersOpen=!state.othersOpen;state.highlightCategory=null;updateSpending();focusMatch(`[data-donut-slice][data-p-highlight="${OTHERS}"]`);previewDonut(null);return;}
     if(b.dataset.pHighlight){state.othersOpen=false;const slice=b.hasAttribute('data-donut-slice');state.highlightCategory=state.highlightCategory===b.dataset.pHighlight?null:b.dataset.pHighlight;updateSpending();focusMatch(`${slice?'[data-donut-slice]':'.donut-legend button'}[data-p-highlight="${CSS.escape(b.dataset.pHighlight)}"]`);previewDonut(null);return;}
     if(b.dataset.pEvidencePerson){personEvidence(b.dataset.pEvidencePerson);return;}
@@ -422,13 +416,10 @@
     if(b.dataset.pMonth){state.month=+b.dataset.pMonth;renderPart('despesas',spending);focusMatch(`[data-p-month="${state.month}"]`);return;}
     if(b.dataset.pMetric){C.state.metric=b.dataset.pMetric;C.refresh();focusMatch(`[data-p-metric="${C.state.metric}"]`);return;}
     if(b.dataset.pTopic){state.topic=b.dataset.pTopic;renderPart('projetos',projectSection);watchMotion();focusMatch(`[data-p-topic="${state.topic}"]`);return;}
-    if(b.dataset.pProject){projectDetail(b.dataset.pProject);return;}
-    if(b.dataset.pProjectSave){const id=b.dataset.pProjectSave;state.projects.has(id)?state.projects.delete(id):state.projects.add(id);save('clareia-projects',[...state.projects]);renderPart('project-grid',projectCards);updateSaved();if($('#detail').open)projectDetail(id);focusMatch(`[data-p-project-save="${id}"]`);return;}
-    if(b.dataset.pVote){voteDetail(b.dataset.pVote);return;}
     if(b.dataset.pDossier){dossier(b.dataset.pDossier);return;}
     if(b.dataset.pSummary){summary(b.dataset.pSummary);return;}
     if(b.dataset.pAsk){runAsk(b.dataset.pAsk);return;}
-    if(b.dataset.pEvent){const kind=b.dataset.pEvent,id=b.dataset.value;if(kind==='vote')voteDetail(id);else if(kind==='project')projectDetail(id);else if(kind==='records')C.recordTable(C.person(id));else C.profile(id);return;}
+    if(b.dataset.pEvent){const kind=b.dataset.pEvent,id=b.dataset.value;if(kind==='records')C.recordTable(C.person(id));else C.profile(id);return;}
     switch(b.dataset.p){
             case 'more-suppliers':{const before=state.supplierLimit;state.supplierLimit+=SUPPLIER_STEP;updateSpending();focusMatch(`#despesas .supplier-list > button:nth-child(${before+1})`);break;}
             case 'more-cats':state.catsOpen=true;updateSpending();focusMatch(`.donut-legend > button:nth-child(${CATEGORY_ROWS+1})`);break;
@@ -438,7 +429,7 @@
             case 'evidence-back':expenseEvidence(evidence.category,evidence.supplier,evidence.month,true);break;
       case 'clear-highlight':state.highlightCategory=null;state.othersOpen=false;updateSpending();focusMatch('.donut-legend button:not(:disabled)');break;
       case 'spend-evidence':expenseEvidence();break;
-      case 'map-evidence':C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.span()} · ${state.mapMetric==='projects'?'autoria principal':catText(C.state.category)}</p><p>UF de representação, não destino da despesa. Média por representante = soma das despesas dividida pelo número de representantes comparáveis da UF; não ajusta tempo em exercício.</p><table class="data-table"><thead><tr><th>UF</th><th>${state.mapMetric==='average'?'Comparáveis':'Perfis'}</th><th>Valor</th></tr></thead><tbody>${Object.entries(UF).filter(([uf])=>C.all().some(p=>!p.noExercise&&p.uf===uf)).map(([uf,[name]])=>`<tr><td>${uf} / ${name}</td><td>${state.mapMetric==='average'?C.all().filter(p=>!p.noExercise&&p.uf===uf).filter(C.comparable).length:C.all().filter(p=>!p.noExercise).filter(p=>p.uf===uf).length}</td><td>${mapFormat(mapValue(uf))}</td></tr>`).join('')}</tbody></table>${ufNoteLine(C.all().filter(p=>!p.noExercise))}<p class="fixture-note">UF de representação conforme o cadastro da Câmara. UFs sem deputados neste recorte aparecem como indisponíveis; indisponível não significa zero.</p>`);break;
+      case 'map-evidence':C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.span()} · ${catText(C.state.category)}</p><p>UF de representação, não destino da despesa. Média por representante = soma das despesas dividida pelo número de representantes comparáveis da UF; não ajusta tempo em exercício.</p><table class="data-table"><thead><tr><th>UF</th><th>${state.mapMetric==='average'?'Comparáveis':'Perfis'}</th><th>Valor</th></tr></thead><tbody>${Object.entries(UF).filter(([uf])=>C.all().some(p=>!p.noExercise&&p.uf===uf)).map(([uf,[name]])=>`<tr><td>${uf} / ${name}</td><td>${state.mapMetric==='average'?C.all().filter(p=>!p.noExercise&&p.uf===uf).filter(C.comparable).length:C.all().filter(p=>!p.noExercise).filter(p=>p.uf===uf).length}</td><td>${mapFormat(mapValue(uf))}</td></tr>`).join('')}</tbody></table>${ufNoteLine(C.all().filter(p=>!p.noExercise))}<p class="fixture-note">UF de representação conforme o cadastro da Câmara. UFs sem deputados neste recorte aparecem como indisponíveis; indisponível não significa zero.</p>`);break;
       case 'map-metric':state.mapMetric=b.dataset.value;renderPart('atlas',atlas);focusMatch('[data-p=map-metric][data-value='+state.mapMetric+']');break;
       case 'activity-more':{const kind=b.dataset.kind;listState[kind].limit+=LIST_STEP;renderList(kind);focusMatch(`[data-p=activity-more][data-kind=${kind}]`);break;}
       case 'map-reset':state.mapUF=null;syncEstado();renderPart('atlas',atlas);focusMatch('[data-p=map-reset]');break;
@@ -452,7 +443,7 @@
       case 'assistant':if(editorial){$('#query').scrollIntoView({block:'center',behavior:state.motion?'smooth':'instant'});$('#query').focus({preventScroll:true});}else assistant();break;
       case 'top':window.scrollTo({top:0,behavior:state.motion?'smooth':'instant'});break;
       case 'coverage':C.showDialog('Cobertura desta versão',`<div class="text-content"><h3>O que esta versão cobre.</h3><p>${C.all().length} deputados, ${C.span()}, despesas da cota parlamentar com dados oficiais da Câmara.</p><p>${window.ClareiaData.billsApproved||window.ClareiaData.votesApproved?`${[window.ClareiaData.billsApproved?'':'Projetos',window.ClareiaData.votesApproved?'':'Votações','Eleições','patrimônio e emendas'].filter(Boolean).join(', ')} ainda não foram publicados nesta versão.`:'Projetos, votações, eleições, patrimônio e emendas ainda não foram coletados; as seções aparecem com o aviso “ainda não coletado”.'}</p><p>A busca usa regras locais, sem IA conectada. Favoritos ficam só neste navegador.</p></div>`);break;
-      case 'reset-saved':state.favorites.clear();state.projects.clear();save('clareia-favorites',[]);save('clareia-projects',[]);updateAll();updateFollowCount();C.toast('Favoritos locais apagados.');break;
+      case 'reset-saved':state.favorites.clear();save('clareia-favorites',[]);updateAll();updateFollowCount();C.toast('Favoritos locais apagados.');break;
     }
   });
   document.addEventListener('click',e=>{
@@ -494,7 +485,6 @@
     const search=/^activity-search-(bills|votes)$/.exec(e.target.id||'');if(search){listState[search[1]].query=e.target.value;listState[search[1]].limit=LIST_STEP;renderList(search[1]);return;}
     if(e.target.id==='linked-from'||e.target.id==='linked-to'){const isFrom=e.target.id==='linked-from';state[isFrom?'from':'to']=+e.target.value;if(state.from>state.to)state[isFrom?'to':'from']=+e.target.value;$('#linked-from').value=state.from;$('#linked-to').value=state.to;$('#linked-from-label').textContent=months[COVERAGE[state.from-1]];$('#linked-to-label').textContent=months[COVERAGE[state.to-1]];$('#linked-result').innerHTML=linkedChart();fitChartHits();}
     if(e.target.id==='spend-range'){state.month=+e.target.value;updateSpending();}
-    if(e.target.id==='project-search'){state.projectQuery=e.target.value;renderPart('project-grid',projectCards);watchMotion();}
     if(e.target.id==='roster-query'){state.rosterQuery=e.target.value;state.rosterLimit=ROSTER_STEP;renderPart('directory-grid',directoryCards);}
   });
   document.addEventListener('change',e=>{
@@ -503,8 +493,6 @@
     if(id==='map-select'){state.mapUF=val||null;state.mapLimit=MAP_STEP;syncEstado();renderPart('atlas',atlas);focusMatch('#map-select');}
     if(id==='activity-bills'||id==='activity-votes'){state.activity=val;activityShown=null;for(const list of Object.values(listState)){list.limit=LIST_STEP;list.query='';}document.querySelectorAll('#activity-bills,#activity-votes').forEach(select=>{select.value=val;});document.querySelectorAll('#bills-list,#votes-list').forEach(el=>el.setAttribute('aria-busy','true'));hydrateActivity();return;}
     if(id==='compare-a'||id==='compare-b'){const k=id==='compare-a'?'a':'b',other=k==='a'?'b':'a';if(state[other]===val)state[other]=state[k];state[k]=val;renderPart('comparacao',comparison);focusMatch('#'+id);if(editorial&&id==='compare-a'){state.voter=val;state.timeline=val;renderPart('votacoes',voteSection);renderPart('acompanhar',following);watchMotion();focusMatch('#compare-a');}}
-    if(id==='project-stage'){state.stage=val;renderPart('project-grid',projectCards);watchMotion();}
-    if(id==='voter'){state.voter=val;renderPart('vote-grid',voteCards);watchMotion();}
     if(id==='timeline-person'){state.timeline=val;renderPart('acompanhar',following);watchMotion();focusMatch('#timeline-person');}
     if(id==='roster-uf'||id==='roster-party'){state[id==='roster-uf'?'rosterUF':'rosterParty']=val;renderPart('directory-grid',directoryCards);}
   });

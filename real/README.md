@@ -8,7 +8,9 @@ Node.js 22 ou superior:
 
 ```sh
 npm ci
-npm run collect
+npm run collect:expenses:intermediate -- --local --selection-run ID --run ID
+npm run verify:expenses:intermediate -- --local --run ID
+npm run publish:expenses -- --history-run ID --run ID --approve --local
 npm run build:site
 npm run dev
 ```
@@ -37,7 +39,7 @@ A versão preliminar baseada apenas na API foi preservada no banco, mas retida n
 
 ### As 15 ocorrências, registro por registro
 
-`npm run verify:api-annual` compara as páginas da API e o CSV preservados na execução publicada (`data/runs/9d9bdb37-…`), sem reutilizar o normalizador. Resultado: 179 pares exatos (pessoa, competência, documento, categoria e valor líquido; número, emissão e lote também conferem), 15 ocorrências só no arquivo, nenhuma só na API.
+No piloto, um script de conferência (removido depois) comparou as páginas da API e o CSV preservados na execução publicada, sem reutilizar o normalizador. Resultado: 179 pares exatos (pessoa, competência, documento, categoria e valor líquido; número, emissão e lote também conferem), 15 ocorrências só no arquivo, nenhuma só na API.
 
 | Grupo no arquivo anual | Ocorrências | Soma líquida | Característica |
 |---|---:|---:|---|
@@ -59,7 +61,7 @@ Consulta da API em 04/11/2026 para o ano inteiro de 2025 dos mesmos três IDs: a
 
 ### Regra de união API + arquivo anual (obrigatória antes de passar de fevereiro)
 
-Implementada em `unionRecords` (`src/annual.ts`). Uma ocorrência que estava publicada e sumiu das duas fontes retém a publicação: revise e rode `npm run collect -- --accept-removed` para publicar sem ela, com a retirada registrada na versão.
+Implementada em `unionRecords` (`src/annual.ts`). Uma ocorrência que estava publicada e sumiu das duas fontes retém a publicação até revisão.
 
 1. **Chave de pareamento.** `(ID Câmara, ano, mês de competência, ideDocumento/codDocumento como texto, txtDescricao/tipoDespesa, valor líquido em centavos)`, a mesma de `src/reconcile.ts`. Pareamento 1:1 por multiplicidade: cada ocorrência de uma fonte consome no máximo uma da outra. Sem tolerância de valor, sem janela de datas e sem casar por nome de fornecedor.
 2. **Par conferido.** Número do documento, data de emissão e lote também precisam coincidir. Se a chave casar e esses campos divergirem, o par é retido para revisão e a publicação daquela pessoa/mês não acontece.
@@ -71,18 +73,6 @@ Implementada em `unionRecords` (`src/annual.ts`). Uma ocorrência que estava pub
 8. **Apresentação.** Cada registro traz a origem: "arquivo anual e API", "só no arquivo anual" ou "só na API (ausente do arquivo anual capturado em <data>)". A origem aparece na tabela, no diálogo do registro e numa coluna da exportação CSV. O resumo mostra quanto do total vem de cada origem. Filtros e gráficos não escondem registros de uma só fonte.
 
 Também foi necessário passar `idLegislatura=57` explicitamente: sem esse filtro, as consultas históricas tentadas retornaram listas vazias. O coletor recusou publicar esses resultados como zero.
-
-## Fluxo da coleta
-
-1. Ler `config/pilot.json`, validar três IDs, dois meses encerrados e legislatura explícita.
-2. Confirmar os IDs na API; armazenar nome/retrato atuais sem inferir UF ou partido históricos.
-3. Coletar todas as páginas de despesas duas vezes, com tamanhos 100 e 25, e comparar os conjuntos.
-4. Baixar duas cópias do arquivo anual oficial, preservar os ZIPs e hashes, ler todas as linhas e selecionar os IDs/competências.
-5. Comparar as duas capturas do recorte. Preservar ocorrências distintas do mesmo documento; reter linhas exatamente iguais e ambíguas.
-6. Validar o esquema e valores. Campos vazios de documento/glosa permanecem `null`; não se presume zero. Valores negativos são mantidos.
-7. Comparar a cobertura da API com o arquivo; registrar a diferença sem combinar as somas.
-8. Reconciliar a soma normalizada em centavos com um acumulador decimal independente e uma soma SQL.
-9. Inserir a versão e trocar a referência ativa em uma transação. Falhas anteriores à publicação mantêm a versão aprovada anterior.
 
 O identificador da versão é o SHA-256 do corpo canônico completo da versão (métrica, recorte, pessoas, registros, páginas e hashes, validação e textos de limitação) junto com a versão do esquema (`clareia.snapshot.v2`, `src/model.ts`). Só os horários de captura (`publishedAt`, `collectedAt`, `fetchedAt`, `profileFetchedAt`) ficam fora, para que recoletar o mesmo conteúdo seja idempotente: nesse caso a versão já gravada, com os horários da primeira captura, é mantida e o manifesto da nova execução registra os próprios horários. Qualquer outra mudança, inclusive só de texto com o mesmo total, gera outro identificador e nova versão. `publish` recusa um identificador que não corresponda ao conteúdo e, se o identificador já existir com corpo diferente, falha em vez de ignorar. As versões anteriores permanecem preservadas.
 
@@ -98,15 +88,9 @@ Conferência de 04/11/2026 pelas rotas do servidor: as duas versões do arquivo 
 
 ## Retomada e evidência
 
-Cada execução tem `data/runs/<run-id>/manifest.json`, respostas JSON originais, metadados, dois ZIPs anuais e eventuais relatórios de falha. Os arquivos brutos podem conter identificadores pessoais e **não são versionados nem servidos pelo site**.
+As coletas atuais ficam em `data/private/`, com as respostas originais, os metadados e os relatórios de cada execução. Os arquivos brutos podem conter identificadores pessoais e **não são versionados nem servidos pelo site**.
 
-Para retomar uma execução, com o servidor encerrado:
-
-```sh
-npm run collect -- --resume ID-DA-EXECUCAO
-```
-
-Páginas de API com hash válido podem ser reaproveitadas por até uma hora; arquivos anuais são baixados novamente. Cache adulterado ou expirado é descartado. Cada registro público aponta para o arquivo original, hash do CSV e posição da linha sem o cabeçalho, começando em zero. O comprovante é um link informado pela fonte, não uma auditoria do documento.
+Cada registro público aponta para o arquivo original, hash do CSV e posição da linha sem o cabeçalho, começando em zero. O comprovante é um link informado pela fonte, não uma auditoria do documento.
 
 ## Testes e conferência independente
 
@@ -115,20 +99,11 @@ npm run typecheck
 npm test
 ```
 
-Com o servidor desligado:
-
-```sh
-npm run verify:annual
-npm run verify:api-annual
-```
-
 Com o servidor ativo:
 
 ```sh
 npm run verify:browser
 ```
-
-`verify:annual` é uma releitura do **mesmo** arquivo da versão, a cópia guardada em `data/runs/<execução>/` (o hash do CSV precisa coincidir), por outro parser. Registros só da API são procurados, com o valor, nas páginas preservadas da mesma execução. A releitura compara com os registros gravados no banco, com o servidor desligado. O resultado fica guardado por versão: o site só serve versões com conferência aprovada, e uma versão nova fica privada até lá, enquanto a anterior aprovada continua no ar. Verifica a cadeia de processamento; não compara com a API nem prova que a fonte esteja completa. O verificador percorreu 209.081 linhas, selecionou 194 e reconciliou **37 grupos de pessoa/mês/categoria**, além da multiplicidade de documentos/valores, sem divergências. Dois registros tinham campos documento/glosa vazios; isso foi mantido explícito. Restituições no recorte do arquivo somaram zero nesta captura.
 
 Os testes de backend cobrem precisão, valores negativos, campos ausentes, identidade, homônimos, duplicatas, paginação incompleta/repetida, tentativas, checkpoints adulterados, instabilidade, idempotência, rollback e revisões. Os testes de navegador cobrem pessoa → mês → categoria → fornecedor → registro, CSV, link com versão, filtros inválidos, bloqueio de arquivos brutos e layouts de 390/768/1360 px.
 
@@ -142,7 +117,7 @@ Relatórios e screenshots ficam em `output/qa/`, ignorado pelo Git. Se a reconci
 - `data/<publicacao>/index.json`: recorte, pessoas, conferências e deputados sem dados.
 - `data/<publicacao>/deputados/<id>/despesas.json` e `.csv`: registros de cada deputado, com IDs e proveniência.
 - Retratos oficiais preservados em `real/portraits/`; origem e data em `sources.json`. `npm run cache:portraits` atualiza as imagens com o servidor ativo.
-- [Arquivo anual oficial](https://www.camara.leg.br/cotas/Ano-2025.csv.zip) (o ano vem de `config/pilot.json`)
+- [Arquivo anual oficial](https://www.camara.leg.br/cotas/Ano-2025.csv.zip)
 - [Significado dos campos CEAP](https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html)
 - [Contrato da API](https://dadosabertos.camara.leg.br/api/v2/api-docs)
 
@@ -150,4 +125,4 @@ Relatórios e screenshots ficam em `output/qa/`, ignorado pelo Git. Se a reconci
 
 Este é um piloto local, sem hospedagem, agendamento diário instalado, alertas externos, IA, ranking nacional ou cálculo por tempo em exercício. O adaptador para PostgreSQL externo está escrito, mas só o engine PostgreSQL local foi executado nesta entrega.
 
-A coleta agendada, o banco cifrado no R2 e o site estático estão descritos no [README principal](../README.md). Próximo passo: ampliar o laboratório de casos reais; validar exercício e política temporal; depois expandir a população e os períodos e levar o desenho editorial (tag `mvp-final`) aos dados reais.
+O banco cifrado no R2 e o site estático estão descritos no [README principal](../README.md). Próximo passo: ampliar o laboratório de casos reais; validar exercício e política temporal; depois expandir a população e os períodos e levar o desenho editorial (tag `mvp-final`) aos dados reais.
