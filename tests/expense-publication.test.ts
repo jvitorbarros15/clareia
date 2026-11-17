@@ -4,6 +4,8 @@ import {canonical,hash,snapshotId} from '../src/model.ts';
 import type {Expense} from '../src/model.ts';
 import {buildExpenseVersion} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
+import {duplicateMarkdown,duplicateReviewItems} from '../src/review-list.ts';
+import {csv} from '../src/view.ts';
 
 const history={people:[1,2,3].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-07T00:00:00Z'}}}))} as any;
 const temporal={historySha256:hash(canonical(history)),scope:{legislature:57},people:[1,2,3].map(id=>({id,events:[],months:[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}]}))} as any;
@@ -110,4 +112,13 @@ test('a month showing two UFs is never settled by the events',()=>{
 });
 test('a confirmed month keeps its uf over the events and is not marked',()=>{
   assert.deepEqual(withFirst([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[ev(57,'RS')]).slice(0,2),['SP',null]);
+});
+test('a published month with possible duplicates is listed with its flagged records and value',()=>{
+  const flagged=[{...record(1,100,0),duplicateFlag:'possible' as const},{...record(1,100,1),duplicateFlag:'possible' as const},record(1,5,2)];
+  const v=buildExpenseVersion([lot(0,[1,2],[{...cell(1,'complete',flagged),duplicateReason:'sigepa-unit-unconfirmed'},cell(2,'no-expenses-confirmed')]),lots()[1]],history,'t');
+  assert.deepEqual(v.validation.duplicateCompetences,[{personId:1,month:1,reason:'sigepa-unit-unconfirmed',records:2,cents:200}]);
+  assert.equal(v.validation.totalCents,205);assert.deepEqual(v.validation.heldMonths,{});
+  assert.deepEqual(duplicateReviewItems(v),[{id:1,name:'Pessoa 1',month:1,reason:'sigepa-unit-unconfirmed',records:2,cents:200}]);
+  assert.match(duplicateMarkdown('p',duplicateReviewItems(v)),/- 1 \| Pessoa 1 \| mês 1 \| motivo: sigepa-unit-unconfirmed \| registros sinalizados: 2 \| R\$ 2,00/);
+  const rows=csv(flagged).split('\r\n');assert.match(rows[0],/;"possivel_duplicidade"$/);assert.match(rows[1],/;"sim"$/);assert.match(rows[3],/;""$/);
 });

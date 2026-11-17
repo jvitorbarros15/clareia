@@ -25,11 +25,12 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   if(new Set(ids).size!==ids.length||ids.length!==first.universeSize||hash(canonical([...ids].sort((a,b)=>a-b)))!==first.universeSha256)throw Error('Pessoas dos lotes não formam o universo declarado');
   const temporal=ordered[0].input.temporal;
   if(hash(canonical(temporal))!==first.temporalSha256||temporal.historySha256!==hash(canonical(history)))throw Error('Histórico de pessoas diverge do usado na coleta');
-  const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[];let cellTotal=0n;
+  const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[],duplicateCompetences:{personId:number;month:number;reason:string;records:number;cents:number}[]=[];let cellTotal=0n;
   for(const l of ordered)for(const c of l.report.cells){
     if(c.status==='complete'||c.status==='no-expenses-confirmed'){
       if(c.status==='no-expenses-confirmed'&&c.records.length)throw Error('Célula sem despesas com registros');
       records.push(...c.records);cellTotal+=BigInt(c.totalCents??0);
+      if(c.duplicateReason){const flagged=c.records.filter(r=>r.duplicateFlag==='possible');duplicateCompetences.push({personId:c.personId,month:c.month,reason:c.duplicateReason,records:flagged.length,cents:flagged.reduce((n,r)=>n+r.cents,0)});}
     }else if(c.status==='held-review'||c.status==='source-failure'){if(c.records.length)throw Error('Célula retida com registros');heldMonths[c.personId]=(heldMonths[c.personId]??0)+1;heldCompetences.push({personId:c.personId,month:c.month,reasons:[...c.reasons].sort()});}
     else throw Error('Situação de célula desconhecida');
   }
@@ -46,7 +47,7 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
   const body={metric:'camara.ceap.valor-liquido-uniao-fontes.v1',scope:{year:first.year,months:first.months,ids,legislature:temporal.scope.legislature},people,records,collectedAt,publishedAt:now,pages:[],
-    validation:{sourceKind:'annual-api-union',stablePasses:2,recordCount:records.length,totalCents:Number(total),independentTotalCents:String(cellTotal),duplicatePolicy:'Documento não é chave. Ocorrências do CSV preservadas; conteúdo idêntico ambíguo retém a competência.',limitations:['Competências retidas para revisão ficam fora dos totais e são indicadas por deputado.'],heldMonths,heldCompetences:heldCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),lots:ordered.map(l=>({runId:l.runId,lot:l.input.proposal.lot,reportSha256:l.manifest.reportSha256,contentSha256:l.report.contentSha256,auditCheckedAt:l.audit.checkedAt}))}};
+    validation:{sourceKind:'annual-api-union',stablePasses:2,recordCount:records.length,totalCents:Number(total),independentTotalCents:String(cellTotal),duplicatePolicy:'Documento não é chave. Ocorrências do CSV preservadas; linhas repetidas são publicadas, como a Câmara as conta, e sinalizadas como possível duplicidade.',limitations:['Competências retidas para revisão ficam fora dos totais e são indicadas por deputado.'],heldMonths,heldCompetences:heldCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),duplicateCompetences:duplicateCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),lots:ordered.map(l=>({runId:l.runId,lot:l.input.proposal.lot,reportSha256:l.manifest.reportSha256,contentSha256:l.report.contentSha256,auditCheckedAt:l.audit.checkedAt}))}};
   return {...body,id:snapshotId(body)};
 }
 // Re-reads what the database now holds; the lot audits already re-derived every competence from the sealed originals.

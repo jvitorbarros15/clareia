@@ -1,6 +1,6 @@
 import {unzipSync} from 'fflate';
-import {BASE,canonical,hash,normalize,stableDigest} from './model.ts';
-import type {Scope,Expense} from './model.ts';
+import {BASE,canonical,hash,normalize,markDuplicates} from './model.ts';
+import type {Scope,Expense,DuplicateReason} from './model.ts';
 import {PeopleCapture,sourceAllowed} from './people-discovery.ts';
 import type {Capture} from './people-discovery.ts';
 import {parseAnnual,normalizeAnnual,unionRecords,annualUrl} from './annual.ts';
@@ -13,7 +13,7 @@ import {checkPortal,mapPortalIdentity} from './cota-portal.ts';
 import type {PortalCheck} from './cota-portal.ts';
 
 export type ExpenseSource=Capture&{pass:1|2};
-export type ExpenseCell={personId:number;year:number;month:number;status:'complete'|'no-expenses-confirmed'|'held-review'|'source-failure';reasons:string[];api:[{count:number|null;pages:ExpenseSource[]},{count:number|null;pages:ExpenseSource[]}];annualCount:number;exercise:MonthlyCoverage['exercise'];party:MonthlyCoverage['party'];uf:MonthlyCoverage['uf'];totalCents:number|null;records:Expense[];diagnostics:{annualOnly:Record<string,number>;apiOnly:Record<string,number>}|null};
+export type ExpenseCell={personId:number;year:number;month:number;status:'complete'|'no-expenses-confirmed'|'held-review'|'source-failure';reasons:string[];api:[{count:number|null;pages:ExpenseSource[]},{count:number|null;pages:ExpenseSource[]}];annualCount:number;exercise:MonthlyCoverage['exercise'];party:MonthlyCoverage['party'];uf:MonthlyCoverage['uf'];totalCents:number|null;records:Expense[];diagnostics:{annualOnly:Record<string,number>;apiOnly:Record<string,number>}|null;duplicateReason?:DuplicateReason};
 export type ExpenseBatch={schema:'clareia.expense-intermediate.v1';equationRule:'camara.ceap.correlated-net.v2';equationDecisions:EquationDecision[];equationHolds:EquationHold[];multiplicityRule:'camara.ceap.sigepa-preserve-hold.v2';multiplicityDecisions:MultiplicityDecision[];portalRule:'camara.ceap.sigepa-portal-ledger.v1';portalRequested:boolean;portalChecks:PortalCheck[];contentSha256:string;scope:Scope;peopleVersion:string;proposalSha256:string;createdAt:string;status:'review-required';publicationEligible:false;annual:[{source:ExpenseSource;csvSha256:string;scanned:number},{source:ExpenseSource;csvSha256:string;scanned:number}];cells:ExpenseCell[];sources:ExpenseSource[];totalCents:number|null;metrics:{elapsedMs:number;maxRssKiB:number;sourceBytes:number;requests:number;retries:number;cacheHits:number;downloadedBytes:number}};
 export function expenseBatchContentId(report:ExpenseBatch):string{
   const {createdAt:_created,metrics:_metrics,contentSha256:_content,...body}=report;
@@ -102,6 +102,7 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
     const selected=annualByCell.get(c.personId+':'+c.month)??[],api=results.get(c.personId+':'+c.month)!;c.annualCount=selected.length;
     if(c.reasons.length)continue;c.status='held-review';
     if(!annualStable){c.reasons.push('annual-changed-between-passes');continue;}
+    let dup:DuplicateReason|null=null;
     try{
       const digest=(rows:ApiRow[])=>hash(rows.map(r=>canonical(r.raw)).sort().join('\n'));
       if(digest(api[0]!)!==digest(api[1]!)){c.reasons.push('api-changed-between-passes');continue;}
@@ -114,13 +115,10 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
         const portalId=mapPortalIdentity(c.personId,firstAnnual.rows,secondAnnual.rows,scope.legislature),check:PortalCheck=portalId===null?{personId:c.personId,year:c.year,month:c.month,portalId:null,status:'unavailable',sources:[],count:null,totalCents:null,signatureSha256:null}:await checkPortal({personId:c.personId,portalId,year:c.year,month:c.month},api[1]!.filter(r=>(r.raw as any)?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA').map(r=>r.raw),one,two);
         portalChecks.push(check);if(check.status==='matched')for(const r of unresolved)portalCovered.add(equationKey({kind:'api',personId:c.personId,source:{...r.source,row:r.row}}));
       }
-      if(unresolved.some(r=>!portalCovered.has(equationKey({kind:'api',personId:c.personId,source:{...r.source,row:r.row}}))))throw Error();
-      stableDigest(selected.map(r=>({personId:c.personId,raw:r.raw})));
-      // Matching routes or a second interface can corroborate source rows, not
-      // establish whether each repeated amount is a separate debit to the quota.
-      // Retain all originals/proofs, but withhold the entire competence for now.
+      if(unresolved.some(r=>!portalCovered.has(equationKey({kind:'api',personId:c.personId,source:{...r.source,row:r.row}})))||new Set(selected.map(r=>canonical(r.raw))).size!==selected.length)dup='ambiguous-identical-occurrences';
+      // Repeated rows are published, as the Câmara counts them, and flagged: the source does not say whether each is a separate debit.
       const sameTicket=new Map<string,number>();for(const r of api[1]! as {raw:any}[])if(r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA'){const key=canonical([r.raw.codDocumento,r.raw.numDocumento,r.raw.valorLiquido]);sameTicket.set(key,(sameTicket.get(key)??0)+1);}
-      if(repeated.length||[...sameTicket.values()].some(n=>n>1)){c.reasons.push('sigepa-unit-unconfirmed');continue;}
+      if(!dup&&(repeated.length||[...sameTicket.values()].some(n=>n>1)))dup='sigepa-unit-unconfirmed';
     }catch{c.reasons.push('ambiguous-identical-occurrences');continue;}
     let annual:Expense[],apiRecords:Expense[];
     try{
@@ -129,8 +127,9 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
     }catch{c.reasons.push('financial-normalization-failed');continue;}
     c.diagnostics=unmatched(annual,apiRecords);
     // Some receipts are numbered with the supplier's CPF: the number is hidden, the original stays sealed.
-    try{c.records=unionRecords(annual,apiRecords).records.map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));}catch{c.reasons.push('unreconciled-source-occurrences');continue;}
+    try{c.records=(dup?markDuplicates(unionRecords(annual,apiRecords).records):unionRecords(annual,apiRecords).records).map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));}catch{c.reasons.push('unreconciled-source-occurrences');continue;}
     if(c.records.length&&c.exercise==='outside'){c.records=[];c.reasons.push('expense-outside-exercise');continue;}
+    if(dup)c.duplicateReason=dup;
     const sum=c.records.reduce((n,r)=>n+BigInt(r.cents),0n);if(sum>BigInt(Number.MAX_SAFE_INTEGER)||sum<BigInt(Number.MIN_SAFE_INTEGER))throw Error('Total financeiro fora do limite');
     c.totalCents=Number(sum);c.status=c.records.length?'complete':'no-expenses-confirmed';
   }

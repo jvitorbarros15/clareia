@@ -2,7 +2,7 @@ import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
 import {unzipSync} from 'fflate';
 import {BASE,canonical,hash} from './model.ts';
-import type {Expense,Scope,FinancialBasis} from './model.ts';
+import type {Expense,Scope,FinancialBasis,DuplicateReason} from './model.ts';
 import type {ExpenseBatch,ExpenseSource} from './expense-intermediate.ts';
 import type {TemporalReport} from './people-temporal.ts';
 import {findCpfs} from './cpf-scan.ts';
@@ -37,6 +37,12 @@ function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:s
   let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(!privatePerson&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
   const occurrence=hash(canonical({personId:id,raw:r}));
   return {id:occurrence,personId:id,year,month,category,supplier:privatePerson?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
+}
+// Independent of markDuplicates: repeated rows stay published; identical ones get distinct ids by occurrence order.
+function flagRepeats(rs:Expense[]):Expense[]{
+  const ticket='PASSAGEM AÉREA - SIGEPA',same=(a:Expense,b:Expense)=>a.category===b.category&&a.documentId===b.documentId&&a.documentNumber===b.documentNumber&&a.cents===b.cents&&(a.category===ticket||canonical([a.date,a.lot,a.supplier,a.documentCents,a.disallowedCents])===canonical([b.date,b.lot,b.supplier,b.documentCents,b.disallowedCents]));
+  const used=new Map<string,number>();
+  return rs.map(r=>{const n=used.get(r.id)??0;used.set(r.id,n+1);const id=n?hash(canonical({id:r.id,occurrence:n})):r.id;return {...r,id,supplierKey:r.supplierKey===r.id?id:r.supplierKey,...(rs.filter(o=>same(o,r)).length>1?{duplicateFlag:'possible' as const}:{})};});
 }
 // This verifier reads sources and independently projects records, paginates,
 // parses money and pairs occurrences. It does not import collection, financial
@@ -112,7 +118,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
     if(!coverage||c.year!==scope.year||canonical([c.exercise,c.party,c.uf])!==canonical([coverage.exercise,coverage.party,coverage.uf]))fail('temporal-coverage',c);
     const [one,two]=reads.get(c.personId+':'+c.month)??[api(c.personId,c.month,1),api(c.personId,c.month,2)],annual=annualRowsByCell.get(c.personId+':'+c.month)??[];
     if(c.annualCount!==annual.length||canonical(c.api)!==canonical([one,two].map(p=>({count:p.count,pages:p.pages}))))fail('source-counts-or-pages',c);
-    let reasons:string[]=[],records:Expense[]=[],total:number|null=null,diagnostics:typeof c.diagnostics=null,status:typeof c.status='held-review';
+    let reasons:string[]=[],records:Expense[]=[],total:number|null=null,diagnostics:typeof c.diagnostics=null,status:typeof c.status='held-review',dup:DuplicateReason|null=null;
     if(one.rows===null)reasons.push('api-source-failure-pass-1');if(two.rows===null)reasons.push('api-source-failure-pass-2');
     if(reasons.length)status='source-failure';
     else if(!annualStable)reasons=['annual-changed-between-passes'];
@@ -132,10 +138,8 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
       if(!apiStable)reasons=['api-changed-between-passes'];
       else if(foreignMonth)reasons=['api-row-outside-competence'];
       else if(budgetBlocked)reasons=['installment-document-review'];
-      else if(unresolved.some(r=>!portalCovered.has(rowKey(r))))reasons=['ambiguous-identical-occurrences'];
-      else if(duplicates(annual))reasons=['ambiguous-identical-occurrences'];
-      else if(repeatedTicket||b.some(r=>(apiCounts.get(canonical(r.raw))??0)>1))reasons=['sigepa-unit-unconfirmed'];
       else{
+        dup=unresolved.some(r=>!portalCovered.has(rowKey(r)))||duplicates(annual)?'ambiguous-identical-occurrences':repeatedTicket||b.some(r=>(apiCounts.get(canonical(r.raw))??0)>1)?'sigepa-unit-unconfirmed':null;
         let ar:Expense[]=[],br:Expense[]=[];
         try{ar=annual.map(r=>project(r,c.personId,scope,'annual',second.csvHash,permission('annual',c.personId,r)));br=b.map(r=>project(r,c.personId,scope,'api',undefined,permission('api',c.personId,r)));}catch{reasons=['financial-normalization-failed'];}
         if(!reasons.length){
@@ -145,14 +149,16 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
           const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right)};
           if(matches.some(({a,b})=>blank(a.documentNumber)!==blank(b.documentNumber)||(a.date?.slice(0,10)||null)!==(b.date?.slice(0,10)||null)||(a.lot||'')!==(b.lot||''))||left.some(r=>!['TELEFONIA','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA'].includes(r.category))||right.some(r=>r.category!=='PASSAGEM AÉREA - SIGEPA'))reasons=['unreconciled-source-occurrences'];
           else{
-            records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))].map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));
+            records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))];
+            if(dup)records=flagRepeats(records);
+            records=records.map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));
             total=Number(records.reduce((n,r)=>n+BigInt(r.cents),0n));if(!Number.isSafeInteger(total))throw Error('Total independente fora da precisão segura');status=records.length?'complete':'no-expenses-confirmed';
-            if(records.length&&c.exercise==='outside'){records=[];total=null;status='held-review';reasons=['expense-outside-exercise'];}
+            if(records.length&&c.exercise==='outside'){records=[];total=null;status='held-review';reasons=['expense-outside-exercise'];dup=null;}
           }
         }
       }
     }
-    if(canonical({status,reasons,records,totalCents:total,diagnostics})!==canonical({status:c.status,reasons:c.reasons,records:c.records,totalCents:c.totalCents,diagnostics:c.diagnostics}))fail('financial-records-coverage-or-union',c);
+    if(canonical({status,reasons,records,totalCents:total,diagnostics,dup:reasons.length?null:dup})!==canonical({status:c.status,reasons:c.reasons,records:c.records,totalCents:c.totalCents,diagnostics:c.diagnostics,dup:c.duplicateReason??null}))fail('financial-records-coverage-or-union',c);
     if(total===null)allComplete=false;else grand+=BigInt(total);
   }
   if(canonical(report.portalChecks)!==canonical(portalChecks))fail('portal-review-evidence');
