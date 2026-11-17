@@ -10,14 +10,14 @@ try{
   const page=await browser.newPage({viewport:{width:1360,height:1000},reducedMotion:'reduce'});page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base);await page.waitForSelector('.full-portal');
   // Expected values come from the published files, summed here in integer cents, independently of the page code.
-  const data=await page.evaluate(async()=>{const m=await fetch('/manifest.json').then(r=>r.json()),index=await fetch(`/${m.base}/index.json`).then(r=>r.json());const people=[];for(const id of index.scope.ids.filter(id=>!index.withoutData.includes(id))){const recs=await fetch(`/${m.base}/deputados/${id}/despesas.json`).then(r=>r.json());people.push({id,name:index.people.find(p=>p.id===id).name,count:recs.length,cents:recs.reduce((n,r)=>n+r.cents,0),negative:recs.filter(r=>r.cents<0).map(r=>r.cents)});}return {base:m.base,domains:Object.keys(m.domains),index,people};});
+  const data=await page.evaluate(async()=>{const m=await fetch('/manifest.json').then(r=>r.json()),index=await fetch(`/${m.base}/index.json`).then(r=>r.json()),summary=await fetch(`/${m.base}/summary.json`).then(r=>r.json()),minMonths=Math.min(6,index.scope.months.length);const people=[];for(const id of index.scope.ids.filter(id=>!index.withoutData.includes(id))){const recs=await fetch(`/${m.base}/deputados/${id}/despesas.json`).then(r=>r.json());const months=summary.people.find(p=>p.id===id)?.months??[];const rankable=!months.some(m=>m.held)&&months.filter(m=>m.exercise!=='outside'||m.records>0).length>=minMonths&&!(recs.length===0&&months.every(m=>!m.exercise||['unknown','outside','conflict'].includes(m.exercise)));people.push({id,rankable,name:index.people.find(p=>p.id===id).name,count:recs.length,cents:recs.reduce((n,r)=>n+r.cents,0),negative:recs.filter(r=>r.cents<0).map(r=>r.cents)});}return {base:m.base,domains:Object.keys(m.domains),index,people};});
   const close=async()=>{await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.querySelector('#detail').open);};
   assert.equal(await page.locator('.editorial-rank .rank-card').count(),Math.min(3,data.people.length));
   // The ranking shows 10 bars at a time: expand it to the end, then read the order from the page.
   while(await page.locator('#comparison [data-action=bars-more]').count())await page.locator('#comparison [data-action=bars-more]').click();
   const order=(await page.locator('.bar-row').evaluateAll(rows=>rows.map(r=>Number(r.dataset.id)))),byId=new Map(data.people.map(p=>[p.id,p]));
   assert.ok(order.length&&order.every(id=>byId.has(id))&&new Set(order).size===order.length,'ranking lists only deputies with published expenses, once each');
-  assert.deepEqual([...order].sort((a,b)=>a-b),[...byId.keys()].sort((a,b)=>a-b),'ranking includes every deputy with published expenses');
+  assert.deepEqual([...order].sort((a,b)=>a-b),data.people.filter(p=>p.rankable).map(p=>p.id).sort((a,b)=>a-b),'ranking includes every deputy with published expenses who meets the ranking rule');
   let chosen=order;
   if(!all&&order.length>30){const rest=order.slice(10,-10),next=random(seed),pool=[...rest];for(let i=pool.length-1;i>0;i--){const j=Math.floor(next()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}chosen=[...order.slice(0,10),...pool.slice(0,10),...order.slice(-10)];}
   const detailStartedAt=Date.now();
