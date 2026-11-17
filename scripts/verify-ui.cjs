@@ -453,7 +453,7 @@ check('negative category', async () => {
   await page.close();
 });
 
-check('comparison stacks on mobile', async () => {
+check('comparison keeps the two people side by side on mobile', async () => {
   const page = await at(390);
   await page.locator('#comparacao').scrollIntoViewIfNeeded();
   const info = await page.evaluate(() => {
@@ -462,9 +462,9 @@ check('comparison stacks on mobile', async () => {
       const label = row.querySelector('b').getBoundingClientRect();
       return { height: label.height, lines: Math.round(label.height / parseFloat(getComputedStyle(row.querySelector('b')).lineHeight || 16)), right: row.getBoundingClientRect().right };
     });
-    return { stacked: b.top >= a.bottom - 1, rows, scroll: document.documentElement.scrollWidth <= innerWidth };
+    return { stacked: b.left >= a.right - 1 && Math.abs(b.top - a.top) < 4, rows, scroll: document.documentElement.scrollWidth <= innerWidth };
   });
-  assert.ok(info.stacked, 'the two people stack');
+  assert.ok(info.stacked, 'the two people sit side by side');
   assert.ok(info.scroll, 'no horizontal scroll');
   assert.ok(info.rows.every(r => r.lines <= 2 && r.right <= 390), `category labels: ${JSON.stringify(info.rows)}`);
   await page.close();
@@ -938,14 +938,14 @@ check('mobile comparison', async () => {
     const cats = [...document.querySelectorAll('.compare-category')];
     const overflow = cats.flatMap(c => [...c.children].filter(k => k.getBoundingClientRect().right > section.right + 0.5).map(k => k.textContent.trim()));
     return {
-      stacked: people[1].top >= people[0].bottom - 1,
+      stacked: people[1].left >= people[0].right - 1 && Math.abs(people[1].top - people[0].top) < 4,
       totals: [...board.querySelectorAll('.compare-total')].map(e => ({ text: e.innerText.replace(/\s+/g, ' '), lines: lines(e) })),
       labels: cats.map(c => ({ text: c.querySelector('b').innerText, lines: lineCount(c.querySelector('b')) })),
       overflow,
       scroll: document.documentElement.scrollWidth - window.innerWidth,
     };
   });
-  assert.ok(m.stacked, 'the two people stack');
+  assert.ok(m.stacked, 'the two people sit side by side');
   for (const t of m.totals) assert.equal(t.lines, 1, `arrow stays on the value line: ${t.text}`);
   for (const l of m.labels) assert.ok(l.lines <= 2, `category label ≤ 2 lines: ${l.text} (${l.lines})`);
   assert.deepEqual(m.overflow, [], 'category values stay inside the section');
@@ -1514,10 +1514,11 @@ check('comparison breakdown bars use magnitudes', async () => {
     const vals = cats.map(c => [sumCents(data, a, c), sumCents(data, b, c)]);
     const max = Math.max(1, ...vals.flat().map(Math.abs));
     const widths = await page.locator('.compare-category').evaluateAll(rows => rows.map(r => [r.querySelector('.left-bar i').style.width, r.querySelector('.right-bar i').style.width].map(w => w === '' ? NaN : parseFloat(w))));
-    assert.equal(widths.length, cats.length);
+    const shown = vals.filter(v => v[0] || v[1]);
+    assert.equal(widths.length, shown.length);
     widths.forEach(([l, r], i) => {
-      assert.ok(Math.abs(l - Math.abs(vals[i][0]) / max * 100) < 1e-3, `${a} bar ${i}: ${l} vs ${vals[i][0]}`);
-      assert.ok(Math.abs(r - Math.abs(vals[i][1]) / max * 100) < 1e-3, `${b} bar ${i}: ${r} vs ${vals[i][1]}`);
+      assert.ok(Math.abs(l - Math.abs(shown[i][0]) / max * 100) < 1e-3, `${a} bar ${i}: ${l} vs ${shown[i][0]}`);
+      assert.ok(Math.abs(r - Math.abs(shown[i][1]) / max * 100) < 1e-3, `${b} bar ${i}: ${r} vs ${shown[i][1]}`);
     });
   }
   await page.close();
