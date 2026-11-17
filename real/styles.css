@@ -1048,3 +1048,21 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 /* First paint: a static shell replaced by the app, and the waits for the supplier file. */
 .boot-shell{max-width:1080px;margin:auto;padding:0 44px;min-height:calc(100vh - 70px)}.boot-head{display:flex;align-items:center;height:70px;border-bottom:1px solid var(--line)}.boot-brand{font:700 30px/1 Arial,Helvetica,sans-serif;letter-spacing:-1.5px}.boot-tagline{margin:56px 0 0;font:400 clamp(44px,8vw,96px)/1.02 "Newsreader",Georgia,serif;color:var(--ink)}.boot-status,.loading-note{margin:16px 0 0;color:var(--muted);font-size:14px}.supplier-pending{padding:48px 0}
 @media(max-width:700px){.boot-shell{padding:0 19px}}
+
+/* Phone hero: the portrait sits beside the figure it describes; the chips and the note follow. */
+@media (max-width:600px){
+  body[data-model=editorial] .editorial-hero{display:grid;grid-template-columns:minmax(0,1fr) 96px;column-gap:14px;align-items:start}
+  body[data-model=editorial] .editorial-feature{display:contents}
+  body[data-model=editorial] .editorial-title,body[data-model=editorial] .editorial-left{grid-column:1/-1}
+  body[data-model=editorial] .editorial-feature .eyebrow{grid-column:1;grid-row:3;margin-top:20px}
+  body[data-model=editorial] .editorial-feature .feature-value{grid-column:1;grid-row:4;font-size:40px;text-align:left}
+  body[data-model=editorial] .editorial-feature>p:not(.eyebrow){grid-column:1;grid-row:5}
+  body[data-model=editorial] .hero-portrait{grid-column:2;grid-row:3/6;margin-top:20px;aspect-ratio:auto}
+  body[data-model=editorial] .hero-portrait .photo{width:100%}
+  body[data-model=editorial] .editorial-feature .text-button{grid-column:1/-1;grid-row:6;justify-self:start}
+  body[data-model=editorial] .editorial-feature .feature-switch{grid-column:1/-1;grid-row:7;flex-wrap:wrap;padding-bottom:8px}
+  body[data-model=editorial] .editorial-handwritten{grid-column:1/-1;grid-row:8}
+}
+@media (max-width:360px){
+  body[data-model=editorial] .editorial-feature .feature-value{font-size:34px}
+}
