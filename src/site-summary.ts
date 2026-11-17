@@ -8,12 +8,11 @@ export type MonthSummary={month:number;cents:number;records:number;exercise:stri
 export type Cell=[number,number,number,number];
 // [month, category index, supplier index, cents, records]
 export type SupplierCell=[number,number,number,number,number];
-export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];ufLast:{uf:string;month:number;note:string}|null;categories:{category:string;cents:number;records:number}[];cells:Cell[];bills:Omit<BillPerson,'id'>|null;votes:Record<string,number>|null;votesHeld:number};
+export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];categories:{category:string;cents:number;records:number}[];cells:Cell[];bills:Omit<BillPerson,'id'>|null;votes:Record<string,number>|null;votesHeld:number};
 export type SiteSummary={schema:'clareia.site-summary.v1';publicationId:string;coverageId:string|null;billsId:string|null;billsYears:number[];votesId:string|null;votesYears:number[];ceiling:SiteCeiling|null;scope:Scope;totalCents:number;records:number;categories:string[];people:PersonSummary[]};
 export type SupplierSummary={schema:'clareia.supplier-summary.v1';publicationId:string;categories:string[];suppliers:string[];people:Record<string,SupplierCell[]>};
 
 const safe=(n:bigint):number=>{if(n>BigInt(Number.MAX_SAFE_INTEGER)||n<BigInt(Number.MIN_SAFE_INTEGER))throw new Error('Total do resumo fora da precisão segura');return Number(n);};
-const MONTH_ABBR=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const sum=(rows:Expense[]):number=>safe(rows.reduce((n,r)=>n+BigInt(r.cents),0n));
 const sorted=(values:Iterable<string>):string[]=>[...new Set(values)].sort();
 function group(rows:Expense[],key:(r:Expense)=>string):Map<string,Expense[]>{
@@ -43,13 +42,11 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
       if(heldKeys.has(id+':'+month)&&rows.length)throw new Error('Competência retida com registros');
       return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,review:row?.review??false,partialScope:row?.partialScope??false,held:heldKeys.has(id+':'+month)};
     });
-    // A deputy with no UF on the registration takes the latest month whose UF the approved coverage confirms.
-    const lastUf=person.uf===null?months.filter(m=>m.ufStatus==='single'&&m.uf).at(-1):undefined,ufLast=lastUf?{uf:lastUf.uf!,month:lastUf.month,note:`UF de ${MONTH_ABBR[lastUf.month-1]}/${scope.year} (última confirmada)`}:null;
     // With an approved version, a deputy absent from it has zero counted bills; without one the count is unknown.
     const counted=billsOf.get(id);
     const cells=cellsOf(own,categoryIndex);
     if(safe(cells.reduce((n,c)=>n+BigInt(c[2]),0n))!==sum(own)||cells.reduce((n,c)=>n+c[3],0)!==own.length)throw new Error('Células mensais divergem dos registros de uma pessoa');
-    return {id,name:person.name,photo:person.photo,cents:sum(own),records:own.length,months,ufLast,categories,cells,bills:billsId===null?null:{proposed:counted?.proposed??0,joint:counted?.joint??0,coauthored:counted?.coauthored??0,norms:counted?.norms??0},votes:input.votesId?input.votes?.get(id)??{}:null,votesHeld:input.votesHeld?.get(id)??0};
+    return {id,name:person.name,photo:person.photo,cents:sum(own),records:own.length,months,categories,cells,bills:billsId===null?null:{proposed:counted?.proposed??0,joint:counted?.joint??0,coauthored:counted?.coauthored??0,norms:counted?.norms??0},votes:input.votesId?input.votes?.get(id)??{}:null,votesHeld:input.votesHeld?.get(id)??0};
   });
   const totalCents=sum(records);
   if(totalCents!==expectedTotalCents)throw new Error('Resumo diverge do total aprovado');

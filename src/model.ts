@@ -63,7 +63,7 @@ export const expenseSchema=z.object({
 export const envelopeSchema=z.object({dados:z.array(z.unknown()),links:z.array(z.object({rel:z.string(),href:z.string()}))});
 export type Scope={year:number;months:number[];ids:number[];legislature:number};
 // uf and party are the Câmara's current status at collection time (statusDate), not a historical attribution.
-export type Person={id:number;name:string;photo:string|null;sourceUrl:string;profileFetchedAt:string;uf?:string|null;party?:string|null;statusDate?:string|null};
+export type Person={id:number;name:string;photo:string|null;sourceUrl:string;profileFetchedAt:string;uf?:string|null;ufNote?:string|null;party?:string|null;statusDate?:string|null};
 export const UFS=new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
 export type SourceRef={url:string;sha256:string;row:number;fetchedAt:string};
 export type FinancialBasis='reported-installment'|'balanced-document-split';

@@ -38,9 +38,9 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   const people:Person[]=ids.map(id=>{
     const h=history.people.find(p=>p.id===id),t=temporal.people.find(p=>p.id===id);
     if(!h?.profile||!t)throw Error(`Cadastro ausente para ${id}`);
-    // The UF a deputy represents is fixed for the legislature, so any month of it serves; the party must be one of the publication year.
-    const months=[...t.months].reverse(),uf=months.find(m=>m.uf.status==='single')?.uf.value??null,party=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null;
-    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,party};
+    // The UF a deputy represents is fixed for the legislature, so any month of it serves; when none is confirmed the registration's UF stands, marked. The party must be one of the publication year.
+    const months=[...t.months].reverse(),temporalUf=months.find(m=>m.uf.status==='single')?.uf.value??null,uf=temporalUf??h.profile.uf??null,party=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null;
+    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,...(temporalUf===null&&uf?{ufNote:'UF do cadastro da Câmara'}:{}),party};
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
   const body={metric:'camara.ceap.valor-liquido-uniao-fontes.v1',scope:{year:first.year,months:first.months,ids,legislature:temporal.scope.legislature},people,records,collectedAt,publishedAt:now,pages:[],

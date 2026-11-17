@@ -89,3 +89,11 @@ test('a party change in the year keeps the uf of the latest month where the uf i
   const v=buildExpenseVersion(changed,history,'t');
   assert.deepEqual([v.people[0].uf,v.people[0].party],['SP','X']);
 });
+
+test('without a confirmed month the registration uf is used and marked, a confirmed one is not',()=>{
+  const changed=structuredClone(lots());
+  const withUf=structuredClone(history);withUf.people[0].profile.uf='RS';const t=changed[0].input.temporal;t.historySha256=hash(canonical(withUf));t.people[0].months=[{year:2025,month:1,uf:{status:'unknown',value:null},party:{status:'single',value:'X'}}] as any;
+  for(const l of changed){l.input.temporal=t;const p=l.input.proposal;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
+  const v=buildExpenseVersion(changed,withUf,'t');
+  assert.deepEqual(v.people.map(p=>[p.uf,p.ufNote??null]),[['RS','UF do cadastro da Câmara'],['SP',null],['SP',null]]);
+});
