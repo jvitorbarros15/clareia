@@ -356,7 +356,7 @@ body[data-model=editorial] .p-overview-sentence .p-stat:active{transform:none}
 
 /* Ranking tabs: one indicator travels to the chosen tab (state indication, 220ms). */
 body[data-model=editorial] .editorial-rank .tabs{position:relative}
-body[data-model=editorial] .editorial-rank .tabs button[aria-pressed=true]{border-bottom-color:transparent}
+body[data-model=editorial] .editorial-rank .tabs button[aria-selected=true]{border-bottom-color:transparent}
 body[data-model=editorial] .editorial-rank .tabs::after{content:"";position:absolute;left:0;bottom:-1px;height:3px;width:var(--tab-w,0);transform:translateX(var(--tab-x,0));background:var(--accent);transition:transform 220ms var(--ease-out),width 220ms var(--ease-out)}
 body[data-model=editorial] .p-overview-sentence .p-stat{padding:0!important;border:0!important}
 body[data-model=editorial] .p-overview-sentence .p-stat strong{margin:0;font-size:inherit;letter-spacing:inherit;line-height:inherit;white-space:nowrap}
@@ -381,9 +381,10 @@ body[data-model=editorial] .directory-stats small{position:absolute;width:1px;he
 body[data-model=editorial] .directory-person h3{font-size:17px}
 body[data-model=editorial] .directory-person p{font-size:13px}
 body[data-model=editorial] .directory-actions{justify-content:flex-end;gap:20px;border:0;padding:0;font-size:14px;font-weight:600}
-body[data-model=editorial] .directory-person .follow-button{margin-left:4px}
+body[data-model=editorial] .directory-person .follow-button{margin-left:auto}
 body[data-model=editorial] .directory-actions button{min-height:44px}
 @media (hover:hover) and (pointer:fine){body[data-model=editorial] .directory-card:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}}
+@media (min-width:761px) and (max-width:900px){body[data-model=editorial] :is(.directory-head,.directory-card){grid-template-columns:minmax(0,1fr) 150px 90px 190px;gap:0 20px}}
 @media (max-width:760px){
   body[data-model=editorial] .directory-head{display:none}
   body[data-model=editorial] .directory-card{grid-template-columns:1fr 1fr;gap:4px 16px;padding:18px 0}
