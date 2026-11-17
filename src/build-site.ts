@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {build} from 'esbuild';
 import {canonical,hash,snapshotId} from './model.ts';
+import type {Expense} from './model.ts';
 import {activePublication,publicationAudit,readRecords} from './publications.ts';
 import type {Domain,Publication} from './publications.ts';
 import type {DB} from './store.ts';
@@ -36,6 +37,8 @@ async function listFiles(dir:string):Promise<string[]>{
   const entries=await fs.readdir(dir,{withFileTypes:true});
   return (await Promise.all(entries.map(e=>e.isDirectory()?listFiles(path.join(dir,e.name)):[path.join(dir,e.name)]))).flat();
 }
+// Versions collected before the id left the supplier out still carry a hash of the CPF and name; unverified records get an id from non-identifying fields only.
+const publicId=(r:Expense)=>hash(canonical({personId:r.personId,year:r.year,month:r.month,category:r.category,documentId:r.documentId,documentNumber:r.documentNumber,date:r.date,lot:r.lot,cents:r.cents,documentCents:r.documentCents,disallowedCents:r.disallowedCents,origin:r.origin,source:r.source?{url:r.source.url,row:r.source.row}:null}));
 // The audit read the records' JSON; the site splits them by column. Both must still be the audited content.
 async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const {domain:_domain,...body}=active,all=await readRecords(db,active.id);
@@ -65,7 +68,8 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   if(votesVersion)for(const id of active.scope.ids){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
   // Only a verified CNPJ publishes its supplier key; for anyone else it is the occurrence hash of an older version, which may embed a CPF.
   // Records come from an approved version that may predate the redaction rule; the site never shows a CPF the source typed into free text.
-  const redacted={n:0},allRecords=(await readRecords(db,active.id)).map(r=>{const {supplierKey,...rest}=redactExpense(r,redacted);return r.supplierVerified?{...rest,supplierKey}:rest;});
+  const redacted={n:0},allRecords=(await readRecords(db,active.id)).map(r=>{const {supplierKey,...rest}=redactExpense(r,redacted);return r.supplierVerified?{...rest,supplierKey}:{...rest,id:publicId(r)};});
+  if(new Set(allRecords.map(r=>r.id)).size!==allRecords.length)throw new Error('Identificador público de despesa repetido');
   if(redacted.n)console.error(`CPF omitido em ${redacted.n} valores de despesas`);
   const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:allRecords,expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld,held:active.validation.heldCompetences??[],ceiling});
   await fs.rm(outDir,{recursive:true,force:true});

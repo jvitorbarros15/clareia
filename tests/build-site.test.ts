@@ -273,3 +273,25 @@ test('only a verified supplier publishes its supplier key',()=>setup(async(db,di
   assert.equal('supplierKey' in rows.find(r=>!r.supplierVerified)!,false);
   assert.equal(rows.find(r=>r.supplierVerified)!.supplierKey,'verified-key');
 }));
+async function publishedIds(supplier:string,key:string,verified:boolean){
+  let ids:string[]=[];
+  await setup(async(db,dist,portraits)=>{
+    const a=version([{...record(100,1,0),id:'old-'+key,supplier,supplierKey:key,supplierVerified:verified}]);
+    await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+    const {publicationId}=await buildSite(db,dist,portraits);
+    const base=path.join(dist,'data',publicationId);
+    ids=(await json(base,'deputados','1','despesas.json') as Expense[]).map(r=>r.id);
+    assert.ok((await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')).includes(ids[0]));
+  });
+  return ids;
+}
+test('an unverified record is published under an id that ignores the supplier; a verified one keeps its id',async()=>{
+  const [a]=await publishedIds('MARIA TESTE','k1',false),[b]=await publishedIds('JOSE TESTE','k2',false);
+  assert.equal(a,b);assert.notEqual(a,'old-k1');assert.match(a,/^[0-9a-f]{64}$/);
+  assert.equal((await publishedIds('EMPRESA','k1',true))[0],'old-k1');
+});
+test('two unverified records that would share a published id stop the build',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0),{...record(100,1,1),source:record(100,1,0).source}]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  await assert.rejects(buildSite(db,dist,portraits),/repetido/);
+}));
