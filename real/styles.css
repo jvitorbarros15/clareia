@@ -818,7 +818,12 @@ body[data-model=editorial] .linked-chart-body:not(.is-year)::before{display:none
   body[data-model=editorial] .linked-chart-body.is-year .x-label{font-size:17px}
 }
 @media (max-width:600px){
-  body[data-model=editorial] .comparison-board{grid-template-columns:1fr;gap:20px;padding:20px 16px}
+  body[data-model=editorial] .comparison-board{grid-template-columns:1fr 1fr;gap:20px 10px;padding:20px 12px;align-items:stretch}
+  body[data-model=editorial] .comparison-center{grid-column:1/-1;grid-row:2}
+  body[data-model=editorial] .compare-person,body[data-model=editorial] .compare-person.second{grid-template-columns:1fr;justify-items:center;text-align:center;gap:8px}
+  body[data-model=editorial] .compare-person .avatar{width:64px;height:76px}
+  body[data-model=editorial] .compare-person h3{margin:4px 0 6px;font-size:16px;overflow-wrap:anywhere}
+  body[data-model=editorial] .compare-total{grid-column:auto;margin-top:auto;justify-content:center;font-size:24px!important}
   body[data-model=editorial] .compare-category{grid-template-columns:1fr 1fr;grid-template-areas:"label label" "lbar rbar" "lval rval";gap:6px 12px;padding:12px 0;border-top:1px solid var(--line)}
   body[data-model=editorial] .compare-category>b{grid-area:label;text-align:left;font-size:14px;color:var(--ink);font-weight:600}
   body[data-model=editorial] .compare-category .left-bar{grid-area:lbar}
@@ -1065,4 +1070,7 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 }
 @media (max-width:360px){
   body[data-model=editorial] .editorial-feature .feature-value{font-size:34px}
+  body[data-model=editorial] .compare-person h3{font-size:14px}
+  body[data-model=editorial] .compare-total{font-size:18px!important;letter-spacing:-.5px}
+  body[data-model=editorial] .compare-person p{font-size:11px}
 }
