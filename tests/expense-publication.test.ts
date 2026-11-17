@@ -6,7 +6,7 @@ import {buildExpenseVersion} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
 
 const history={people:[1,2,3].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-07T00:00:00Z'}}}))} as any;
-const temporal={historySha256:hash(canonical(history)),scope:{legislature:57},people:[1,2,3].map(id=>({id,events:[],months:[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}]}))} as any;
+const temporal={historySha256:hash(canonical(history)),scope:{legislature:57,end:'2025-12-31'},people:[1,2,3].map(id=>({id,events:[],months:[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}]}))} as any;
 const record=(personId:number,cents:number,i:number):Expense=>({id:`r${personId}-${i}`,personId,year:2025,month:1,category:'C',supplier:'S',supplierKey:'k',supplierVerified:false,documentId:'1',documentNumber:'1',date:null,receipt:null,cents,documentCents:cents,disallowedCents:0,source:{url:'https://www.camara.leg.br/cotas/Ano-2025.csv.zip',sha256:'s',row:i,fetchedAt:'2026-11-09T00:00:00Z'}});
 const universe=[1,2,3];
 function lot(n:number,ids:number[],cells:any[]):ExpenseLotRun{
@@ -110,4 +110,27 @@ test('a month showing two UFs is never settled by the events',()=>{
 });
 test('a confirmed month keeps its uf over the events and is not marked',()=>{
   assert.deepEqual(withFirst([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[ev(57,'RS')]).slice(0,2),['SP',null]);
+});
+
+const pev=(siglaPartido:string|null,dataHora:string|null,idLegislatura=57)=>({original:{idLegislatura,siglaPartido,dataHora}});
+const noParty=[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'unknown',value:null}}];
+const partyOf=(months:any[],events:any[])=>{const v=withFirstPeople(months,events);return [v[0].party,v[0].partyNote??null,v[1].party,v[1].partyNote??null];};
+function withFirstPeople(months:any[],events:any[]){
+  const changed=structuredClone(lots()),t=changed[0].input.temporal,h=structuredClone(history);t.people[0].months=months;t.people[0].events=events;t.historySha256=hash(canonical(h));
+  for(const l of changed){const p=l.input.proposal;l.input.temporal=t;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
+  return buildExpenseVersion(changed,h,'t').people;
+}
+test('without a confirmed party month, events that agree give the party, marked; other legislatures are ignored',()=>{
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PL','2024-05-01T10:00'),pev('PT','2019-01-01T10:00',56)]).slice(0,2),['PL','partido dos eventos da legislatura']);
+});
+test('events that switch party give the latest one up to the end of the scope, with its month',()=>{
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2024-05-10T10:00'),pev('PP','2024-06-10T10:00')]).slice(0,2),['PP','último partido nos eventos (desde mai/2024)']);
+});
+test('no events, a missing party or an unreadable date leave the party empty',()=>{
+  assert.deepEqual(partyOf(noParty,[]).slice(0,2),[null,null]);
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev(null,'2024-05-01T10:00')]).slice(0,2),[null,null]);
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP',null)]).slice(0,2),[null,null]);
+});
+test('a confirmed party month keeps its party over the events and is not marked',()=>{
+  assert.deepEqual(partyOf([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[pev('PL','2023-02-01T10:00')]).slice(0,2),['X',null]);
 });

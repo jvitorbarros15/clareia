@@ -7,8 +7,9 @@
   try {
     const manifest = await json('/manifest.json'), base = '/' + manifest.base, [index, summary] = await Promise.all(['index', 'summary'].map(name => json(`${base}/${name}.json`)));
     // Only an approved monthly coverage can name the party of a past expense; otherwise the current one is labelled as such.
-    const partyOfPeriod = (id, current) => {
+    const partyOfPeriod = (id, current, note) => {
       if (!summary.coverageId) return current ? `${current} (atual)` : null;
+      if (note && current) return current;
       const months = summaryOf.get(id)?.months ?? [], served = months.filter(m => m.partyStatus !== 'not-applicable');
       if (!served.length || served.some(m => m.partyStatus === 'unavailable' || m.partyStatus === 'unknown')) return 'Partido indisponível';
       if (served.some(m => m.partyStatus === 'review' || m.partyStatus === 'conflict')) return 'Partido em revisão';
@@ -32,7 +33,7 @@
     const people = index.scope.ids.map(id => {
       const info = index.people.find(p => p.id === id) || { name: 'ID ' + id }, own = summaryOf.get(id);
       const cells = (own?.categories ?? []).map(c => ({ month: null, category: c.category, supplier: null, amount: c.cents, count: c.records }));
-      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, ufNote: info.ufNote ?? null, party: partyOfPeriod(id, info.party ?? null), partyInReview: partyOfPeriod(id, info.party ?? null) === 'Partido em revisão',lastConfirmedParty: lastConfirmedParty(id),profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), exercisedMonths: exercisedMonths(id), noExercise: withoutConfirmedExercise(id, own?.records ?? 0), heldMonths: (own?.months ?? []).filter(m => m.held).map(m => m.month - 1), use: ClareiaView.ceilingUse(own?.months ?? [], summary.ceiling, Boolean(summary.coverageId)), projects: own?.bills?.proposed ?? null, approved: own?.bills?.norms ?? null, votes: null, cells, total: own?.cents ?? 0 };
+      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, ufNote: info.ufNote ?? null, party: partyOfPeriod(id, info.party ?? null, info.partyNote), partyNote: info.partyNote ?? null, partyInReview: partyOfPeriod(id, info.party ?? null, info.partyNote) === 'Partido em revisão',lastConfirmedParty: lastConfirmedParty(id),profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), exercisedMonths: exercisedMonths(id), noExercise: withoutConfirmedExercise(id, own?.records ?? 0), heldMonths: (own?.months ?? []).filter(m => m.held).map(m => m.month - 1), use: ClareiaView.ceilingUse(own?.months ?? [], summary.ceiling, Boolean(summary.coverageId)), projects: own?.bills?.proposed ?? null, approved: own?.bills?.norms ?? null, votes: null, cells, total: own?.cents ?? 0 };
     });
     // Same names as the published list; the order is the one of the monthly cells, which only the supplier file carries.
     const categories = [...summary.categories];

@@ -8,6 +8,21 @@ import type {DB} from './store.ts';
 
 export type ExpenseLotRun={runId:string;manifest:{runId:string;status:string;reportSha256:string;proposalSha256:string;inputSha256:string};input:{schema:string;proposal:any;temporal:TemporalReport};report:ExpenseBatch;audit:{status:string;reportSha256:string;proposalSha256:string;checkedAt:string;competences:number}};
 
+const MONTHS=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+// The party the legislature's own events agree on; if they disagree, the latest one up to the end of the scope, and only when every date is readable.
+function partyFromEvents(events:{original:{siglaPartido?:string|null;dataHora?:string|null}}[],end:string):{value:string;note:string}|null{
+  const all=events.map(e=>({party:e.original.siglaPartido?.trim()||null,at:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(e.original.dataHora??'')?e.original.dataHora!.slice(0,16):null}));
+  if(!all.length||all.some(e=>!e.party))return null;
+  const parties=new Set(all.map(e=>e.party));
+  if(parties.size===1)return {value:all[0].party!,note:'partido dos eventos da legislatura'};
+  if(all.some(e=>!e.at))return null;
+  const upto=all.filter(e=>e.at!<=end+'T23:59').sort((a,b)=>a.at!.localeCompare(b.at!));
+  if(!upto.length)return null;
+  if(upto.length>1&&upto.at(-2)!.at===upto.at(-1)!.at&&upto.at(-2)!.party!==upto.at(-1)!.party)return null;
+  let i=upto.length-1;while(i>0&&upto[i-1].party===upto[i].party)i--;
+  return {value:upto[i].party!,note:`último partido nos eventos (desde ${MONTHS[Number(upto[i].at!.slice(5,7))-1]}/${upto[i].at!.slice(0,4)})`};
+}
+
 // Only audited lots of one universe, all of them, each once: a missing or repeated lot would silently change the totals.
 export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,now:string):Snapshot{
   if(!lots.length)throw Error('Nenhum lote informado');
@@ -41,8 +56,8 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
     // The UF is fixed for the legislature, so any confirmed month serves. Without one, the UF the legislature's own events all agree on stands, marked; a month showing two UFs (changed/conflict) is never settled this way.
     const months=[...t.months].reverse(),temporalUf=months.find(m=>m.uf.status==='single')?.uf.value??null,contested=months.some(m=>m.uf.status==='changed'||m.uf.status==='conflict');
     const eventUfs=new Set(t.events.filter(e=>e.original.idLegislatura===temporal.scope.legislature).map(e=>e.original.siglaUf)),only=eventUfs.size===1?[...eventUfs][0]:null;
-    const fallback=temporalUf===null&&!contested&&only&&UFS.has(only)?only:null,uf=temporalUf??fallback,party=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null;
-    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,...(fallback?{ufNote:'UF dos eventos da legislatura'}:{}),party};
+    const fallback=temporalUf===null&&!contested&&only&&UFS.has(only)?only:null,uf=temporalUf??fallback,confirmed=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null,eventParty=confirmed===null?partyFromEvents(t.events.filter(e=>e.original.idLegislatura===temporal.scope.legislature),temporal.scope.end):null,party=confirmed??eventParty?.value??null;
+    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,...(fallback?{ufNote:'UF dos eventos da legislatura'}:{}),party,...(eventParty?{partyNote:eventParty.note}:{})};
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
   const body={metric:'camara.ceap.valor-liquido-uniao-fontes.v1',scope:{year:first.year,months:first.months,ids,legislature:temporal.scope.legislature},people,records,collectedAt,publishedAt:now,pages:[],

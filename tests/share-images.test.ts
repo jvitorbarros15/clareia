@@ -15,7 +15,7 @@ import type {Renderer} from '../src/share-images.ts';
 const PAGE=path.join(import.meta.dirname,'..','real');
 const shell=await fs.readFile(path.join(PAGE,'index.html'),'utf8');
 const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11]};
-const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,heldMonths:[],cents:123456789,hasCells:true,projects:7};
+const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyNote:null,partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,heldMonths:[],cents:123456789,hasCells:true,projects:7};
 const partial:Deputy={...normal,id:101,heldMonths:[2],cents:-5000};
 const none:Deputy={...normal,id:102,noExercise:true,exercisedMonths:0,cents:0};
 const assets=await loadShareAssets(PAGE);
