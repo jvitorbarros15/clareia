@@ -67,8 +67,8 @@
   const exclusionNote = p => p.heldMonths?.length ? partialNote(p) : fewMonths(p) ? `Exerceu o mandato em ${p.exercisedMonths} de ${D.coverage.length} meses do recorte. Rankings e comparações incluem quem exerceu pelo menos ${MIN_MONTHS} meses.` : '';
   const partialNote = p => `Total parcial: ${p.heldMonths.length === 1 ? `${months[p.heldMonths[0]].toLowerCase()} de ${state.year} está em revisão` : `${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
   // Party is the Câmara's current status at collection time, not a historical attribution.
-  const context = p => [p.uf, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
-  const cardContext = p => p.partyInReview ? [p.uf, p.lastConfirmedParty && `${p.lastConfirmedParty} (último confirmado)`].filter(Boolean).join(' · ') || 'Deputado(a) federal' : context(p);
+  const context = p => [p.uf, p.ufNote, p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';
+  const cardContext = p => p.partyInReview ? [p.uf, p.ufNote, p.lastConfirmedParty && `${p.lastConfirmedParty} (último confirmado)`].filter(Boolean).join(' · ') || 'Deputado(a) federal' : context(p);
   function value(p, kind = state.tab) {
     if (kind === 'projetos') return null;
     const result = sum(cells(p));
@@ -130,7 +130,7 @@
     return `<div class="metric-toggle" role="group" aria-label="Forma de comparar"><button data-metric="total" aria-pressed="${state.metric === 'total'}">Total</button><button data-metric="mensal" aria-pressed="${state.metric === 'mensal'}">Por mês</button></div>`;
   }
   function tabs() {
-    return `<div class="tabs" role="group" aria-label="Indicador">${[['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']].map(([key, label]) => `<button data-tab="${key}" aria-pressed="${state.tab === key}">${label}</button>`).join('')}</div>`;
+    return `<div class="tabs" role="tablist" aria-label="Indicador">${[['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']].map(([key, label]) => `<button role="tab" data-tab="${key}" aria-selected="${state.tab === key}" tabindex="${state.tab === key ? 0 : -1}">${label}</button>`).join('')}</div>`;
   }
   const monthsWord = n => n === 1 ? 'mês' : 'meses';
   function caption(p) {
@@ -246,8 +246,9 @@
     if (dock) { dock.hidden = !narrowed; dock.innerHTML = narrowed ? `<span>${escape(scope)}</span><span aria-hidden="true">✕</span>` : ''; dock.setAttribute('aria-label', `Filtro ativo: ${scope}. Limpar filtros`); }
   }
   function markTab(animate = true) {
-    const tabsEl = $('.editorial-rank .tabs'), on = tabsEl?.querySelector('[aria-pressed="true"]');
+    const tabsEl = $('.editorial-rank .tabs'), on = tabsEl?.querySelector('[aria-selected="true"]');
     if (!on) return;
+    tabsEl.querySelectorAll('[role="tab"]').forEach(t => { t.tabIndex = t === on ? 0 : -1; });
     const next = { x: on.offsetLeft, w: on.offsetWidth };
     if (animate && tabMark) { tabsEl.style.setProperty('--tab-x', tabMark.x + 'px'); tabsEl.style.setProperty('--tab-w', tabMark.w + 'px'); tabsEl.getBoundingClientRect(); }
     tabsEl.style.setProperty('--tab-x', next.x + 'px'); tabsEl.style.setProperty('--tab-w', next.w + 'px');
@@ -493,7 +494,7 @@
   let recordRun = 0;
   function loadRecords(p) {
     const id = p.officialId;
-    if (!recordCache.has(id)) recordCache.set(id, fetch(D.recordsUrl(id)).then(r => { if (r.status === 404) return []; if (!r.ok) throw new Error(); return r.json(); }).then(raw => { recordsReady.add(id); return raw.map(x => ({ id: x.id, date: x.date, month: x.month - 1, category: x.category, amount: x.cents, supplier: x.supplier, raw: x })); }).catch(error => { recordCache.delete(id); throw error; }));
+    if (!recordCache.has(id)) recordCache.set(id, fetch(D.recordsUrl(id)).then(r => { if (r.status === 404 && !p.cells.length) return []; if (!r.ok) throw new Error(); return r.json(); }).then(raw => { recordsReady.add(id); return raw.map(x => ({ id: x.id, date: x.date, month: x.month - 1, category: x.category, amount: x.cents, supplier: x.supplier, raw: x })); }).catch(error => { recordCache.delete(id); throw error; }));
     return recordCache.get(id);
   }
   // While a file loads the dialog says so. A late result is dropped if a newer request started or another dialog replaced the note.
@@ -599,6 +600,16 @@
     const field = $('#profile-link'); field.focus(); field.select();
     try { if (document.execCommand('copy')) copied(); } catch { /* the selected field is the fallback */ }
   }
+  document.addEventListener('keydown', event => {
+    const tab = event.target.closest?.('[role="tab"][data-tab]');
+    if (!tab) return;
+    const all = [...tab.parentElement.querySelectorAll('[role="tab"][data-tab]')], i = all.indexOf(tab);
+    const to = { ArrowRight: (i + 1) % all.length, ArrowLeft: (i - 1 + all.length) % all.length, Home: 0, End: all.length - 1 }[event.key];
+    if (to === undefined) return;
+    event.preventDefault();
+    all[to].click();
+    document.querySelector(`[role="tab"][data-tab="${all[to].dataset.tab}"]`)?.focus();
+  });
   document.addEventListener('click', event => {
     const target = event.target.closest('[data-action],[data-tab],[data-metric],[data-question]');
     if (!event.target.closest('.search-wrap')) closeSuggestions();

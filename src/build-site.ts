@@ -10,6 +10,8 @@ import {redactCpf,redactExpense,scanCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary,buildSupplierSummary} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
+import type {ReviewItem} from './review-list.ts';
+import {ufReviewItems} from './review-list.ts';
 import {deputiesOf,resolveOptions,writePrerendered,writeStaticPages} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
 import {generateShareImages} from './share-images.ts';
@@ -43,7 +45,7 @@ async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const outside=all.filter(r=>!active.scope.ids.includes(r.personId)).length;
   if(outside)throw new Error(`${outside} registros fora do recorte da versão`);
 }
-export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number}>{
+export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number;review:ReviewItem[]}>{
   const siteOptions=resolveOptions(options);
   // Everything is built aside: a refusal at any step leaves the previous output in place.
   const outDir=finalDir+'.building';
@@ -75,7 +77,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     // Loaded by the page only when someone opens the section, and never joined to expenses.
     if(billsVersion||votesVersion){
       const bills=billList.filter(b=>!b.issues.length&&b.authors.some(a=>a.deputyId===id)).map(b=>({id:b.id,type:b.type,number:b.number,year:b.year,summary:redactCpf(b.summary),situation:b.situation,situationAt:b.situationAt,norm:b.norm,proponent:b.authors.find(a=>a.deputyId===id)!.proponent,joint:b.authors.filter(a=>a.proponent).length+b.otherProponents>1})).sort((x,y)=>y.id-x.id);
-      const votes=(ballotsOf.get(id)??[]).map(([voteId,,category])=>{const v=voteList.get(voteId)!;return {id:voteId,date:v.date,organ:v.organ,kind:v.kind,description:redactCpf(v.description),matters:v.objects.map((o:{title:string|null})=>o.title?redactCpf(o.title):null).filter(Boolean),category};}).sort((x,y)=>y.date.localeCompare(x.date)||x.id.localeCompare(y.id));
+      const votes=(ballotsOf.get(id)??[]).map(([voteId,,category])=>{const v=voteList.get(voteId)!;return {id:voteId,date:v.date,organ:v.organ,kind:v.kind,description:redactCpf(v.description),matters:v.objects.map((o:{title:string|null})=>o.title?redactCpf(o.title):null).filter(Boolean),billId:v.objects.map((o:{billId:number|null})=>o.billId).find((b:number|null)=>b!==null)??null,category};}).sort((x,y)=>y.date.localeCompare(x.date)||x.id.localeCompare(y.id));
       await fs.mkdir(path.join(data,'atividade'),{recursive:true});const activity=JSON.stringify({bills,votes});if(scanCpfs(activity,new Set()))throw new Error('Identificador privado na atividade de um deputado');await fs.writeFile(path.join(data,'atividade',id+'.json'),activity);
     }
     if(!records.length){withoutData.push(id);continue;}
@@ -110,5 +112,5 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   checkLimits(files.length,Math.max(...sizes));
   await fs.rm(finalDir,{recursive:true,force:true});
   await fs.rename(outDir,finalDir);
-  return {publicationId,files:files.length};
+  return {publicationId,files:files.length,review:ufReviewItems(active.people)};
 }
