@@ -65,6 +65,13 @@ test('percent uses exact sums over the counted months, with partial and held mon
   assert.deepEqual(u.counted.map(c=>c.month),[1,2,6]);assert.deepEqual(u.excluded,[{month:3,reason:'partial'},{month:4,reason:'held'}]);assert.deepEqual(u.outside,[5]);
   assert.equal(u.expenseCents,600000);assert.equal(u.ceilingCents,4283733*2+5140633);assert.equal(u.tenths,tenthsOf(600000,4283733*2+5140633));
 });
+test('a held month outside the mandate stays held, never outside',()=>{
+  const u=ceilingUse([month(1,100000),month(5,0,{exercise:'outside',held:true})],table,true);
+  assert.equal(u.status,'ok');if(u.status!=='ok')return;
+  assert.deepEqual(u.counted.map(c=>c.month),[1]);
+  assert.deepEqual(u.excluded,[{month:5,reason:'held'}]);
+  assert.deepEqual(u.outside,[]);
+});
 test('a counted month without a confirmed UF ceiling is not confirmed, never zero',()=>{
   assert.equal(ceilingUse([month(1,5),month(2,5,{uf:null,ufStatus:'review'})],table,true).status,'unconfirmed');
   assert.equal(ceilingUse([month(1,5)],null,true).status,'unconfirmed');
