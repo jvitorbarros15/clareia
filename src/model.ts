@@ -24,7 +24,6 @@ export function snapshotId(snapshot:object):string{
 export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
 // An individual paid by the quota is not a public figure: the name stays out until a legal opinion says otherwise.
 // 11 digits is a CPF. Any other id that is not a valid CNPJ (short, padded, letters stripped) is flagged for review; the build decides whether its name stays public.
-export const isPersonId=(id:string)=>id.length===11;
 export const oddId=(id:string)=>id.length>0&&id.length!==11&&!validCnpj(id);
 // The occurrence id is an unsalted hash, so for anyone but a verified CNPJ the supplier id and name stay out of it: a guessed name would otherwise let the ~10^9 CPFs be tried against the published id.
 export function occurrenceId(personId:number,raw:Record<string,unknown>,verified:boolean,idField:string,nameField:string):string{
