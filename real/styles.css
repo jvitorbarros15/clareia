@@ -384,6 +384,7 @@ body[data-model=editorial] .directory-actions{justify-content:flex-end;gap:20px;
 body[data-model=editorial] .directory-person .follow-button{margin-left:4px}
 body[data-model=editorial] .directory-actions button{min-height:44px}
 @media (hover:hover) and (pointer:fine){body[data-model=editorial] .directory-card:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}}
+@media (min-width:761px) and (max-width:900px){body[data-model=editorial] :is(.directory-head,.directory-card){grid-template-columns:minmax(0,1fr) 150px 90px 190px;gap:0 20px}}
 @media (max-width:760px){
   body[data-model=editorial] .directory-head{display:none}
   body[data-model=editorial] .directory-card{grid-template-columns:1fr 1fr;gap:4px 16px;padding:18px 0}
