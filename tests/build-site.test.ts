@@ -215,6 +215,32 @@ test('supplier rows that disagree with the monthly cells are refused',()=>{
   assert.throws(()=>assertSuppliersMatchSummary(summary,missing),/pessoas do resumo/);
   assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,publicationId:'x'}),/outra versão/);
 });
+test('a CNPJ with many spellings is one supplier named by its most recent record, and an override wins',()=>{
+  const cnpj=(cents:number,i:number,supplier:string,date:string,key='K1'):Expense=>({...record(cents,1,i),supplier,supplierKey:key,supplierVerified:true,date});
+  const records=[cnpj(100,0,'TAM','2025-01-05T10:00:00'),cnpj(200,1,'LATAM Airlines Brasil','2025-01-20T10:00:00'),cnpj(300,2,'Cia Aérea - TAM','2025-01-10T10:00:00')],summary=buildSiteSummary(summaryInput(records,600));
+  const grouped=buildSupplierSummary(summary,records);
+  assert.deepEqual(grouped.suppliers,['LATAM Airlines Brasil']);
+  assert.deepEqual(grouped.people['1'],[[1,0,0,600,3]]);
+  assert.deepEqual(grouped.aliases,{K1:0});
+  assert.deepEqual(buildSupplierSummary(summary,records,{K1:{name:'Latam'}}).suppliers,['Latam']);
+  const tie=[cnpj(100,0,'B','2025-01-05'),cnpj(100,1,'A','2025-01-05')];
+  assert.deepEqual(buildSupplierSummary(buildSiteSummary(summaryInput(tie,200)),tie).suppliers,['A']);
+});
+test('the same name under two CNPJs stays two suppliers, a typed-name entry keeps the plain name, and a person is one line',()=>{
+  const cnpj=(cents:number,i:number,key:string):Expense=>({...record(cents,1,i),supplier:'POSTO',supplierKey:key,supplierVerified:true}),person=(cents:number,i:number):Expense=>({...record(cents,1,i),supplier:'Fornecedor pessoa física',supplierKey:'p'+i});
+  const records=[cnpj(100,0,'A'),cnpj(300,1,'B'),{...record(50,1,2),supplier:'POSTO'},person(10,3),person(20,4)],summary=buildSiteSummary(summaryInput(records,480));
+  const grouped=buildSupplierSummary(summary,records);
+  assert.deepEqual(grouped.suppliers,['Fornecedor pessoa física','POSTO','POSTO · 2','POSTO · 3']);
+  assert.deepEqual(grouped.people['1'],[[1,0,0,30,2],[1,0,1,50,1],[1,0,2,300,1],[1,0,3,100,1]]);
+  assert.deepEqual(grouped.aliases,{A:3,B:2});
+  const cells=grouped.people['1'].reduce((n,c)=>n+c[3],0);assert.equal(cells,480);
+});
+test('supplier checks refuse repeated names, unused suppliers and CPFs in a name',()=>{
+  const records=[record(100,1,0),{...record(50,1,1),supplier:'Outro'}],summary=buildSiteSummary(summaryInput(records,150)),good=buildSupplierSummary(summary,records);
+  assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,suppliers:['Fornecedor','Fornecedor']}),/repetidos/);
+  assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,suppliers:[...good.suppliers,'Sobra']}),/sem células/);
+  assert.throws(()=>assertSuppliersMatchSummary(summary,{...good,suppliers:['Fornecedor','Fulano 123.456.789-09']}),/Identificador privado/);
+});
 test('a private supplier keeps its label in the supplier file',()=>setup(async(db,dist,portraits)=>{
   const a=version([{...record(100,1,0),supplier:'Fornecedor pessoa física'}]);
   await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);

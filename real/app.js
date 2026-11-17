@@ -494,7 +494,7 @@
   let recordRun = 0;
   function loadRecords(p) {
     const id = p.officialId;
-    if (!recordCache.has(id)) recordCache.set(id, fetch(D.recordsUrl(id)).then(r => { if (r.status === 404 && !p.cells.length) return []; if (!r.ok) throw new Error(); return r.json(); }).then(raw => { recordsReady.add(id); return raw.map(x => ({ id: x.id, date: x.date, month: x.month - 1, category: x.category, amount: x.cents, supplier: x.supplier, raw: x })); }).catch(error => { recordCache.delete(id); throw error; }));
+    if (!recordCache.has(id)) recordCache.set(id, fetch(D.recordsUrl(id)).then(r => { if (r.status === 404 && !p.cells.length) return []; if (!r.ok) throw new Error(); return r.json(); }).then(raw => { recordsReady.add(id); return raw.map(x => ({ id: x.id, date: x.date, month: x.month - 1, category: x.category, amount: x.cents, supplier: D.supplierName(x), raw: x })); }).catch(error => { recordCache.delete(id); throw error; }));
     return recordCache.get(id);
   }
   // While a file loads the dialog says so. A late result is dropped if a newer request started or another dialog replaced the note.

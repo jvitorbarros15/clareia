@@ -9,6 +9,7 @@ import {csv} from './view.ts';
 import {redactCpf,redactExpense,scanCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary,buildSupplierSummary} from './site-summary.ts';
+import type {SupplierNames} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
 import type {ReviewItem} from './review-list.ts';
 import {ufReviewItems} from './review-list.ts';
@@ -91,7 +92,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const summaryJson=JSON.stringify({...summary,people:summary.people.map(({cells:_cells,...person})=>person)});if(scanCpfs(summaryJson,new Set()))throw new Error('Identificador privado no resumo');
   await fs.writeFile(path.join(data,'summary.json'),summaryJson);
   // Supplier names are already redacted for private persons; the scan refuses any that slipped through.
-  const supplierSummary=buildSupplierSummary(summary,allRecords),suppliers=JSON.stringify(supplierSummary);if(scanCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
+  const supplierSummary=buildSupplierSummary(summary,allRecords,await readSupplierNames()),suppliers=JSON.stringify(supplierSummary);if(scanCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
   await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
   await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,...siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)}));
@@ -113,4 +114,11 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.rm(finalDir,{recursive:true,force:true});
   await fs.rename(outDir,finalDir);
   return {publicationId,files:files.length,review:ufReviewItems(active.people)};
+}
+
+// Reviewed display names for CNPJs, by supplierKey (config/supplier-names.json); anything else uses the most recent spelling.
+async function readSupplierNames():Promise<SupplierNames>{
+  const names:unknown=JSON.parse(await fs.readFile(path.join(import.meta.dirname,'..','config','supplier-names.json'),'utf8'));
+  if(typeof names!=='object'||names===null||Array.isArray(names)||Object.values(names).some(v=>typeof v?.name!=='string'||!v.name.trim()))throw new Error('config/supplier-names.json deve mapear supplierKey para {name}');
+  return names as SupplierNames;
 }

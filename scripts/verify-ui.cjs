@@ -1901,7 +1901,7 @@ check('every aggregate equals the published records, and categories keep their o
     const D = window.ClareiaData, out = [], byCategory = new Map();
     for (const p of D.dataset()) {
       const res = await fetch(D.recordsUrl(p.officialId)), raw = res.status === 404 ? [] : await res.json(), want = new Map();
-      for (const r of raw) { const k = [r.month - 1, r.category, r.supplier].join('|'), w = want.get(k) || [0, 0]; w[0] += r.cents; w[1]++; want.set(k, w); byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.cents)); }
+      for (const r of raw) { const k = [r.month - 1, r.category, D.supplierName(r)].join('|'), w = want.get(k) || [0, 0]; w[0] += r.cents; w[1]++; want.set(k, w); byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.cents)); }
       const got = new Map(p.cells.map(c => [[c.month, c.category, c.supplier].join('|'), [c.amount, c.count]]));
       if (got.size !== want.size) out.push(`${p.name}: ${got.size} cells for ${want.size} groups`);
       for (const [k, w] of want) { const g = got.get(k); if (!g || g[0] !== w[0] || g[1] !== w[1]) out.push(`${p.name} ${k}: ${g} vs ${w}`); }
