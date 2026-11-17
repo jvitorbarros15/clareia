@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {ufReviewItems,writeReview} from '../src/review-list.ts';
+import {signReviewItems,ufReviewItems,writeReview,writeSignReview} from '../src/review-list.ts';
 import {withLock} from '../src/lock.ts';
 import {auditExpenseVersion,buildExpenseVersion} from '../src/expense-publication.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
@@ -20,7 +20,7 @@ const load=async(folder:string,file:string)=>JSON.parse(await fs.readFile(path.r
 const lots:ExpenseLotRun[]=await Promise.all(runs.map(async runId=>{const folder=path.join('data/private/expense-intermediate',runId);return {runId,manifest:await load(folder,'run.json'),input:await load(folder,'input.json'),report:await load(folder,'batch.json'),audit:await load(folder,'audit.json')};}));
 const history=await load(path.join('data/private/people-history',historyRun),'history.json');
 const version=buildExpenseVersion(lots,history,new Date().toISOString());
-await writeReview(version.id,ufReviewItems(version.people));
+await writeReview(version.id,ufReviewItems(version.people));await writeSignReview(version.id,signReviewItems(version.records,version.people));
 const held=version.validation.heldMonths??{};
 const summary={id:version.id,deputies:version.scope.ids.length,records:version.records.length,totalCents:version.validation.totalCents,heldCompetences:Object.values(held).reduce((a,b)=>a+b,0),deputiesWithHeld:Object.keys(held).length,lots:runs.length};
 if(dryRun){console.log(JSON.stringify({...summary,stored:false},null,2));process.exit(0);}
