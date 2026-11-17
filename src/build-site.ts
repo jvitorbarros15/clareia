@@ -12,7 +12,7 @@ import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary,buildSupplierSummary,withSupplierLabels} from './site-summary.ts';
 import type {SupplierNames} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
-import type {ReviewItem,WithheldName} from './review-list.ts';
+import type {ReviewItem,ReviewNames} from './review-list.ts';
 import {ufReviewItems} from './review-list.ts';
 import {deputiesOf,resolveOptions,writePrerendered,writeStaticPages} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
@@ -49,7 +49,7 @@ async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const outside=all.filter(r=>!active.scope.ids.includes(r.personId)).length;
   if(outside)throw new Error(`${outside} registros fora do recorte da versão`);
 }
-export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number;review:ReviewItem[];withheld:WithheldName[]}>{
+export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number;review:ReviewItem[];names:ReviewNames}>{
   const siteOptions=resolveOptions(options);
   // Everything is built aside: a refusal at any step leaves the previous output in place.
   const outDir=finalDir+'.building';
@@ -69,13 +69,16 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   if(votesVersion)for(const id of active.scope.ids){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
   // Every published id is rebuilt from the redacted record, so nothing the source typed (CPF in a document number, supplier) sits in a hash. Only a verified CNPJ publishes its supplier key and page hash.
   // Records come from an approved version that may predate the redaction rule; the site never shows a CPF the source typed into free text.
-  const approved=await readApprovedNames(),withheldNames=new Map<string,{count:number;cents:number}>();
+  const approved=new Set(options.approvedNames??await readApprovedNames()),withheldNames=new Map<string,{count:number;cents:number}>(),keptNames=new Map<string,{count:number;cents:number}>();
+  const tally=(m:typeof withheldNames,name:string,cents:number)=>{const t=m.get(name)??{count:0,cents:0};t.count++;t.cents+=cents;m.set(name,t);};
   const redacted={n:0},oddIds=new Map<number,number>(),allRecords=(await readRecords(db,active.id)).map(r=>{if(r.supplierIdOdd)oddIds.set(r.personId,(oddIds.get(r.personId)??0)+1);const {supplierKey,supplierIdOdd:_odd,...red}=redactExpense(r,redacted);
-    // Stored versions may predate the collection-time rule: an unverified supplier keeps its typed name only if it is a person label, looks like a company, or the owner approved it.
-    let rest=red;if(!r.supplierVerified&&!LABELS.has(red.supplier)&&!COMPANY_NAME.test(red.supplier.toUpperCase())&&!approved.has(red.supplier)){const t=withheldNames.get(red.supplier)??{count:0,cents:0};t.count++;t.cents+=red.cents;withheldNames.set(red.supplier,t);rest={...red,supplier:'Fornecedor não identificado na fonte',receipt:null};}
+    // The single place that withholds names: a stored version may hold any typed name. An unverified supplier keeps it only if it is a label, the owner approved it, or it looks like a company.
+    let rest=red;if(!r.supplierVerified&&!LABELS.has(red.supplier)&&!approved.has(red.supplier)){
+      if(COMPANY_NAME.test(red.supplier.toUpperCase()))tally(keptNames,red.supplier,red.cents);else{tally(withheldNames,red.supplier,red.cents);rest={...red,supplier:WITHHELD,receipt:null};}
+    }
     const pub={...rest,id:publicId(rest)};return r.supplierVerified?{...pub,supplierKey}:{...pub,source:{url:r.source.url,row:r.source.row,fetchedAt:r.source.fetchedAt}};});
   if(new Set(allRecords.map(r=>r.id)).size!==allRecords.length)throw new Error('Identificador público de despesa repetido');
-  if(allRecords.some(r=>r.receipt!==null&&(r.supplier==='Fornecedor pessoa física'||r.supplier==='Fornecedor não identificado na fonte')))throw new Error('Link de recibo em fornecedor sem identificação');
+  if(allRecords.some(r=>r.receipt!==null&&LABELS.has(r.supplier)))throw new Error('Link de recibo em fornecedor sem identificação');
   if(redacted.n)console.error(`CPF omitido em ${redacted.n} valores de despesas`);
   const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:allRecords,expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld,held:active.validation.heldCompetences??[],ceiling});
   await fs.rm(outDir,{recursive:true,force:true});
@@ -123,10 +126,11 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   checkLimits(files.length,Math.max(...sizes));
   await fs.rm(finalDir,{recursive:true,force:true});
   await fs.rename(outDir,finalDir);
-  return {publicationId,files:files.length,withheld:[...withheldNames].map(([name,t])=>({name,...t})).sort((a,c)=>c.cents-a.cents),review:[...ufReviewItems(active.people),...[...oddIds].map(([id,n])=>({id,name:active.people.find(p=>p.id===id)?.name??'',used:n+' registros',from:'identificador do fornecedor fora do formato'}))]};
+  return {publicationId,files:files.length,names:{withheld:rows(withheldNames),kept:rows(keptNames)},review:[...ufReviewItems(active.people),...[...oddIds].map(([id,n])=>({id,name:active.people.find(p=>p.id===id)?.name??'',used:n+' registros',from:'identificador do fornecedor fora do formato'}))]};
 }
 
-const LABELS=new Set(['Fornecedor pessoa física','Fornecedor não identificado na fonte']);
+const WITHHELD='Nome não exibido pelo Clareia',LABELS=new Set(['Fornecedor pessoa física',WITHHELD,'Fornecedor não informado']);
+const rows=(m:Map<string,{count:number;cents:number}>)=>[...m].map(([name,t])=>({name,...t})).sort((a,c)=>c.cents-a.cents);
 // Typed supplier names the owner approved to stay public (config/supplier-names-public.json, exact names).
 async function readApprovedNames():Promise<Set<string>>{
   const names:unknown=JSON.parse(await fs.readFile(path.join(import.meta.dirname,'..','config','supplier-names-public.json'),'utf8'));

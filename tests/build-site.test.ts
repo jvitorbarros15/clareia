@@ -196,7 +196,7 @@ test('monthly cells and supplier rows add up to each person and carry no record 
   const built=buildSiteSummary(summaryInput(a.records,a.validation.totalCents));
   assert.deepEqual(built.people[0].cells,[[1,0,70,1],[1,1,320,3]]);
   assert.deepEqual(built.people[1].cells,[]);
-  assert.deepEqual(suppliers.suppliers,['Fornecedor não identificado na fonte']);
+  assert.deepEqual(suppliers.suppliers,['Nome não exibido pelo Clareia']);
   assert.deepEqual(suppliers.people['1'],[[1,0,0,70,1],[1,1,0,320,3]]);
   assert.deepEqual(suppliers.people['2'],[]);
   assert.equal(suppliers.publicationId,a.id);
@@ -343,7 +343,7 @@ test('two unverified records that would share a published id stop the build',()=
   await assert.rejects(buildSite(db,dist,portraits),/repetido/);
 }));
 test('a record without an identified supplier cannot carry a receipt link',()=>setup(async(db,dist,portraits)=>{
-  const a=version([{...record(100,1,0),supplier:'Fornecedor não identificado na fonte',receipt:'https://www.camara.leg.br/x.pdf'}]);
+  const a=version([{...record(100,1,0),supplier:'Nome não exibido pelo Clareia',receipt:'https://www.camara.leg.br/x.pdf'}]);
   await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
   await assert.rejects(buildSite(db,dist,portraits),/recibo/);
 }));
@@ -352,16 +352,16 @@ test('an unverified typed name is withheld at build unless it looks like a compa
   const url='https://www.camara.leg.br/x.pdf',named=(i:number,supplier:string,more:Partial<Expense>={})=>({...record(100,1,i),supplier,receipt:url,documentId:'D'+i,...more});
   const a=version([named(0,'MARIA TESTE'),named(1,'EMPRESA TESTE LTDA'),named(2,'JOSE TESTE'),named(3,'JOAO CASA'),named(4,'MARIA TESTE'),named(5,'OUTRA PESSOA',{supplierVerified:true,supplierKey:'k'})]);
   await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
-  const approved=path.join(import.meta.dirname,'..','config','supplier-names-public.json'),before=await fs.readFile(approved,'utf8');
-  await fs.writeFile(approved,JSON.stringify(['JOAO CASA']));
-  try{
-    const built=await buildSite(db,dist,portraits),base=path.join(dist,'data',built.publicationId),rows=await json(base,'deputados','1','despesas.json') as Expense[],by=(i:number)=>rows.find(r=>r.documentId==='D'+i)!;
-    assert.deepEqual([0,1,2,3,5].map(i=>by(i).supplier),['Fornecedor não identificado na fonte','EMPRESA TESTE LTDA','Fornecedor não identificado na fonte','JOAO CASA','OUTRA PESSOA']);
+  {
+    const built=await buildSite(db,dist,portraits,{approvedNames:['JOAO CASA']}),base=path.join(dist,'data',built.publicationId),rows=await json(base,'deputados','1','despesas.json') as Expense[],by=(i:number)=>rows.find(r=>r.documentId==='D'+i)!;
+    assert.deepEqual([0,1,2,3,5].map(i=>by(i).supplier),['Nome não exibido pelo Clareia','EMPRESA TESTE LTDA','Nome não exibido pelo Clareia','JOAO CASA','OUTRA PESSOA']);
     assert.deepEqual([0,1,2,3,5].map(i=>by(i).receipt),[null,url,null,url,url]);
     const text=await fs.readFile(path.join(base,'fornecedores.json'),'utf8')+await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')+JSON.stringify(rows);
     assert.ok(!text.includes('MARIA TESTE')&&!text.includes('JOSE TESTE')&&text.includes('OUTRA PESSOA'));
-    assert.deepEqual(built.withheld,[{name:'MARIA TESTE',count:2,cents:200},{name:'JOSE TESTE',count:1,cents:100}]);
-    const {reviewMarkdown}=await import('../src/review-list.ts'),md=reviewMarkdown(built.publicationId,built.review,built.withheld);
+    assert.deepEqual(built.names.withheld,[{name:'MARIA TESTE',count:2,cents:200},{name:'JOSE TESTE',count:1,cents:100}]);
+    assert.deepEqual(built.names.kept,[{name:'EMPRESA TESTE LTDA',count:1,cents:100}]);
+    const {reviewMarkdown}=await import('../src/review-list.ts'),md=reviewMarkdown(built.publicationId,built.review,built.names);
     assert.match(md,/## Nomes de fornecedor ocultados\s+- MARIA TESTE \| 2 registros \| R\$ 2\.00\s+- JOSE TESTE \| 1 registros \| R\$ 1\.00/);
-  }finally{await fs.writeFile(approved,before);}
+    assert.match(md,/## Nomes mantidos pela regra de empresa\s+- EMPRESA TESTE LTDA \| 1 registros/);
+  }
 }));

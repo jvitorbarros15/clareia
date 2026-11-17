@@ -8,14 +8,16 @@ export type ReviewItem={id:number;name:string;used:string;from:string};
 // Deputies whose UF is not confirmed month by month: the one their legislature's events agree on, or none.
 export const ufReviewItems=(people:Person[]):ReviewItem[]=>people.flatMap(p=>p.uf&&!p.ufNote?[]:[p.uf?{id:p.id,name:p.name,used:p.uf,from:'eventos da legislatura'}:{id:p.id,name:p.name,used:'sem UF',from:'sem UF confirmada'}]);
 
-export type WithheldName={name:string;count:number;cents:number};
-export const reviewMarkdown=(publicationId:string,items:ReviewItem[],withheld:WithheldName[]=[])=>[`# Pendências para revisão - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | usada: ${i.used} | fonte: ${i.from}`),...withheld.length?['','## Nomes de fornecedor ocultados','',...withheld.map(w=>`- ${w.name} | ${w.count} registros | R$ ${(w.cents/100).toFixed(2)}`)]:[],''].join('\n');
+export type NameTally={name:string;count:number;cents:number};
+export type ReviewNames={withheld:NameTally[];kept:NameTally[]};
+const nameSection=(title:string,rows:NameTally[])=>rows.length?['','## '+title,'',...rows.map(w=>`- ${w.name} | ${w.count} registros | R$ ${(w.cents/100).toFixed(2)}`)]:[];
+export const reviewMarkdown=(publicationId:string,items:ReviewItem[],names:ReviewNames={withheld:[],kept:[]})=>[`# Pendências para revisão - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | usada: ${i.used} | fonte: ${i.from}`),...nameSection('Nomes de fornecedor ocultados',names.withheld),...nameSection('Nomes mantidos pela regra de empresa',names.kept),''].join('\n');
 
 // Never published: output/review is gitignored, outside the site folder, and anchored to the repository, not to the working directory.
-export async function writeReview(publicationId:string,items:ReviewItem[],withheld:WithheldName[]=[]):Promise<number>{
-  const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-uf-pendencias.md`);
-  await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,reviewMarkdown(publicationId,items,withheld));
-  console.error(`Pendências de UF: ${items.length} em ${file}`);
+export async function writeReview(publicationId:string,items:ReviewItem[],names:ReviewNames={withheld:[],kept:[]}):Promise<number>{
+  const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-pendencias-revisao.md`);
+  await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,reviewMarkdown(publicationId,items,names));
+  console.error(`Pendências para revisão: ${items.length} em ${file}; nomes ocultados: ${names.withheld.length}`);
   return items.length;
 }
 
