@@ -265,3 +265,11 @@ test('approved bills and votes produce a per-deputy activity file and held votes
   const built=await buildSite(db,dist,portraits),activity=await json(dist,'data',built.publicationId,'atividade','1.json'),summary=await json(dist,'data',built.publicationId,'summary.json');
   assert.deepEqual(activity.votes.map((x:{id:string})=>x.id),['nobill','ok']);assert.deepEqual(activity.votes[1].matters,['PL 5/2025']);assert.equal(activity.votes[1].billId,5);assert.equal(activity.votes[0].billId,null);assert.deepEqual(summary.people[0].votes,{Sim:2});assert.equal(summary.people[0].votesHeld,1);assert.equal(JSON.stringify(activity).includes('cents'),false);
 }));
+test('only a verified supplier publishes its supplier key',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0),{...record(250,1,1),supplierVerified:true,supplierKey:'verified-key'}]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const {publicationId}=await buildSite(db,dist,portraits);
+  const rows=await json(path.join(dist,'data',publicationId),'deputados','1','despesas.json') as Expense[];
+  assert.equal('supplierKey' in rows.find(r=>!r.supplierVerified)!,false);
+  assert.equal(rows.find(r=>r.supplierVerified)!.supplierKey,'verified-key');
+}));

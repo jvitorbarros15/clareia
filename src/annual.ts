@@ -3,7 +3,7 @@ import path from 'node:path';
 import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
 import {unzipSync} from 'fflate';
-import {canonical,hash,cents,snapshotId,validCnpj,officialUrl,stableDigest,publicSupplier,readLimited,RETRY_WAITS,retryWait,sourceError} from './model.ts';
+import {canonical,hash,cents,snapshotId,verifiedCnpj,occurrenceId,officialUrl,stableDigest,publicSupplier,readLimited,RETRY_WAITS,retryWait,sourceError} from './model.ts';
 import {pairOccurrences} from './reconcile.ts';
 import {assertArchive} from './sources.ts';
 import type {Snapshot,Scope,Expense,SourceRef,FinancialBasis} from './model.ts';
@@ -40,7 +40,7 @@ export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef,basis?:
   const money=(field:string)=>r[field]?.trim()?cents(r[field].trim().replace(',','.')):null;
   const net=money('vlrLiquido')!,face=money('vlrDocumento'),glosa=money('vlrGlosa');
   if(face!==null&&glosa!==null&&face-glosa!==net&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Equação financeira anual diverge');
-  const id=hash(canonical({personId,raw:r})),supplierId=(r.txtCNPJCPF||'').replace(/\D/g,'');const verified=validCnpj(supplierId),supplier=publicSupplier(r.txtFornecedor||'',supplierId);
+  const supplierId=(r.txtCNPJCPF||'').replace(/\D/g,''),verified=verifiedCnpj(supplierId),id=occurrenceId(personId,r,verified,'txtCNPJCPF','txtFornecedor');const supplier=publicSupplier(r.txtFornecedor||'',supplierId);
   return {id,personId,year,month,category:r.txtDescricao,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,lot:r.numLote||'',receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }
 export async function parseAnnual(bytes:Uint8Array,scope:Scope,observe?:(row:AnnualRow)=>void):Promise<{rows:{raw:AnnualRow;row:number}[];scanned:number}> {

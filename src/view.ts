@@ -6,19 +6,19 @@ export function parseFilters(params:URLSearchParams,snapshot:Snapshot):Filters {
   if(!snapshot.scope.ids.includes(personId)||!Number.isInteger(from)||!Number.isInteger(to)||from>to||!snapshot.scope.months.includes(from)||!snapshot.scope.months.includes(to))throw new Error('Recorte fora da cobertura');
   const category=params.get('category')||null,supplier=params.get('supplier')||null;
   if(category&&!snapshot.records.some(r=>r.personId===personId&&r.category===category))throw new Error('Categoria fora da cobertura');
-  if(supplier&&!snapshot.records.some(r=>r.personId===personId&&r.supplierKey===supplier))throw new Error('Fornecedor fora da cobertura');
+  if(supplier&&!snapshot.records.some(r=>r.personId===personId&&(r.supplierKey??r.id)===supplier))throw new Error('Fornecedor fora da cobertura');
   return {personId,from,to,category,supplier};
 }
 export function results(snapshot:Snapshot,filters:Filters){
   const all=snapshot.records.filter(r=>r.personId===filters.personId&&r.month>=filters.from&&r.month<=filters.to);
   const filteredCategory=all.filter(r=>!filters.category||r.category===filters.category);
-  const records=filteredCategory.filter(r=>!filters.supplier||r.supplierKey===filters.supplier);
+  const records=filteredCategory.filter(r=>!filters.supplier||(r.supplierKey??r.id)===filters.supplier);
   const sum=(rows:Expense[])=>rows.reduce((n,r)=>n+r.cents,0);
   return {snapshotId:snapshot.id,metric:snapshot.metric,scope:snapshot.scope,filters,people:snapshot.people,person:snapshot.people.find(p=>p.id===filters.personId),collectedAt:snapshot.collectedAt,publishedAt:snapshot.publishedAt,validation:snapshot.validation,
     totalCents:sum(records),recordCount:records.length,
     months:snapshot.scope.months.filter(m=>m>=filters.from&&m<=filters.to).map(month=>({month,cents:sum(records.filter(r=>r.month===month)),count:records.filter(r=>r.month===month).length})),
     categories:[...new Set(all.map(r=>r.category))].sort().map(category=>({category,cents:sum(all.filter(r=>r.category===category))})),
-    suppliers:[...new Set(filteredCategory.map(r=>r.supplierKey))].map(key=>{const rows=filteredCategory.filter(r=>r.supplierKey===key);return {key,name:rows[0].supplier,verified:rows[0].supplierVerified,cents:sum(rows),count:rows.length};}),records};
+    suppliers:[...new Set(filteredCategory.map(r=>r.supplierKey??r.id))].map(key=>{const rows=filteredCategory.filter(r=>(r.supplierKey??r.id)===key);return {key,name:rows[0].supplier,verified:rows[0].supplierVerified,cents:sum(rows),count:rows.length};}),records};
 }
 const originLabel=(r:Expense)=>r.origin?({both:'arquivo anual e API',annual:'só no arquivo anual',api:'só na API'} as const)[r.origin]:'';
 export function csv(rows:Expense[]):string {

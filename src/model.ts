@@ -24,9 +24,17 @@ export function snapshotId(snapshot:object):string{
 // Some suppliers are individuals with a CPF inside the trade name; it never reaches a published record.
 export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
 // An individual paid by the quota is not a public figure: the name stays out until a legal opinion says otherwise.
+// A CPF can arrive short (lost zero), or padded with zeros to 14 digits, where it may even pass the CNPJ check; any id that is not a clean CNPJ-sized number is a person.
+const cpfDigits=(id:string)=>{if(!/^\d{11}$/.test(id)||/^(\d)+$/.test(id))return false;const d=(n:number)=>{const r=[...id.slice(0,n)].reduce((s,c,i)=>s+Number(c)*(n+1-i),0)*10%11;return r===10?0:r;};return d(9)===Number(id[9])&&d(10)===Number(id[10]);};
+export const isPersonId=(id:string)=>id.length>0&&id.length!==14||id.length===14&&id.startsWith('000')&&cpfDigits(id.slice(3));
+export const verifiedCnpj=(id:string)=>!isPersonId(id)&&validCnpj(id);
+// The occurrence id is an unsalted hash, so for anyone but a verified CNPJ the supplier id and name stay out of it: a guessed name would otherwise let the ~10^9 CPFs be tried against the published id.
+export function occurrenceId(personId:number,raw:Record<string,unknown>,verified:boolean,idField:string,nameField:string):string{
+  return hash(canonical({personId,raw:verified?raw:{...raw,[idField]:null,[nameField]:null}}));
+}
 export function publicSupplier(name:string,rawId:string):{name:string;key:'cnpj'|'person'|'unknown'}{
   const id=rawId.replace(/\D/g,'');
-  if(id.length===11)return {name:'Fornecedor pessoa física',key:'person'};
+  if(isPersonId(id))return {name:'Fornecedor pessoa física',key:'person'};
   return {name:maskPersonalId(name||'Fornecedor não informado'),key:validCnpj(id)?'cnpj':'unknown'};
 }
 // The Câmara API drops connections for tens of seconds at a time; a run is long, so retries wait long.
@@ -67,7 +75,7 @@ export type Person={id:number;name:string;photo:string|null;sourceUrl:string;pro
 export const UFS=new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
 export type SourceRef={url:string;sha256:string;row:number;fetchedAt:string};
 export type FinancialBasis='reported-installment'|'balanced-document-split';
-export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey:string;supplierVerified:boolean;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis};
+export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey?:string;supplierVerified:boolean;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis};
 export type Page={url:string;sha256:string;file:string;fetchedAt:string;pass:number;count:number|null};
 export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
 
@@ -86,8 +94,8 @@ export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceR
   if(glosa!==null&&face-glosa!==net&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
   const supplierId=(r.cnpjCpfFornecedor||'').replace(/\D/g,'');
   // Only validated CNPJ businesses are grouped across records. CPF/missing IDs remain separate.
-  const verified=validCnpj(supplierId),supplier=publicSupplier(r.nomeFornecedor,supplierId);
-  const occurrence=hash(canonical({personId,raw}));
+  const verified=verifiedCnpj(supplierId),supplier=publicSupplier(r.nomeFornecedor,supplierId);
+  const occurrence=occurrenceId(personId,raw as Record<string,unknown>,verified,'cnpjCpfFornecedor','nomeFornecedor');
   return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:r.codLote===null?'':String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }
 export function validCnpj(id:string):boolean {
@@ -98,5 +106,8 @@ export function validCnpj(id:string):boolean {
 export function stableDigest(rows:{personId:number;raw:unknown}[]):string {
   const keys=rows.map(({personId,raw})=>canonical({personId,raw})).sort();
   for(let i=1;i<keys.length;i++)if(keys[i]===keys[i-1])throw new Error('Linhas idênticas ambíguas: não deduplicar nem publicar automaticamente');
+  // Occurrence ids leave the supplier out for anyone but a verified CNPJ: two rows that differ only there would share an id.
+  const ids=rows.map(({personId,raw})=>{const r=raw as Record<string,unknown>,api='cnpjCpfFornecedor' in r,idField=api?'cnpjCpfFornecedor':'txtCNPJCPF';return occurrenceId(personId,r,verifiedCnpj(String(r[idField]||'').replace(/\D/g,'')),idField,api?'nomeFornecedor':'txtFornecedor');}).sort();
+  for(let i=1;i<ids.length;i++)if(ids[i]===ids[i-1])throw new Error('Linhas que só diferem no fornecedor teriam o mesmo id: não publicar automaticamente');
   return hash(keys.join('\n'));
 }

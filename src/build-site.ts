@@ -63,8 +63,9 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const billList=billsVersion?await readBills(db,billsVersion.id):[],voteList=votesVersion?new Map((await readVotes(db,votesVersion.id)).map(v=>[v.id,v])):new Map();
   const ballotsOf=new Map<number,Awaited<ReturnType<typeof readBallots>>>(),voteTotals=new Map<number,Record<string,number>>(),votesHeld=new Map<number,number>();
   if(votesVersion)for(const id of active.scope.ids){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
+  // Only a verified CNPJ publishes its supplier key; for anyone else it is the occurrence hash of an older version, which may embed a CPF.
   // Records come from an approved version that may predate the redaction rule; the site never shows a CPF the source typed into free text.
-  const redacted={n:0},allRecords=(await readRecords(db,active.id)).map(r=>redactExpense(r,redacted));
+  const redacted={n:0},allRecords=(await readRecords(db,active.id)).map(r=>{const {supplierKey,...rest}=redactExpense(r,redacted);return r.supplierVerified?{...rest,supplierKey}:rest;});
   if(redacted.n)console.error(`CPF omitido em ${redacted.n} valores de despesas`);
   const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:allRecords,expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld,held:active.validation.heldCompetences??[],ceiling});
   await fs.rm(outDir,{recursive:true,force:true});

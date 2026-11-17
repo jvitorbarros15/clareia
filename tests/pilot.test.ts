@@ -70,7 +70,7 @@ test('same document with distinct events is preserved; ambiguous identical rows 
 });
 test('missing IDs and CPF do not merge suppliers by name; source URLs stay official',()=>{
   const a=normalize({...expense(),cnpjCpfFornecedor:''},1,scope,source);
-  const b=normalize({...expense(),cnpjCpfFornecedor:'12345678900'},1,scope,source);
+  const b=normalize({...expense(),codDocumento:'OTHER-DOC',cnpjCpfFornecedor:'12345678900'},1,scope,source);
   assert.equal(a.supplierVerified,false);assert.equal(b.supplierVerified,false);assert.notEqual(a.supplierKey,b.supplierKey);
   assert.equal(normalize(expense(),1,scope,source).supplierVerified,true);
   assert.equal(officialUrl('https://camara.leg.br.evil.test/file','receipt'),null);
