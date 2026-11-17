@@ -57,18 +57,20 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
   return {schema:'clareia.site-summary.v1',publicationId,coverageId,billsId,billsYears:input.billsYears??[],votesId:input.votesId??null,votesYears:input.votesYears??[],ceiling,scope,totalCents,records:records.length,categories:categoryList,people:summaries};
 }
 
-// A validated CNPJ is one supplier whatever its spelling; the rest are grouped by typed name. Display name: reviewed override, else the most recent spelling (alphabetical on a tie).
+// A validated CNPJ is one supplier whatever its spelling; the rest are grouped by typed name. Display name: reviewed override, else the spelling with the largest total value (then most records, latest date, alphabetical), so a stray typed name cannot become the label.
 const entryOf=(r:Expense):string=>r.supplierVerified?'k:'+r.supplierKey:'n:'+r.supplier;
 export function supplierDisplayNames(records:Expense[],names:SupplierNames={}):Map<string,string>{
   const entries=[...group(records,entryOf)].map(([id,list])=>{
-    const newest=list.reduce((a,b)=>{const x=a.date??'',y=b.date??'';return y>x||(y===x&&b.supplier<a.supplier)?b:a;}).supplier,verified=list[0].supplierVerified;
-    return {id,verified,name:verified?names[list[0].supplierKey]?.name??newest:list[0].supplier,cents:sum(list)};
+    const spellings=new Map<string,{cents:number;n:number;date:string}>(),verified=list[0].supplierVerified;
+    for(const r of list){const t=spellings.get(r.supplier)??{cents:0,n:0,date:''};t.cents+=r.cents;t.n++;if((r.date??'')>t.date)t.date=r.date??'';spellings.set(r.supplier,t);}
+    const main=[...spellings].sort(([a,x],[b,y])=>y.cents-x.cents||y.n-x.n||(y.date>x.date?1:y.date<x.date?-1:0)||(a<b?-1:a>b?1:0))[0][0];
+    return {id,verified,name:verified?names[list[0].supplierKey]?.name??main:list[0].supplier};
   });
   const byName=new Map<string,typeof entries>(),taken=new Set(entries.map(e=>e.name)),out=new Map<string,string>();
   for(const e of entries){const list=byName.get(e.name);if(list)list.push(e);else byName.set(e.name,[e]);}
-  // Same name, different CNPJ: typed-name entries keep the plain name, then the larger value; the others get " · 2", " · 3"…
+  // Same name, different CNPJ: typed-name entries keep the plain name, then CNPJs in supplierKey order, so a supplier keeps its number; the others get " · 2", " · 3"…
   for(const [name,same] of byName){
-    same.sort((a,b)=>Number(a.verified)-Number(b.verified)||b.cents-a.cents||(a.id<b.id?-1:1));
+    same.sort((a,b)=>Number(a.verified)-Number(b.verified)||(a.id<b.id?-1:1));
     let n=1;
     for(const [i,e] of same.entries()){
       if(i===0){out.set(e.id,name);continue;}
