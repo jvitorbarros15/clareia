@@ -18,7 +18,7 @@ const verifiedCnpj=(s:string)=>{
   if(!/^\d{14}$/.test(s)||/^(\d)\1+$/.test(s))return false;
   for(const [size,weights] of [[12,[5,4,3,2,9,8,7,6,5,4,3,2]],[13,[6,5,4,3,2,9,8,7,6,5,4,3,2]]] as const){const remainder=weights.reduce((sum,w,i)=>sum+Number(s[i])*w,0)%11;if(Number(s[size])!==(remainder<2?0:11-remainder))return false;}return true;
 };
-function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:string,basis?:FinancialBasis):Expense{
+export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:string,basis?:FinancialBasis):Expense{
   const r=row.raw,annual=kind==='annual',year=Number(annual?r.numAno:r.ano),month=Number(annual?r.numMes:r.mes);
   if(!r||year!==scope.year||!scope.months.includes(month)||annual&&(Number(r.ideCadastro)!==id||Number(r.codLegislatura)!==scope.legislature))throw Error();
   if(!annual){
@@ -34,7 +34,7 @@ function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:s
   const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis)throw Error();
   const identity=String((annual?r.txtCNPJCPF:r.cnpjCpfFornecedor)||'').replace(/\D/g,''),verified=verifiedCnpj(identity),odd=identity.length>0&&identity.length!==11&&!verified;
   const name=String((annual?r.txtFornecedor:r.nomeFornecedor)||'Fornecedor não informado').replace(/(?<![\d./-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
-  const withheld=odd&&!/\b(LTDA|S\.A|SA|S\/A|EIRELI|EPP|ME|CIA|COMPANHIA|LINHAS A[ÉE]REAS|AIRLINES|HOTEL|TELEF\w*|CELULAR FUNCIONAL)\b/.test(name.toUpperCase()),identityHidden=identity.length===11||withheld;
+  const withheld=odd&&!/(?<![\p{L}\p{N}])(LTDA|S\.A|S\/A|EIRELI|EPP|COMPANHIA|LINHAS A[ÉE]REAS|AIRLINES|HOTEL|TELEF[ÔO]NICA|CELULAR FUNCIONAL)(?![\p{L}\p{N}])/u.test(name.toUpperCase()),identityHidden=identity.length===11||withheld;
   let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(!identityHidden&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
   const occurrence=hash(canonical({personId:id,raw:verified?r:{...r,[annual?'txtCNPJCPF':'cnpjCpfFornecedor']:null,[annual?'txtFornecedor':'nomeFornecedor']:null}}));
   return {id:occurrence,personId:id,year,month,category,supplier:identity.length===11?'Fornecedor pessoa física':withheld?'Fornecedor não identificado na fonte':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,...(identity.length>0&&identity.length!==11&&!verified?{supplierIdOdd:true as const}:{}),documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
@@ -153,8 +153,8 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
         }
       }
     }
-    // Lots collected before the id rule changed hold old ids for suppliers that are not verified CNPJs; everything financial is still compared.
-    const financial=(rows:any[])=>rows.map(({id:_id,supplierKey:_key,supplierIdOdd:_odd,...rest})=>rest.supplierVerified?{id:_id,supplierKey:_key,supplierIdOdd:_odd,...rest}:rest);
+    // Lots collected before the id rule changed hold old ids for suppliers that are not verified CNPJs; everything else, the review flag included, is still compared.
+    const financial=(rows:any[])=>rows.map(({id:_id,supplierKey:_key,...rest})=>rest.supplierVerified?{id:_id,supplierKey:_key,...rest}:rest);
     if(canonical({status,reasons,records:financial(records),totalCents:total,diagnostics})!==canonical({status:c.status,reasons:c.reasons,records:financial(c.records),totalCents:c.totalCents,diagnostics:c.diagnostics}))fail('financial-records-coverage-or-union',c);
     if(total===null)allComplete=false;else grand+=BigInt(total);
   }

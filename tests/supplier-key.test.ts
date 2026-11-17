@@ -42,3 +42,20 @@ test('rows that differ only in the supplier are refused instead of sharing an id
   assert.throws(()=>stableDigest([{personId:1,raw:row(CPF,'A')},{personId:1,raw:row(OTHER_CPF,'B')}]),/só diferem no fornecedor/);
   assert.doesNotThrow(()=>stableDigest([{personId:1,raw:row(CNPJ,'A')},{personId:1,raw:row('11444777000161','B')}]));
 });
+const ODD='1112345678901';
+test('a person-like name is withheld even with accents, and bare SA, ME, CIA or TELEF do not make a company',()=>{
+  for(const name of ['MARIA LÚCIA DA SILVA','PATRÍCIA SOUZA','MARIA DE SA','JOAO DA SILVA ME','ANTONIO TELEFONE','JOSE CIA'])
+    assert.equal(normalize(row(ODD,name),1,scope,source).supplier,'Fornecedor não identificado na fonte',name);
+  for(const name of ['CELULAR FUNCIONAL','EMPRESA TESTE LTDA','Tam Linhas Aéreas S.A','Gol Linhas Aereas S/A','Hotel Aloft','TELEFÔNICA BRASIL','Tonosol S.A. Aloft'])
+    assert.equal(normalize(row(ODD,name),1,scope,source).supplier,name,name);
+});
+test('the audit applies the same placeholder rule and sets the review flag',async()=>{
+  const {project}=await import('../src/expense-intermediate-audit.ts');
+  const at=(id:string,name:string)=>project({raw:{...row(id,name),urlDocumento:'https://www.camara.leg.br/x.pdf'},row:0,source:{url:source.url,sha256:'t',fetchedAt:source.fetchedAt}} as never,1,scope,'api');
+  const person=at(ODD,'MARIA LÚCIA DA SILVA'),company=at(ODD,'EMPRESA TESTE LTDA'),cpf=at(CPF,'MARIA'),verified=at(CNPJ,'EMPRESA');
+  assert.deepEqual([person.supplier,person.receipt,person.supplierIdOdd],['Fornecedor não identificado na fonte',null,true]);
+  assert.deepEqual([company.supplier,company.supplierIdOdd],['EMPRESA TESTE LTDA',true]);assert.ok(company.receipt);
+  assert.deepEqual([cpf.supplier,cpf.supplierIdOdd],['Fornecedor pessoa física',undefined]);assert.equal(verified.supplierIdOdd,undefined);
+  const real=normalize({...row(ODD,'MARIA LÚCIA DA SILVA'),urlDocumento:'https://www.camara.leg.br/x.pdf'},1,scope,source);
+  assert.deepEqual([person.id,person.supplier,person.supplierIdOdd],[real.id,real.supplier,real.supplierIdOdd]);
+});

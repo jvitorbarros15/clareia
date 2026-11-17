@@ -345,3 +345,8 @@ test('two unverified records that would share a published id stop the build',()=
   await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
   await assert.rejects(buildSite(db,dist,portraits),/repetido/);
 }));
+test('a record without an identified supplier cannot carry a receipt link',()=>setup(async(db,dist,portraits)=>{
+  const a=version([{...record(100,1,0),supplier:'Fornecedor não identificado na fonte',receipt:'https://www.camara.leg.br/x.pdf'}]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  await assert.rejects(buildSite(db,dist,portraits),/recibo/);
+}));
