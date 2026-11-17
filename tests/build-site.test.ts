@@ -196,8 +196,8 @@ test('monthly cells and supplier rows add up to each person and carry no record 
   const built=buildSiteSummary(summaryInput(a.records,a.validation.totalCents));
   assert.deepEqual(built.people[0].cells,[[1,0,70,1],[1,1,320,3]]);
   assert.deepEqual(built.people[1].cells,[]);
-  assert.deepEqual(suppliers.suppliers,['Fornecedor','Outro']);
-  assert.deepEqual(suppliers.people['1'],[[1,0,0,70,1],[1,1,0,350,2],[1,1,1,-30,1]]);
+  assert.deepEqual(suppliers.suppliers,['Nome não exibido pelo Clareia']);
+  assert.deepEqual(suppliers.people['1'],[[1,0,0,70,1],[1,1,0,320,3]]);
   assert.deepEqual(suppliers.people['2'],[]);
   assert.equal(suppliers.publicationId,a.id);
   assert.equal(JSON.stringify(suppliers).includes('r1-0'),false);
@@ -301,4 +301,74 @@ test('approved bills and votes produce a per-deputy activity file and held votes
   await storeVotesVersion(db,v);await recordDomainAudit(db,v.id,'passed',report);
   const built=await buildSite(db,dist,portraits),activity=await json(dist,'data',built.publicationId,'atividade','1.json'),summary=await json(dist,'data',built.publicationId,'summary.json');
   assert.deepEqual(activity.votes.map((x:{id:string})=>x.id),['nobill','ok']);assert.deepEqual(activity.votes[1].matters,['PL 5/2025']);assert.equal(activity.votes[1].billId,5);assert.equal(activity.votes[0].billId,null);assert.deepEqual(summary.people[0].votes,{Sim:2});assert.equal(summary.people[0].votesHeld,1);assert.equal(JSON.stringify(activity).includes('cents'),false);
+}));
+test('only a verified supplier publishes its supplier key',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0),{...record(250,1,1),supplierVerified:true,supplierKey:'verified-key'}]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const {publicationId}=await buildSite(db,dist,portraits);
+  const rows=await json(path.join(dist,'data',publicationId),'deputados','1','despesas.json') as Expense[];
+  assert.equal('supplierKey' in rows.find(r=>!r.supplierVerified)!,false);
+  assert.equal(rows.find(r=>r.supplierVerified)!.supplierKey,'verified-key');
+}));
+const CPF='11144477735';
+async function published(change:Partial<Expense>){
+  let out:{rows:Expense[];review:{id:number;from:string;used:string}[];csv:string}={rows:[],review:[],csv:''};
+  await setup(async(db,dist,portraits)=>{
+    const a=version([{...record(100,1,0),id:'old',...change}]);
+    await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+    const built=await buildSite(db,dist,portraits),base=path.join(dist,'data',built.publicationId);
+    out={rows:await json(base,'deputados','1','despesas.json') as Expense[],review:built.review,csv:await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')};
+  });
+  return out;
+}
+test('every published id is rebuilt from the redacted record, never from the stored id or a CPF in the free text',async()=>{
+  const a=await published({documentNumber:'NF '+CPF}),b=await published({documentNumber:'NF 52998224725'});
+  assert.equal(a.rows[0].id,b.rows[0].id);assert.notEqual(a.rows[0].id,'old');assert.match(a.rows[0].id,/^[0-9a-f]{64}$/);
+  assert.ok(!JSON.stringify(a.rows).includes(CPF)&&!a.csv.includes(CPF));assert.ok(a.csv.includes(a.rows[0].id));
+  const v=await published({supplierVerified:true,supplierKey:'k',supplier:'EMPRESA'}),w=await published({supplierVerified:true,supplierKey:'k',supplier:'OUTRA'});
+  assert.equal(v.rows[0].id,w.rows[0].id);assert.notEqual(v.rows[0].id,'old');assert.equal(v.rows[0].supplierKey,'k');
+});
+test('an unverified record publishes neither its supplier key nor its page hash; a verified one keeps both',async()=>{
+  const u=(await published({})).rows[0],v=(await published({supplierVerified:true,supplierKey:'k'})).rows[0];
+  assert.ok(!('supplierKey' in u)&&!('sha256' in u.source));assert.equal(v.supplierKey,'k');assert.equal(v.source.sha256,'s');
+});
+test('a supplier id outside the format reaches the review list by deputy count and not the site',async()=>{
+  const r=await published({supplierIdOdd:true});
+  assert.deepEqual(r.review.filter(i=>i.from==='identificador do fornecedor fora do formato').map(i=>[i.id,i.used]),[[1,'1 registros']]);
+  assert.ok(!('supplierIdOdd' in r.rows[0]));
+});
+test('two unverified records that would share a published id stop the build',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0),{...record(100,1,1),source:record(100,1,0).source}]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  await assert.rejects(buildSite(db,dist,portraits),/repetido/);
+}));
+test('a record without an identified supplier cannot carry a receipt link',()=>setup(async(db,dist,portraits)=>{
+  const a=version([{...record(100,1,0),supplier:'Nome não exibido pelo Clareia',receipt:'https://www.camara.leg.br/x.pdf'}]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  await assert.rejects(buildSite(db,dist,portraits),/recibo/);
+}));
+
+test('an unverified typed name is withheld at build unless it looks like a company or the owner approved it; verified records are untouched',()=>setup(async(db,dist,portraits)=>{
+  const url='https://www.camara.leg.br/x.pdf',named=(i:number,supplier:string,more:Partial<Expense>={})=>({...record(100,1,i),supplier,receipt:url,documentId:'D'+i,...more});
+  const a=version([named(0,'MARIA TESTE'),named(1,'EMPRESA TESTE LTDA'),named(2,'JOSE TESTE'),named(3,'JOAO CASA'),named(4,'MARIA TESTE'),named(5,'OUTRA PESSOA',{supplierVerified:true,supplierKey:'k'})]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  {
+    const built=await buildSite(db,dist,portraits,{approvedNames:['JOAO CASA']}),base=path.join(dist,'data',built.publicationId),rows=await json(base,'deputados','1','despesas.json') as Expense[],by=(i:number)=>rows.find(r=>r.documentId==='D'+i)!;
+    assert.deepEqual([0,1,2,3,5].map(i=>by(i).supplier),['Nome não exibido pelo Clareia','EMPRESA TESTE LTDA','Nome não exibido pelo Clareia','JOAO CASA','OUTRA PESSOA']);
+    assert.deepEqual([0,1,2,3,5].map(i=>by(i).receipt),[null,url,null,url,url]);
+    const text=await fs.readFile(path.join(base,'fornecedores.json'),'utf8')+await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')+JSON.stringify(rows);
+    assert.ok(!text.includes('MARIA TESTE')&&!text.includes('JOSE TESTE')&&text.includes('OUTRA PESSOA'));
+    assert.deepEqual(built.names.withheld,[{name:'MARIA TESTE',count:2,cents:200},{name:'JOSE TESTE',count:1,cents:100}]);
+    assert.deepEqual(built.names.kept,[{name:'EMPRESA TESTE LTDA',count:1,cents:100}]);
+    const {reviewMarkdown}=await import('../src/review-list.ts'),md=reviewMarkdown(built.publicationId,built.review,built.names);
+    assert.match(md,/## Nomes de fornecedor ocultados\s+- MARIA TESTE \| 2 registros \| R\$ 2\.00\s+- JOSE TESTE \| 1 registros \| R\$ 1\.00/);
+    assert.match(md,/## Nomes mantidos pela regra de empresa\s+- EMPRESA TESTE LTDA \| 1 registros/);
+  }
+}));
+test('identical flagged rows keep distinct public ids, the flag and the CSV column, and their withheld name',()=>setup(async(db,dist,portraits)=>{
+  const row=(i:number)=>({...record(100,1,i),supplier:'MARIA TESTE',documentId:'D',duplicateFlag:'possible' as const,id:hash('same-'+i)});
+  const a=version([row(0),row(1),row(2)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const built=await buildSite(db,dist,portraits,{approvedNames:[]}),base=path.join(dist,'data',built.publicationId),rows=await json(base,'deputados','1','despesas.json') as Expense[];
+  assert.equal(new Set(rows.map(r=>r.id)).size,3);assert.ok(rows.every(r=>r.duplicateFlag==='possible'&&r.supplier==='Nome não exibido pelo Clareia'));
+  const lines=(await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')).split('\r\n');assert.match(lines[0],/;"sinal_corrigido";"possivel_duplicidade"$/);assert.match(lines[1],/;"";"sim"$/);
 }));

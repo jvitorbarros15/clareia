@@ -1,5 +1,5 @@
 import {unzipSync} from 'fflate';
-import {BASE,canonical,hash,normalize,markDuplicates} from './model.ts';
+import {BASE,canonical,hash,normalize,markDuplicates,stableDigest} from './model.ts';
 import type {Scope,Expense,DuplicateReason} from './model.ts';
 import {PeopleCapture,sourceAllowed} from './people-discovery.ts';
 import type {Capture} from './people-discovery.ts';
@@ -118,6 +118,8 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
         if(check.status==='mismatch'||check.status==='changed'){c.reasons.push('ambiguous-identical-occurrences');continue;}
       }
       if(unresolved.some(r=>!portalCovered.has(equationKey({kind:'api',personId:c.personId,source:{...r.source,row:r.row}})))||new Set(selected.map(r=>canonical(r.raw))).size!==selected.length)dup='ambiguous-identical-occurrences';
+      // Identical rows are allowed; rows that differ only in the supplier would still share an id, so they stay held.
+      try{stableDigest([...new Map(selected.map(r=>[canonical(r.raw),{personId:c.personId,raw:r.raw}])).values()]);}catch{c.reasons.push('ambiguous-identical-occurrences');continue;}
       // Repeated rows are published, as the Câmara counts them, and flagged: the source does not say whether each is a separate debit.
       const sameTicket=new Map<string,number>();for(const r of api[1]! as {raw:any}[])if(r.raw?.tipoDespesa==='PASSAGEM AÉREA - SIGEPA'){const key=canonical([r.raw.codDocumento,r.raw.numDocumento,r.raw.valorLiquido]);sameTicket.set(key,(sameTicket.get(key)??0)+1);}
       if(!dup&&(repeated.length||[...sameTicket.values()].some(n=>n>1)))dup='sigepa-unit-unconfirmed';

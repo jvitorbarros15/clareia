@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {canonical,hash,snapshotId} from '../src/model.ts';
 import type {Expense} from '../src/model.ts';
-import {buildExpenseVersion} from '../src/expense-publication.ts';
-import type {ExpenseLotRun} from '../src/expense-publication.ts';
-import {duplicateMarkdown,duplicateReviewItems} from '../src/review-list.ts';
+import {auditExpenseVersion,buildExpenseVersion,fixSign} from '../src/expense-publication.ts';
+import {duplicateMarkdown,duplicateReviewItems,signReviewItems,signReviewMarkdown} from '../src/review-list.ts';
 import {csv} from '../src/view.ts';
+import {openDB} from '../src/store.ts';
+import {publishDomain} from '../src/publications.ts';
+import type {ExpenseLotRun} from '../src/expense-publication.ts';
 
 const history={people:[1,2,3].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-07T00:00:00Z'}}}))} as any;
 const temporal={historySha256:hash(canonical(history)),scope:{legislature:57},people:[1,2,3].map(id=>({id,events:[],months:[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}]}))} as any;
@@ -113,6 +115,43 @@ test('a month showing two UFs is never settled by the events',()=>{
 test('a confirmed month keeps its uf over the events and is not marked',()=>{
   assert.deepEqual(withFirst([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[ev(57,'RS')]).slice(0,2),['SP',null]);
 });
+
+const HOUSING='COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA';
+const sr=(cents:number,doc:number|null,glosa:number|null,i:number,extra:object={})=>({...record(1,cents,i),category:HOUSING,documentCents:doc,disallowedCents:glosa,...extra});
+const build=(recs:Expense[])=>buildExpenseVersion([lot(0,[1,2],[cell(1,'complete',recs),cell(2,'held-review')]),lots()[1]],history,'t');
+test('only the exact inverted-net shape is flipped; totals stay consistent and the source net is kept',()=>{
+  const recs=[sr(-500,500,null,0),sr(-500,500,0,1),sr(-500,500,100,2),sr(-500,-500,null,3),sr(-400,500,null,4),sr(-500,-500,0,5),sr(70,100,30,6)];
+  const v=build(recs);
+  assert.deepEqual(v.records.map(x=>x.cents),[500,-500,-500,-500,-400,-500,70]);
+  assert.deepEqual(v.records.map(x=>x.sourceCents),[-500,...Array(6).fill(undefined)]);
+  assert.equal(v.records[0].note,'sinal corrigido conforme a página da Câmara');
+  assert.equal(v.validation.totalCents,-1830);assert.equal(v.validation.independentTotalCents,'-1830');
+  assert.deepEqual(v.validation.signFix,{count:1,deltaCents:1000});
+  const items=signReviewItems(v.records,v.people);
+  assert.deepEqual(items.map(i=>[i.reason,i.sourceCents,i.cents]),[['sinal do líquido invertido na fonte; corrigido conforme a página da Câmara',-500,500],['sinal a revisar',-500,-500],['sinal a revisar',-500,-500],['sinal a revisar',-400,-400]]);
+  const md=signReviewMarkdown('p',items);
+  assert.match(md,/- 1 \| Pessoa 1 \| 1 registros \| R\$ 5\.00/);
+  assert.match(md,/mês 1 \| COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA \| fonte R\$ -5\.00 -> publicado R\$ 5\.00 \| r1-0 \|/);
+  assert.ok(md.indexOf('sinal a revisar')<md.indexOf('corrigido conforme',md.indexOf('## Por registro')));
+});
+test('the shape in another category stops the build; a financial basis is left alone; running twice does not flip back',()=>{
+  assert.throws(()=>build([sr(-500,500,null,0,{category:'COMBUSTÍVEIS E LUBRIFICANTES.'})]),/categoria não prevista/);
+  const kept=build([sr(-500,500,null,0,{financialBasis:'reported-installment'})]);assert.equal(kept.records[0].cents,-500);assert.equal(kept.records[0].sourceCents,undefined);
+  const once=build([sr(-500,500,null,0)]).records[0];assert.deepEqual(fixSign(once),once);
+});
+test('the audit recomputes the correction from the stored records and the lots',async()=>{
+  const recs=[sr(-500,500,null,0),sr(-300,-300,0,1)],ls=[lot(0,[1,2],[cell(1,'complete',recs),cell(2,'held-review')]),lots()[1]],v=buildExpenseVersion(ls,history,'t'),db=await openDB(true);
+  try{
+    await publishDomain(db,'despesas',v);
+    assert.equal((await auditExpenseVersion(db,v,ls)).status,'passed');
+    const wrong={...v,validation:{...v.validation,signFix:{...v.validation.signFix!,deltaCents:v.validation.signFix!.deltaCents+1}}};
+    assert.deepEqual((await auditExpenseVersion(db,wrong,ls)).failures,['sign-correction']);
+  }finally{await db.close();}
+});
+test('the CSV marks corrected records in a last column',()=>{
+  const [a,b]=build([sr(-500,500,null,0),sr(100,100,0,1)]).records,lines=csv([a,b]).split('\r\n');
+  assert.match(lines[0],/;"sinal_corrigido";"possivel_duplicidade"$/);assert.match(lines[1],/;"sim";""$/);assert.match(lines[2],/;"";""$/);
+});
 test('a published month with possible duplicates is listed with its flagged records and value',()=>{
   const flagged=[{...record(1,100,0),duplicateFlag:'possible' as const},{...record(1,100,1),duplicateFlag:'possible' as const},record(1,5,2)];
   const v=buildExpenseVersion([lot(0,[1,2],[{...cell(1,'complete',flagged),duplicateReason:'sigepa-unit-unconfirmed'},cell(2,'no-expenses-confirmed')]),lots()[1]],history,'t');
@@ -121,4 +160,10 @@ test('a published month with possible duplicates is listed with its flagged reco
   assert.deepEqual(duplicateReviewItems(v),[{id:1,name:'Pessoa 1',month:1,reason:'sigepa-unit-unconfirmed',records:2,cents:200,monthCents:205,url:'https://www.camara.leg.br/deputados/1?ano=2025'}]);
   assert.match(duplicateMarkdown('p',duplicateReviewItems(v)),/- 1 \| Pessoa 1 \| mês 1 \| motivo: sigepa-unit-unconfirmed \| registros sinalizados: 2 \| R\$ 2,00 \| total do mês publicado: R\$ 2,05 \| https:\/\/www\.camara\.leg\.br\/deputados\/1\?ano=2025/);
   const rows=csv(flagged).split('\r\n');assert.match(rows[0],/;"possivel_duplicidade"$/);assert.match(rows[1],/;"sim"$/);assert.match(rows[3],/;""$/);
+});
+test('the flagged value of a duplicate month is the one published after the sign correction',()=>{
+  const dup=(i:number)=>({...sr(-500,500,null,i),duplicateFlag:'possible' as const});
+  const v=buildExpenseVersion([lot(0,[1,2],[{...cell(1,'complete',[dup(0),dup(1)]),duplicateReason:'ambiguous-identical-occurrences'},cell(2,'held-review')]),lots()[1]],history,'t');
+  assert.deepEqual(v.validation.duplicateCompetences,[{personId:1,month:1,reason:'ambiguous-identical-occurrences',records:2,cents:1000}]);
+  assert.equal(v.validation.totalCents,1000);assert.equal(duplicateReviewItems(v)[0].monthCents,1000);
 });

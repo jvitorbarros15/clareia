@@ -224,3 +224,8 @@ test('the batch date is the latest capture time, so an offline re-projection kee
   const again=await collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true});
   assert.equal(again.createdAt,r.report.createdAt);assert.equal(again.createdAt,r.report.sources.map(x=>x.fetchedAt).sort().at(-1));
 });
+test('annual rows that differ only in the supplier stay held, while identical rows do not',async t=>{
+  const line=(supplier:string,id:string)=>annualLine().replace('Empresa;11222333000181',`${supplier};${id}`);
+  const {report}=await setup(t,url=>url.endsWith('.zip')?annual([line('A','12345678909'),line('B','98765432100')]):undefined);
+  assert.equal(cell(report).status,'held-review');assert.deepEqual(cell(report).reasons,['ambiguous-identical-occurrences']);assert.equal(cell(report).duplicateReason,undefined);
+});

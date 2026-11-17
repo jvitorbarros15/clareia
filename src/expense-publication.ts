@@ -8,6 +8,15 @@ import type {DB} from './store.ts';
 
 export type ExpenseLotRun={runId:string;manifest:{runId:string;status:string;reportSha256:string;proposalSha256:string;inputSha256:string};input:{schema:string;proposal:any;temporal:TemporalReport};report:ExpenseBatch;audit:{status:string;reportSha256:string;proposalSha256:string;checkedAt:string;competences:number}};
 
+export const SIGN_NOTE='sinal corrigido conforme a página da Câmara';
+export const SIGN_CATEGORIES=['COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA','PASSAGEM AÉREA - MISSÃO OFICIAL'];
+// The source reports document > 0, no glosa and net = -document; the Câmara's own pages count it as positive. Only this shape in the two listed categories is flipped (the signed source net stays in sourceCents); the same shape elsewhere stops the build for a human decision.
+export const fixSign=(r:Expense):Expense=>{
+  if(r.financialBasis||r.documentCents===null||r.documentCents<=0||r.disallowedCents!==null||r.cents!==-r.documentCents)return r;
+  if(!SIGN_CATEGORIES.includes(r.category))throw Error(`Sinal invertido em categoria não prevista (${r.category}): decisão necessária antes de publicar`);
+  return {...r,cents:r.documentCents,sourceCents:r.cents,note:SIGN_NOTE};
+};
+
 // Only audited lots of one universe, all of them, each once: a missing or repeated lot would silently change the totals.
 export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,now:string):Snapshot{
   if(!lots.length)throw Error('Nenhum lote informado');
@@ -25,17 +34,17 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   if(new Set(ids).size!==ids.length||ids.length!==first.universeSize||hash(canonical([...ids].sort((a,b)=>a-b)))!==first.universeSha256)throw Error('Pessoas dos lotes não formam o universo declarado');
   const temporal=ordered[0].input.temporal;
   if(hash(canonical(temporal))!==first.temporalSha256||temporal.historySha256!==hash(canonical(history)))throw Error('Histórico de pessoas diverge do usado na coleta');
-  const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[],duplicateCompetences:{personId:number;month:number;reason:string;records:number;cents:number}[]=[];let cellTotal=0n;
+  const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[],duplicateCompetences:{personId:number;month:number;reason:string;records:number;cents:number}[]=[];let cellTotal=0n,fixCount=0,fixDelta=0n;
   for(const l of ordered)for(const c of l.report.cells){
     if(c.status==='complete'||c.status==='no-expenses-confirmed'){
       if(c.status==='no-expenses-confirmed'&&c.records.length)throw Error('Célula sem despesas com registros');
-      records.push(...c.records);cellTotal+=BigInt(c.totalCents??0);
-      if(c.duplicateReason){const flagged=c.records.filter(r=>r.duplicateFlag==='possible');duplicateCompetences.push({personId:c.personId,month:c.month,reason:c.duplicateReason,records:flagged.length,cents:flagged.reduce((n,r)=>n+r.cents,0)});}
+      const fixed=c.records.map(fixSign);records.push(...fixed);cellTotal+=BigInt(c.totalCents??0);for(const r of fixed)if(r.sourceCents!==undefined){fixCount++;fixDelta+=BigInt(r.cents-r.sourceCents);}
+      if(c.duplicateReason){const flagged=fixed.filter(r=>r.duplicateFlag==='possible');duplicateCompetences.push({personId:c.personId,month:c.month,reason:c.duplicateReason,records:flagged.length,cents:flagged.reduce((n,r)=>n+r.cents,0)});}
     }else if(c.status==='held-review'||c.status==='source-failure'){if(c.records.length)throw Error('Célula retida com registros');heldMonths[c.personId]=(heldMonths[c.personId]??0)+1;heldCompetences.push({personId:c.personId,month:c.month,reasons:[...c.reasons].sort()});}
     else throw Error('Situação de célula desconhecida');
   }
   const total=records.reduce((n,r)=>n+BigInt(r.cents),0n);
-  if(total!==cellTotal||!Number.isSafeInteger(Number(total)))throw Error('Soma dos registros diverge das células auditadas');
+  if(total!==cellTotal+fixDelta||!Number.isSafeInteger(Number(total)))throw Error('Soma dos registros diverge das células auditadas');
   const people:Person[]=ids.map(id=>{
     const h=history.people.find(p=>p.id===id),t=temporal.people.find(p=>p.id===id);
     if(!h?.profile||!t)throw Error(`Cadastro ausente para ${id}`);
@@ -47,7 +56,7 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
   const body={metric:'camara.ceap.valor-liquido-uniao-fontes.v1',scope:{year:first.year,months:first.months,ids,legislature:temporal.scope.legislature},people,records,collectedAt,publishedAt:now,pages:[],
-    validation:{sourceKind:'annual-api-union',stablePasses:2,recordCount:records.length,totalCents:Number(total),independentTotalCents:String(cellTotal),duplicatePolicy:'Documento não é chave. Ocorrências do CSV preservadas; linhas repetidas são publicadas, como a Câmara as conta, e sinalizadas como possível duplicidade.',limitations:['Competências retidas para revisão ficam fora dos totais e são indicadas por deputado.'],heldMonths,heldCompetences:heldCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),duplicateCompetences:duplicateCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),lots:ordered.map(l=>({runId:l.runId,lot:l.input.proposal.lot,reportSha256:l.manifest.reportSha256,contentSha256:l.report.contentSha256,auditCheckedAt:l.audit.checkedAt}))}};
+    validation:{sourceKind:'annual-api-union',stablePasses:2,recordCount:records.length,totalCents:Number(total),independentTotalCents:String(cellTotal+fixDelta),signFix:{count:fixCount,deltaCents:Number(fixDelta)},duplicatePolicy:'Documento não é chave. Ocorrências do CSV preservadas; linhas repetidas são publicadas, como a Câmara as conta, e sinalizadas como possível duplicidade.',limitations:['Competências retidas para revisão ficam fora dos totais e são indicadas por deputado.'],heldMonths,heldCompetences:heldCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),duplicateCompetences:duplicateCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),lots:ordered.map(l=>({runId:l.runId,lot:l.input.proposal.lot,reportSha256:l.manifest.reportSha256,contentSha256:l.report.contentSha256,auditCheckedAt:l.audit.checkedAt}))}};
   return {...body,id:snapshotId(body)};
 }
 // Re-reads what the database now holds; the lot audits already re-derived every competence from the sealed originals.
@@ -58,6 +67,17 @@ export async function auditExpenseVersion(db:DB,version:Snapshot,lots:ExpenseLot
     if(snapshotId(stored)!==version.id)failures.push('content-id');
     if(stored.records.length!==version.validation.recordCount)failures.push('record-count');
     if(String(stored.records.reduce((n,r)=>n+BigInt(r.cents),0n))!==version.validation.independentTotalCents)failures.push('total');
+    // The sign rule is written again here on purpose: a bug in fixSign must not pass its own check.
+    const cells=lots.flatMap(l=>l.report.cells).filter(c=>c.status==='complete'||c.status==='no-expenses-confirmed'),allowed=['COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA','PASSAGEM AÉREA - MISSÃO OFICIAL'];
+    let source=0n,count=0,delta=0n,bad=false;
+    for(const r of stored.records){
+      const d=r.documentCents,shape=d!==null&&d>0&&r.disallowedCents===null&&!r.financialBasis;
+      if(r.sourceCents===undefined){source+=BigInt(r.cents);if(shape&&r.cents===-d)bad=true;}
+      else{source+=BigInt(r.sourceCents);count++;delta+=BigInt(r.cents-r.sourceCents);if(!shape||r.sourceCents!==-d||r.cents!==d||r.note!==SIGN_NOTE||!allowed.includes(r.category))bad=true;}
+    }
+    const fix=version.validation.signFix;
+    if(source!==cells.reduce((n,c)=>n+BigInt(c.totalCents??0),0n))failures.push('audited-total');
+    if(bad||count!==fix?.count||Number(delta)!==fix?.deltaCents)failures.push('sign-correction');
   }
   return {checkedAt:new Date().toISOString(),status:failures.length?'failed' as const:'passed' as const,failures,lots:lots.length,competences:lots.reduce((n,l)=>n+l.audit.competences,0),selected:version.records.length};
 }

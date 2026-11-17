@@ -18,7 +18,7 @@ const verifiedCnpj=(s:string)=>{
   if(!/^\d{14}$/.test(s)||/^(\d)\1+$/.test(s))return false;
   for(const [size,weights] of [[12,[5,4,3,2,9,8,7,6,5,4,3,2]],[13,[6,5,4,3,2,9,8,7,6,5,4,3,2]]] as const){const remainder=weights.reduce((sum,w,i)=>sum+Number(s[i])*w,0)%11;if(Number(s[size])!==(remainder<2?0:11-remainder))return false;}return true;
 };
-function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:string,basis?:FinancialBasis):Expense{
+export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:string,basis?:FinancialBasis):Expense{
   const r=row.raw,annual=kind==='annual',year=Number(annual?r.numAno:r.ano),month=Number(annual?r.numMes:r.mes);
   if(!r||year!==scope.year||!scope.months.includes(month)||annual&&(Number(r.ideCadastro)!==id||Number(r.codLegislatura)!==scope.legislature))throw Error();
   if(!annual){
@@ -32,17 +32,17 @@ function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:s
   const category=annual?r.txtDescricao:r.tipoDespesa;if(typeof category!=='string'||!category.trim())throw Error();
   const money=(field:string)=>annual&&!r[field]?.trim()||!annual&&field==='valorGlosa'&&r[field]===null?null:amount(r[field]);
   const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis)throw Error();
-  const identity=String((annual?r.txtCNPJCPF:r.cnpjCpfFornecedor)||'').replace(/\D/g,''),verified=verifiedCnpj(identity),privatePerson=identity.length===11;
+  const identity=String((annual?r.txtCNPJCPF:r.cnpjCpfFornecedor)||'').replace(/\D/g,''),verified=verifiedCnpj(identity),odd=identity.length>0&&identity.length!==11&&!verified;
   const name=String((annual?r.txtFornecedor:r.nomeFornecedor)||'Fornecedor não informado').replace(/(?<![\d./-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
-  let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(!privatePerson&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
-  const occurrence=hash(canonical({personId:id,raw:r}));
-  return {id:occurrence,personId:id,year,month,category,supplier:privatePerson?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
+  let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(identity.length!==11&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
+  const occurrence=hash(canonical({personId:id,raw:verified?r:{...r,[annual?'txtCNPJCPF':'cnpjCpfFornecedor']:null,[annual?'txtFornecedor':'nomeFornecedor']:null}}));
+  return {id:occurrence,personId:id,year,month,category,supplier:identity.length===11?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,...(odd?{supplierIdOdd:true as const}:{}),documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
 }
 // Independent of markDuplicates: repeated rows stay published; identical ones get distinct ids by occurrence order.
 function flagRepeats(rs:Expense[]):Expense[]{
   const ticket='PASSAGEM AÉREA - SIGEPA',blank=(s:string)=>s==='Não informado'?'':s,same=(a:Expense,b:Expense)=>a.category===b.category&&blank(a.documentId)===blank(b.documentId)&&blank(a.documentNumber)===blank(b.documentNumber)&&a.cents===b.cents&&(a.category===ticket||canonical([a.date,a.lot,a.supplier,a.documentCents,a.disallowedCents])===canonical([b.date,b.lot,b.supplier,b.documentCents,b.disallowedCents]));
   const used=new Map<string,number>();
-  return rs.map(r=>{const n=used.get(r.id)??0;used.set(r.id,n+1);const id=n?hash(canonical({id:r.id,occurrence:n})):r.id;return {...r,id,supplierKey:r.supplierKey===r.id?id:r.supplierKey,...(rs.filter(o=>same(o,r)).length>1?{duplicateFlag:'possible' as const}:{})};});
+  return rs.map(r=>{const n=used.get(r.id)??0;used.set(r.id,n+1);const id=n?hash(canonical({id:r.id,occurrence:n})):r.id;return {...r,id,...(r.supplierKey===r.id?{supplierKey:id}:{}),...(rs.filter(o=>same(o,r)).length>1?{duplicateFlag:'possible' as const}:{})};});
 }
 // This verifier reads sources and independently projects records, paginates,
 // parses money and pairs occurrences. It does not import collection, financial
@@ -144,6 +144,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
         dup=unresolved.some(r=>!portalCovered.has(rowKey(r)))||duplicates(annual)?'ambiguous-identical-occurrences':repeatedTicket||b.some(r=>(apiCounts.get(canonical(r.raw))??0)>1)?'sigepa-unit-unconfirmed':null;
         let ar:Expense[]=[],br:Expense[]=[];
         try{ar=annual.map(r=>project(r,c.personId,scope,'annual',second.csvHash,permission('annual',c.personId,r)));br=b.map(r=>project(r,c.personId,scope,'api',undefined,permission('api',c.personId,r)));}catch{reasons=['financial-normalization-failed'];}
+        if(!reasons.length){const first=new Map<string,string>();annual.forEach((r,i)=>{const raw=canonical(r.raw),seen=first.get(ar[i].id);if(seen!==undefined&&seen!==raw){reasons=['ambiguous-identical-occurrences'];dup=null;}first.set(ar[i].id,raw);});}
         if(!reasons.length){
           const blank=(s:string)=>s==='Não informado'?'':s,key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
@@ -163,7 +164,9 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
         }
       }
     }
-    if(canonical({status,reasons,records,totalCents:total,diagnostics,dup:reasons.length?null:dup})!==canonical({status:c.status,reasons:c.reasons,records:c.records,totalCents:c.totalCents,diagnostics:c.diagnostics,dup:c.duplicateReason??null}))fail('financial-records-coverage-or-union',c);
+    // Lots collected before the id rule changed hold old ids for suppliers that are not verified CNPJs; everything else, the review flag included, is still compared.
+    const financial=(rows:any[])=>rows.map(({id:_id,supplierKey:_key,...rest})=>rest.supplierVerified?{id:_id,supplierKey:_key,...rest}:rest);
+    if(canonical({status,reasons,records:financial(records),totalCents:total,diagnostics,dup:reasons.length?null:dup})!==canonical({status:c.status,reasons:c.reasons,records:financial(c.records),totalCents:c.totalCents,diagnostics:c.diagnostics,dup:c.duplicateReason??null}))fail('financial-records-coverage-or-union',c);
     if(total===null)allComplete=false;else grand+=BigInt(total);
   }
   if(canonical(report.portalChecks)!==canonical(portalChecks))fail('portal-review-evidence');

@@ -66,8 +66,8 @@ export function supplierDisplayNames(records:Expense[],names:SupplierNames={}):M
     const spellings=new Map<string,{abs:number;n:number;date:string}>(),verified=list[0].supplierVerified;
     for(const r of list){const t=spellings.get(r.supplier)??{abs:0,n:0,date:''};t.abs+=Math.abs(r.cents);t.n++;if((r.date??'')>t.date)t.date=r.date??'';spellings.set(r.supplier,t);}
     const main=[...spellings].sort(([a,x],[b,y])=>y.n-x.n||y.abs-x.abs||(y.date>x.date?1:y.date<x.date?-1:0)||(a<b?-1:a>b?1:0))[0][0];
-    const reviewed=verified&&Object.hasOwn(names,list[0].supplierKey);
-    return {id,verified,reviewed,name:reviewed?names[list[0].supplierKey].name:verified?main:list[0].supplier};
+    const key=list[0].supplierKey!,reviewed=verified&&Object.hasOwn(names,key);
+    return {id,verified,reviewed,name:reviewed?names[key].name:verified?main:list[0].supplier};
   });
   const byName=new Map<string,typeof entries>(),taken=new Set(entries.map(e=>e.name)),out=new Map<string,string>();
   for(const e of entries){const list=byName.get(e.name);if(list)list.push(e);else byName.set(e.name,[e]);}
