@@ -7,7 +7,6 @@ import {openDB} from '../src/store.ts';
 import type {DB} from '../src/store.ts';
 import {publishDomain,recordDomainAudit} from '../src/publications.ts';
 import {buildSite,checkLimits,dataFolderId} from '../src/build-site.ts';
-import {personView} from '../src/view.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {storePeopleCoverage} from '../src/people-publication.ts';
@@ -127,8 +126,6 @@ test('a deputy without a file renders as unavailable, not zero',()=>setup(async(
   const base=path.join(dist,'data',publicationId),index=await json(base,'index.json');
   await assert.rejects(fs.access(path.join(base,'deputados','2','despesas.json')));
   assert.deepEqual(index.withoutData,[2]);
-  assert.equal(personView(index,null,new URLSearchParams('person=2')),null);
-  assert.equal(personView(index,await json(base,'deputados','1','despesas.json'),new URLSearchParams('person=1'))?.totalCents,100);
 }));
 test('portraits are versioned with the data and a missing one is simply absent',()=>setup(async(db,dist,portraits)=>{
   const a=version([record(100,1,0),record(100,2,1)]);

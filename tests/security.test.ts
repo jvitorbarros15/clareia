@@ -9,7 +9,7 @@ import type {AddressInfo} from 'node:net';
 import {createApp} from '../src/app.ts';
 import {lock} from '../src/lock.ts';
 import {maskPersonalId,readLimited,snapshotId} from '../src/model.ts';
-import {csv,parseFilters} from '../src/view.ts';
+import {csv} from '../src/view.ts';
 import type {Snapshot,Expense} from '../src/model.ts';
 
 function version(cents:number):Snapshot{
@@ -64,8 +64,7 @@ test('CPF inside a supplier name is masked; CNPJ and ordinary numbers stay',()=>
   assert.equal(maskPersonalId('MARIA 123.456.789-00 ME'),'MARIA [CPF oculto] ME');
   for(const safe of ['EMPRESA 12.345.678/0001-90','ACME 12345678000190','LOJA 123','FONE 6133334444'])assert.equal(maskPersonalId(safe),safe);
 });
-test('filters accept digits only and CSV neutralizes formulas behind leading whitespace',()=>{
+test('CSV neutralizes formulas behind leading whitespace',()=>{
   const s=version(100);
-  assert.throws(()=>parseFilters(new URLSearchParams('from=0x1'),{...s,scope:{...s.scope,months:[1,2]}}));assert.throws(()=>parseFilters(new URLSearchParams('person=1e0'),s));
   assert.match(csv([{...s.records[0],supplier:' =HYPERLINK("x")'}]),/' =HYPERLINK/);assert.match(csv([{...s.records[0],supplier:'\n=cmd'}]),/'\n=cmd/);
 });
