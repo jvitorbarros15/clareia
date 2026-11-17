@@ -8,6 +8,10 @@ import type {DB} from './store.ts';
 
 export type ExpenseLotRun={runId:string;manifest:{runId:string;status:string;reportSha256:string;proposalSha256:string;inputSha256:string};input:{schema:string;proposal:any;temporal:TemporalReport};report:ExpenseBatch;audit:{status:string;reportSha256:string;proposalSha256:string;checkedAt:string;competences:number}};
 
+export const SIGN_NOTE='sinal corrigido conforme a página da Câmara';
+// The source reports document > 0, no glosa and net = -document; the Câmara's own pages count it as positive. Only this exact shape is flipped, the signed source net stays in sourceCents.
+export const fixSign=(r:Expense):Expense=>r.documentCents!==null&&r.documentCents>0&&r.disallowedCents===null&&r.cents===-r.documentCents?{...r,cents:r.documentCents,sourceCents:r.cents,note:SIGN_NOTE}:r;
+
 // Only audited lots of one universe, all of them, each once: a missing or repeated lot would silently change the totals.
 export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,now:string):Snapshot{
   if(!lots.length)throw Error('Nenhum lote informado');
@@ -29,7 +33,7 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   for(const l of ordered)for(const c of l.report.cells){
     if(c.status==='complete'||c.status==='no-expenses-confirmed'){
       if(c.status==='no-expenses-confirmed'&&c.records.length)throw Error('Célula sem despesas com registros');
-      records.push(...c.records);cellTotal+=BigInt(c.totalCents??0);
+      const fixed=c.records.map(fixSign);records.push(...fixed);cellTotal+=BigInt(c.totalCents??0)+fixed.reduce((n,r)=>n+(r.sourceCents===undefined?0n:BigInt(r.cents-r.sourceCents)),0n);
     }else if(c.status==='held-review'||c.status==='source-failure'){if(c.records.length)throw Error('Célula retida com registros');heldMonths[c.personId]=(heldMonths[c.personId]??0)+1;heldCompetences.push({personId:c.personId,month:c.month,reasons:[...c.reasons].sort()});}
     else throw Error('Situação de célula desconhecida');
   }

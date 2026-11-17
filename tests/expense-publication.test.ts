@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {canonical,hash,snapshotId} from '../src/model.ts';
 import type {Expense} from '../src/model.ts';
 import {buildExpenseVersion} from '../src/expense-publication.ts';
+import {signReviewItems} from '../src/review-list.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
 
 const history={people:[1,2,3].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-07T00:00:00Z'}}}))} as any;
@@ -110,4 +111,15 @@ test('a month showing two UFs is never settled by the events',()=>{
 });
 test('a confirmed month keeps its uf over the events and is not marked',()=>{
   assert.deepEqual(withFirst([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}],[ev(57,'RS')]).slice(0,2),['SP',null]);
+});
+
+test('only the exact inverted-net shape is flipped; totals stay consistent and the source net is kept',()=>{
+  const r=(cents:number,doc:number|null,glosa:number|null,i:number)=>({...record(1,cents,i),documentCents:doc,disallowedCents:glosa});
+  const recs=[r(-500,500,null,0),r(-500,500,0,1),r(-500,500,100,2),r(-500,-500,null,3),r(-400,500,null,4),r(-500,-500,0,5),r(70,100,30,6)];
+  const v=buildExpenseVersion([lot(0,[1,2],[cell(1,'complete',recs),cell(2,'held-review')]),lots()[1]],history,'t');
+  assert.deepEqual(v.records.map(x=>x.cents),[500,-500,-500,-500,-400,-500,70]);
+  assert.deepEqual(v.records.map(x=>x.sourceCents),[-500,...Array(6).fill(undefined)]);
+  assert.equal(v.records[0].note,'sinal corrigido conforme a página da Câmara');
+  assert.equal(v.validation.totalCents,-1830);assert.equal(v.validation.independentTotalCents,String(v.validation.totalCents));
+  assert.deepEqual(signReviewItems(v.records,v.people),[{id:1,name:'Pessoa 1',count:1,cents:500,reason:'sinal do líquido invertido na fonte; corrigido conforme a página da Câmara'}]);
 });
