@@ -10,6 +10,9 @@ import {auditCeiling} from '../src/cota-ceiling-audit.ts';
 import {buildSiteCeiling} from '../src/ceiling-site.ts';
 import {ceilingUse,tenthsOf} from '../src/ceiling-use.ts';
 import {buildSiteSummary} from '../src/site-summary.ts';
+import {buildPeopleCoverage} from '../src/people-publication.ts';
+import type {TemporalReport} from '../src/people-temporal.ts';
+import type {CrosscheckReport} from '../src/people-legacy.ts';
 import {openDB} from '../src/store.ts';
 import {publishDomain,recordDomainAudit} from '../src/publications.ts';
 import {buildSite} from '../src/build-site.ts';
@@ -93,4 +96,34 @@ test('a negative month lowers the sum and the percent keeps its sign',()=>{
   const u=ceilingUse([month(1,4283733),month(2,-4283733*2)],table,true);
   assert.equal(u.status,'ok');if(u.status!=='ok')return;
   assert.equal(u.expenseCents,-4283733);assert.equal(u.tenths,-500);
+});
+
+type Spec={exercise:'full'|'partial'|'outside';uf:{status:'single'|'conflict';value:string|null};comparison:'unavailable'|'potential-conflict'};
+const dim=(status:'single'|'conflict',value:string|null)=>({status,value,values:value?[value]:[],rows:[0]});
+function ceilingOfCoverage(specs:Spec[],uf:string|null){
+  const {report,audit}=made(),ceiling=buildSiteCeiling(report,audit,2025),months=specs.map((s,i)=>({year:2025,month:i+1,start:'',end:'',partialScope:s.exercise==='partial',exercise:s.exercise,party:dim('single','PL'),uf:dim(s.uf.status,s.uf.value),financialCollection:'not-collected' as const}));
+  const t:TemporalReport={schema:'clareia.people-temporal.v1',ruleVersion:'camara.history-reported-change.v1',historySha256:hash('h'),scope:{legislature:57,start:'2025-01-01',end:'2025-03-31',sampleIds:[1]},createdAt:'2026-11-08T12:00:00Z',status:'review-required',publicAttributionEnabled:false,people:[{id:1,collectionStatus:'stable',events:[],intervals:[],months,issues:[]}]};
+  const c:CrosscheckReport={schema:'clareia.people-crosscheck.v1',legacySha256:hash('l'),temporalSha256:hash(canonical(t)),historySha256:hash('h'),discoverySha256:hash('d'),scope:t.scope,createdAt:'2026-11-08T12:00:00Z',status:'review-required',publicAttributionEnabled:false,dateSemantics:'boundary-days-and-open-ends-unconfirmed',people:[{id:1,legacyStatus:'stable',partyComparisonStatus:'compared',partyChanges:[],months:specs.map((s,i)=>({year:2025,month:i+1,v2Exercise:s.exercise,legacy:'reported-exercise' as const,periodRows:[0],openEnd:false,comparison:s.comparison}))}]};
+  const coverage=buildPeopleCoverage(t,c,{status:'passed',temporalSha256:hash(canonical(t))},'2026-11-08T13:00:00Z');
+  const records=specs.map((_,i)=>({id:'r'+i,personId:1,year:2025,month:i+1,cents:1000,category:'C',supplier:'S',supplierId:'0',document:'d',date:'2025-0'+(i+1)+'-05T00:00:00',source:'x'} as unknown as Expense));
+  const s=buildSiteSummary({publicationId:'p',scope:{year:2025,months:specs.map((_,i)=>i+1),ids:[1],legislature:57},people:[{...person,uf}],records,expectedTotalCents:specs.length*1000,coverageId:coverage.id,coverage:coverage.rows,ceiling});
+  return ceilingUse(s.people[0].months,ceiling,true);
+}
+const single=(v:string):Spec['uf']=>({status:'single',value:v});
+const full=(uf=single('RR'),comparison:Spec['comparison']='unavailable'):Spec=>({exercise:'full',uf,comparison});
+test('a full month with no second source keeps its own UF and the ceiling counts it',()=>{
+  const use=ceilingOfCoverage([full(),full(),full()],'RR');
+  assert.equal(use.status,'ok');assert.deepEqual(use.counted.map(c=>c.uf),['RR','RR','RR']);
+});
+test('a full month the legacy source contradicts stays out and the figure is unconfirmed',()=>{
+  const use=ceilingOfCoverage([full(),full(single('RR'),'potential-conflict'),full()],'RR');
+  assert.equal(use.status,'unconfirmed');assert.deepEqual(use.counted.map(c=>c.month),[1,3]);
+});
+test('a month with its own conflicting UF is not counted, whatever the other months say',()=>{
+  const use=ceilingOfCoverage([full(single('RJ')),full({status:'conflict',value:null}),full(single('RJ'))],'RJ');
+  assert.equal(use.status,'unconfirmed');assert.deepEqual(use.counted.map(c=>c.month),[1,3]);
+});
+test('a partial month stays excluded from the ceiling even with a confirmed UF',()=>{
+  const use=ceilingOfCoverage([full(),{...full(),exercise:'partial'},full()],'RR');
+  assert.equal(use.status,'ok');assert.deepEqual(use.excluded,[{month:2,reason:'partial'}]);assert.deepEqual(use.counted.map(c=>c.month),[1,3]);
 });

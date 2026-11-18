@@ -81,7 +81,7 @@
     ['people[].months[].cents, records', 'inteiro, número', 'Soma líquida em centavos e número de registros do mês. Com <code>held: true</code>, <code>cents: 0</code> não é gasto zero.'],
     ['people[].months[].held', 'verdadeiro ou falso', 'Mês retido para revisão: fica fora dos totais.'],
     ['people[].months[].exercise', 'texto', 'Exercício do mandato no mês: <code>full</code>, <code>partial</code>, <code>outside</code> ou <code>unknown</code>.'],
-    ['people[].months[].party, uf', 'texto', 'Partido e UF do deputado no mês, com <code>partyStatus</code> e <code>ufStatus</code> dizendo se são únicos, mudaram, estão em revisão ou não se aplicam.'],
+    ['people[].months[].party, uf', 'texto', 'Partido e UF do deputado no mês, com <code>partyStatus</code> e <code>ufStatus</code> dizendo se são únicos, mudaram, estão em revisão ou não se aplicam. A UF de um mês pode estar confirmada enquanto o partido ainda está em revisão.'],
     ['people[].bills, votes', 'objeto', 'Projetos e votações do deputado, quando publicados.'],
     ['people[].exercisedMonths', 'número', 'Meses do recorte que contam como exercício: todos, menos os marcados como fora do mandato que não têm despesa.'],
     ['people[].noExercise', 'verdadeiro ou falso', 'Sem exercício de mandato confirmado no recorte: o deputado não aparece com R$ 0,00.'],
