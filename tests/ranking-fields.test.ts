@@ -6,7 +6,7 @@ import type {MonthSummary} from '../src/site-summary.ts';
 // The rule real/app.js and real/data.js applied in the browser before the build published it.
 function browserRule(months:MonthSummary[],coverageId:string|null,records:number,scopeMonths:number){
   const exercised=(m:MonthSummary)=>m.exercise!=='outside'||m.records>0;
-  const noExercise=(()=>{if(!coverageId||records)return false;return months.length>0&&months.every(m=>!m.exercise||['unknown','outside','conflict'].includes(m.exercise));})();
+  const noExercise=(()=>{if(!coverageId||records||months.some(m=>m.held))return false;return months.length>0&&months.every(m=>!m.exercise||['unknown','outside','conflict'].includes(m.exercise));})();
   const exercisedMonths=coverageId?months.filter(exercised).length:scopeMonths;
   const heldMonths=months.filter(m=>m.held).map(m=>m.month-1),min=Math.min(6,scopeMonths);
   return {exercisedMonths,noExercise,heldMonths,comparable:!noExercise&&!heldMonths.length&&!(exercisedMonths<min)};
@@ -42,4 +42,10 @@ test('ranking fields match the old browser rule on every edge case',()=>{
   assert.equal(run(all(12,'outside'),null,12).comparable,true);
   assert.equal(run(all(12,'outside'),null,12).exercisedMonths,12);
   assert.equal(run(all(3,'in-office'),null,3).comparable,true);
+});
+
+test('a held month is never reported as no exercise, even with no records', ()=>{
+  const held=[...all(11,'unknown'),month(12,'outside',0,true)];
+  assert.equal(run(held,'c',12).noExercise,false);
+  assert.deepEqual(run(held,'c',12).heldMonths,[12]);
 });
