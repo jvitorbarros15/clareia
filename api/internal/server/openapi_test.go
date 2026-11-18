@@ -170,6 +170,12 @@ func TestOpenAPIMatchesServer(t *testing.T) {
 		{"/v1/expenses/{public_id}", "/v1/expenses/" + rec, "200"},
 		{"/v1/expenses/{public_id}", "/v1/expenses/" + strings.Repeat("a", 64), "404"},
 		{"/v1/expenses/{public_id}", "/v1/expenses/x", "400"},
+		{"/v1/suppliers", "/v1/suppliers?limit=50", "200"},
+		{"/v1/suppliers", "/v1/suppliers?q=ab", "400"},
+		{"/v1/suppliers", "/v1/suppliers?cursor=" + testCursor("aaaaaaaaaaaa", "x"), "409"},
+		{"/v1/suppliers/{key}", "/v1/suppliers/" + strings.Repeat("0", 64), "404"},
+		{"/v1/suppliers/{key}", "/v1/suppliers/x", "400"},
+		{"/v1/categories", "/v1/categories", "200"},
 	}
 	seen := map[string]bool{}
 	for _, c := range calls {
