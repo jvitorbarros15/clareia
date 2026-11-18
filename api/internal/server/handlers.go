@@ -221,13 +221,6 @@ func (s *Server) expenses(ctx context.Context, tx pgx.Tx, r *http.Request, pub s
 		}
 		after = seq
 	}
-	var exists bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM api.deputies WHERE id = $1)`, id).Scan(&exists); err != nil {
-		return nil, internal(err)
-	}
-	if !exists {
-		return nil, errNotFound("deputado não encontrado")
-	}
 	rows, err := tx.Query(ctx, `SELECT seq, record FROM api.expenses
 		WHERE deputy_id = $1 AND seq > $2 AND ($3::int = 0 OR month = $3::int) AND (NOT $4::boolean OR category = $5::text)
 		ORDER BY seq LIMIT $6`, id, after, month, hasCat, category, limit+1)
@@ -254,6 +247,15 @@ func (s *Server) expenses(ctx context.Context, tx pgx.Tx, r *http.Request, pub s
 	}
 	if rows.Err() != nil {
 		return nil, internal(rows.Err())
+	}
+	if len(list) == 0 {
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM api.deputies WHERE id = $1)`, id).Scan(&exists); err != nil {
+			return nil, internal(err)
+		}
+		if !exists {
+			return nil, errNotFound("deputado não encontrado")
+		}
 	}
 	return map[string]any{"publication": pub, "deputyId": id, "expenses": list, "nextCursor": next}, nil
 }
