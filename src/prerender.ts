@@ -14,7 +14,7 @@ const MONTH_ABBR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','N
 const ICON='/icon-512.png';
 export const SHARE_WIDTH=1200,SHARE_HEIGHT=630;
 
-export type SiteOptions={siteUrl?:string;sitemap?:boolean;noindex?:boolean;shareImages?:boolean};
+export type SiteOptions={approvedNames?:string[];siteUrl?:string;sitemap?:boolean;noindex?:boolean;shareImages?:boolean};
 export type ResolvedOptions={siteUrl:string;sitemap:boolean;noindex:boolean;shareImages:boolean};
 
 export function resolveOptions(options:SiteOptions={}):ResolvedOptions{
@@ -148,7 +148,7 @@ export function robotsTxt(o:ResolvedOptions):string{
 }
 
 export type CorrectionEntry={date:string;title:string;detail:string};
-type StaticPages={CONTACT_EMAIL:string;POLICY:string;layout:(name:string,eyebrow:string,title:string,lede:string,inner:string,toc?:string)=>string;pages:{sobre:{title:string;description:string;body:()=>string};correcoes:{title:string;description:string;body:(list:CorrectionEntry[],email:string)=>string};metodologia:{title:string;description:string;naoConcluimos:string;privacidade:string}}};
+type StaticPages={CONTACT_EMAIL:string;POLICY:string;layout:(name:string,eyebrow:string,title:string,lede:string,inner:string,toc?:string)=>string;pages:{sobre:{title:string;description:string;body:()=>string};correcoes:{title:string;description:string;body:(list:CorrectionEntry[],email:string)=>string};metodologia:{title:string;description:string;naoConcluimos:string;privacidade:string};'dados-abertos':{title:string;description:string;body:(manifest:unknown,base:string)=>string}}};
 // real/pages.js is the one copy of these texts: the browser loads it as a script, and here it is run in an empty sandbox.
 export async function loadStaticPages():Promise<StaticPages>{
   const sandbox:{window:{ClareiaPages?:StaticPages}}={window:{}};
@@ -161,13 +161,17 @@ export async function loadCorrections():Promise<CorrectionEntry[]>{
   if(!Array.isArray(list)||list.some(e=>typeof e!=='object'||e===null||typeof e.date!=='string'||typeof e.title!=='string'||typeof e.detail!=='string'))throw new Error('config/corrections.json deve ser uma lista de {date, title, detail}');
   return list as CorrectionEntry[];
 }
+async function readOpenData(outDir:string):Promise<{manifest:unknown;base:string}|null>{
+  try{const base=JSON.parse(await fs.readFile(path.join(outDir,'manifest.json'),'utf8')).base as string;return {base:'/'+base,manifest:JSON.parse(await fs.readFile(path.join(outDir,base,'dados-abertos.json'),'utf8'))};}catch{return null;}
+}
 export async function writeStaticPages(outDir:string,options:ResolvedOptions):Promise<void>{
   const shell=await fs.readFile(path.join(outDir,'index.html'),'utf8');
   const pages=await loadStaticPages(),corrections=await loadCorrections();
   await fs.copyFile(path.join(REPO,'config','corrections.json'),path.join(outDir,'corrections.json'));
-  for(const name of ['sobre','correcoes','metodologia'] as const){
+  const published=await readOpenData(outDir);
+  for(const name of ['sobre','correcoes','metodologia','dados-abertos'] as const){
     const entry=pages.pages[name];
-    const inner=name==='sobre'?pages.pages.sobre.body():name==='correcoes'?pages.pages.correcoes.body(corrections,pages.CONTACT_EMAIL):pages.layout('metodologia','Metodologia',`Metodologia`,esc(entry.description),`<p>Ative o JavaScript para ler a metodologia completa e os números desta versão.</p>`);
+    const inner=name==='sobre'?pages.pages.sobre.body():name==='correcoes'?pages.pages.correcoes.body(corrections,pages.CONTACT_EMAIL):name==='dados-abertos'?pages.pages['dados-abertos'].body(published?.manifest??null,published?.base??''):pages.layout('metodologia','Metodologia',`Metodologia`,esc(entry.description),`<p>Ative o JavaScript para ler a metodologia completa e os números desta versão.</p>`);
     const noscript=`<noscript><main id="main">${inner}</main></noscript>`;
     // Same rule as the deputy pages: <route>.html, so the route answers without a redirect.
     await fs.writeFile(path.join(outDir,`${name}.html`),page(shell,{title:entry.title,description:entry.description,url:options.siteUrl+`/${name}`,type:'website',image:icon(options.siteUrl)},noscript));

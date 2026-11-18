@@ -14,5 +14,6 @@ test('a confirmed UF is not listed; a fallback and a missing UF are, with their 
 test('a confirmed party is not listed; a fallback and a missing party are',()=>{
   const list=partyReviewItems([{...person(1,'SP'),party:'PL'},{...person(2,'SP'),party:'PP',partyNote:'partido dos eventos da legislatura'},{...person(3,'SP'),partyNote:'evento sem partido'},{...person(4,'SP'),party:'PL',partyNote:'partido registrado em fev/2023 (eventos da legislatura)'}]);
   assert.deepEqual(list.map(i=>[i.id,i.used,i.from]),[[2,'PP','partido dos eventos da legislatura'],[3,'sem partido','evento sem partido'],[4,'PL','partido registrado em fev/2023 (eventos da legislatura)']]);
-  assert.match(reviewMarkdown('p',list,'partido'),/^# Pendências de partido - p/);
+  assert.match(reviewMarkdown('p',[],undefined,list),/## Partido\n\n- 2 \| Pessoa 2 \| usado: PP \| fonte: partido dos eventos da legislatura/);
+  assert.doesNotMatch(reviewMarkdown('p',items),/## Partido/);
 });

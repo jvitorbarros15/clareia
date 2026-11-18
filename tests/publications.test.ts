@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDB} from '../src/store.ts';
 import type {DB} from '../src/store.ts';
-import {activePublication,latestPublication,publishDomain,readPublication,readRecords,recordDomainAudit,withholdPublication} from '../src/publications.ts';
+import {activePublication,latestPublication,publishDomain,readPublication,readRecords,recordDomainAudit} from '../src/publications.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 
@@ -60,15 +60,6 @@ test('a wrong record total rolls back the whole publication',()=>withDB(async db
   await assert.rejects(publishDomain(db,'despesas',bad),/Reconciliação/);
   assert.equal((await db.query<{count:number}>('SELECT count(*)::integer AS count FROM expenses_v2')).rows[0].count,0);
   assert.equal(await readPublication(db,bad.id),null);
-}));
-test('a withheld publication is never active',()=>withDB(async db=>{
-  const a=version([record(100)]),b=version([record(200)]);
-  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',passed);
-  await publishDomain(db,'despesas',b);await recordDomainAudit(db,b.id,'passed',passed);
-  await withholdPublication(db,b.id,'Revisão');
-  assert.equal((await activePublication(db,'despesas'))?.id,a.id);
-  assert.equal((await latestPublication(db,'despesas'))?.id,a.id);
-  assert.equal(await readPublication(db,b.id),null);
 }));
 test('a stored publication rebuilds to the same identifier, in the original order',()=>withDB(async db=>{
   const a=version([record(300,2,0),record(100,1,1),record(200,2,2)]);

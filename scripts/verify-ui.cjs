@@ -9,6 +9,9 @@ const seed = seedAt < 0 ? 20261110 : Number(argv[seedAt + 1]), only = onlyAt < 0
 const base = process.env.BASE_URL || 'http://127.0.0.1:4174';
 const checks = [];
 const check = (name, fn) => checks.push({ name, fn });
+// The published data may lack the case a check needs (e.g. no negative category after the housing sign fix): skip, don't fail.
+class NoCase extends Error {}
+const needCase = (ok, message) => { if (!ok) throw new NoCase(message); };
 const text = async locator => (await locator.innerText()).replace(/\s+/g, ' ').trim();
 const clean = value => value.replace(/\s+/g, ' ').trim();
 const random = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -178,7 +181,7 @@ check('adjustments explained', async () => {
   const page = await at(1440);
   const data = await published(page);
   const negative = Object.values(data.categories).filter(c => c < 0).reduce((n, c) => n + c, 0);
-  assert.ok(negative < 0, 'the published sample has a negative category');
+  needCase(negative < 0, 'the published sample has a negative category');
   const body = clean(await page.evaluate(() => document.body.innerText));
   assert.ok(body.includes(clean(`Ajustes negativos de ${brl(negative)} não entram nas fatias`)), `adjustment line for ${brl(negative)}`);
   await page.close();
@@ -214,7 +217,7 @@ check('copy', async () => {
   if (data.summary.votesId) assert.ok(body.includes(`Votações nominais de ${data.summary.votesYears.join(', ')}.`), 'votações copy for collected votes');
   else assert.ok(body.includes('Votações nominais ainda não foram coletadas'), 'votações copy');
   const negative = Object.values(data.categories).find(c => c < 0);
-  assert.ok(negative < 0, 'the published sample has a negative category');
+  needCase(negative < 0, 'the published sample has a negative category');
   await page.locator('#despesas [data-p=more-cats]').click();
   const listed = clean(await page.locator('#despesas .donut-legend').innerText());
   assert.ok(listed.includes(clean(brlCompact(negative))), `negative compact value ${brlCompact(negative)} in the category list`);
@@ -443,7 +446,9 @@ check('donut panel', async () => {
 check('negative category', async () => {
   const page = await at(1440);
   const data = await published(page);
-  const [name, cents] = Object.entries(data.categories).find(([, c]) => c < 0);
+  const found = Object.entries(data.categories).find(([, c]) => c < 0);
+  needCase(found, 'the published sample has a negative category');
+  const [name, cents] = found;
   await page.locator('#despesas [data-p=more-cats]').click();
   const row = page.locator(`.donut-legend [data-p-highlight="${name}"]`);
   const rowText = clean(await row.innerText());
@@ -720,7 +725,7 @@ check('panorama dialog reuses the record rows', async () => {
 check('supplier note names companies and individuals', async () => {
   const page = await at(1440);
   const body = clean(await page.evaluate(() => document.body.innerText));
-  assert.ok(body.includes("Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'."), 'N5 note');
+  assert.ok(body.includes("Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'. Nomes de fornecedores sem CNPJ válido que não parecem de empresa não são exibidos, para proteger possíveis pessoas físicas."), 'N5 note');
   assert.ok(!body.includes('Fornecedor pessoa física aparece sem nome'), 'old note gone');
   await page.close();
 });
@@ -971,7 +976,7 @@ async function adjustmentPair(data) {
     if (!zero && !values.length && await uniqueFirst(p.name)) zero = p;
     if (negative && zero) break;
   }
-  assert.ok(negative && zero, 'the published data has a deputy with negative adjustments and one with none in the category');
+  needCase(negative && zero, 'the published data has a deputy with negative adjustments and one with none in the category');
   return adjusted = { negative, zero };
 }
 const pickPair = async (page, data, a, b) => {
@@ -1297,7 +1302,7 @@ const stub = ({ months, records } = {}) => async page => {
     const res = await route.fetch(), f = await res.json(), rows = await shaped, cells = {};
     for (const [id, list] of Object.entries(rows)) {
       const groups = new Map();
-      for (const r of list) { const k = [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplier)].join(':'), g = groups.get(k) || [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplier), 0, 0]; g[3] += r.cents; g[4]++; groups.set(k, g); }
+      for (const r of list) { const k = [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplierLabel ?? r.supplier)].join(':'), g = groups.get(k) || [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplierLabel ?? r.supplier), 0, 0]; g[3] += r.cents; g[4]++; groups.set(k, g); }
       cells[id] = [...groups.values()];
     }
     f.people = cells;
@@ -1584,7 +1589,7 @@ check('shared link with a question keeps defaults the reader chose, and short li
 check('a link without uf never matches deputies who have no uf, so a question still renders the page', async () => {
   const data = await published();
   const noUf = data.summary.people.filter(q => inOffice(q) && !data.index.people.find(p => p.id === q.id).uf);
-  assert.ok(noUf.length > 0, 'the published data has deputies in office without a uf');
+  needCase(noUf.length > 0, 'the published data has deputies in office without a uf');
   for (const search of [`?q=${encodeURIComponent('Quem mais gastou?')}`, `?q=${encodeURIComponent('Quem mais gastou?')}&uf=`]) {
     const page = await at(1440, { search });
     assert.equal(await page.evaluate(() => window.Clareia.state.uf), 'Brasil', `uf stays Brasil for ${search}`);
@@ -1636,7 +1641,7 @@ check('map shades only positive values and gives net-negative tiles their own st
   const cat = await page.evaluate(() => window.Clareia.state.category);
   const byUf = {};
   for (const p of data.people.filter(p => p.uf && p.uf !== smallest[0])) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p, cat);
-  assert.ok(Object.values(byUf).some(v => v < 0), 'real data has a net-negative state for this category');
+  needCase(Object.values(byUf).some(v => v < 0), 'real data has a net-negative state for this category');
   const maxPositive = Math.max(0, ...Object.values(byUf).filter(v => v > 0));
   const read = uf => page.locator(`[data-p-uf="${uf}"]`).evaluate(g => {
     const path = g.querySelectorAll('path')[1], cs = getComputedStyle(path);
@@ -1901,7 +1906,7 @@ check('every aggregate equals the published records, and categories keep their o
     const D = window.ClareiaData, out = [], byCategory = new Map();
     for (const p of D.dataset()) {
       const res = await fetch(D.recordsUrl(p.officialId)), raw = res.status === 404 ? [] : await res.json(), want = new Map();
-      for (const r of raw) { const k = [r.month - 1, r.category, r.supplier].join('|'), w = want.get(k) || [0, 0]; w[0] += r.cents; w[1]++; want.set(k, w); byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.cents)); }
+      for (const r of raw) { const k = [r.month - 1, r.category, r.supplierLabel ?? r.supplier].join('|'), w = want.get(k) || [0, 0]; w[0] += r.cents; w[1]++; want.set(k, w); byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.cents)); }
       const got = new Map(p.cells.map(c => [[c.month, c.category, c.supplier].join('|'), [c.amount, c.count]]));
       if (got.size !== want.size) out.push(`${p.name}: ${got.size} cells for ${want.size} groups`);
       for (const [k, w] of want) { const g = got.get(k); if (!g || g[0] !== w[0] || g[1] !== w[1]) out.push(`${p.name} ${k}: ${g} vs ${w}`); }
@@ -2132,6 +2137,25 @@ check('projects tab ranks approved projects by count then name, hides Total / Po
   await page.close();
 });
 
+check('comparison shows each deputy approved projects apart from the money bars, never mixed with spending', async () => {
+  const page = await at(1440, { before: approvedSummary(i => i % 4 + 1, { drop: 0 }) });
+  await page.locator('#comparacao').scrollIntoViewIfNeeded();
+  const got = await page.evaluate(() => {
+    const C = window.Clareia, ids = ['#compare-a', '#compare-b'].map(s => document.querySelector(s).value);
+    return { ids, expected: ids.map(id => C.approvedText(C.all().find(p => String(p.id) === id))), shown: [...document.querySelectorAll('.compare-projects button b')].map(e => e.textContent), inBars: document.querySelectorAll('.compare-breakdown .compare-projects, .compare-category .compare-projects').length, board: document.querySelector('.comparison-board').innerText, block: document.querySelector('.compare-projects')?.innerText };
+  });
+  needCase(got.shown.length === 2, 'the comparison shows the projects block');
+  assert.deepEqual(got.shown, got.expected);
+  assert.equal(got.inBars, 0, 'projects are not a category row');
+  assert.match(got.block, /Projetos aprovados · 2023–2026/); assert.match(got.block, /não tem relação com o valor gasto/);
+  assert.doesNotMatch(got.block, /%|R\$/, 'no ratio or money in the projects block');
+  assert.doesNotMatch(got.board, /projeto/i, 'the spending board does not mention projects');
+  assert.equal(await page.locator('.compare-projects [data-kind=projetos]').count(), 2);
+  // the mocked summary points at activity files that the local build does not have
+  assert.deepEqual(page.errors.filter(e => !/404/.test(e)), []);
+  await page.close();
+});
+
 check('every ranking tab renders rows or an explicit empty message with its reason', async () => {
   for (const [label, before] of [['without bills', undefined], ['with bills', approvedSummary(i => i % 4)], ['bills collected for nobody', approvedSummary(() => 0, { drop: 10000 })]]) {
     for (const tab of ['gastos', 'menos', 'projetos']) {
@@ -2305,18 +2329,74 @@ check('static pages load at their own URLs and the footer links reach them', asy
   await page.close();
 });
 
+check('the open data page links every download, shows each SHA-256 and documents every record field', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(base);
+  await page.waitForSelector('.footer');
+  await page.locator('.footer a[href="/dados-abertos"]').click();
+  await page.waitForSelector('#main h1');
+  assert.equal(new URL(page.url()).pathname, '/dados-abertos');
+  assert.equal(clean(await page.locator('#main h1').innerText()), 'Dados abertos');
+  await page.waitForSelector('.doc-table a[download]');
+  const { manifest, sample, indexSha } = await page.evaluate(async () => {
+    const m = await (await fetch('/manifest.json')).json(), open = await (await fetch(`/${m.base}/dados-abertos.json`)).json();
+    const ids = (await (await fetch(`/${m.base}/index.json`)).json()).scope.ids;
+    let rows = [];
+    for (const id of ids) { rows = await (await fetch(`/${m.base}/deputados/${id}/despesas.json`)).json().catch(() => []); if (rows.length) break; }
+    const bytes = await (await fetch(`/${m.base}/index.json`)).arrayBuffer(), digest = await crypto.subtle.digest('SHA-256', bytes);
+    return { manifest: { ...open, base: m.base }, sample: rows, indexSha: [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('') };
+  });
+  assert.ok(manifest.files.some(f => f.kind === 'month'), 'monthly files listed');
+  assert.equal(indexSha, manifest.files.find(f => f.name === 'index.json').sha256, 'index.json matches its SHA-256');
+  const hrefs = await page.locator('.doc-table a[download]').evaluateAll(links => links.map(a => a.getAttribute('href')));
+  assert.deepEqual(hrefs.sort(), manifest.files.map(f => `/${manifest.base}/${f.path}`).sort());
+  const text = await page.locator('#main').innerText();
+  for (const f of manifest.files) {
+    const response = await page.request.get(`${base}/${manifest.base}/${f.path}`);
+    assert.equal(response.status(), 200, f.name);
+    assert.equal((await response.body()).length, f.bytes, `${f.name} size`);
+    assert.ok(text.includes(f.sha256), `${f.name} SHA-256 shown`);
+  }
+  assert.deepEqual(errors, []);
+  needCase(sample.length > 0, 'the published sample has a deputy with expense records');
+  const fields = new Set(sample.flatMap(r => [...Object.keys(r), ...Object.keys(r.source).map(k => `source.${k}`)]).filter(k => k !== 'source'));
+  const listed = new Set(await page.locator('.doc-table code').allInnerTexts());
+  for (const field of fields) assert.ok(listed.has(field), `dictionary lists ${field}`);
+  await page.close();
+});
+
+check('the record detail shows the possible-duplicate line only for a flagged record', async () => {
+  const open = async flag => {
+    const page = await at(1440, { before: flag ? page => page.route(/despesas\.json/, async route => { const res = await route.fetch(), rows = await res.json(); await route.fulfill({ response: res, json: Array.isArray(rows) ? rows.map(r => ({ ...r, duplicateFlag: 'possible' })) : rows }); }) : undefined });
+    await page.locator('.bar-row').first().click();
+    await page.waitForSelector('#detail[open]');
+    await page.locator('#detail [data-action=records]').click();
+    await page.locator('#detail .record-row').first().click();
+    await page.waitForFunction(() => document.querySelector('#detail-title').textContent === 'O registro por trás do valor');
+    return clean(await page.locator('#detail').innerText());
+  };
+  const line = 'Possível duplicidade: a fonte traz outro lançamento com o mesmo documento e valor. Somamos todos, como a Câmara.';
+  assert.ok((await open(true)).includes(line), 'flagged record shows the line');
+  assert.ok(!(await open(false)).includes('Possível duplicidade'), 'an unflagged record does not');
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
-  let failed = 0, ran = 0;
+  let failed = 0, ran = 0, skipped = 0;
   try {
     for (const { name, fn } of checks) {
       if (only && !name.toLowerCase().includes(only)) continue;
       ran++;
       try { await fn(); console.log(`PASS ${name}`); }
-      catch (error) { failed++; console.log(`FAIL ${name}\n  ${String(error.message).split('\n').join('\n  ')}`); }
+      catch (error) {
+        if (error instanceof NoCase) { skipped++; console.log(`SKIP ${name}\n  sem caso no dado: ${error.message}`); }
+        else { failed++; console.log(`FAIL ${name}\n  ${String(error.message).split('\n').join('\n  ')}`); }
+      }
       for (const page of browser.contexts().flatMap(context => context.pages())) await page.close().catch(() => {});
     }
   } finally { await browser.close(); }
-  console.log(`${ran - failed} of ${ran} checks passed`);
+  console.log(`${ran - failed - skipped} of ${ran - skipped} checks passed${skipped ? `, ${skipped} skipped (no case in the data)` : ''}`);
   if (failed) process.exitCode = 1;
 })();

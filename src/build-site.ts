@@ -1,22 +1,26 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {build} from 'esbuild';
-import {canonical,hash,snapshotId} from './model.ts';
+import {canonical,hash,snapshotId,COMPANY_NAME} from './model.ts';
+import type {Expense} from './model.ts';
 import {activePublication,publicationAudit,readRecords} from './publications.ts';
 import type {Domain,Publication} from './publications.ts';
 import type {DB} from './store.ts';
 import {csv} from './view.ts';
 import {redactCpf,redactExpense,scanCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
-import {buildSiteSummary,buildSupplierSummary} from './site-summary.ts';
+import {buildSiteSummary,buildSupplierSummary,withSupplierLabels} from './site-summary.ts';
+import type {SupplierNames} from './site-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
-import type {ReviewItem} from './review-list.ts';
+import type {ReviewItem,ReviewNames} from './review-list.ts';
 import {partyReviewItems,ufReviewItems} from './review-list.ts';
 import {deputiesOf,resolveOptions,writePrerendered,writeStaticPages} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
 import {generateShareImages} from './share-images.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
 import type {SiteCeiling} from './ceiling-site.ts';
+import {fileEntry,monthlyTables,quirkCounts,zipOf} from './open-data.ts';
+import type {OpenData} from './open-data.ts';
 
 const DOMAINS:Domain[]=['pessoas','despesas','votacoes','projetos','eleicoes','emendas'];
 const MAX_FILES=15000,MAX_BYTES=10*1024*1024;
@@ -36,6 +40,8 @@ async function listFiles(dir:string):Promise<string[]>{
   const entries=await fs.readdir(dir,{withFileTypes:true});
   return (await Promise.all(entries.map(e=>e.isDirectory()?listFiles(path.join(dir,e.name)):[path.join(dir,e.name)]))).flat();
 }
+// Versions collected before the id left the supplier out still carry a hash of the CPF and name; unverified records get an id from non-identifying fields only.
+const publicId=(r:Expense)=>hash(canonical({personId:r.personId,year:r.year,month:r.month,category:r.category,documentId:r.documentId,documentNumber:r.documentNumber,date:r.date,lot:r.lot,cents:r.cents,documentCents:r.documentCents,disallowedCents:r.disallowedCents,origin:r.origin,source:r.source?{url:r.source.url,row:r.source.row}:null}));
 // The audit read the records' JSON; the site splits them by column. Both must still be the audited content.
 async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const {domain:_domain,...body}=active,all=await readRecords(db,active.id);
@@ -45,7 +51,7 @@ async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const outside=all.filter(r=>!active.scope.ids.includes(r.personId)).length;
   if(outside)throw new Error(`${outside} registros fora do recorte da versão`);
 }
-export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number;review:ReviewItem[];partyReview:ReviewItem[]}>{
+export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number;review:ReviewItem[];names:ReviewNames;partyReview:ReviewItem[]}>{
   const siteOptions=resolveOptions(options);
   // Everything is built aside: a refusal at any step leaves the previous output in place.
   const outDir=finalDir+'.building';
@@ -63,14 +69,24 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const billList=billsVersion?await readBills(db,billsVersion.id):[],voteList=votesVersion?new Map((await readVotes(db,votesVersion.id)).map(v=>[v.id,v])):new Map();
   const ballotsOf=new Map<number,Awaited<ReturnType<typeof readBallots>>>(),voteTotals=new Map<number,Record<string,number>>(),votesHeld=new Map<number,number>();
   if(votesVersion)for(const id of active.scope.ids){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
+  // Every published id is rebuilt from the redacted record, so nothing the source typed (CPF in a document number, supplier) sits in a hash. Only a verified CNPJ publishes its supplier key and page hash.
   // Records come from an approved version that may predate the redaction rule; the site never shows a CPF the source typed into free text.
-  const redacted={n:0},allRecords=(await readRecords(db,active.id)).map(r=>redactExpense(r,redacted));
+  const approved=new Set(options.approvedNames??await readApprovedNames()),withheldNames=new Map<string,{count:number;cents:number}>(),keptNames=new Map<string,{count:number;cents:number}>();
+  const tally=(m:typeof withheldNames,name:string,cents:number)=>{const t=m.get(name)??{count:0,cents:0};t.count++;t.cents+=cents;m.set(name,t);};
+  const redacted={n:0},oddIds=new Map<number,number>(),allRecords=(await readRecords(db,active.id)).map(r=>{if(r.supplierIdOdd)oddIds.set(r.personId,(oddIds.get(r.personId)??0)+1);const {supplierKey,supplierIdOdd:_odd,...red}=redactExpense(r,redacted);
+    // The single place that withholds names: a stored version may hold any typed name. An unverified supplier keeps it only if it is a label, the owner approved it, or it looks like a company.
+    let rest=red;if(!r.supplierVerified&&!LABELS.has(red.supplier)&&!approved.has(red.supplier)){
+      if(COMPANY_NAME.test(red.supplier.toUpperCase()))tally(keptNames,red.supplier,red.cents);else{tally(withheldNames,red.supplier,red.cents);rest={...red,supplier:WITHHELD,receipt:null};}
+    }
+    const pub={...rest,id:publicId(rest)};return r.supplierVerified?{...pub,supplierKey}:{...pub,source:{url:r.source.url,row:r.source.row,fetchedAt:r.source.fetchedAt}};});
+  if(new Set(allRecords.map(r=>r.id)).size!==allRecords.length)throw new Error('Identificador público de despesa repetido');
+  if(allRecords.some(r=>r.receipt!==null&&LABELS.has(r.supplier)))throw new Error('Link de recibo em fornecedor sem identificação');
   if(redacted.n)console.error(`CPF omitido em ${redacted.n} valores de despesas`);
   const summary=buildSiteSummary({publicationId:active.id,scope:active.scope,people:active.people,records:allRecords,expectedTotalCents:active.validation.totalCents,coverageId:peopleVersion?.id??null,coverage:peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billsId:billsVersion?.id??null,billsYears:billsVersion?(billsVersion.scope as unknown as {years:number[]}).years:[],bills:billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[],votesId:votesVersion?.id??null,votesYears:votesVersion?(votesVersion.scope as unknown as {years:number[]}).years:[],votes:voteTotals,votesHeld,held:active.validation.heldCompetences??[],ceiling});
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const withoutData:number[]=[];
-  const recordsOf=new Map<number,typeof allRecords>();for(const r of allRecords){const list=recordsOf.get(r.personId);if(list)list.push(r);else recordsOf.set(r.personId,[r]);}
+  const supplierNames=await readSupplierNames(),recordsOf=new Map<number,ReturnType<typeof withSupplierLabels>>();for(const r of withSupplierLabels(allRecords,supplierNames)){const list=recordsOf.get(r.personId);if(list)list.push(r);else recordsOf.set(r.personId,[r]);}
   for(const id of active.scope.ids){
     const records=recordsOf.get(id)??[];
     await fs.copyFile(path.join(portraitsDir,`${id}.jpg`),path.join(data,'portraits',`${id}.jpg`)).catch(()=>{});
@@ -91,10 +107,12 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const summaryJson=JSON.stringify({...summary,people:summary.people.map(({cells:_cells,...person})=>person)});if(scanCpfs(summaryJson,new Set()))throw new Error('Identificador privado no resumo');
   await fs.writeFile(path.join(data,'summary.json'),summaryJson);
   // Supplier names are already redacted for private persons; the scan refuses any that slipped through.
-  const supplierSummary=buildSupplierSummary(summary,allRecords),suppliers=JSON.stringify(supplierSummary);if(scanCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
+  const supplierSummary=buildSupplierSummary(summary,allRecords,supplierNames),suppliers=JSON.stringify(supplierSummary);if(scanCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
   await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
-  await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,...siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)}));
+  const indexJson=JSON.stringify({...meta,snapshotId,withoutData,...siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)});
+  await fs.writeFile(path.join(data,'index.json'),indexJson);
+  await writeOpenData(data,active.scope.ids.flatMap(id=>recordsOf.get(id)??[]),{summary:summaryJson,suppliers,index:indexJson},summary.people.flatMap(p=>p.months.filter(m=>m.held).map(()=>({personId:p.id}))),{year:active.scope.year,publishedAt:active.publishedAt,collectedAt:active.collectedAt});
   for(const file of ['index.html','404.html','data.js','pages.js','analytics.js','app.js','portal.js','styles.css','_headers','icon.svg','apple-touch-icon.png','favicon-32.png','site.webmanifest','icon-192.png','icon-512.png','icon-maskable-512.png'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
   await fs.mkdir(path.join(outDir,'fonts'));
   for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
@@ -109,8 +127,35 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names);
   await writeStaticPages(outDir,siteOptions);
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
-  checkLimits(files.length,Math.max(...sizes));
+  // The all-months zip is the one file allowed past 10 MiB; zipOf already keeps it under the 25 MiB Workers asset limit.
+  checkLimits(files.length,Math.max(...sizes.filter((_,i)=>!files[i].endsWith('.zip'))));
   await fs.rm(finalDir,{recursive:true,force:true});
   await fs.rename(outDir,finalDir);
-  return {publicationId,files:files.length,review:ufReviewItems(active.people),partyReview:partyReviewItems(active.people)};
+  return {publicationId,files:files.length,names:{withheld:rows(withheldNames),kept:rows(keptNames)},partyReview:partyReviewItems(active.people),review:[...ufReviewItems(active.people),...[...oddIds].map(([id,n])=>({id,name:active.people.find(p=>p.id===id)?.name??'',used:n+' registros',from:'identificador do fornecedor fora do formato'}))]};
+}
+
+// Everything is cut from the same records written for the site, so a download is never newer or wider than the pages.
+async function writeOpenData(data:string,records:ReturnType<typeof withSupplierLabels>,json:{summary:string;suppliers:string;index:string},held:{personId:number}[],meta:{year:number;publishedAt:string;collectedAt:string}):Promise<void>{
+  const dir=path.join(data,'abertos'),tables=monthlyTables(records),files:OpenData['files']=[],zipName=`despesas-${meta.year}.zip`;
+  await fs.mkdir(dir);
+  const zip=zipOf(tables,meta.publishedAt);
+  if(zip){await fs.writeFile(path.join(dir,zipName),zip);files.push(fileEntry(zipName,'abertos/'+zipName,zip,'zip',records.length));}
+  for(const t of tables){await fs.writeFile(path.join(dir,t.name),t.text);files.push(fileEntry(t.name,'abertos/'+t.name,t.text,'month',t.records));}
+  for(const [name,text] of [['summary.json',json.summary],['fornecedores.json',json.suppliers],['index.json',json.index]])files.push(fileEntry(name,name,text,'json'));
+  const manifest:OpenData={schema:'clareia.open-data.v1',year:meta.year,publishedAt:meta.publishedAt,collectedAt:meta.collectedAt,files,quirks:quirkCounts(records,held,{withheld:WITHHELD,individual:'Fornecedor pessoa física'})};
+  await fs.writeFile(path.join(data,'dados-abertos.json'),JSON.stringify(manifest));
+}
+const WITHHELD='Nome não exibido pelo Clareia',LABELS=new Set(['Fornecedor pessoa física',WITHHELD,'Fornecedor não informado']);
+const rows=(m:Map<string,{count:number;cents:number}>)=>[...m].map(([name,t])=>({name,...t})).sort((a,c)=>c.cents-a.cents);
+// Typed supplier names the owner approved to stay public (config/supplier-names-public.json, exact names).
+async function readApprovedNames():Promise<Set<string>>{
+  const names:unknown=JSON.parse(await fs.readFile(path.join(import.meta.dirname,'..','config','supplier-names-public.json'),'utf8'));
+  if(!Array.isArray(names)||names.some(n=>typeof n!=='string'))throw new Error('config/supplier-names-public.json deve ser uma lista de nomes');
+  return new Set(names as string[]);
+}
+// Reviewed display names for CNPJs, by supplierKey (config/supplier-names.json); anything else uses the spelling with the most records.
+async function readSupplierNames():Promise<SupplierNames>{
+  const names:unknown=JSON.parse(await fs.readFile(path.join(import.meta.dirname,'..','config','supplier-names.json'),'utf8'));
+  if(typeof names!=='object'||names===null||Array.isArray(names)||Object.values(names).some(v=>typeof v?.name!=='string'||!v.name.trim()))throw new Error('config/supplier-names.json deve mapear supplierKey para {name}');
+  return names as SupplierNames;
 }
