@@ -1,0 +1,268 @@
+package loader
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"sort"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+)
+
+type Result struct {
+	Name   string
+	OK     bool
+	Detail string
+}
+
+type Options struct {
+	RoleName     string
+	RolePassword string
+	Out          io.Writer
+}
+
+func (o Options) printf(format string, a ...any) {
+	if o.Out != nil {
+		fmt.Fprintf(o.Out, format, a...)
+	}
+}
+
+type Report struct {
+	FolderID string
+	Skipped  string
+	Results  []Result
+	Elapsed  time.Duration
+}
+
+func schemaOf(id string) string { return "pub_" + id }
+
+const lockKey = 7415220
+
+// Load puts one publication folder in schema pub_<id>, checks it against the files, and makes it the active one.
+func Load(ctx context.Context, conn *pgx.Conn, dir string, o Options) (*Report, error) {
+	start := time.Now()
+	pub, err := Read(dir)
+	if err != nil {
+		return nil, err
+	}
+	rep := &Report{FolderID: pub.FolderID}
+	if err := EnsureBase(ctx, conn, o); err != nil {
+		return nil, err
+	}
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, lockKey); err != nil {
+		return nil, err
+	}
+	defer conn.Exec(context.Background(), `SELECT pg_advisory_unlock($1)`, lockKey)
+
+	var state *string
+	if err := conn.QueryRow(ctx, `SELECT state FROM api.publications WHERE folder_id = $1`, pub.FolderID).Scan(&state); err != nil && err != pgx.ErrNoRows {
+		return nil, err
+	}
+	if state != nil && *state == "revoked" {
+		return nil, fmt.Errorf("publicação %s foi revogada e não volta", pub.FolderID)
+	}
+	loaded, err := loadedAndVerified(ctx, conn, pub.FolderID)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case loaded && state != nil:
+		rep.Skipped = "já carregada e conferida, estado " + *state
+		rep.Elapsed = time.Since(start)
+		return rep, nil
+	case loaded:
+		o.printf("pub_%s já conferida mas sem ativação: só ativa\n", pub.FolderID)
+	default:
+		if _, err := conn.Exec(ctx, `DROP SCHEMA IF EXISTS `+schemaOf(pub.FolderID)+` CASCADE`); err != nil {
+			return nil, err
+		}
+		results, err := loadAndCheck(ctx, conn, pub, o)
+		rep.Results = results
+		if err != nil {
+			return rep, err
+		}
+	}
+	if err := activate(ctx, conn, pub, o); err != nil {
+		return rep, err
+	}
+	rep.Elapsed = time.Since(start)
+	return rep, nil
+}
+
+func loadedAndVerified(ctx context.Context, conn *pgx.Conn, id string) (bool, error) {
+	var exists bool
+	if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = $1)`, schemaOf(id)).Scan(&exists); err != nil || !exists {
+		return false, err
+	}
+	var verified bool
+	if err := conn.QueryRow(ctx, `SELECT coalesce((SELECT verified FROM `+schemaOf(id)+`.publication), false)`).Scan(&verified); err != nil {
+		return false, nil
+	}
+	return verified, nil
+}
+
+func loadAndCheck(ctx context.Context, conn *pgx.Conn, pub *Publication, o Options) ([]Result, error) {
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	schema := schemaOf(pub.FolderID)
+	if _, err := tx.Exec(ctx, `CREATE SCHEMA `+schema); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('search_path', $1, true)`, schema); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, ddlPublication); err != nil {
+		return nil, err
+	}
+	t := time.Now()
+	if err := insertAll(ctx, tx, pub, schema); err != nil {
+		return nil, err
+	}
+	o.printf("carga: %s\n", time.Since(t).Round(time.Millisecond))
+	t = time.Now()
+	results, err := runChecks(ctx, tx, pub)
+	if err != nil {
+		return results, err
+	}
+	o.printf("conferências: %s\n", time.Since(t).Round(time.Millisecond))
+	for _, r := range results {
+		if !r.OK {
+			return results, fmt.Errorf("conferência falhou: %s (%s); nada foi carregado", r.Name, r.Detail)
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE publication SET verified = true`); err != nil {
+		return results, err
+	}
+	return results, tx.Commit(ctx)
+}
+
+func jsonOrNil(b json.RawMessage) any {
+	if len(b) == 0 || string(b) == "null" {
+		return nil
+	}
+	return string(b)
+}
+
+func insertAll(ctx context.Context, tx pgx.Tx, pub *Publication, schema string) error {
+	s, v := pub.Summary, pub.Validation
+	published, _ := time.Parse(time.RFC3339, pub.Index.PublishedAt)
+	var pubAt any
+	if !published.IsZero() {
+		pubAt = published
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO publication (folder_id, expenses_version, domain_versions, published_at, total_cents, records, min_months, ceiling, limitations, validation)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		pub.FolderID, s.PublicationID, string(pub.DomainVersion), pubAt, s.TotalCents, s.Records, s.MinMonths, jsonOrNil(s.Ceiling), jsonOrNil(v.Limitations), string(pub.Index.Validation)); err != nil {
+		return err
+	}
+
+	indexOf := map[int]IndexPerson{}
+	for _, p := range pub.Index.People {
+		indexOf[p.ID] = p
+	}
+	without := map[int]bool{}
+	for _, id := range pub.Index.WithoutData {
+		without[id] = true
+	}
+	reasons := map[[2]int][]string{}
+	for _, h := range v.HeldCompetences {
+		reasons[[2]int{h.PersonID, h.Month}] = h.Reasons
+	}
+
+	var deputies, months, categories [][]any
+	for _, p := range s.People {
+		ix := indexOf[p.ID]
+		held := p.HeldMonths
+		if held == nil {
+			held = []int{}
+		}
+		deputies = append(deputies, []any{p.ID, p.Name, ix.UF, ix.UFNote, p.Party, p.PartyNote, p.PartyInReview, p.LastConfirmedParty, ix.Party, p.Photo, ix.SourceURL, p.Comparable, p.ExercisedMonths, p.NoExercise, held, p.Cents, p.Records, without[p.ID]})
+		for _, m := range p.Months {
+			var cents any = m.Cents
+			var why any
+			if m.Held {
+				cents = nil
+				if r, ok := reasons[[2]int{p.ID, m.Month}]; ok {
+					b, _ := json.Marshal(r)
+					why = string(b)
+				}
+			}
+			values := m.PartyValues
+			if values == nil {
+				values = []string{}
+			}
+			vb, _ := json.Marshal(values)
+			months = append(months, []any{p.ID, int16(m.Month), cents, m.Records, m.Exercise, m.Party, m.PartyStatus, string(vb), m.UF, m.UFStatus, m.Held, why})
+		}
+		for _, c := range p.Categories {
+			categories = append(categories, []any{p.ID, c.Category, c.Cents, c.Records})
+		}
+	}
+	copyRows := func(table string, cols []string, rows [][]any) error {
+		_, err := tx.CopyFrom(ctx, pgx.Identifier{schema, table}, cols, pgx.CopyFromRows(rows))
+		return err
+	}
+	if err := copyRows("deputies", []string{"id", "name", "uf", "uf_note", "party", "party_note", "party_in_review", "last_confirmed_party", "current_party", "photo_url", "source_url", "comparable", "exercised_months", "no_exercise", "held_months", "cents", "records", "without_data"}, deputies); err != nil {
+		return fmt.Errorf("deputies: %w", err)
+	}
+	if err := copyRows("deputy_months", []string{"deputy_id", "month", "cents", "records", "exercise", "party", "party_status", "party_values", "uf", "uf_status", "held", "held_reasons"}, months); err != nil {
+		return fmt.Errorf("deputy_months: %w", err)
+	}
+	if err := copyRows("deputy_categories", []string{"deputy_id", "category", "cents", "records"}, categories); err != nil {
+		return fmt.Errorf("deputy_categories: %w", err)
+	}
+
+	for _, p := range s.People {
+		raws, fields, ok, err := pub.readRecords(p.ID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		rows := make([][]any, len(raws))
+		for i, f := range fields {
+			rows[i] = []any{p.ID, int32(i), f.ID, int16(f.Month), f.Category, f.SupplierKey, f.SupplierVerified, f.Cents, string(raws[i])}
+		}
+		if err := copyRows("expenses", []string{"deputy_id", "seq", "public_id", "month", "category", "supplier_key", "verified", "cents", "record"}, rows); err != nil {
+			return fmt.Errorf("despesas de %d: %w", p.ID, err)
+		}
+	}
+
+	var cells [][]any
+	f := pub.Suppliers
+	ids := make([]string, 0, len(f.People))
+	for k := range f.People {
+		ids = append(ids, k)
+	}
+	sort.Strings(ids)
+	for _, k := range ids {
+		var id int
+		if _, err := fmt.Sscan(k, &id); err != nil {
+			return fmt.Errorf("fornecedores: pessoa %q", k)
+		}
+		for _, c := range f.People[k] {
+			if c[1] < 0 || int(c[1]) >= len(f.Categories) || c[2] < 0 || int(c[2]) >= len(f.Suppliers) {
+				return fmt.Errorf("fornecedores: célula fora dos índices em %s", k)
+			}
+			cells = append(cells, []any{id, int16(c[0]), f.Categories[c[1]], f.Suppliers[c[2]], nil, c[3], int(c[4])})
+		}
+	}
+	if err := copyRows("supplier_cells", []string{"deputy_id", "month", "category", "label", "supplier_key", "cents", "records"}, cells); err != nil {
+		return fmt.Errorf("supplier_cells: %w", err)
+	}
+	_, err := tx.Exec(ctx, sqlFillSupplierKeys)
+	return err
+}
+
+// A label is one supplier: the key of its verified records. Unverified labels keep a NULL key.
+const sqlFillSupplierKeys = `
+UPDATE supplier_cells c SET supplier_key = k.supplier_key
+FROM (SELECT coalesce(record->>'supplierLabel', record->>'supplier') AS label, min(supplier_key) AS supplier_key
+      FROM expenses WHERE verified GROUP BY 1) k
+WHERE c.label = k.label`
