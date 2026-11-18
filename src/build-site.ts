@@ -41,7 +41,7 @@ async function listFiles(dir:string):Promise<string[]>{
   return (await Promise.all(entries.map(e=>e.isDirectory()?listFiles(path.join(dir,e.name)):[path.join(dir,e.name)]))).flat();
 }
 // Versions collected before the id left the supplier out still carry a hash of the CPF and name; unverified records get an id from non-identifying fields only.
-const publicId=(r:Expense)=>hash(canonical({personId:r.personId,year:r.year,month:r.month,category:r.category,documentId:r.documentId,documentNumber:r.documentNumber,date:r.date,lot:r.lot,cents:r.cents,documentCents:r.documentCents,disallowedCents:r.disallowedCents,origin:r.origin,source:r.source?{url:r.source.url,row:r.source.row}:null}));
+export const publicId=(r:Expense)=>hash(canonical({personId:r.personId,year:r.year,month:r.month,category:r.category,documentId:r.documentId,documentNumber:r.documentNumber,date:r.date,lot:r.lot,cents:r.cents,documentCents:r.documentCents,disallowedCents:r.disallowedCents,origin:r.origin,source:r.source?{url:r.source.url,row:r.source.row}:null}));
 // The audit read the records' JSON; the site splits them by column. Both must still be the audited content.
 async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const {domain:_domain,...body}=active,all=await readRecords(db,active.id);
@@ -145,7 +145,7 @@ async function writeOpenData(data:string,records:ReturnType<typeof withSupplierL
   const manifest:OpenData={schema:'clareia.open-data.v1',year:meta.year,publishedAt:meta.publishedAt,collectedAt:meta.collectedAt,files,quirks:quirkCounts(records,held,{withheld:WITHHELD,individual:'Fornecedor pessoa física'})};
   await fs.writeFile(path.join(data,'dados-abertos.json'),JSON.stringify(manifest));
 }
-const WITHHELD='Nome não exibido pelo Clareia',LABELS=new Set(['Fornecedor pessoa física',WITHHELD,'Fornecedor não informado']);
+export const WITHHELD='Nome não exibido pelo Clareia',LABELS=new Set(['Fornecedor pessoa física',WITHHELD,'Fornecedor não informado']);
 const rows=(m:Map<string,{count:number;cents:number}>)=>[...m].map(([name,t])=>({name,...t})).sort((a,c)=>c.cents-a.cents);
 // Typed supplier names the owner approved to stay public (config/supplier-names-public.json, exact names).
 async function readApprovedNames():Promise<Set<string>>{
