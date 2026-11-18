@@ -9,13 +9,13 @@ import {buildSite} from '../src/build-site.ts';
 import {createApp} from '../src/app.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
-import {loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
+import {deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
 
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
 const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11],minMonths:6};
 const SITE='https://example.test';
-const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,comparable:true,heldMonths:[],cents:123456789,hasCells:true,projects:7};
+const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyNote:null,partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,comparable:true,heldMonths:[],cents:123456789,hasCells:true,projects:7};
 const meta=(html:string,key:string)=>new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)">`).exec(html)?.[1];
 
 test('slugs follow the rule of real/app.js',()=>{
@@ -220,4 +220,20 @@ test('the about and methodology texts name the project, not a person, and carry 
   assert.ok(text.includes('Projeto Clareia'));
   assert.ok(text.includes('Gasto maior não significa irregularidade'));
   assert.doesNotMatch(text,/[\w.+-]+@[\w-]+\.[\w.]+/);
+});
+
+test('a party taken from the events is shown with its note',()=>{
+  assert.match(deputyDescription({...normal,party:'PP',partyNote:'partido dos eventos da legislatura'},period),/PP \(partido dos eventos da legislatura\)/);
+});
+
+const shown=(status:string|null,party='PP',note='partido registrado em fev/2023, nos eventos da legislatura')=>{
+  const month=status?[{month:1,partyStatus:status,party:status==='single'?'PL':null,partyValues:[],exercise:'unknown',records:0,cents:0,held:false}]:[];
+  const d=deputiesOf({ids:[1],people:[{id:1,name:'A',photo:null,sourceUrl:'',profileFetchedAt:'',uf:'SP',party,partyNote:note}],summary:{coverageId:status===null?null:'c',people:[{id:1,months:month,exercisedMonths:0,noExercise:false,heldMonths:[],comparable:false}],ceiling:null} as any,suppliers:{people:{}} as any})[0];
+  return [d.party,d.partyNote];
+};
+test('the events party shows only when the coverage has nothing better: confirmed and in-review win over the note',()=>{
+  assert.deepEqual(shown('unknown'),['PP','partido registrado em fev/2023, nos eventos da legislatura']);
+  assert.deepEqual(shown('review'),['Partido em revisão',null]);
+  assert.deepEqual(shown('single'),['PL',null]);
+  assert.deepEqual(shown(null),['PP','partido registrado em fev/2023, nos eventos da legislatura']);
 });

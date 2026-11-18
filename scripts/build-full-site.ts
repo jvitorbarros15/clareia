@@ -56,12 +56,12 @@ try{
   await storeBillsVersion(db,billsVersion);await approve('projetos',billsVersion.id,await auditBillsVersion(db,billsVersion.id,bills.map(b=>b.report)));
   await storeVotesVersion(db,votesVersion);await approve('votacoes',votesVersion.id,await auditVotesVersion(db,votesVersion.id));
   for(const [domain,id] of [['despesas',expenses.id],['pessoas',coverage.id],['projetos',billsVersion.id],['votacoes',votesVersion.id]] as const)if((await activePublication(db,domain))?.id!==id)throw new Error(`Versão de ${domain} não ficou ativa`);
-  const {review,names,...built}=await buildSite(db,out,portraits,siteOptions,ceiling),have=await Promise.all(expenses.scope.ids.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
-  await writeReview(built.publicationId,review,names);await writeSignReview(built.publicationId,signReviewItems(expenses.records,expenses.people));
+  const {review,partyReview,names,...built}=await buildSite(db,out,portraits,siteOptions,ceiling),have=await Promise.all(expenses.scope.ids.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
+  await writeReview(built.publicationId,review,names,partyReview);await writeSignReview(built.publicationId,signReviewItems(expenses.records,expenses.people));
   const headersFile=path.join(out,'_headers');
   if(args.includes('--noindex'))await fs.writeFile(headersFile,addNoindex(await fs.readFile(headersFile,'utf8')));
   assertHeaders(await fs.readFile(headersFile,'utf8'),args.includes('--noindex'));
   const expectedMissing=expenses.scope.ids.filter(id=>!history.people.find((p:{id:number})=>p.id===id)?.profile?.photo).length;
   if(noPortrait>expectedMissing&&!args.includes('--allow-missing-portraits'))throw new Error(`Faltam ${noPortrait-expectedMissing} retratos de quem tem foto oficial (${noPortrait} ausentes, ${expectedMissing} sem foto no cadastro). Use --allow-missing-portraits só em montagens locais.`);
-  console.log(JSON.stringify({...summary,...built,ufPendencias:review.length,nomesOcultados:names.withheld.length,noPortrait,noindex:args.includes('--noindex')}));
+  console.log(JSON.stringify({...summary,...built,ufPendencias:review.length,partidoPendencias:partyReview.length,nomesOcultados:names.withheld.length,noPortrait,noindex:args.includes('--noindex')}));
 }finally{await db.close();}
