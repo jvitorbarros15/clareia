@@ -22,7 +22,9 @@ export function snapshotId(snapshot:object):string{
   return hash(canonical({schema:SNAPSHOT_SCHEMA,body:withoutCaptureTimes(body)}));
 }
 // Some suppliers are individuals with a CPF inside the trade name; it never reaches a published record.
-export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
+const PLAIN_CPF=/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/;
+// The usual forms are masked whatever their check digits; the extra separators (spaces, "/") only count with a valid CPF checksum, so ordinary numbers in a name survive.
+export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./])\d{3}[. ]?\d{3}[. ]?\d{3}[-./ ]?\d{2}(?![\d/])/g,m=>PLAIN_CPF.test(m)||validCpf(m.replace(/\D/g,''))?'[CPF oculto]':m);
 // An individual paid by the quota is not a public figure: the name stays out until a legal opinion says otherwise.
 // 11 digits is a CPF. Any other id that is not a valid CNPJ (short, padded, letters stripped) is flagged for review; the build decides whether its name stays public.
 export const oddId=(id:string)=>id.length>0&&id.length!==11&&!validCnpj(id);

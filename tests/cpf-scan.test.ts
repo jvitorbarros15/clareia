@@ -100,3 +100,20 @@ test('hex hashes are not read as digit runs',()=>{
   assert.equal(scanCpfs(JSON.stringify({id:'ab'+CPF+'cd'+'0'.repeat(10)}),new Set()),0);
 });
 test('the shipped allowlist is valid and empty',async()=>{assert.equal((await loadAllowlist(path.join(import.meta.dirname,'..','config','cpf-allowlist.json'))).size,0);});
+
+const groups=(c:string)=>[c.slice(0,3),c.slice(3,6),c.slice(6,9),c.slice(9)];
+test('a CPF with spaces, dots or a slash before the check digits is redacted, masked and found by the scanner',()=>{
+  const [a,b,c,d]=groups(CPF),forms=[`${a} ${b} ${c} ${d}`,`${a}.${b}.${c}.${d}`,`${a}.${b}.${c}/${d}`,`${a} ${b}.${c} ${d}`,`${a}.${b} ${c}/${d}`,`${a}${b}${c} ${d}`,`${a}.${b}.${c}-${d}`];
+  for(const f of forms){
+    assert.equal(redactCpf('MEI '+f+' LTDA'),'MEI [CPF omitido] LTDA',f);
+    assert.equal(publicSupplier('MEI '+f+' LTDA',CNPJ).name,'MEI [CPF oculto] LTDA',f);
+    assert.equal(scanCpfs(JSON.stringify({s:'MEI '+f}),new Set()),1,f);
+  }
+});
+test('phone numbers, a CNPJ and a bad checksum are not read as a CPF',()=>{
+  const [a,b,c,d]=groups(CPF),bad=d[0]+(Number(d[1])+1)%10;
+  for(const text of ['TEL 11 98765 4321','(11) 98765-4321','TEL 11 987 654 321 01','CNPJ 11.222.333/0001-81','11 222 333 0001 81',`${a} ${b} ${c} ${bad}`,`${a}.${b}.${c}/${bad}`,`${a} ${b} ${c} ${d}7`,`7${a} ${b} ${c} ${d}`]){
+    assert.equal(redactCpf(text),text,text);assert.equal(scanCpfs(text,new Set()),0,text);
+  }
+  assert.equal(publicSupplier(`ACME ${a} ${b} ${c} ${bad}`,CNPJ).name,`ACME ${a} ${b} ${c} ${bad}`);
+});
