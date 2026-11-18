@@ -225,3 +225,9 @@ Abra uma [issue](https://github.com/jvitorbarros15/clareia/issues) com o comport
 Pull requests devem explicar o problema, o comportamento resultante e a verificação realizada. Mudanças metodológicas precisam preservar a rastreabilidade e manter casos incertos explícitos. Execute `npm run typecheck` e `npm test` quando alterar código, acrescentando verificações de navegador para mudanças de interação.
 
 O protótipo com dados fictícios está preservado na tag [`mvp-final`](https://github.com/jvitorbarros15/clareia/tree/mvp-final). A interface atual consome as publicações reais aprovadas.
+
+## Licença
+
+© 2026 João Vitor Barros. Todos os direitos reservados. O código deste repositório não tem licença de uso: ler é permitido, copiar, modificar ou reutilizar não.
+
+Os dados de despesas, projetos e votações vêm dos dados abertos da Câmara dos Deputados e continuam públicos. Ao reutilizá-los, cite a fonte oficial.

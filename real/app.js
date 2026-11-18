@@ -384,7 +384,7 @@
     if (!parts.length || (parts.length === 1 && parts[0] === 'index.html')) return null;
     if (parts[0] === 'deputado') { const m = parts.length === 2 ? /^(\d+)(?:-.*)?$/.exec(parts[1]) : null; return { type: 'deputado', id: m?.[1] ?? null, slug: m ? parts[1].slice(m[1].length + 1) : '' }; }
     if (parts[0] === 'estado' && parts.length === 2) return { type: 'estado', uf: parts[1].toUpperCase() };
-    if (parts.length === 1 && ['sobre', 'correcoes', 'metodologia'].includes(parts[0])) return { type: 'page', name: parts[0] };
+    if (parts.length === 1 && ['sobre', 'correcoes', 'metodologia', 'dados-abertos'].includes(parts[0])) return { type: 'page', name: parts[0] };
     return { type: 'unknown' };
   }
   const NOT_FOUND = {
@@ -549,6 +549,12 @@
     const main = $('#main');
     document.title = P.pages[name].title;
     if (name === 'sobre') main.innerHTML = P.pages.sobre.body();
+    else if (name === 'dados-abertos') {
+      let manifest = null;
+      try { const r = await fetch(`${base}/dados-abertos.json`); if (r.ok) manifest = await r.json(); } catch {}
+      main.innerHTML = P.pages['dados-abertos'].body(manifest, base);
+      P.spy();
+    }
     else if (name === 'metodologia') { const s = P.sections(`${auditTiles()}${methodologyBody()}`); main.innerHTML = P.layout('metodologia', 'Metodologia', 'Metodologia', 'Como somamos as despesas, o que conferimos e o que ainda não concluímos.', s.html, s.toc); P.spy(); }
     else {
       let list = [];

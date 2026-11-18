@@ -2329,6 +2329,44 @@ check('static pages load at their own URLs and the footer links reach them', asy
   await page.close();
 });
 
+check('the open data page links every download, shows each SHA-256 and documents every record field', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(base);
+  await page.waitForSelector('.footer');
+  await page.locator('.footer a[href="/dados-abertos"]').click();
+  await page.waitForSelector('#main h1');
+  assert.equal(new URL(page.url()).pathname, '/dados-abertos');
+  assert.equal(clean(await page.locator('#main h1').innerText()), 'Dados abertos');
+  await page.waitForSelector('.doc-table a[download]');
+  const { manifest, sample, indexSha } = await page.evaluate(async () => {
+    const m = await (await fetch('/manifest.json')).json(), open = await (await fetch(`/${m.base}/dados-abertos.json`)).json();
+    const ids = (await (await fetch(`/${m.base}/index.json`)).json()).scope.ids;
+    let rows = [];
+    for (const id of ids) { rows = await (await fetch(`/${m.base}/deputados/${id}/despesas.json`)).json().catch(() => []); if (rows.length) break; }
+    const bytes = await (await fetch(`/${m.base}/index.json`)).arrayBuffer(), digest = await crypto.subtle.digest('SHA-256', bytes);
+    return { manifest: { ...open, base: m.base }, sample: rows, indexSha: [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('') };
+  });
+  assert.ok(manifest.files.some(f => f.kind === 'month'), 'monthly files listed');
+  assert.equal(indexSha, manifest.files.find(f => f.name === 'index.json').sha256, 'index.json matches its SHA-256');
+  const hrefs = await page.locator('.doc-table a[download]').evaluateAll(links => links.map(a => a.getAttribute('href')));
+  assert.deepEqual(hrefs.sort(), manifest.files.map(f => `/${manifest.base}/${f.path}`).sort());
+  const text = await page.locator('#main').innerText();
+  for (const f of manifest.files) {
+    const response = await page.request.get(`${base}/${manifest.base}/${f.path}`);
+    assert.equal(response.status(), 200, f.name);
+    assert.equal((await response.body()).length, f.bytes, `${f.name} size`);
+    assert.ok(text.includes(f.sha256), `${f.name} SHA-256 shown`);
+  }
+  assert.deepEqual(errors, []);
+  needCase(sample.length > 0, 'the published sample has a deputy with expense records');
+  const fields = new Set(sample.flatMap(r => [...Object.keys(r), ...Object.keys(r.source).map(k => `source.${k}`)]).filter(k => k !== 'source'));
+  const listed = new Set(await page.locator('.doc-table code').allInnerTexts());
+  for (const field of fields) assert.ok(listed.has(field), `dictionary lists ${field}`);
+  await page.close();
+});
+
 check('the record detail shows the possible-duplicate line only for a flagged record', async () => {
   const open = async flag => {
     const page = await at(1440, { before: flag ? page => page.route(/despesas\.json/, async route => { const res = await route.fetch(), rows = await res.json(); await route.fulfill({ response: res, json: Array.isArray(rows) ? rows.map(r => ({ ...r, duplicateFlag: 'possible' })) : rows }); }) : undefined });
