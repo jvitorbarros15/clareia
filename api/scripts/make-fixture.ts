@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {dataFolderId} from '../../src/build-site.ts';
+import {dataFolderId,WITHHELD} from '../../src/build-site.ts';
 
 // Cuts a few deputies out of a built publication folder and rewrites summary, index and fornecedores so the subset is internally consistent.
 const [source,outRoot]=process.argv.slice(2);
@@ -8,7 +8,7 @@ if(!source||!outRoot)throw new Error('Uso: make-fixture <pasta da publicação> 
 const read=async(f:string)=>JSON.parse(await fs.readFile(path.join(source,f),'utf8'));
 const summary=await read('summary.json'),index=await read('index.json'),suppliers=await read('fornecedores.json');
 
-const WITHHELD='Nome não exibido pelo Clareia',INDIVIDUAL='Fornecedor pessoa física';
+const INDIVIDUAL='Fornecedor pessoa física';
 const features:Record<number,{records:any[];tags:Set<string>}>={};
 for(const p of summary.people){
   const records:any[]=await fs.readFile(path.join(source,'deputados',String(p.id),'despesas.json'),'utf8').then(JSON.parse,()=>[]);

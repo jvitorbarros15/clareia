@@ -22,7 +22,7 @@ WHERE d.cents <> coalesce(e.cents, 0) OR d.records <> coalesce(e.n, 0)`
 SELECT count(*) FROM deputy_months m
 FULL JOIN (SELECT deputy_id, month, sum(cents) AS cents, count(*) AS n FROM expenses GROUP BY 1, 2) e ON e.deputy_id = m.deputy_id AND e.month = m.month
 WHERE m.deputy_id IS NULL
-   OR (m.held AND (m.cents IS NOT NULL OR e.n IS NOT NULL))
+   OR (m.held AND (m.cents IS NOT NULL OR m.records <> 0 OR e.n IS NOT NULL))
    OR (NOT m.held AND (m.cents IS DISTINCT FROM coalesce(e.cents, 0) OR m.records <> coalesce(e.n, 0)))`
 
 	sqlCategoryTotals = `
@@ -42,10 +42,19 @@ SELECT count(*) FROM (
   SELECT label FROM (SELECT coalesce(record->>'supplierLabel', record->>'supplier') AS label, supplier_key, verified FROM expenses GROUP BY 1, 2, 3) g
   GROUP BY label HAVING count(*) > 1) x`
 
-	sqlHeldBad = `
-SELECT count(*) FROM deputy_months m
-WHERE (m.held AND (m.cents IS NOT NULL OR EXISTS (SELECT 1 FROM expenses e WHERE e.deputy_id = m.deputy_id AND e.month = m.month)))
-   OR (NOT m.held AND m.cents IS NULL)`
+	sqlKeyLabels = `
+SELECT count(*) FROM (SELECT supplier_key FROM supplier_cells WHERE supplier_key IS NOT NULL GROUP BY 1 HAVING count(DISTINCT label) > 1) x`
+
+	sqlFilterColumns = `
+SELECT count(*) FROM expenses WHERE
+  public_id IS DISTINCT FROM record->>'id'
+  OR deputy_id IS DISTINCT FROM (record->>'personId')::int
+  OR month IS DISTINCT FROM (record->>'month')::int
+  OR cents IS DISTINCT FROM (record->>'cents')::bigint
+  OR category IS DISTINCT FROM record->>'category'
+  OR supplier_key IS DISTINCT FROM record->>'supplierKey'
+  OR verified IS DISTINCT FROM (record->>'supplierVerified')::boolean
+  OR (verified AND supplier_key IS NULL)`
 
 	sqlWithoutDataBad = `
 SELECT count(*) FROM deputies d
@@ -105,7 +114,11 @@ func runChecks(ctx context.Context, tx pgx.Tx, pub *Publication) ([]Result, erro
 	for _, p := range pub.Index.People {
 		indexIDs[p.ID] = true
 	}
-	c.add("pessoas do summary = index = escopo", len(ids) == len(s.People) && reflect.DeepEqual(ids, indexIDs) && len(s.Scope.IDs) == len(ids), "summary %d, index %d, escopo %d", len(ids), len(indexIDs), len(s.Scope.IDs))
+	scopeIDs := map[int]bool{}
+	for _, id := range s.Scope.IDs {
+		scopeIDs[id] = true
+	}
+	c.add("pessoas do summary = index = escopo", len(ids) == len(s.People) && reflect.DeepEqual(ids, indexIDs) && reflect.DeepEqual(ids, scopeIDs) && len(s.Scope.IDs) == len(ids), "summary %d, index %d, escopo %d", len(ids), len(indexIDs), len(s.Scope.IDs))
 	c.add("soma das pessoas = total", personSum == s.TotalCents && personRecords == s.Records, "soma %d centavos, %d registros", personSum, personRecords)
 	c.zero("total por pessoa", sqlPersonTotals, "pessoas divergentes do summary")
 	c.zero("total por pessoa e mês", sqlMonthTotals, "meses divergentes do summary")
@@ -127,18 +140,16 @@ func runChecks(ctx context.Context, tx pgx.Tx, pub *Publication) ([]Result, erro
 	c.add("células de fornecedor: contagem e rótulos", cellCount == int64(expectedCells) && labels == int64(len(pub.Suppliers.Suppliers)) && len(unique) == len(pub.Suppliers.Suppliers), "%d células, %d rótulos", cellCount, labels)
 	c.zero("células de fornecedor = despesas agrupadas", sqlSupplierCells, "células divergentes de fornecedores.json")
 	c.zero("um rótulo = uma chave", sqlLabelKeys, "rótulos com mais de uma chave ou verificação")
+	c.zero("uma chave = um rótulo", sqlKeyLabels, "chaves com mais de um rótulo")
+	c.zero("colunas de filtro = record", sqlFilterColumns, "registros com colunas diferentes do record")
 
-	var nWithout, nWithoutRows int64
+	var nWithout int64
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM deputies WHERE without_data`).Scan(&nWithout); err != nil {
 		return nil, err
 	}
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM expenses e JOIN deputies d ON d.id = e.deputy_id WHERE d.without_data`).Scan(&nWithoutRows); err != nil {
-		return nil, err
-	}
-	c.add("withoutData sem registros", nWithout == int64(len(pub.Index.WithoutData)) && nWithoutRows == 0, "%d pessoas, %d registros", nWithout, nWithoutRows)
+	c.add("withoutData: contagem de pessoas", nWithout == int64(len(pub.Index.WithoutData)), "%d pessoas", nWithout)
 	c.zero("withoutData = pessoas sem registro", sqlWithoutDataBad, "pessoas com marca errada")
 
-	c.zero("mês retido: cents nulo e zero registros", sqlHeldBad, "meses incoerentes")
 	c.zero("heldMonths do summary = meses retidos", sqlHeldMonthsBad, "pessoas divergentes")
 	checkHeldSet(c, pub)
 
