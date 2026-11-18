@@ -6,17 +6,6 @@
   const load = src => new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('Falha ao carregar ' + src)); document.body.appendChild(s); });
   try {
     const manifest = await json('/manifest.json'), base = '/' + manifest.base, [index, summary] = await Promise.all(['index', 'summary'].map(name => json(`${base}/${name}.json`)));
-    // Only an approved monthly coverage can name the party of a past expense; otherwise the current one is labelled as such.
-    const partyOfPeriod = (id, current, note) => {
-      if (!summary.coverageId) return current ? (note ? current : `${current} (atual)`) : null;
-      const months = summaryOf.get(id)?.months ?? [], served = months.filter(m => m.partyStatus !== 'not-applicable');
-      const doubt = served.some(m => m.partyStatus === 'review' || m.partyStatus === 'conflict');
-      if (!served.length || served.some(m => m.partyStatus === 'unavailable' || m.partyStatus === 'unknown')) return note && current && !doubt ? current : 'Partido indisponível';
-      if (doubt) return 'Partido em revisão';
-      const parties = [...new Set(served.flatMap(m => m.party ? [m.party] : m.partyValues))];
-      return parties.join(' / ');
-    };
-    const lastConfirmedParty = id => [...(summaryOf.get(id)?.months ?? [])].filter(m => m.partyStatus === 'single' && m.party).sort((a, b) => b.month - a.month)[0]?.party ?? null;
     const monthNames =['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     // Without an approved coverage every published month counts; with one, months outside the mandate do not.
     // Only a month reported outside the mandate drops out, and never one with an expense: a spent month always enters the divisor.
@@ -29,9 +18,8 @@
     // Individual records are fetched only when someone opens a list.
     const people = index.scope.ids.map(id => {
       const info = index.people.find(p => p.id === id) || { name: 'ID ' + id }, own = summaryOf.get(id);
-      const party = partyOfPeriod(id, info.party ?? null, info.partyNote);
       const cells = (own?.categories ?? []).map(c => ({ month: null, category: c.category, supplier: null, amount: c.cents, count: c.records }));
-      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, ufNote: info.ufNote ?? null, party, partyNote: info.party && party === info.party && !(own?.months ?? []).some(m => m.partyStatus === 'single') ? info.partyNote ?? null : null, partyInReview: party === 'Partido em revisão',lastConfirmedParty: lastConfirmedParty(id),profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), exercisedMonths: own.exercisedMonths, noExercise: own.noExercise, heldMonths: own.heldMonths.map(m => m - 1), comparable: own.comparable, use: ClareiaView.ceilingUse(own?.months ?? [], summary.ceiling, Boolean(summary.coverageId)), projects: own?.bills?.proposed ?? null, approved: own?.bills?.norms ?? null, votes: null, cells, total: own?.cents ?? 0 };
+      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, ufNote: info.ufNote ?? null, party: own.party, partyNote: own.partyNote, partyInReview: own.partyInReview, lastConfirmedParty: own.lastConfirmedParty, profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), exercisedMonths: own.exercisedMonths, noExercise: own.noExercise, heldMonths: own.heldMonths.map(m => m - 1), comparable: own.comparable, use: ClareiaView.ceilingUse(own?.months ?? [], summary.ceiling, Boolean(summary.coverageId)), projects: own?.bills?.proposed ?? null, approved: own?.bills?.norms ?? null, votes: null, cells, total: own?.cents ?? 0 };
     });
     // Same names as the published list; the order is the one of the monthly cells, which only the supplier file carries.
     const categories = [...summary.categories];

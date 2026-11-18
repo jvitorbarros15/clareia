@@ -84,6 +84,10 @@
     ['people[].noExercise', 'verdadeiro ou falso', 'Sem exercício de mandato confirmado no recorte: o deputado não aparece com R$ 0,00.'],
     ['people[].heldMonths', 'lista de números', 'Meses (1 a 12) retidos para revisão, fora dos totais.'],
     ['people[].comparable', 'verdadeiro ou falso', 'Entra nos rankings e comparações: tem exercício confirmado, nenhum mês retido e pelo menos <code>minMonths</code> meses de exercício.'],
+    ['people[].party', 'texto', 'Partido exibido no site: o dos meses publicados (vários separados por " / "), "Partido em revisão", "Partido indisponível" ou, sem cobertura aprovada, o atual do cadastro. Pode ser nulo.'],
+    ['people[].partyNote', 'texto', 'Como o partido foi obtido quando não vem mês a mês (eventos da legislatura). Nulo nos demais casos.'],
+    ['people[].partyInReview', 'verdadeiro ou falso', 'O partido está em revisão: algum mês tem dúvida ou conflito.'],
+    ['people[].lastConfirmedParty', 'texto', 'Partido do último mês com partido único confirmado. Pode ser nulo.'],
     ['minMonths', 'número', 'Mínimo de meses de exercício para entrar nos rankings (6, ou o total de meses do recorte se for menor).'],
     ['ceiling', 'objeto', 'Teto mensal da cota por UF, em centavos, com o ato da Mesa que o define.']
   ];

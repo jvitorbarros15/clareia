@@ -9,8 +9,8 @@ export type MonthSummary={month:number;cents:number;records:number;exercise:stri
 export type Cell=[number,number,number,number];
 // [month, category index, supplier index, cents, records]
 export type SupplierCell=[number,number,number,number,number];
-export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];categories:{category:string;cents:number;records:number}[];cells:Cell[];bills:Omit<BillPerson,'id'>|null;votes:Record<string,number>|null;votesHeld:number;exercisedMonths:number;noExercise:boolean;heldMonths:number[];comparable:boolean};
-export type SiteSummary={schema:'clareia.site-summary.v2';publicationId:string;coverageId:string|null;billsId:string|null;billsYears:number[];votesId:string|null;votesYears:number[];ceiling:SiteCeiling|null;scope:Scope;minMonths:number;totalCents:number;records:number;categories:string[];people:PersonSummary[]};
+export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];categories:{category:string;cents:number;records:number}[];cells:Cell[];bills:Omit<BillPerson,'id'>|null;votes:Record<string,number>|null;votesHeld:number;exercisedMonths:number;noExercise:boolean;heldMonths:number[];comparable:boolean;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null};
+export type SiteSummary={schema:'clareia.site-summary.v3';publicationId:string;coverageId:string|null;billsId:string|null;billsYears:number[];votesId:string|null;votesYears:number[];ceiling:SiteCeiling|null;scope:Scope;minMonths:number;totalCents:number;records:number;categories:string[];people:PersonSummary[]};
 export type SupplierSummary={schema:'clareia.supplier-summary.v1';publicationId:string;categories:string[];suppliers:string[];people:Record<string,SupplierCell[]>};
 export type SupplierNames=Record<string,{name:string}>;
 
@@ -35,6 +35,13 @@ export function rankingFieldsOf(months:MonthSummary[],coverageId:string|null,rec
   return {exercisedMonths,noExercise,heldMonths,comparable:!noExercise&&!heldMonths.length&&exercisedMonths>=minMonths};
 }
 
+// The party the site shows. Without an approved coverage the registration's party is labelled current; with one it comes from the months, and the registration's own party (partyNote says how it was found) is used only when the months give no answer and raise no doubt.
+export function partyFieldsOf(months:MonthSummary[],coverageId:string|null,current:string|null,note:string|null|undefined){
+  const served=months.filter(m=>m.partyStatus!=='not-applicable'),doubt=served.some(m=>m.partyStatus==='review'||m.partyStatus==='conflict');
+  const party=!coverageId?(current?(note?current:`${current} (atual)`):null):!served.length||served.some(m=>m.partyStatus==='unavailable'||m.partyStatus==='unknown')?(note&&current&&!doubt?current:'Partido indisponível'):doubt?'Partido em revisão':[...new Set(served.flatMap(m=>m.party?[m.party]:m.partyValues))].join(' / ');
+  return {party,partyNote:current&&party===current&&!months.some(m=>m.partyStatus==='single')?note??null:null,partyInReview:party==='Partido em revisão',lastConfirmedParty:[...months].filter(m=>m.partyStatus==='single'&&m.party).sort((a,b)=>b.month-a.month)[0]?.party??null};
+}
+
 // Party and UF come only from an approved monthly coverage. Without one they stay
 // unavailable: the current registration must never be applied to a past expense.
 export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:Person[];records:Expense[];expectedTotalCents:number;coverageId:string|null;coverage:CoverageRow[];billsId?:string|null;billsYears?:number[];bills?:BillPerson[];votesId?:string|null;votesYears?:number[];votes?:Map<number,Record<string,number>>;votesHeld?:Map<number,number>;held?:{personId:number;month:number}[];ceiling?:SiteCeiling|null}):SiteSummary{
@@ -57,12 +64,12 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
     const counted=billsOf.get(id);
     const cells=cellsOf(own,categoryIndex);
     if(safe(cells.reduce((n,c)=>n+BigInt(c[2]),0n))!==sum(own)||cells.reduce((n,c)=>n+c[3],0)!==own.length)throw new Error('Células mensais divergem dos registros de uma pessoa');
-    return {id,name:person.name,photo:person.photo,cents:sum(own),records:own.length,months,categories,cells,bills:billsId===null?null:{proposed:counted?.proposed??0,joint:counted?.joint??0,coauthored:counted?.coauthored??0,norms:counted?.norms??0},votes:input.votesId?input.votes?.get(id)??{}:null,votesHeld:input.votesHeld?.get(id)??0,...rankingFieldsOf(months,coverageId,own.length,scope.months.length,minMonths)};
+    return {id,name:person.name,photo:person.photo,cents:sum(own),records:own.length,months,categories,cells,bills:billsId===null?null:{proposed:counted?.proposed??0,joint:counted?.joint??0,coauthored:counted?.coauthored??0,norms:counted?.norms??0},votes:input.votesId?input.votes?.get(id)??{}:null,votesHeld:input.votesHeld?.get(id)??0,...rankingFieldsOf(months,coverageId,own.length,scope.months.length,minMonths),...partyFieldsOf(months,coverageId,person.party??null,person.partyNote)};
   });
   const totalCents=sum(records);
   if(totalCents!==expectedTotalCents)throw new Error('Resumo diverge do total aprovado');
   if(safe(summaries.reduce((n,p)=>n+BigInt(p.cents),0n))!==totalCents)throw new Error('Soma das pessoas diverge do total do resumo');
-  return {schema:'clareia.site-summary.v2',publicationId,coverageId,billsId,billsYears:input.billsYears??[],votesId:input.votesId??null,votesYears:input.votesYears??[],ceiling,scope,minMonths,totalCents,records:records.length,categories:categoryList,people:summaries};
+  return {schema:'clareia.site-summary.v3',publicationId,coverageId,billsId,billsYears:input.billsYears??[],votesId:input.votesId??null,votesYears:input.votesYears??[],ceiling,scope,minMonths,totalCents,records:records.length,categories:categoryList,people:summaries};
 }
 
 // A validated CNPJ is one supplier whatever its spelling; the rest are grouped by typed name. Display name: reviewed override, else the spelling with the most records (then largest absolute value, latest date, alphabetical), so a stray typed name cannot easily become the label.
