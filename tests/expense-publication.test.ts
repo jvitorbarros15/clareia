@@ -129,11 +129,11 @@ test('events that agree inside the period give the party; other legislatures out
   assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PL','2025-01-05T10:00'),pev('PT','2019-01-01T10:00',56)]),['PL','partido dos eventos da legislatura']);
 });
 test('a deciding event before the period start, or a switch, is noted with the deciding event month',()=>{
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PL','2024-05-01T10:00')]),['PL','partido registrado em mai/2024 (eventos da legislatura)']);
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-01-10T10:00'),pev('PT','2025-02-10T10:00')]),['PP','partido registrado em jan/2025 (eventos da legislatura)']);
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PL','2024-05-01T10:00')]),['PL','partido registrado em mai/2024, nos eventos da legislatura']);
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-01-10T10:00'),pev('PT','2025-02-10T10:00')]),['PP','partido registrado em jan/2025, nos eventos da legislatura']);
 });
 test('a switch after the expense period keeps the earlier party; with no earlier event the party stays empty with its reason',()=>{
-  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-06-10T10:00')]),['PL','partido registrado em fev/2023 (eventos da legislatura)']);
+  assert.deepEqual(partyOf(noParty,[pev('PL','2023-02-01T10:00'),pev('PP','2025-06-10T10:00')]),['PL','partido registrado em fev/2023, nos eventos da legislatura']);
   assert.deepEqual(partyOf(noParty,[pev('PP','2025-06-10T10:00')]),[null,'sem eventos até o fim do período']);
 });
 test('a confirmed party month keeps its party over the events; a contested month gives no fallback',()=>{
@@ -151,7 +151,7 @@ test('a merged-away label becomes its successor even when the event is dated aft
   assert.deepEqual(direct([pev('PSC','2025-02-26T10:00')]),['PODE','PSC registrado em fev/2025; partido extinto, sucedido pelo PODE (jun/2023)']);
 });
 test('a merger approved after the period end keeps the old label',()=>{
-  assert.deepEqual(direct([pev('PSC','2023-03-10T10:00')],'2023-05-31'),['PSC','partido registrado em mar/2023 (eventos da legislatura)']);
+  assert.deepEqual(direct([pev('PSC','2023-03-10T10:00')],'2023-05-31'),['PSC','partido registrado em mar/2023, nos eventos da legislatura']);
 });
 test('a confirmed month is never mapped through a merger',()=>{
   assert.deepEqual(partyOf([{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'PATRIOTA'}}],[]),['PATRIOTA',null]);

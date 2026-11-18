@@ -27,7 +27,7 @@ export function partyFromEvents(events:PartyEvent[],legislature:number,start:str
   const merger=MERGERS[party(last)];
   if(merger&&merger.on<=end)return {value:merger.to,note:`${party(last)} registrado em ${monthYear(day)}; partido extinto, sucedido pelo ${merger.to} (${monthYear(merger.on)})`};
   const agree=new Set(upto.map(party)).size===1&&day>=start;
-  return {value:party(last),note:agree?'partido dos eventos da legislatura':`partido registrado em ${monthYear(day)} (eventos da legislatura)`};
+  return {value:party(last),note:agree?'partido dos eventos da legislatura':`partido registrado em ${monthYear(day)}, nos eventos da legislatura`};
 }
 export const SIGN_NOTE='sinal corrigido conforme a página da Câmara';
 export const SIGN_CATEGORIES=['COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA','PASSAGEM AÉREA - MISSÃO OFICIAL'];
