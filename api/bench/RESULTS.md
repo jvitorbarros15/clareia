@@ -10,7 +10,7 @@ There are two sets of measurements of the same code base. The first benchmark (`
 
 - **The plan's criterion "a second full run within ±10% on p95" was NOT met**: it is met only by step (a). Static files (0) and the real API setup (b) missed it. Whether to waive it is João's decision; I did not change the criterion or rerun until it passed.
 - **The supplier list is below the 50 ms line; the supplier search is not.** A `q` search with fewer than 51 results scans all 21,677 labels (p50 73 to 88 ms in step (b)). This is a known limitation; whether to fix it (for example by storing a normalized label column) is João's decision.
-  - Note 2026-11-19: the search now uses the stored `suppliers.label_norm` column. One EXPLAIN ANALYZE of a no-match search went from 66 ms to 2.2 ms (Postgres only, not k6). The HTTP p50 of 73 to 88 ms above was not re-measured.
+  - Note 2026-11-19: the search now uses the stored `suppliers.label_norm` column. One EXPLAIN ANALYZE of a no-match search went from 66 ms to 2.2 ms (Postgres only, not k6). A search-only A/B over HTTP (`bench/search.js`: the benchmark's 200 search terms, `limit=50`, constant 50 req/s, 10 s warm-up, then 3 runs of 60 s; old server built from main and new server from this change, against the same database on the same laptop, one after the other) gave p50 91–99 ms and p95 98–107 ms before, and p50 13.0–13.4 ms and p95 19.6–19.9 ms after. All requests returned 200, with 0 dropped. The full benchmark was not rerun, because only the search query changed.
 
 ## Headline numbers after the `suppliers` table
 
