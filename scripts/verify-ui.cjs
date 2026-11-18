@@ -2329,6 +2329,28 @@ check('static pages load at their own URLs and the footer links reach them', asy
   await page.close();
 });
 
+check('the apoie page loads at its own URL, shows the Pix key and a 44px copy button, and the footer links to it', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 800 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(`${base}/apoie`);
+  await page.waitForSelector('#main h1');
+  assert.equal(clean(await page.locator('#main h1').innerText()), 'Apoie o Clareia');
+  assert.equal(await page.title(), 'Apoie o Clareia');
+  assert.equal(clean(await page.locator('#pix-key').innerText()), 'jvitorbarros15@gmail.com');
+  const box = await page.locator('[data-action="copy-pix"]').boundingBox();
+  assert.ok(box.height >= 44 && box.width >= 44, `copy button ${box.width}x${box.height}`);
+  await page.locator('[data-action="copy-pix"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-action="copy-pix"]').textContent === 'Chave copiada' || String(getSelection()).includes('jvitorbarros15@gmail.com'));
+  assert.deepEqual(errors, [], 'apoie errors');
+  await page.goto(base);
+  await page.waitForSelector('.footer');
+  await page.locator('.footer a[href="/apoie"]').click();
+  await page.waitForSelector('#pix-key');
+  assert.equal(new URL(page.url()).pathname, '/apoie');
+  await page.close();
+});
+
 check('the open data page links every download, shows each SHA-256 and documents every record field', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];

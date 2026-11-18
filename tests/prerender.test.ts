@@ -192,14 +192,20 @@ test('static pages are prerendered at their own route, with the same meta tags a
   try{
     await fs.writeFile(path.join(dir,'index.html'),shell);
     await writeStaticPages(dir,resolveOptions({siteUrl:SITE}));
-    for(const route of ['sobre','correcoes','metodologia']){
+    for(const route of ['sobre','correcoes','metodologia','apoie']){
+      const apoieTitle=route==='apoie';
       const html=await fs.readFile(path.join(dir,route+'.html'),'utf8');
-      assert.match(html,/<title>[^<]+ — Clareia<\/title>/);
+      assert.match(html,apoieTitle?/<title>Apoie o Clareia<\/title>/:/<title>[^<]+ — Clareia<\/title>/);
       assert.ok(html.includes(`<link rel="canonical" href="${SITE}/${route}">`));
       assert.ok(html.includes(`<meta property="og:url" content="${SITE}/${route}">`));
       assert.match(html,/<meta name="description" content="[^"]+">/);
       assert.ok(html.includes('<noscript><main id="main">'));
     }
+    const apoie=await fs.readFile(path.join(dir,'apoie.html'),'utf8');
+    assert.ok(apoie.includes('<title>Apoie o Clareia</title>'));
+    assert.ok(apoie.includes('jvitorbarros15@gmail.com'));
+    assert.ok(apoie.includes('<a href="/apoie" aria-current="page">Apoie</a>'));
+    assert.ok(apoie.includes('data-action="copy-pix"'));
     assert.equal(await fs.readFile(path.join(dir,'corrections.json'),'utf8'),await fs.readFile(path.join(import.meta.dirname,'..','config','corrections.json'),'utf8'));
   }finally{await fs.rm(dir,{recursive:true,force:true});}
 });

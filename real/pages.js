@@ -1,4 +1,4 @@
-/* Textos das páginas Sobre, Correções, Metodologia e Dados abertos. Lido pelo navegador e por src/prerender.ts (via vm), para que o texto exista em um só lugar. */
+/* Textos das páginas Sobre, Correções, Metodologia, Dados abertos e Apoie. Lido pelo navegador e por src/prerender.ts (via vm), para que o texto exista em um só lugar. */
 (() => {
   'use strict';
   const CONTACT_EMAIL = '';
@@ -8,7 +8,7 @@
   const contact = (email = CONTACT_EMAIL) => email ? `<p>Escreva para <a href="mailto:${esc(email)}">${esc(email)}</a>.</p>` : '<p>Canal de correções em configuração.</p>';
   const corrections = (list = []) => list.length ? `<table class="doc-table"><thead><tr><th scope="col">Data</th><th scope="col">O que mudou</th></tr></thead><tbody>${list.map(e => `<tr><td><time datetime="${esc(e.date)}">${dateBR(e.date)}</time></td><td><strong>${esc(e.title)}</strong>. ${esc(e.detail)}</td></tr>`).join('')}</tbody></table>` : '<p>Nenhuma correção registrada até agora.</p>';
   const RAYS = '<svg class="doc-rays" viewBox="322 88 140 150" aria-hidden="true" focusable="false"><path pathLength="1" d="m330 149 12-53"/><path pathLength="1" d="m376 170 34-42"/><path pathLength="1" d="m404 209 48-19"/></svg>';
-  const NAV = [['sobre', 'Sobre'], ['correcoes', 'Correções'], ['metodologia', 'Metodologia'], ['dados-abertos', 'Dados abertos'], ['api', 'API']];
+  const NAV = [['sobre', 'Sobre'], ['correcoes', 'Correções'], ['metodologia', 'Metodologia'], ['dados-abertos', 'Dados abertos'], ['apoie', 'Apoie'], ['api', 'API']];
   const layout = (name, eyebrow, title, lede, inner, toc = '') => `<div class="doc"><div class="doc-side"><nav class="doc-nav" aria-label="Páginas do projeto">${NAV.map(([key, label]) => `<a href="/${key}"${key === name ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>${toc}</div><article class="doc-main"><header class="doc-head">${RAYS}<p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="doc-lede">${lede}</p></header>${inner}</article></div>`;
   const sections = html => { const items = []; const out = html.replace(/<h3>(.*?)<\/h3>/g, (_, text) => { const id = `s${items.length + 1}`; items.push(`<li><a href="#${id}">${text}</a></li>`); return `<h2 id="${id}">${text}</h2>`; }); return { html: out, toc: `<nav class="doc-toc" aria-label="Nesta página"><p class="eyebrow">Nesta página</p><ol>${items.join('')}</ol></nav>` }; };
 
@@ -16,6 +16,9 @@
   const conferimos = extra => `<h3>O que conferimos</h3><p>Duas capturas de cada fonte, identidade pelo ID oficial e contas em centavos, reconciliadas com uma segunda soma e com o banco.${extra}</p>`;
   const naoConcluimos = `<div class="doc-callout"><h3>O que não concluímos</h3><p>Gasto maior não demonstra irregularidade. O recorte não mede qualidade do mandato nem faz nova subtração de restituições. Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'. Nomes de fornecedores sem CNPJ válido que não parecem de empresa não são exibidos, para proteger possíveis pessoas físicas.</p></div>`;
   const privacidade = `<h3>Privacidade</h3><p>Contamos visitas e quantas vezes cada página foi vista, inclusive as páginas de deputados, com o Cloudflare Web Analytics, sem cookies e sem identificar quem visita. Não sabemos quem viu qual página.</p>`;
+
+  const PIX_KEY = 'jvitorbarros15@gmail.com';
+  const apoieBody = () => { const s = sections(`<h3>Por que eu faço isso</h3><p>Os gastos da cota parlamentar sempre foram públicos. Estão no site da Câmara, em arquivos que pouca gente consegue abrir e quase ninguém tem tempo de conferir. Eu queria que qualquer pessoa, em qualquer lugar do Brasil, pudesse procurar o próprio deputado e entender em poucos minutos quanto ele gastou e com o quê.</p><p>O Clareia não tem lado. Mostra o mesmo número para todo mundo, calculado com a mesma regra. Todo valor tem a página "Como chegamos nisso?", com a soma, os registros e o link para a fonte oficial. Se você quiser refazer a conta, os arquivos estão em <a href="/dados-abertos">Dados abertos</a>, em CSV, cada um com seu código SHA-256.</p><p>Uma coisa que eu repito sempre: o Clareia não é auditoria. Gastar mais não quer dizer gastar errado. O site mostra o que foi declarado à Câmara, e a conclusão fica com você.</p><h3>Para onde vai o dinheiro</h3><p>O custo maior é tempo: coletar os dados, conferir cada mês em duas fontes da Câmara e corrigir quando a própria Câmara erra. Isso aconteceu em novembro de 2026, quando a API dela passou a mostrar despesas com o sinal trocado e eu precisei refazer a conferência de três anos. Também quero pagar um domínio próprio e, quando fizer sentido, um servidor para a API pública.</p><p>Com apoio, os próximos passos são as despesas completas de 2023 a 2026, as emendas parlamentares, o custo dos gabinetes e, depois, os senadores.</p><h3>O que a doação não faz</h3><p>Doar não muda nenhum número, ranking ou texto do site. Quem doa não ganha acesso antes, não pode pedir destaque para ninguém e não pode pedir que algo saia do ar. Se um dia isso mudar, vai estar escrito aqui.</p><h3>Como apoiar</h3><div class="doc-callout pix"><p>Pix (chave e-mail):</p><p class="pix-row"><code id="pix-key" class="pix-key">${PIX_KEY}</code><button type="button" class="outline-button pix-copy" data-action="copy-pix">Copiar chave</button></p></div><p>Qualquer valor ajuda. O site continua sem anúncios, sem cookies e sem cadastro.</p>`); return layout('apoie', 'Apoie', 'Apoie o Clareia', 'O Clareia é feito por uma pessoa, sem dinheiro de partido nem de político. Se ele te ajudou a entender alguma coisa sobre quem te representa, você pode ajudar a mantê-lo no ar.', s.html, s.toc); };
 
   const num = n => Number(n).toLocaleString('pt-BR');
   const size = bytes => bytes >= 1048576 ? `${(bytes / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MiB` : `${Math.max(1, Math.round(bytes / 1024)).toLocaleString('pt-BR')} KiB`;
@@ -180,6 +183,11 @@
         title: 'Correções — Clareia',
         description: 'Como pedir a correção de um dado do Clareia e o registro público das correções feitas.',
         body: (list, email) => layout('correcoes', 'Correções', 'Correções', 'Como pedir a correção de um dado e o registro público do que foi corrigido.', `<ol class="doc-steps"><li><span>1</span><strong>Envie</strong><p>Veja abaixo o que enviar.</p></li><li><span>2</span><strong>Respondemos</strong><p>Em até 5 dias úteis.</p></li><li><span>3</span><strong>Nova versão dos dados</strong><p>Com registro público do que mudou e quando.</p></li></ol><h2>Como pedir uma correção</h2>${contact(email)}<h2>O que enviar</h2><ul><li>O deputado, com nome ou ID da Câmara.</li><li>O número ou o texto como aparece no site, com o link da página.</li><li>A fonte oficial que comprova o dado, como o registro na Câmara ou o arquivo CEAP.</li></ul><div class="doc-callout doc-commit"><h2>Nosso compromisso</h2><p>${POLICY}</p></div><h2>Registro de correções</h2>${corrections(list)}`)
+      },
+      apoie: {
+        title: 'Apoie o Clareia',
+        description: 'O Clareia é feito por uma pessoa, sem dinheiro de partido nem de político. Veja por que existe, para onde vai o dinheiro e como apoiar por Pix.',
+        body: apoieBody
       },
       'dados-abertos': {
         title: 'Dados abertos — Clareia',

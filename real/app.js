@@ -384,7 +384,7 @@
     if (!parts.length || (parts.length === 1 && parts[0] === 'index.html')) return null;
     if (parts[0] === 'deputado') { const m = parts.length === 2 ? /^(\d+)(?:-.*)?$/.exec(parts[1]) : null; return { type: 'deputado', id: m?.[1] ?? null, slug: m ? parts[1].slice(m[1].length + 1) : '' }; }
     if (parts[0] === 'estado' && parts.length === 2) return { type: 'estado', uf: parts[1].toUpperCase() };
-    if (parts.length === 1 && ['sobre', 'correcoes', 'metodologia', 'dados-abertos'].includes(parts[0])) return { type: 'page', name: parts[0] };
+    if (parts.length === 1 && ['sobre', 'correcoes', 'metodologia', 'dados-abertos', 'apoie'].includes(parts[0])) return { type: 'page', name: parts[0] };
     return { type: 'unknown' };
   }
   const NOT_FOUND = {
@@ -549,6 +549,7 @@
     const main = $('#main');
     document.title = P.pages[name].title;
     if (name === 'sobre') main.innerHTML = P.pages.sobre.body();
+    else if (name === 'apoie') { main.innerHTML = P.pages.apoie.body(); P.spy(); }
     else if (name === 'dados-abertos') {
       let manifest = null;
       try { const r = await fetch(`${base}/dados-abertos.json`); if (r.ok) manifest = await r.json(); } catch {}
@@ -570,7 +571,7 @@
     try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(location.href); toast('Link com a investigação e os filtros copiado.'); }
     catch { showDialog('Compartilhar investigação', `<div class="manual-share"><p>Copie este link. Os filtros e a pergunta serão preservados.</p><label for="share-link">Link da consulta</label><input id="share-link" readonly value="${escape(location.href)}"></div>`); $('#share-link').select(); }
   }
-  function closeSuggestions() { $('#suggestions').hidden = true; $('#query').setAttribute('aria-expanded', 'false'); }
+  function closeSuggestions() { const list = $('#suggestions'); if (!list) return; list.hidden = true; $('#query').setAttribute('aria-expanded', 'false'); }
   function exportCSV(id, month) {
     const p = person(id), whole = month === undefined && state.category === 'Todas';
     const save = (href, n) => { const a = document.createElement('a'); a.href = href; a.download = `clareia-${index.snapshotId.slice(0, 12)}-${p.officialId}${month === undefined ? '' : '-' + (month + 1)}.csv`; a.click(); toast(`CSV com ${n} registros oficiais preparado.`); };
@@ -605,6 +606,13 @@
     if (!box) { box = document.createElement('div'); box.id = 'profile-link-box'; box.className = 'manual-share'; box.innerHTML = `<label for="profile-link">Copie o link do perfil</label><input id="profile-link" readonly value="${escape(url)}">`; button.closest('.action-row').after(box); }
     const field = $('#profile-link'); field.focus(); field.select();
     try { if (document.execCommand('copy')) copied(); } catch { /* the selected field is the fallback */ }
+  }
+  async function copyPixKey(button) {
+    const key = $('#pix-key'), label = button.textContent;
+    const done = () => { button.textContent = 'Chave copiada'; setTimeout(() => { if (button.isConnected) button.textContent = label; }, 2000); };
+    try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(key.textContent); done(); return; } catch { /* the selected text is the fallback */ }
+    const range = document.createRange(); range.selectNodeContents(key);
+    const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
   }
   document.addEventListener('keydown', event => {
     const tab = event.target.closest?.('[role="tab"][data-tab]');
@@ -642,6 +650,7 @@
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog().then(() => ask(`Compare ${person(id).name} e ${peer.name}`)); }
     else if (action === 'share') shareLink();
     else if (action === 'copy-link') copyProfileLink(id, target);
+    else if (action === 'copy-pix') copyPixKey(target);
     else if (action === 'share-image') downloadShareImage(id);
     else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
