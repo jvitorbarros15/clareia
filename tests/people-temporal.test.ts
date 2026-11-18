@@ -43,8 +43,8 @@ test('invalid selected-legislature dates hold the timeline while other legislatu
   assert.equal(other.months[0].party.value,'PL');assert.equal(other.events[1].disposition,'other-legislature');assert.equal(other.events[1].original.siglaPartido,'WRONG');
   const misplaced=deriveTemporalPerson(person([event({dataHora:'2022-01-01T00:00'})]),context);assert.equal(misplaced.months[0].exercise,'unknown');assert.ok(misplaced.issues.includes('selected-legislature-date-mismatch'));
 });
-test('unknown source situations and Convocado do not imply actual exercise or absence',()=>{
-  for(const situacao of ['Convocado','NEW_SOURCE_STATE',null]){const m=month([event({situacao})],1);assert.equal(m.exercise,'unknown');assert.equal(m.party.status,'unknown');}
+test('unknown source situations do not imply actual exercise or absence',()=>{
+  for(const situacao of ['NEW_SOURCE_STATE',null]){const m=month([event({situacao})],1);assert.equal(m.exercise,'unknown');assert.equal(m.party.status,'unknown');}
   assert.equal(month([event({situacao:'FIM_MANDATO'})],1).exercise,'outside');
   const ctx={...context,references:{...context.references,states:[...context.references.states,{sigla:'X',nome:'constructor'}]}};
   const unexpected=deriveTemporalPerson(person([event({situacao:'constructor'})]),ctx);assert.equal(unexpected.months[0].exercise,'unknown');
@@ -74,4 +74,25 @@ test('an event filed under another legislature inside the window stops the perso
 test('an event from another legislature dated outside the window does not block the person',()=>{
   const result=deriveTemporalPerson(person([event(),event({idLegislatura:56,dataHora:'2022-06-10T09:00',siglaPartido:'PSD'})]),context);
   assert.ok(!result.issues.includes('other-legislature-event-in-window'));assert.equal(result.months.find(m=>m.month===7)!.party.value,'PL');
+});
+
+test('a convocation counts as out of office until the oath, so the month is partial',()=>{
+  const m=month([event(),event({situacao:'Convocado',dataHora:'2025-02-03T15:59'}),event({situacao:'Exercício',dataHora:'2025-02-03T16:30'})],2);
+  assert.equal(m.exercise,'partial');
+  assert.equal(month([event({situacao:'Convocado'})],1).exercise,'outside');
+});
+test('same-minute Convocado with Exercício is in office, with Suplência is out of office',()=>{
+  assert.equal(month([event({situacao:'Convocado',dataHora:'2025-02-03T16:30'}),event({situacao:'Exercício',dataHora:'2025-02-03T16:30'})],3).exercise,'full');
+  assert.equal(month([event({situacao:'Convocado',dataHora:'2025-02-03T16:30'}),event({situacao:'Suplência',dataHora:'2025-02-03T16:30'})],3).exercise,'outside');
+  assert.equal(month([event({situacao:'Exercício',dataHora:'2025-02-03T16:30'}),event({situacao:'Afastado',dataHora:'2025-02-03T16:30'})],3).exercise,'conflict');
+});
+test('an event dated outside the legislature is ignored and the rest of the history derives', ()=>{
+  const result=deriveTemporalPerson(person([event(),event({situacao:'Suplência',dataHora:'2022-03-31T10:00'})]),context);
+  assert.equal(result.events[1].disposition,'outside-legislature');
+  assert.ok(result.months.every(m=>m.exercise==='full'));
+});
+test('a person who blocks for another reason still blocks even with an outside-legislature event',()=>{
+  const result=deriveTemporalPerson(person([event(),event({situacao:'Suplência',dataHora:'2022-03-31T10:00'})],'changed'),context);
+  assert.ok(result.months.every(m=>m.exercise==='unknown'));
+  assert.equal(month([event(),event({dataHora:'2025-02-30T12:00'})],3).exercise,'unknown');
 });

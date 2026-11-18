@@ -72,7 +72,7 @@ test('changed exercise, affiliation and duplicate count between passes prevent u
 test('month comparisons keep boundary days, open ends and unknown exercise separate without filling gaps',async t=>{
   const r=await setup(t,id=>xml(id,period('31/01/2025','01/02/2025')));
   assert.equal(r.cross.people[0].months[0].legacy,'boundary-only');assert.equal(r.cross.people[0].months[1].legacy,'boundary-only');assert.equal(r.cross.people[0].months[2].legacy,'no-listed-period');
-  const h=structuredClone(r.h);h.people[0].events=h.people[0].events.map(e=>({...e,situacao:'CONVOCADO'}));h.references.states.push({nome:'Convocado',sigla:'CONVOCADO'});
+  const h=structuredClone(r.h);h.people[0].events=h.people[0].events.map(e=>({...e,situacao:'ESTADO_NOVO'}));
   const temporal=deriveTemporalHistory(h),legacy=structuredClone(r.legacy);legacy.historySha256=hash(canonical(h));const cross=compareLegacy(legacy,h,temporal);
   assert.equal(cross.people[0].months[0].comparison,'no-automatic-resolution');
   const open=await setup(t);assert.equal(open.cross.people[0].months[0].openEnd,true);

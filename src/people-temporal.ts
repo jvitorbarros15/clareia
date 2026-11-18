@@ -13,7 +13,7 @@ const unique=(values:number[])=>[...new Set(values)].sort((a,b)=>a-b);
 const UFS=new Set('AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' '));
 const fold=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
 const STATES:Record<string,'in-office'|'out-of-office'|null>={
-  exercicio:'in-office',afastado:'out-of-office',licenca:'out-of-office',suplencia:'out-of-office',suspenso:'out-of-office',vacancia:'out-of-office','fim de mandato':'out-of-office',fim_mandato:'out-of-office',convocado:null
+  exercicio:'in-office',afastado:'out-of-office',licenca:'out-of-office',suplencia:'out-of-office',suspenso:'out-of-office',vacancia:'out-of-office','fim de mandato':'out-of-office',fim_mandato:'out-of-office',convocado:'out-of-office'
 };
 // Civil timestamps stay in the source's calendar. No implicit timezone conversion.
 export function historyTime(value:string|null):{time:string|null;precision:'minute'|'second'|'unsupported'}{
@@ -32,8 +32,10 @@ function join(values:Dimension[]):Dimension{
   if(values.some(v=>v.status==='unknown')||known.length!==1)return {status:'unknown',value:null,rows,reasons};
   return {status:'known',value:known[0],rows,reasons};
 }
+const isConvocado=(e:NormalizedEvent)=>!!e.original.situacao&&fold(e.original.situacao)==='convocado';
 function stateFor(events:NormalizedEvent[],references:Set<string>){
-  const exercise=events.map(({row,original:e})=>{
+  const inOfficeSameMinute=events.some(e=>!isConvocado(e)&&e.original.situacao&&STATES[fold(e.original.situacao)]==='in-office');
+  const exercise=(inOfficeSameMinute?events.filter(e=>!isConvocado(e)):events).map(({row,original:e})=>{
     if(!e.situacao)return unknown('missing-exercise-state',[row]);
     const raw=fold(e.situacao),isAlias=raw==='fim_mandato'&&references.has('fim de mandato');
     if(!references.has(raw)&&!isAlias)return unknown('unrecognized-exercise-state',[row]);
@@ -69,7 +71,7 @@ export function deriveTemporalPerson(person:HistoryPerson,report:Pick<HistoryRep
   // An event dated in the window but filed under another legislature can carry a real change.
   const foreignInWindow=events.some(e=>e.disposition==='other-legislature'&&e.time!==null&&e.time>=start&&e.time<end);
   if(foreignInWindow)issues.push('other-legislature-event-in-window');
-  const blocked=foreignInWindow||person.status!=='stable'||events.some(e=>e.disposition==='invalid-date'||e.disposition==='outside-legislature');
+  const blocked=foreignInWindow||person.status!=='stable'||events.some(e=>e.disposition==='invalid-date');
   const references=new Set(report.references.states.map(s=>fold(s.nome)));
   const usable=events.filter(e=>e.disposition==='usable').sort((a,b)=>a.time!.localeCompare(b.time!)||a.row-b.row),groups=new Map<string,NormalizedEvent[]>();
   for(const e of usable)groups.set(e.time!,[...(groups.get(e.time!)||[]),e]);
