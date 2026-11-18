@@ -72,7 +72,7 @@ export type SourceRef={url:string;sha256?:string;row:number;fetchedAt:string};
 export type FinancialBasis='reported-installment'|'balanced-document-split';
 export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey?:string;supplierVerified:boolean;supplierIdOdd?:true;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis;sourceCents?:number;note?:string;duplicateFlag?:'possible'};
 export type Page={url:string;sha256:string;file:string;fetchedAt:string;pass:number;count:number|null};
-export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];duplicateCompetences?:{personId:number;month:number;reason:DuplicateReason}[];signFix?:{count:number;deltaCents:number};lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
+export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];duplicateCompetences?:{personId:number;month:number;reason:DuplicateReason}[];signFix?:{count:number;deltaCents:number};apiSignFix?:{count:number};lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
 
 export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|null {
   try {const u=new URL(input);if(u.protocol!=='https:'&&u.protocol!=='http:')return null;
@@ -82,11 +82,13 @@ export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|n
     u.protocol='https:';return u.href;
   }catch{return null;}
 }
+// The API sometimes reports a positive document with net = -(document - glosa); the annual file carries the real value. Airfare, mission and housing keep their own sign handling.
+export const invertedApiShape=(face:number|null,glosa:number|null,net:number,category:string)=>face!==null&&glosa!==null&&glosa>=0&&face>0&&face-glosa>0&&net===-(face-glosa)&&!/AERE|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
 export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceRef,basis?:FinancialBasis):Expense {
   const r=expenseSchema.parse(raw);
   if(!scope.ids.includes(personId)||r.ano!==scope.year||!scope.months.includes(r.mes))throw new Error('Registro fora do recorte contratado');
   const net=cents(r.valorLiquido),face=cents(r.valorDocumento),glosa=r.valorGlosa===null?null:cents(r.valorGlosa);
-  if(glosa!==null&&face-glosa!==net&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
+  if(glosa!==null&&face-glosa!==net&&!invertedApiShape(face,glosa,net,r.tipoDespesa)&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
   const supplierId=(r.cnpjCpfFornecedor||'').replace(/\D/g,'');
   // Only validated CNPJ businesses are grouped across records. CPF/missing IDs remain separate.
   const verified=validCnpj(supplierId),supplier=publicSupplier(r.nomeFornecedor,supplierId);

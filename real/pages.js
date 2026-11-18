@@ -104,6 +104,7 @@
     ['validation.independentTotalCents', 'texto', 'Segunda soma, feita por outro caminho, que precisa ser igual a <code>totalCents</code>.'],
     ['validation.heldCompetences[]', 'lista', 'Meses retidos: <code>personId</code>, <code>month</code> e <code>reasons</code>.'],
     ['validation.signFix', 'objeto', '<code>count</code> registros de sinal corrigido e a diferença que isso causa, <code>deltaCents</code>.'],
+    ['validation.apiSignFix', 'objeto', 'Só aparece quando há mês corrigido: <code>count</code> ocorrências em que a API trouxe o líquido com sinal invertido (com ou sem glosa) e o valor foi tomado do arquivo anual, que confirmou documento e glosa.'],
     ['validation.duplicatePolicy', 'texto', 'Como linhas repetidas são tratadas.'],
     ['audit', 'objeto', 'Resultado das conferências: <code>status</code>, <code>failures</code> e os lotes conferidos, com o hash de cada relatório.']
   ];

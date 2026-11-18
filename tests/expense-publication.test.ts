@@ -9,16 +9,16 @@ import {openDB} from '../src/store.ts';
 import {publishDomain} from '../src/publications.ts';
 import type {ExpenseLotRun} from '../src/expense-publication.ts';
 
-const history={people:[1,2,3].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-07T00:00:00Z'}}}))} as any;
-const temporal={historySha256:hash(canonical(history)),scope:{legislature:57,end:'2025-12-31'},people:[1,2,3].map(id=>({id,events:[],months:[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}]}))} as any;
+const history={scope:{legislature:57},legislature:{id:57,start:'2023-02-01',end:'2027-01-31'},people:[1,2,3].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-07T00:00:00Z'}}}))} as any;
+const temporal={historySha256:hash(canonical(history)),scope:{legislature:57,start:'2025-01-01',end:'2025-12-31'},people:[1,2,3].map(id=>({id,events:[],months:[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}}]}))} as any;
 const record=(personId:number,cents:number,i:number):Expense=>({id:`r${personId}-${i}`,personId,year:2025,month:1,category:'C',supplier:'S',supplierKey:'k',supplierVerified:false,documentId:'1',documentNumber:'1',date:null,receipt:null,cents,documentCents:cents,disallowedCents:0,source:{url:'https://www.camara.leg.br/cotas/Ano-2025.csv.zip',sha256:'s',row:i,fetchedAt:'2026-11-09T00:00:00Z'}});
 const universe=[1,2,3];
 function lot(n:number,ids:number[],cells:any[]):ExpenseLotRun{
   const proposal={schema:'clareia.expense-lot.v1',year:2025,months:[1],lot:n,lotSize:2,lots:2,universeSize:3,universeSha256:hash(canonical(universe)),people:ids.map(id=>({id})),temporalSha256:hash(canonical(temporal)),crosscheckSha256:'c'};
   const proposalSha256=hash(canonical(proposal)),input={schema:'clareia.expense-lot-input.v1',selectionRun:'s',proposal,temporal,originAudit:{}};
-  const report={scope:{year:2025,months:[1],ids,legislature:57},proposalSha256,createdAt:`2026-11-09T0${n}:00:00Z`,contentSha256:'c'+n,cells} as any;
+  const report={peopleVersion:hash(canonical(temporal)),scope:{year:2025,months:[1],ids,legislature:57},proposalSha256,createdAt:`2026-11-09T0${n}:00:00Z`,contentSha256:'c'+n,cells} as any;
   const reportSha256=hash(canonical(report));
-  return {runId:'run'+n,manifest:{runId:'run'+n,status:'review-required',reportSha256,proposalSha256,inputSha256:hash(canonical(input))},input:input as any,report,audit:{status:'passed',reportSha256,proposalSha256,checkedAt:'2026-11-09T10:00:00Z',competences:cells.length}};
+  return {runId:'run'+n,manifest:{runId:'run'+n,status:'review-required',reportSha256,proposalSha256,inputSha256:hash(canonical(input))},input:input as any,report,audit:{status:'passed',reportSha256,proposalSha256,checkedAt:'2026-11-09T10:00:00Z',competences:cells.length,scope:report.scope,peopleVersion:report.peopleVersion}};
 }
 const cell=(personId:number,status:string,records:Expense[]=[])=>({personId,year:2025,month:1,status,records,reasons:status==='held-review'?['sigepa-unit-unconfirmed']:[],totalCents:status==='complete'||status==='no-expenses-confirmed'?records.reduce((n,r)=>n+r.cents,0):null});
 const lots=()=>[lot(0,[1,2],[cell(1,'complete',[record(1,100,0),record(1,-30,1)]),cell(2,'held-review')]),lot(1,[3],[cell(3,'no-expenses-confirmed')])];
@@ -81,7 +81,7 @@ test('storing an older version without approval never makes it active again afte
 test('the party comes from the publication year, never from a later month of the history',()=>{
   const later=structuredClone(lots());
   for(const l of later){l.input.temporal.people[0].months.push({year:2026,month:3,uf:{status:'single',value:'SP'},party:{status:'single',value:'Y'}} as any);}
-  const t=later[0].input.temporal;for(const l of later){l.input.temporal=t;const p=l.input.proposal;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
+  const t=later[0].input.temporal;for(const l of later){l.input.temporal=t;const p=l.input.proposal;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));l.report.peopleVersion=hash(canonical(t));l.audit.peopleVersion=hash(canonical(t));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
   const h={...history};const v=buildExpenseVersion(later,{...h,people:h.people} as any,'t');
   assert.deepEqual([v.people[0].uf,v.people[0].party],['SP','X']);
 });
@@ -89,7 +89,7 @@ test('the party comes from the publication year, never from a later month of the
 test('a party change in the year keeps the uf of the latest month where the uf is single',()=>{
   const changed=structuredClone(lots());
   const t=changed[0].input.temporal;t.people[0].months=[{year:2025,month:1,uf:{status:'single',value:'SP'},party:{status:'single',value:'X'}},{year:2025,month:2,uf:{status:'single',value:'SP'},party:{status:'changed',value:null}}] as any;
-  for(const l of changed){l.input.temporal=t;const p=l.input.proposal;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
+  for(const l of changed){l.input.temporal=t;const p=l.input.proposal;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));l.report.peopleVersion=hash(canonical(t));l.audit.peopleVersion=hash(canonical(t));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
   const v=buildExpenseVersion(changed,history,'t');
   assert.deepEqual([v.people[0].uf,v.people[0].party],['SP','X']);
 });
@@ -97,7 +97,7 @@ test('a party change in the year keeps the uf of the latest month where the uf i
 const ev=(idLegislatura:number,siglaUf:string)=>({original:{idLegislatura,siglaUf}});
 function withFirst(months:any[],events:any[]){
   const changed=structuredClone(lots()),t=changed[0].input.temporal,h=structuredClone(history);t.people[0].months=months;t.people[0].events=events;t.historySha256=hash(canonical(h));
-  for(const l of changed){const p=l.input.proposal;l.input.temporal=t;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
+  for(const l of changed){const p=l.input.proposal;l.input.temporal=t;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));l.report.peopleVersion=hash(canonical(t));l.audit.peopleVersion=hash(canonical(t));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
   const v=buildExpenseVersion(changed,h,'t');return [v.people[0].uf,v.people[0].ufNote??null,v.people[1].uf,v.people[1].ufNote??null];
 }
 const unknown=[{year:2025,month:1,uf:{status:'unknown',value:null},party:{status:'single',value:'X'}}];
@@ -122,7 +122,7 @@ const partyOf=(months:any[],events:any[])=>{const v=withFirstPeople(months,event
 const direct=(events:any[],end='2025-12-31')=>{const r=partyFromEvents(events,57,'2025-01-01',end);return [r.value,r.note];};
 function withFirstPeople(months:any[],events:any[]){
   const changed=structuredClone(lots()),t=changed[0].input.temporal,h=structuredClone(history);t.people[0].months=months;t.people[0].events=events;t.historySha256=hash(canonical(h));
-  for(const l of changed){const p=l.input.proposal;l.input.temporal=t;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
+  for(const l of changed){const p=l.input.proposal;l.input.temporal=t;p.temporalSha256=hash(canonical(t));l.manifest.proposalSha256=hash(canonical(p));l.report.proposalSha256=l.manifest.proposalSha256;l.audit.proposalSha256=l.manifest.proposalSha256;l.manifest.inputSha256=hash(canonical(l.input));l.report.peopleVersion=hash(canonical(t));l.audit.peopleVersion=hash(canonical(t));const r=hash(canonical(l.report));l.manifest.reportSha256=r;l.audit.reportSha256=r;}
   return buildExpenseVersion(changed,h,'t').people;
 }
 test('events that agree inside the period give the party; other legislatures outside the period are ignored',()=>{
@@ -206,4 +206,18 @@ test('the flagged value of a duplicate month is the one published after the sign
   const v=buildExpenseVersion([lot(0,[1,2],[{...cell(1,'complete',[dup(0),dup(1)]),duplicateReason:'ambiguous-identical-occurrences'},cell(2,'held-review')]),lots()[1]],history,'t');
   assert.deepEqual(v.validation.duplicateCompetences,[{personId:1,month:1,reason:'ambiguous-identical-occurrences'}]);
   assert.equal(v.validation.totalCents,1000);assert.deepEqual(duplicateReviewItems(v).map(i=>[i.records,i.cents,i.monthCents]),[[2,1000,1000]]);
+});
+test('an API-sign month adds its count to the version and leaves the sign-fix accounting alone',async()=>{
+  const fixed=record(1,100,0),ls=[lot(0,[1,2],[{...cell(1,'complete',[fixed,sr(-500,500,null,1)]),diagnostics:{annualOnly:{},apiOnly:{},apiSignCorrected:1}},cell(2,'held-review')]),lots()[1]],v=buildExpenseVersion(ls,history,'t'),db=await openDB(true);
+  assert.deepEqual(v.validation.signFix,{count:1,deltaCents:1000});assert.deepEqual(v.validation.apiSignFix,{count:1});assert.equal(v.validation.independentTotalCents,String(v.validation.totalCents));
+  assert.deepEqual(signReviewItems(v.records,v.people).map(i=>i.recordId),['r1-1']);
+  try{
+    await publishDomain(db,'despesas',v);
+    assert.equal((await auditExpenseVersion(db,v,ls)).status,'passed');
+    assert.deepEqual((await auditExpenseVersion(db,{...v,validation:{...v.validation,apiSignFix:{count:2}}},ls)).failures,['api-sign-count']);
+  }finally{await db.close();}
+});
+test('a version without API-sign months has no apiSignFix key, so its content id is unchanged',()=>{
+  const v=buildExpenseVersion(lots(),history,'2026-11-09T12:00:00Z');
+  assert.equal('apiSignFix' in v.validation,false);assert.equal(v.id,snapshotId(v));
 });

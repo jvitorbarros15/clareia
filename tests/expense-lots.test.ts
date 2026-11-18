@@ -7,7 +7,7 @@ import type {TemporalReport} from '../src/people-temporal.ts';
 import type {CrosscheckReport} from '../src/people-legacy.ts';
 
 const months=(exercise:string,year=2025)=>Array.from({length:12},(_,i)=>({year,month:i+1,exercise}));
-const temporal=(people:{id:number;months:{year:number;month:number;exercise:string}[]}[])=>({people}) as unknown as TemporalReport;
+const temporal=(people:{id:number;months:{year:number;month:number;exercise:string}[]}[])=>({scope:{legislature:57,start:"2025-01-01",end:"2025-12-31"},people}) as unknown as TemporalReport;
 const discovery=(ids:number[],year=2025)=>({annuals:[{year,people:ids.map(id=>({id,months:[1],rows:1}))}]}) as unknown as DiscoveryReport;
 const cross={people:[]} as unknown as CrosscheckReport;
 
@@ -38,4 +38,24 @@ test('the lot proposal has the shape the collector and audit read, and pins the 
   assert.equal(p.year,2025);assert.equal(p.lots,2);assert.equal(p.universeSize,3);
   assert.equal(p.universeSha256,hash(canonical([1,2,3])));
   assert.equal(p.temporalSha256,hash(canonical(t)));assert.equal(p.crosscheckSha256,hash(canonical(cross)));
+});
+
+test('segment universes select exercise and annual evidence only in their requested months',()=>{
+  const t=temporal([{id:1,months:[{year:2025,month:1,exercise:'full'},{year:2025,month:2,exercise:'outside'}]},{id:2,months:[{year:2025,month:1,exercise:'outside'},{year:2025,month:2,exercise:'full'}]}]);
+  assert.deepEqual(lotUniverse(t,discovery([]),2025,[1]),[1]);
+  assert.deepEqual(lotUniverse(t,discovery([]),2025,[2]),[2]);
+  assert.deepEqual(lotUniverse(t,discovery([2]),2025,[1]),[1,2],'financial evidence cannot be dropped merely because exercise is outside');
+  const d={annuals:[{year:2025,people:[{id:99,months:[2],rows:1}]}]} as DiscoveryReport;
+  assert.deepEqual(lotUniverse(t,d,2025,[1]),[1]);
+  assert.throws(()=>lotUniverse(t,d,2025,[2]),/fora do histórico/);
+});
+
+test('lot proposals refuse incomplete, duplicated or partially scoped temporal competences',()=>{
+  for(const kind of ['missing','duplicate','partial']){
+    const t=temporal([{id:1,months:months('full')}]);
+    if(kind==='missing')t.people[0].months.shift();
+    if(kind==='duplicate')t.people[0].months.push(t.people[0].months[0]);
+    if(kind==='partial')t.people[0].months[0].partialScope=true;
+    assert.throws(()=>lotProposal(t,cross,discovery([1]),2025,0),/temporal/);
+  }
 });

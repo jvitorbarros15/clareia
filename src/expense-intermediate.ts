@@ -1,9 +1,10 @@
+import {validateExpenseTemporal} from './expense-period.ts';
 import {unzipSync} from 'fflate';
 import {BASE,canonical,hash,normalize,markDuplicates,stableDigest} from './model.ts';
 import type {Scope,Expense,DuplicateReason} from './model.ts';
 import {PeopleCapture,sourceAllowed} from './people-discovery.ts';
 import type {Capture} from './people-discovery.ts';
-import {parseAnnual,normalizeAnnual,unionRecords,annualUrl} from './annual.ts';
+import {parseAnnual,normalizeAnnual,unionRecords,pairApiSign,annualUrl} from './annual.ts';
 import {assertArchive} from './sources.ts';
 import {findCpfs} from './cpf-scan.ts';
 import type {TemporalReport,MonthlyCoverage} from './people-temporal.ts';
@@ -13,7 +14,7 @@ import {checkPortal,mapPortalIdentity} from './cota-portal.ts';
 import type {PortalCheck} from './cota-portal.ts';
 
 export type ExpenseSource=Capture&{pass:1|2};
-export type ExpenseCell={personId:number;year:number;month:number;status:'complete'|'no-expenses-confirmed'|'held-review'|'source-failure';reasons:string[];api:[{count:number|null;pages:ExpenseSource[]},{count:number|null;pages:ExpenseSource[]}];annualCount:number;exercise:MonthlyCoverage['exercise'];party:MonthlyCoverage['party'];uf:MonthlyCoverage['uf'];totalCents:number|null;records:Expense[];diagnostics:{annualOnly:Record<string,number>;apiOnly:Record<string,number>}|null;duplicateReason?:DuplicateReason};
+export type ExpenseCell={personId:number;year:number;month:number;status:'complete'|'no-expenses-confirmed'|'held-review'|'source-failure';reasons:string[];api:[{count:number|null;pages:ExpenseSource[]},{count:number|null;pages:ExpenseSource[]}];annualCount:number;exercise:MonthlyCoverage['exercise'];party:MonthlyCoverage['party'];uf:MonthlyCoverage['uf'];totalCents:number|null;records:Expense[];diagnostics:{annualOnly:Record<string,number>;apiOnly:Record<string,number>;apiSignCorrected?:number}|null;duplicateReason?:DuplicateReason};
 export type ExpenseBatch={schema:'clareia.expense-intermediate.v1';equationRule:'camara.ceap.correlated-net.v2';equationDecisions:EquationDecision[];equationHolds:EquationHold[];multiplicityRule:'camara.ceap.sigepa-publish-flag.v3';multiplicityDecisions:MultiplicityDecision[];portalRule:'camara.ceap.sigepa-portal-ledger.v1';portalRequested:boolean;portalChecks:PortalCheck[];contentSha256:string;scope:Scope;peopleVersion:string;proposalSha256:string;createdAt:string;status:'review-required';publicationEligible:false;annual:[{source:ExpenseSource;csvSha256:string;scanned:number},{source:ExpenseSource;csvSha256:string;scanned:number}];cells:ExpenseCell[];sources:ExpenseSource[];totalCents:number|null;metrics:{elapsedMs:number;maxRssKiB:number;sourceBytes:number;requests:number;retries:number;cacheHits:number;downloadedBytes:number}};
 export function expenseBatchContentId(report:ExpenseBatch):string{
   const {createdAt:_created,metrics:_metrics,contentSha256:_content,...body}=report;
@@ -73,8 +74,8 @@ export function privatePaths(value:unknown,known:Set<string>,at='report'):string
   return [];
 }
 export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,proposalSha256:string,one:PeopleCapture,two:PeopleCapture,options:{workers?:number;portal?:boolean;offline?:boolean;previous?:ExpenseBatch;wait?:(ms:number)=>Promise<void>;progress?:(pass:number,done:number,total:number)=>void}={}):Promise<ExpenseBatch>{
-  validateExpenseScope(scope);const start=Date.now(),workers=options.workers??2,known=new Set<string>();
-  if(!Number.isInteger(workers)||workers<1||workers>3||!/^[a-f0-9]{64}$/.test(proposalSha256)||scope.legislature!==temporal.scope.legislature||scope.ids.some(id=>!temporal.people.some(p=>p.id===id))||temporal.scope.start>`${scope.year}-01-01`||temporal.scope.end<`${scope.year}-12-31`)throw Error('Entradas financeiras incompatíveis');
+  validateExpenseScope(scope);validateExpenseTemporal(scope,temporal);const start=Date.now(),workers=options.workers??2,known=new Set<string>();
+  if(!Number.isInteger(workers)||workers<1||workers>3||!/^[a-f0-9]{64}$/.test(proposalSha256)||scope.legislature!==temporal.scope.legislature||scope.ids.some(id=>!temporal.people.some(p=>p.id===id)))throw Error('Entradas financeiras incompatíveis');
   const {data:contract}=await one.json(BASE+'/api-docs'),parameters=contract.paths?.['/deputados/{id}/despesas']?.get?.parameters;
   if(!Array.isArray(parameters)||['ano','mes','idLegislatura','itens','pagina','ordem','ordenarPor'].some(name=>!parameters.some((p:any)=>p.name===name&&p.in==='query')))throw Error('Contrato da API de despesas mudou');
   const firstAnnual=await expenseAnnual(one,scope,1);for(const id of firstAnnual.known)known.add(id);
@@ -129,14 +130,15 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
     }catch{c.reasons.push('financial-normalization-failed');continue;}
     // Identical rows are allowed; rows that differ only in the supplier would still share an id, so they stay held.
     try{stableDigest([...new Map(selected.map(r=>[canonical(r.raw),{personId:c.personId,raw:r.raw}])).values()]);}catch{c.reasons.push('supplier-only-difference');continue;}
-    c.diagnostics=unmatched(annual,apiRecords);
+    const paired=pairApiSign(annual,apiRecords);c.diagnostics={...unmatched(annual,paired.api),...(paired.fixed?{apiSignCorrected:paired.fixed}:{})};
     // Some receipts are numbered with the supplier's CPF: the number is hidden, the original stays sealed.
-    try{const union=unionRecords(annual,apiRecords).records;c.records=(dup?markDuplicates(union):union).map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));}catch{c.reasons.push('unreconciled-source-occurrences');continue;}
+    try{const union=unionRecords(annual,paired.api).records;c.records=(dup?markDuplicates(union):union).map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));}catch{c.reasons.push('unreconciled-source-occurrences');continue;}
     if(c.records.length&&c.exercise==='outside'){c.records=[];c.reasons.push('expense-outside-exercise');continue;}
     if(dup){if(c.records.filter(r=>r.duplicateFlag==='possible').length<2){c.records=[];c.reasons.push('duplicate-unconfirmed');continue;}c.duplicateReason=dup;}
     const sum=c.records.reduce((n,r)=>n+BigInt(r.cents),0n);if(sum>BigInt(Number.MAX_SAFE_INTEGER)||sum<BigInt(Number.MIN_SAFE_INTEGER))throw Error('Total financeiro fora do limite');
     c.totalCents=Number(sum);c.status=c.records.length?'complete':'no-expenses-confirmed';
   }
+  for(const c of cells)if(c.diagnostics&&c.status!=='complete')delete c.diagnostics.apiSignCorrected;
   const sources:ExpenseSource[]=[...one.captures.map(s=>({...s,pass:1 as const})),...two.captures.map(s=>({...s,pass:2 as const}))];
   const complete=cells.every(c=>c.status==='complete'||c.status==='no-expenses-confirmed'),sum=cells.reduce((n,c)=>n+BigInt(c.totalCents??0),0n);if(sum>BigInt(Number.MAX_SAFE_INTEGER)||sum<BigInt(Number.MIN_SAFE_INTEGER))throw Error('Total financeiro fora do limite');
   const stats=[one.stats,two.stats],report:ExpenseBatch={schema:'clareia.expense-intermediate.v1',equationRule:'camara.ceap.correlated-net.v2',equationDecisions:equationReview.decisions,equationHolds:equationReview.holds,multiplicityRule:'camara.ceap.sigepa-publish-flag.v3',multiplicityDecisions:multiplicityReview.decisions,portalRule:'camara.ceap.sigepa-portal-ledger.v1',portalRequested:options.portal===true,portalChecks,contentSha256:'',scope,peopleVersion:hash(canonical(temporal)),proposalSha256,createdAt:sources.map(s=>s.fetchedAt).sort().at(-1)!,status:'review-required',publicationEligible:false,annual:[firstAnnual,secondAnnual].map(a=>({source:a.source,csvSha256:a.csvSha256,scanned:a.scanned})) as ExpenseBatch['annual'],cells,sources,totalCents:complete?Number(sum):null,metrics:{elapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,sourceBytes:sources.reduce((n,s)=>n+s.bytes,0),requests:stats.reduce((n,s)=>n+s.requests,0),retries:stats.reduce((n,s)=>n+s.retries,0),cacheHits:stats.reduce((n,s)=>n+s.cacheHits,0),downloadedBytes:stats.reduce((n,s)=>n+s.downloadedBytes,0)}};

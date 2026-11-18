@@ -36,13 +36,15 @@ export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csv
   }
   const category=annual?r.txtDescricao:r.tipoDespesa;if(typeof category!=='string'||!category.trim())throw Error();
   const money=(field:string)=>annual&&!r[field]?.trim()||!annual&&field==='valorGlosa'&&r[field]===null?null:amount(r[field]);
-  const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis)throw Error();
+  const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis&&!(!annual&&inverted(face,glosa,net,category)))throw Error();
   const identity=String((annual?r.txtCNPJCPF:r.cnpjCpfFornecedor)||'').replace(/\D/g,''),verified=verifiedCnpj(identity),odd=identity.length>0&&identity.length!==11&&(!verified||identity.length===14&&identity.startsWith('000')&&cpfDigits(identity.slice(3)));
   const name=String((annual?r.txtFornecedor:r.nomeFornecedor)||'Fornecedor não informado').replace(/(?<![\d./])\d{3}[.  -]{0,2}\d{3}[.  -]{0,2}\d{3}[-–./  ]{0,3}\d{2}(?![\d/])/g,m=>/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/.test(m)||cpfDigits(m.replace(/\D/g,''))?'[CPF oculto]':m);
   let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(identity.length!==11&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
   const occurrence=hash(canonical({personId:id,raw:verified?r:{...r,[annual?'txtCNPJCPF':'cnpjCpfFornecedor']:null,[annual?'txtFornecedor':'nomeFornecedor']:null}}));
   return {id:occurrence,personId:id,year,month,category,supplier:identity.length===11?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,...(odd?{supplierIdOdd:true as const}:{}),documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
 }
+// Written again on purpose; the collector's predicate is not imported.
+const inverted=(face:number,glosa:number|null,net:number,category:string)=>glosa!==null&&glosa>=0&&face>0&&face-glosa>0&&net===-(face-glosa)&&!/AERE|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
 // A blank document is 'Não informado' in the annual file and '' in the API.
 const blank=(s:string)=>s==='Não informado'?'':s;
 // Independent of markDuplicates: repeated rows stay published; identical ones get distinct ids by occurrence order.
@@ -60,6 +62,15 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   if(report.schema!=='clareia.expense-intermediate.v1'||report.publicationEligible!==false||report.status!=='review-required')fail('publication-gate');
   if(canonical(report.scope)!==canonical(expectedScope)||report.peopleVersion!==hash(canonical(temporal))||report.proposalSha256!==proposalSha256)fail('input-version-or-scope');
   if(expectedScope.legislature!==temporal.scope.legislature)fail('temporal-legislature');
+  // Independently check closed months and historical coverage, using capture time.
+  const auditTime=new Date(report.createdAt).valueOf();
+  if(!Number.isFinite(auditTime)||!Number.isInteger(expectedScope.year)||expectedScope.year<2009||!expectedScope.months.length||expectedScope.months.length>12||!expectedScope.ids.length||new Set(expectedScope.ids).size!==expectedScope.ids.length||expectedScope.ids.some(id=>!Number.isSafeInteger(id)||id<1))fail('invalid-period');
+  for(const [i,month] of expectedScope.months.entries()){
+    if(!Number.isInteger(month)||month<1||month>12){fail('invalid-period');continue;}
+    const start=expectedScope.year+'-'+String(month).padStart(2,'0')+'-01',end=new Date(Date.UTC(expectedScope.year,month,0)).toISOString().slice(0,10);
+    if((i>0&&month!==expectedScope.months[i-1]+1)||Date.UTC(expectedScope.year,month,1)>auditTime||!temporal.scope.start||!temporal.scope.end||temporal.scope.start>start||temporal.scope.end<end)fail('invalid-period');
+    for(const id of expectedScope.ids){const cells=temporal.people.filter(p=>p.id===id).flatMap(p=>p.months.filter(m=>m.year===expectedScope.year&&m.month===month));if(cells.length!==1||cells[0].partialScope)fail('incomplete-temporal-period',{personId:id,month});}
+  }
   const stable=(v:any):any=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).filter(k=>k!=='fetchedAt').map(k=>[k,stable(v[k])])):v;
   const body=JSON.parse(JSON.stringify(report));delete body.createdAt;delete body.metrics;delete body.contentSha256;body.sources.sort((a:ExpenseSource,b:ExpenseSource)=>a.pass-b.pass||a.url.localeCompare(b.url));
   if(report.contentSha256!==hash(canonical(stable(body))))fail('logical-content-version');
@@ -154,9 +165,18 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
         if(!reasons.length){const first=new Map<string,string>();annual.forEach((r,i)=>{const raw=canonical(r.raw),seen=first.get(ar[i].id);if(seen!==undefined&&seen!==raw){reasons=['supplier-only-difference'];dup=null;}first.set(ar[i].id,raw);});}
         if(!reasons.length){
           const key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
+          // Leftover-only rule: an inverted API row takes the annual value when an annual leftover has that net, the same document value and the same glosa (a zero glosa may be blank in the annual file).
+          const rows=new Map<string,Expense[]>(),credit=new Map<string,number>(),used=new Set<Expense>(),credited=new Set<Expense>(),spare=(k:string)=>(rows.get(k)?.length??0)-(credit.get(k)??0);
+          for(const r of ar)rows.set(key(r),[...(rows.get(key(r))??[]),r]);const plain=(r:Expense)=>r.financialBasis||r.documentCents===null||!inverted(r.documentCents,r.disallowedCents,r.cents,r.category);
+          for(const r of [...br.filter(plain),...br.filter(r=>!plain(r))]){const k=key(r);if(spare(k)>0){credit.set(k,(credit.get(k)??0)+1);credited.add(r);}}
+          let signFixed=0;
+          br=br.map(r=>{if(credited.has(r)||plain(r))return r;
+            const face=r.documentCents!,glosa=r.disallowedCents!,net=face-glosa,k=key({...r,cents:net});if(spare(k)<=0)return r;
+            const partner=(rows.get(k)??[]).find(a=>!used.has(a)&&(a.documentCents===null?glosa===0:a.documentCents===face)&&(glosa===0?(a.disallowedCents??0)===0:a.disallowedCents===glosa));if(!partner)return r;
+            used.add(partner);credit.set(k,(credit.get(k)??0)+1);signFixed++;return {...r,cents:net};});
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
           for(const r of ar){const list=pool.get(key(r));if(list?.length)matches.push({a:r,b:list.shift()!});else left.push(r);}
-          const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right)};
+          const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right),...(signFixed?{apiSignCorrected:signFixed}:{})};
           if(matches.some(({a,b})=>blank(a.documentNumber)!==blank(b.documentNumber)||(a.date?.slice(0,10)||null)!==(b.date?.slice(0,10)||null)||(a.lot||'')!==(b.lot||''))||left.some(r=>!['TELEFONIA','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA'].includes(r.category))||right.some(r=>r.category!=='PASSAGEM AÉREA - SIGEPA'))reasons=['unreconciled-source-occurrences'];
           else{
             records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))];
@@ -171,6 +191,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
     }
     // Lots collected before the id rule changed hold old ids for suppliers that are not verified CNPJs; everything else, the review flag included, is still compared.
     const financial=(rows:any[])=>rows.map(({id:_id,supplierKey:_key,...rest})=>rest.supplierVerified?{id:_id,supplierKey:_key,...rest}:rest);
+    if(diagnostics&&status!=='complete')diagnostics={annualOnly:diagnostics.annualOnly,apiOnly:diagnostics.apiOnly};
     if(canonical({status,reasons,records:financial(records),totalCents:total,diagnostics,dup:reasons.length?null:dup})!==canonical({status:c.status,reasons:c.reasons,records:financial(c.records),totalCents:c.totalCents,diagnostics:c.diagnostics,dup:c.duplicateReason??null}))fail('financial-records-coverage-or-union',c);
     if(total===null)allComplete=false;else grand+=BigInt(total);
   }

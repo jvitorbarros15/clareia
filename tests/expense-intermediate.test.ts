@@ -161,13 +161,13 @@ test('an empty response identifying another competence cannot manufacture a zero
   const r=await setup(t,url=>url.includes('/2/despesas')&&url.includes('mes=2&')?{dados:[],links:[{rel:'self',href:url.replace('mes=2&','mes=1&')}]}:undefined);
   const cell=r.report.cells.find(c=>c.personId===2&&c.month===2)!;assert.equal(cell.status,'source-failure');assert.equal(cell.totalCents,null);assert.equal(r.report.totalCents,null);
 });
-test('financial CLI takes its lock before reading inputs and refuses a different selection without overwriting a run',async t=>{
+test('financial CLI refuses a different selection before reading inputs or touching a lock',async t=>{
   const cwd=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-financial-cli-'));t.after(()=>fs.rm(cwd,{recursive:true,force:true}));
   const root=path.join(cwd,'data/private/expense-intermediate/test-run'),keys=path.join(cwd,'data/private/people-discovery');await fs.mkdir(root,{recursive:true});await fs.mkdir(keys,{recursive:true});await fs.writeFile(path.join(keys,'local-vault-key'),randomBytes(32));
   const original=JSON.stringify({selectionRun:'original-selection',status:'review-required'});await fs.writeFile(path.join(root,'run.json'),original);
   const script=fileURLToPath(new URL('../scripts/collect-expense-intermediate.ts',import.meta.url)),args=['--import',import.meta.resolve('tsx'),script,'--local','--offline','--run','test-run','--selection-run','another-selection'];
   await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}));assert.equal(await fs.readFile(path.join(root,'run.json'),'utf8'),original);await assert.rejects(fs.stat(path.join(root,'running.lock')),{code:'ENOENT'});
-  await fs.writeFile(path.join(root,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('Outra tarefa possui'));assert.equal(await fs.readFile(path.join(root,'running.lock'),'utf8'),'keep');
+  await fs.writeFile(path.join(root,'running.lock'),'keep');await assert.rejects(promisify(execFile)(process.execPath,args,{cwd}),e=>typeof e==='object'&&e!==null&&'stderr' in e&&String(e.stderr).includes('Retomada incompat'));assert.equal(await fs.readFile(path.join(root,'running.lock'),'utf8'),'keep');
 });
 
 const sigepa=(month:number,overrides:Record<string,unknown>={})=>apiRow(month,{tipoDespesa:'PASSAGEM AÉREA - SIGEPA',codDocumento:'11',numDocumento:'T1',valorDocumento:500,valorLiquido:500,...overrides});
@@ -193,6 +193,16 @@ test('an annual file without numParcela stops the run',async t=>{
   const noParcel=zipSync({'Ano-2025.csv':strToU8(columns.replace(';numParcela','')+'\n'+annualLine().replace(/;0$/,'')+'\n')});
   await assert.rejects(setup(t,url=>url.endsWith('.zip')?noParcel:undefined));
 });
+
+test('an annual row from another legislature remains evidence and holds its competence',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine().replace(';57;',';56;')]):undefined);
+  const c=cell(r.report);
+  assert.equal(c.annualCount,1);assert.equal(c.status,'held-review');
+  assert.deepEqual(c.reasons,['financial-normalization-failed']);
+  assert.equal(c.totalCents,null);assert.deepEqual(c.records,[]);
+  // setup also independently audits both preserved captures.
+});
+
 test('the audit rejects a duplicate flag or marker on a month that has no repeated rows',async t=>{
   const r=await setup(t);const audit=()=>auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read);
   r.report.cells[0].records[0].duplicateFlag='possible';assert.ok((await audit()).failures.some(f=>f.code==='financial-records-coverage-or-union'));
@@ -252,4 +262,88 @@ test('an offline re-projection fails only on a failure the previous report did n
   assert.equal(cell(r.report,1,2).status,'source-failure');
   const again=await collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true,previous:r.report});assert.equal(cell(again,1,2).status,'source-failure');
   await assert.rejects(collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true}),/offline/);
+});
+const invertedApi=(overrides:Record<string,unknown>={})=>(url:string)=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{valorDocumento:10.21,valorGlosa:0,valorLiquido:-10.21,...overrides})],links:[]}:undefined;
+test('an inverted API net is taken from the annual value, counted for the month and not marked on the record',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?undefined:invertedApi()(url));
+  const c=r.report.cells[0];assert.equal(c.status,'complete');assert.deepEqual(c.reasons,[]);assert.equal(c.records.length,1);assert.equal(c.records[0].cents,1021);assert.equal(c.records[0].origin,'both');assert.equal(c.records[0].sourceCents,undefined);assert.equal(c.records[0].note,undefined);assert.equal(c.diagnostics?.apiSignCorrected,1);assert.equal(r.report.totalCents,1021);
+});
+test('an inverted API row with no annual partner or a different annual value keeps the month held',async t=>{
+  const none=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedApi()(url));
+  const empty=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,'COMBUSTÍVEIS','10.21','99')]):invertedApi()(url));
+  for(const r of [none,empty]){const c=r.report.cells[0];assert.equal(c.status,'held-review');assert.deepEqual(c.reasons,['unreconciled-source-occurrences']);assert.deepEqual(c.records,[]);assert.equal(c.diagnostics?.apiSignCorrected,undefined);}
+  const other=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,'COMBUSTÍVEIS','9.50')]):invertedApi()(url));
+  assert.deepEqual(other.report.cells[0].reasons,['unreconciled-source-occurrences']);assert.deepEqual(other.report.cells[0].records,[]);
+});
+test('a second inverted row with only one annual partner leaves the month held',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?undefined:url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{valorLiquido:-10.21}),apiRow(1,{valorLiquido:-10.21})],links:[]}:undefined);
+  assert.deepEqual(r.report.cells[0].reasons,['unreconciled-source-occurrences']);
+});
+test('two inverted rows with two annual partners are both taken from the annual file',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(),annualLine()]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{valorLiquido:-10.21}),apiRow(1,{valorLiquido:-10.21})],links:[]}:undefined);
+  const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.diagnostics?.apiSignCorrected,2);assert.equal(c.totalCents,2042);
+});
+test('airfare, housing, zero values and correct positives are not touched by the API sign rule',async t=>{
+  const sigepa=await setup(t,url=>url.endsWith('.zip')?undefined:invertedApi({tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})(url));
+  assert.deepEqual(sigepa.report.cells[0].reasons,['financial-normalization-failed']);
+  const housing='COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA',line=`1;2025;1;57;${housing};-10.21;10.21;;;Empresa;11222333000181;;N1;2025-01-02T00:00:00;;0`;
+  const both=await setup(t,url=>url.endsWith('.zip')?annual([line]):invertedApi({tipoDespesa:housing,codDocumento:null,codLote:null,parcela:null,valorGlosa:null})(url));
+  assert.equal(both.report.cells[0].status,'complete');assert.equal(both.report.cells[0].totalCents,-1021);assert.equal(both.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+  const zero=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,'COMBUSTÍVEIS','0.00')]):invertedApi({valorDocumento:0,valorLiquido:-0})(url));
+  assert.equal(zero.report.cells[0].status,'complete');assert.equal(zero.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+  const ok=await setup(t);assert.equal(ok.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+});
+test('an installment with an inverted API net stays held for review',async t=>{
+  const line=annualLine().replace(/;0$/,';1'),r=await setup(t,url=>url.endsWith('.zip')?annual([line]):invertedApi({parcela:1})(url));
+  assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+});
+test('the API sign rule never applies to airfare, mission or housing categories',async t=>{
+  for(const category of ['LOCAÇÃO OU FRETAMENTO DE AERONAVES','PASSAGEM AÉREA - RPA','PASSAGEM AÉREA - REEMBOLSO','PASSAGEM AÉREA - MISSÃO OFICIAL','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA','PASSAGEM AÉREA - SIGEPA']){
+    const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,category)]):invertedApi({tipoDespesa:category})(url));
+    assert.deepEqual(r.report.cells[0].reasons,['financial-normalization-failed'],category);assert.equal(r.report.cells[0].status,'held-review');
+  }
+});
+test('an inverted row with glosa null is not taken from the annual value',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?undefined:invertedApi({valorGlosa:null})(url));
+  assert.deepEqual(r.report.cells[0].reasons,['unreconciled-source-occurrences']);
+});
+test('a held month carries no API sign counter',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(),annualLine(1,1,'UNREVIEWED')]):invertedApi()(url));
+  assert.equal(r.report.cells[0].status,'held-review');assert.equal(r.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+});
+test('an inverted row and a legitimate refund of the same value complete in either API order',async t=>{
+  const refund=annualLine(1,1,'COMBUSTÍVEIS','-10.21'),inverted=apiRow(1,{valorLiquido:-10.21}),legit=apiRow(1,{valorDocumento:-10.21,valorLiquido:-10.21});
+  for(const dados of [[inverted,legit],[legit,inverted]]){
+    const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(),refund]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados,links:[]}:undefined);
+    const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.totalCents,0);assert.equal(c.diagnostics?.apiSignCorrected,1);
+  }
+});
+const withGlosa=(net:string,face:string,glosa:string)=>annualLine().replace(';10.21;10.21;0;',`;${net};${face};${glosa};`);
+const invertedGlosa=(overrides:Record<string,unknown>={})=>invertedApi({valorDocumento:10.21,valorGlosa:2,valorLiquido:-8.21,...overrides});
+test('an inverted API row with glosa takes the annual value when document and glosa match, and is counted',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','2')]):invertedGlosa()(url));
+  const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.totalCents,821);assert.equal(c.records[0].cents,821);assert.equal(c.records[0].documentCents,1021);assert.equal(c.records[0].disallowedCents,200);assert.equal(c.records[0].origin,'both');assert.equal(c.diagnostics?.apiSignCorrected,1);
+});
+test('an inverted API row with glosa stays held unless the annual net, document and glosa all match',async t=>{
+  const held=async(reply:(url:string)=>unknown,code='unreconciled-source-occurrences')=>{const r=await setup(t,reply as any);assert.deepEqual(r.report.cells[0].reasons,[code]);assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.cells[0].diagnostics?.apiSignCorrected,undefined);};
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','11.21','3')]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('7.21','9.21','2')]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','0')].map(l=>l.replace(';8.21;10.21;0;',';10.21;10.21;0;'))):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','2').replace('COMBUSTÍVEIS','PASSAGEM AÉREA - SIGEPA')]):invertedGlosa({tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})(url),'financial-normalization-failed');
+  await held(url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedGlosa({valorDocumento:5,valorGlosa:8,valorLiquido:3})(url),'financial-normalization-failed');
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','')]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','','2')]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('10.21','12.21','2')]):invertedApi()(url));
+});
+test('an annual row with the inverted shape is never fixed: the month stays held in the collector and the audit',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([withGlosa('-8.21','10.21','2')]):url.includes('/despesas')?{dados:[],links:[]}:undefined);
+  assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.cells[0].diagnostics,null);
+});
+test('an inverted row finds its annual partner whichever order the annual rows come in',async t=>{
+  const plain=withGlosa('8.21','8.21','0'),glosa=withGlosa('8.21','10.21','2'),dados=[apiRow(1,{valorDocumento:10.21,valorGlosa:2,valorLiquido:8.21}),apiRow(1,{valorDocumento:8.21,valorGlosa:0,valorLiquido:-8.21})];
+  for(const lines of [[plain,glosa],[glosa,plain]]){
+    const r=await setup(t,url=>url.endsWith('.zip')?annual(lines):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados,links:[]}:undefined);
+    const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.totalCents,1642);assert.equal(c.diagnostics?.apiSignCorrected,1);
+  }
 });
