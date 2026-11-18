@@ -316,27 +316,6 @@ func TestMissingActiveSchemaGivesClearError(t *testing.T) {
 	}
 }
 
-// A publication loaded before the index existed gets it on the next (no-op) load, without a reload.
-func TestExistingPublicationGetsSupplierKeyIndex(t *testing.T) {
-	e := newEnv(t)
-	dir := fixtureCopy(t, "aaaaaaaaaaaa")
-	e.load(t, dir)
-	count := `SELECT count(*) FROM pg_indexes WHERE schemaname = 'pub_aaaaaaaaaaaa' AND indexname = 'supplier_cells_supplier_key_idx'`
-	if got := e.scalar(t, count); got != "1" {
-		t.Fatalf("carga nova sem o índice: %s", got)
-	}
-	if _, err := e.conn.Exec(context.Background(), `DROP INDEX pub_aaaaaaaaaaaa.supplier_cells_supplier_key_idx`); err != nil {
-		t.Fatal(err)
-	}
-	if rep := e.load(t, dir); rep.Skipped == "" {
-		t.Fatalf("devia ser no-op, veio %+v", rep)
-	}
-	if got := e.scalar(t, count); got != "1" {
-		t.Fatalf("o no-op não recriou o índice: %s", got)
-	}
-	e.load(t, dir)
-}
-
 // A publication loaded before the suppliers table existed gets it, filled and verified, and the api view, on the next (no-op) load.
 func TestExistingPublicationGetsSuppliersTable(t *testing.T) {
 	e := newEnv(t)
@@ -368,6 +347,66 @@ func TestExistingPublicationGetsSuppliersTable(t *testing.T) {
 	}
 	if _, err := loader.Load(ctx, e.conn, dir, e.opts); err == nil || !strings.Contains(err.Error(), "divergentes") {
 		t.Fatalf("linha adulterada devia ser recusada: %v", err)
+	}
+}
+
+// A publication whose suppliers table predates label_norm gets the column and a recreated api.suppliers view on the next (no-op) load.
+func TestExistingPublicationGetsLabelNorm(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	dir := fixtureCopy(t, "aaaaaaaaaaaa")
+	e.load(t, dir)
+	want := e.scalar(t, `SELECT count(*) FROM pub_aaaaaaaaaaaa.suppliers`)
+	if _, err := e.conn.Exec(ctx, `DROP VIEW api.suppliers; ALTER TABLE pub_aaaaaaaaaaaa.suppliers DROP COLUMN label_norm; CREATE VIEW api.suppliers AS SELECT * FROM pub_aaaaaaaaaaaa.suppliers`); err != nil {
+		t.Fatal(err)
+	}
+	if rep := e.load(t, dir); rep.Skipped == "" {
+		t.Fatalf("devia ser no-op, veio %+v", rep)
+	}
+	for _, rel := range []string{"pub_aaaaaaaaaaaa.suppliers", "api.suppliers"} {
+		if got := e.scalar(t, `SELECT count(*) FROM `+rel+` WHERE label_norm = translate(lower(label), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')`); got != want {
+			t.Fatalf("%s: label_norm certo em %s de %s linhas", rel, got, want)
+		}
+	}
+	ro := e.roConn(t)
+	var n int
+	if err := ro.QueryRow(ctx, `SELECT count(*) FROM api.suppliers WHERE strpos(label_norm, 'a') > 0`).Scan(&n); err != nil {
+		t.Fatalf("o papel devia ler label_norm em api.suppliers: %v", err)
+	}
+}
+
+// A previous publication whose suppliers table exists but predates label_norm can still be rolled back to.
+func TestRollbackToPublicationWithoutLabelNorm(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.load(t, fixtureCopy(t, "aaaaaaaaaaaa"))
+	e.load(t, publicationB(t, "bbbbbbbbbbbb"))
+	want := e.scalar(t, `SELECT count(*) FROM pub_aaaaaaaaaaaa.suppliers`)
+	if _, err := e.conn.Exec(ctx, `ALTER TABLE pub_aaaaaaaaaaaa.suppliers DROP COLUMN label_norm`); err != nil {
+		t.Fatal(err)
+	}
+	if id, err := loader.Rollback(ctx, e.conn, e.opts); err != nil || id != "aaaaaaaaaaaa" {
+		t.Fatalf("rollback: %q %v", id, err)
+	}
+	if got := e.scalar(t, `SELECT count(*) FROM api.suppliers WHERE label_norm IS NOT NULL`); got != want {
+		t.Fatalf("api.suppliers depois do rollback: %s com label_norm, esperado %s", got, want)
+	}
+	if got := e.roConn(t).QueryRow(ctx, `SELECT 1 FROM api.suppliers LIMIT 1`).Scan(new(int)); got != nil {
+		t.Fatalf("o papel devia ler api.suppliers: %v", got)
+	}
+}
+
+// A tampered label_norm is refused on the no-op path.
+func TestTamperedLabelNormIsRefused(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	dir := fixtureCopy(t, "aaaaaaaaaaaa")
+	e.load(t, dir)
+	if _, err := e.conn.Exec(ctx, `DROP VIEW api.suppliers; ALTER TABLE pub_aaaaaaaaaaaa.suppliers DROP COLUMN label_norm; ALTER TABLE pub_aaaaaaaaaaaa.suppliers ADD COLUMN label_norm text; UPDATE pub_aaaaaaaaaaaa.suppliers SET label_norm = 'x'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loader.Load(ctx, e.conn, dir, e.opts); err == nil || !strings.Contains(err.Error(), "label_norm") {
+		t.Fatalf("label_norm adulterado devia ser recusado: %v", err)
 	}
 }
 

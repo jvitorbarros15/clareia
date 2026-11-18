@@ -19,7 +19,7 @@ Everything here is a measurement of Go + pgx + JSON serialization over loopback.
 | Publication | `b571fe73c261` (226,510 expense records, 592 deputies, 562 with data) |
 | Not recorded | Docker/WSL CPU and memory limits for the Postgres VM (unknown), Postgres settings (appear to be the image defaults: the supplier aggregation sorts through 14.5 MB of temp files, consistent with the 4 MB `work_mem` default), antivirus and other background load (unknown) |
 
-Raw environment and per-run process CPU are in `results/run*/env.json` and `results/run*/*/*.proc.json`. CPU numbers are the CPU time of the server and of k6 divided by wall time (1.0 = one core fully busy); the Postgres figure is one `docker stats` sample taken mid-run, in percent of one core, so 280% means about 2.8 cores.
+Raw environment and per-run process CPU were in `results/run*/env.json` and `results/run*/*/*.proc.json`. CPU numbers are the CPU time of the server and of k6 divided by wall time (1.0 = one core fully busy); the Postgres figure is one `docker stats` sample taken mid-run, in percent of one core, so 280% means about 2.8 cores.
 
 ## Method
 
@@ -226,3 +226,5 @@ Complete plans: `results/run1/explain-with-indexes.txt` and `results/run1/explai
 ## Files
 
 `run.ps1` (everything), `tables.ps1` (tables), `mix.js` (open-model mix), `etag.js` (304 vs 200), `fixture.sql` (ids from the active publication), `explain.sql`, `static/main.go` (baseline server), `results/run1` and `results/run2` (k6 summaries as small JSON, one `*.proc.json` per run with exit code and CPU, `env.json`, `tables.md`, EXPLAIN output).
+
+The raw per-probe k6 JSON and `.proc.json` files of this benchmark were deleted; the tables are kept in `run1/tables.md` and `run2/tables.md`, with `env.json` and the EXPLAIN text.
