@@ -72,7 +72,7 @@ test('changed exercise, affiliation and duplicate count between passes prevent u
 test('month comparisons keep boundary days, open ends and unknown exercise separate without filling gaps',async t=>{
   const r=await setup(t,id=>xml(id,period('31/01/2025','01/02/2025')));
   assert.equal(r.cross.people[0].months[0].legacy,'boundary-only');assert.equal(r.cross.people[0].months[1].legacy,'boundary-only');assert.equal(r.cross.people[0].months[2].legacy,'no-listed-period');
-  const h=structuredClone(r.h);h.people[0].events=h.people[0].events.map(e=>({...e,situacao:'CONVOCADO'}));h.references.states.push({nome:'Convocado',sigla:'CONVOCADO'});
+  const h=structuredClone(r.h);h.people[0].events=h.people[0].events.map(e=>({...e,situacao:'ESTADO_NOVO'}));
   const temporal=deriveTemporalHistory(h),legacy=structuredClone(r.legacy);legacy.historySha256=hash(canonical(h));const cross=compareLegacy(legacy,h,temporal);
   assert.equal(cross.people[0].months[0].comparison,'no-automatic-resolution');
   const open=await setup(t);assert.equal(open.cross.people[0].months[0].openEnd,true);
@@ -88,10 +88,15 @@ test('party matches use date and pair of parties, preserve minute differences an
   assert.equal((await auditLegacy(unmatched.legacy,unmatched.cross,unmatched.h,unmatched.temporal,unmatched.d,unmatched.read)).status,'passed');
 });
 test('ineligible v2 histories do not manufacture legacy-only party changes',async t=>{
-  const r=await setup(t),h=structuredClone(r.h);h.people[0].events.push(event(1,{dataHora:'2022-01-01T00:00:00'}));
+  const r=await setup(t),h=structuredClone(r.h);h.people[0].events.push(event(1,{dataHora:'2025-02-30T00:00:00'}));
   const temporal=deriveTemporalHistory(h),legacy=structuredClone(r.legacy);legacy.historySha256=hash(canonical(h));const cross=compareLegacy(legacy,h,temporal);
   assert.equal(cross.people[0].partyComparisonStatus,'unavailable');assert.deepEqual(cross.people[0].partyChanges,[]);assert.equal((await auditLegacy(legacy,cross,h,temporal,r.d,r.read)).status,'passed');
   cross.people[0].partyComparisonStatus='compared';assert.ok((await auditLegacy(legacy,cross,h,temporal,r.d,r.read)).failures.some(f=>f.code==='party-comparison-eligibility'));
+});
+test('an event dated outside the legislature does not make the party comparison unavailable',async t=>{
+  const r=await setup(t),h=structuredClone(r.h);h.people[0].events.push(event(1,{dataHora:'2022-01-01T00:00:00'}));
+  const temporal=deriveTemporalHistory(h),legacy=structuredClone(r.legacy);legacy.historySha256=hash(canonical(h));const cross=compareLegacy(legacy,h,temporal);
+  assert.equal(cross.people[0].partyComparisonStatus,'compared');assert.equal((await auditLegacy(legacy,cross,h,temporal,r.d,r.read)).status,'passed');
 });
 test('intermediate proposal preserves pilot IDs, hard-case reasons and missing annual data without declaring zero or approval',async t=>{
   const r=await setup(t),d=structuredClone(r.d);d.annuals=[{year:2025,scanned:2,selected:2,people:[{id:1,months:[1,2],rows:2}],issues:[]}];

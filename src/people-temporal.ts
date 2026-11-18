@@ -32,12 +32,17 @@ function join(values:Dimension[]):Dimension{
   if(values.some(v=>v.status==='unknown')||known.length!==1)return {status:'unknown',value:null,rows,reasons};
   return {status:'known',value:known[0],rows,reasons};
 }
-function stateFor(events:NormalizedEvent[],references:Set<string>){
-  const exercise=events.map(({row,original:e})=>{
+// A suplente must take the oath within 30 days of the convocation.
+const CONVOCATION_DAYS=30;
+const isConvocado=(e:NormalizedEvent)=>!!e.original.situacao&&fold(e.original.situacao)==='convocado';
+const withinConvocationWindow=(from:string,next:string|null)=>next!==null&&Date.parse(next+'Z')-Date.parse(from+'Z')<=CONVOCATION_DAYS*86400000;
+function stateFor(events:NormalizedEvent[],references:Set<string>,next:string|null=null){
+  const known=(raw:string)=>!!STATES[raw]&&(references.has(raw)||(raw==='fim_mandato'&&references.has('fim de mandato'))),decided=events.some(e=>!isConvocado(e)&&!!e.original.situacao&&known(fold(e.original.situacao)));
+  const exercise=(decided?events.filter(e=>!isConvocado(e)):events).map(({row,time,original:e})=>{
     if(!e.situacao)return unknown('missing-exercise-state',[row]);
     const raw=fold(e.situacao),isAlias=raw==='fim_mandato'&&references.has('fim de mandato');
     if(!references.has(raw)&&!isAlias)return unknown('unrecognized-exercise-state',[row]);
-    const value=Object.hasOwn(STATES,raw)?STATES[raw]:null;
+    const value=raw==='convocado'?(withinConvocationWindow(time!,next)?'out-of-office' as const:null):Object.hasOwn(STATES,raw)?STATES[raw]:null;
     return value?{status:'known' as const,value,rows:[row],reasons:[]}:unknown('unconfirmed-exercise-state',[row]);
   });
   const party=events.map(({row,original:e})=>e.siglaPartido?.trim()?{status:'known' as const,value:e.siglaPartido.trim(),rows:[row],reasons:[]}:unknown('missing-party',[row]));
@@ -69,7 +74,7 @@ export function deriveTemporalPerson(person:HistoryPerson,report:Pick<HistoryRep
   // An event dated in the window but filed under another legislature can carry a real change.
   const foreignInWindow=events.some(e=>e.disposition==='other-legislature'&&e.time!==null&&e.time>=start&&e.time<end);
   if(foreignInWindow)issues.push('other-legislature-event-in-window');
-  const blocked=foreignInWindow||person.status!=='stable'||events.some(e=>e.disposition==='invalid-date'||e.disposition==='outside-legislature');
+  const blocked=foreignInWindow||person.status!=='stable'||events.some(e=>e.disposition==='invalid-date');
   const references=new Set(report.references.states.map(s=>fold(s.nome)));
   const usable=events.filter(e=>e.disposition==='usable').sort((a,b)=>a.time!.localeCompare(b.time!)||a.row-b.row),groups=new Map<string,NormalizedEvent[]>();
   for(const e of usable)groups.set(e.time!,[...(groups.get(e.time!)||[]),e]);
@@ -79,7 +84,7 @@ export function deriveTemporalPerson(person:HistoryPerson,report:Pick<HistoryRep
     const since=points[i],until=points[i+1];
     const preceding=[...groups.keys()].filter(t=>t<=since).sort().at(-1);
     const reason=blocked?'history-not-eligible-for-derivation':'no-prior-history-event';
-    const state=blocked||!preceding?{exercise:unknown(reason),party:unknown(reason),uf:unknown(reason)}:stateFor(groups.get(preceding)!,references);
+    const state=blocked||!preceding?{exercise:unknown(reason),party:unknown(reason),uf:unknown(reason)}:stateFor(groups.get(preceding)!,references,[...groups.keys()].sort().find(t=>t>preceding)??null);
     intervals.push({start:since,end:until,...state});
   }
   const months:MonthlyCoverage[]=[];

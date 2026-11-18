@@ -102,15 +102,19 @@ export async function auditTemporalHistory(history:HistoryReport,temporal:Tempor
       return {row,original,...stamp,disposition};
     });
     if(canonical(normalized)!==canonical(result.events))failures.push({id:person.id,code:'temporal-event-provenance'});
-    const usable=normalized.filter(e=>e.disposition==='usable'),foreignEvent=normalized.some(e=>e.disposition==='other-legislature'&&e.time!==null&&e.time>=windowStart&&e.time<windowEnd),blocked=foreignEvent||state!=='stable'||normalized.some(e=>e.disposition==='invalid-date'||e.disposition==='outside-legislature');
+    const usable=normalized.filter(e=>e.disposition==='usable'),foreignEvent=normalized.some(e=>e.disposition==='other-legislature'&&e.time!==null&&e.time>=windowStart&&e.time<windowEnd),blocked=foreignEvent||state!=='stable'||normalized.some(e=>e.disposition==='invalid-date');
     const expectedIssues=[...new Set([...person.issues,...(normalized.some(e=>e.disposition==='outside-legislature')?['selected-legislature-date-mismatch']:[]),...(foreignEvent?['other-legislature-event-in-window']:[])])].sort();
     if(canonical(expectedIssues)!==canonical(result.issues))failures.push({id:person.id,code:'person-issues'});
     const stateAt=(time:string):State=>{
       if(blocked)return vacant();
       const previous=usable.filter(e=>e.time!<=time).sort((a,b)=>b.time!.localeCompare(a.time!))[0]?.time;
       if(!previous)return vacant();
-      const latest=usable.filter(e=>e.time===previous);
-      return {exercise:merge(latest.map(e=>({row:e.row,value:inOffice(e.original.situacao)}))),party:merge(latest.map(e=>({row:e.row,value:e.original.siglaPartido?.trim()||null}))),uf:merge(latest.map(e=>({row:e.row,value:allowedUfs.has(e.original.siglaUf??'')?e.original.siglaUf:null})))};
+      const latest=usable.filter(e=>e.time===previous),convocado=(e:typeof latest[number])=>clean(e.original.situacao??'')==='convocado';
+      const next=usable.map(e=>e.time!).filter(t=>t>previous).sort()[0]??null;
+      // Suplente's posse deadline: a convocation only counts as absence when the next event is within 30 days.
+      const soon=next!==null&&Date.parse(next+'Z')-Date.parse(previous+'Z')<=30*86400000;
+      const decided=latest.some(e=>!convocado(e)&&inOffice(e.original.situacao)!==null),exerciseEvents=decided?latest.filter(e=>!convocado(e)):latest;
+      return {exercise:merge(exerciseEvents.map(e=>({row:e.row,value:convocado(e)&&allowedStates.has('convocado')?(soon?'out-of-office':null):inOffice(e.original.situacao)}))),party:merge(latest.map(e=>({row:e.row,value:e.original.siglaPartido?.trim()||null}))),uf:merge(latest.map(e=>({row:e.row,value:allowedUfs.has(e.original.siglaUf??'')?e.original.siglaUf:null})))};
     };
     const boundaries=[...new Set([windowStart,windowEnd,...usable.map(e=>e.time!).filter(t=>t>windowStart&&t<windowEnd)])].sort();
     const expectedIntervals=boundaries.slice(0,-1).map((start,i)=>({start,end:boundaries[i+1],...stateAt(start)}));
