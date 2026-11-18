@@ -147,6 +147,16 @@ func TestOpenAPIMatchesServer(t *testing.T) {
 	s := loadSpec(t)
 	e, _ := loaded(t)
 	rec := fixtureRecords(t, dep180)[3]["id"].(string)
+	var supKey string
+	for _, x := range e.get(t, "/v1/suppliers?limit=500").json(t)["suppliers"].([]any) {
+		if k, ok := x.(map[string]any)["key"].(string); ok {
+			supKey = k
+			break
+		}
+	}
+	if supKey == "" {
+		t.Fatal("a fixture não tem fornecedor com chave")
+	}
 
 	// Every route the server has, with a request for each documented status. The spec must have exactly these paths.
 	calls := []struct {
@@ -170,6 +180,13 @@ func TestOpenAPIMatchesServer(t *testing.T) {
 		{"/v1/expenses/{public_id}", "/v1/expenses/" + rec, "200"},
 		{"/v1/expenses/{public_id}", "/v1/expenses/" + strings.Repeat("a", 64), "404"},
 		{"/v1/expenses/{public_id}", "/v1/expenses/x", "400"},
+		{"/v1/suppliers", "/v1/suppliers?limit=50", "200"},
+		{"/v1/suppliers", "/v1/suppliers?q=ab", "400"},
+		{"/v1/suppliers", "/v1/suppliers?cursor=" + testCursor("aaaaaaaaaaaa", "x"), "409"},
+		{"/v1/suppliers/{key}", "/v1/suppliers/" + strings.Repeat("0", 64), "404"},
+		{"/v1/suppliers/{key}", "/v1/suppliers/x", "400"},
+		{"/v1/suppliers/{key}", "/v1/suppliers/" + supKey, "200"},
+		{"/v1/categories", "/v1/categories", "200"},
 	}
 	seen := map[string]bool{}
 	for _, c := range calls {

@@ -204,15 +204,9 @@ func (s *Server) expenses(ctx context.Context, tx pgx.Tx, r *http.Request, pub s
 	if aerr != nil {
 		return nil, aerr
 	}
-	limit := defaultLimit
-	if v, ok, aerr := opt(q, "limit"); aerr != nil {
+	limit, aerr := limitParam(q)
+	if aerr != nil {
 		return nil, aerr
-	} else if ok {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > maxLimit {
-			return nil, errBadRequest("limit deve ser de 1 a " + strconv.Itoa(maxLimit))
-		}
-		limit = n
 	}
 	after := -1
 	if v, ok, aerr := opt(q, "cursor"); aerr != nil {
@@ -223,7 +217,7 @@ func (s *Server) expenses(ctx context.Context, tx pgx.Tx, r *http.Request, pub s
 			return nil, errBadRequest(err.Error())
 		}
 		if cp != pub {
-			return nil, &apiError{http.StatusConflict, "stale_cursor", "o cursor é da publicação " + cp + " e a ativa é " + pub + ": recomece a listagem sem cursor"}
+			return nil, staleCursor(cp, pub)
 		}
 		after = seq
 	}

@@ -80,6 +80,7 @@ CREATE TABLE supplier_cells (
 );
 CREATE INDEX ON expenses (supplier_key);
 CREATE INDEX ON supplier_cells (label);
+CREATE INDEX supplier_cells_supplier_key_idx ON supplier_cells (supplier_key);
 `
 
 // Tables the api views point to. publication goes first: requests hold a lock on api.publication, so activation waits for them before it touches any other view (the reverse order deadlocks).

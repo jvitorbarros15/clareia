@@ -210,6 +210,159 @@ func TestContractAgainstRealPublication(t *testing.T) {
 		withData++
 		records += len(file)
 	}
+
+	// Phase 3: suppliers and categories against fornecedores.json and summary.json.
+	f := readFornecedores(t, dir)
+	type cellKey struct {
+		dep, month int
+		cat, label string
+	}
+	wantCells := map[string]map[cellKey][2]int64{}
+	wantTotal := map[string][3]int64{}
+	wantDeps := map[string]map[int]bool{}
+	fileCells := 0
+	for k, cells := range f.People {
+		var dep int
+		fmt.Sscan(k, &dep)
+		for _, c := range cells {
+			l := f.Suppliers[int(c[2])]
+			ck := cellKey{dep, int(c[0]), f.Categories[int(c[1])], l}
+			if wantCells[l] == nil {
+				wantCells[l] = map[cellKey][2]int64{}
+			}
+			wantCells[l][ck] = [2]int64{int64(c[3]), int64(c[4])}
+			w := wantTotal[l]
+			if wantDeps[l] == nil {
+				wantDeps[l] = map[int]bool{}
+			}
+			wantDeps[l][dep] = true
+			wantTotal[l] = [3]int64{w[0] + int64(c[3]), w[1] + int64(c[4]), 0}
+			fileCells++
+		}
+	}
+	if len(wantCells) != len(f.Suppliers) {
+		t.Fatalf("fornecedores.json repete rótulos: %d distintos de %d", len(wantCells), len(f.Suppliers))
+	}
+	supStart := time.Now()
+	seenLabels, keyedCells, keylessCells, keyless, detailReqs := 0, 0, 0, 0, 0
+	cursor := ""
+	prevLabel := ""
+	for n := 0; ; n++ {
+		path := "/v1/suppliers?limit=500"
+		if cursor != "" {
+			path += "&cursor=" + url.QueryEscape(cursor)
+		}
+		r := get(path, fmt.Sprintf("suppliers/list-%03d.json", n))
+		conforms("/v1/suppliers", path, r)
+		var pg struct {
+			Suppliers []struct {
+				Label      string  `json:"label"`
+				Key        *string `json:"key"`
+				Verified   bool    `json:"verified"`
+				TotalCents int64   `json:"totalCents"`
+				Records    int64   `json:"records"`
+				Deputies   int     `json:"deputies"`
+			} `json:"suppliers"`
+			NextCursor *string `json:"nextCursor"`
+		}
+		if err := json.Unmarshal(r.body, &pg); err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range pg.Suppliers {
+			if prevLabel != "" && prevLabel >= s.Label {
+				t.Fatalf("fornecedores fora de ordem ou repetidos em %q", s.Label)
+			}
+			prevLabel = s.Label
+			seenLabels++
+			w, ok := wantCells[s.Label]
+			if !ok {
+				t.Fatalf("rótulo da API que não está no fornecedores.json: %q", s.Label)
+			}
+			if s.Deputies != len(wantDeps[s.Label]) {
+				t.Fatalf("rótulo %q: %d deputados pela API, %d no arquivo", s.Label, s.Deputies, len(wantDeps[s.Label]))
+			}
+			if tot := wantTotal[s.Label]; s.TotalCents != tot[0] || s.Records != tot[1] {
+				t.Fatalf("rótulo %q: total da API %d/%d, arquivo %d/%d", s.Label, s.TotalCents, s.Records, tot[0], tot[1])
+			}
+			if s.Key == nil {
+				if s.Verified {
+					t.Fatalf("rótulo %q: sem chave mas verified", s.Label)
+				}
+				keyless++
+				keylessCells += len(w)
+				continue
+			}
+			dp := "/v1/suppliers/" + *s.Key
+			dr := get(dp, "suppliers/"+*s.Key+".json")
+			detailReqs++
+			conforms("/v1/suppliers/{key}", dp, dr)
+			var det struct {
+				Label string `json:"label"`
+				Cells []struct {
+					DeputyID int    `json:"deputyId"`
+					Month    int    `json:"month"`
+					Category string `json:"category"`
+					Cents    int64  `json:"cents"`
+					Records  int64  `json:"records"`
+				} `json:"cells"`
+			}
+			if err := json.Unmarshal(dr.body, &det); err != nil {
+				t.Fatal(err)
+			}
+			if det.Label != s.Label || len(det.Cells) != len(w) {
+				t.Fatalf("fornecedor %q: %d células pela API, %d no arquivo", s.Label, len(det.Cells), len(w))
+			}
+			for _, c := range det.Cells {
+				if got := w[cellKey{c.DeputyID, c.Month, c.Category, s.Label}]; got != [2]int64{c.Cents, c.Records} {
+					t.Fatalf("fornecedor %q: célula %d/%d/%s difere do arquivo", s.Label, c.DeputyID, c.Month, c.Category)
+				}
+			}
+			keyedCells += len(det.Cells)
+		}
+		if pg.NextCursor == nil {
+			break
+		}
+		cursor = *pg.NextCursor
+	}
+	if seenLabels != len(f.Suppliers) || keyedCells+keylessCells != fileCells {
+		t.Fatalf("fornecedores: %d rótulos (esperado %d), %d+%d células (esperado %d)", seenLabels, len(f.Suppliers), keyedCells, keylessCells, fileCells)
+	}
+
+	catResp := get("/v1/categories", "categories.json")
+	conforms("/v1/categories", "/v1/categories", catResp)
+	var cb struct {
+		TotalCents int64 `json:"totalCents"`
+		Categories []struct {
+			Category string `json:"category"`
+			Cents    int64  `json:"cents"`
+			Records  int    `json:"records"`
+		} `json:"categories"`
+	}
+	if err := json.Unmarshal(catResp.body, &cb); err != nil {
+		t.Fatal(err)
+	}
+	wantCat := map[string][2]int64{}
+	for _, p := range summary.People {
+		for _, c := range p.Categories {
+			w := wantCat[c.Category]
+			wantCat[c.Category] = [2]int64{w[0] + c.Cents, w[1] + int64(c.Records)}
+		}
+	}
+	var catSum int64
+	if len(cb.Categories) != len(wantCat) {
+		t.Fatalf("categorias: %d, summary.json tem %d", len(cb.Categories), len(wantCat))
+	}
+	for _, c := range cb.Categories {
+		if wantCat[c.Category] != [2]int64{c.Cents, int64(c.Records)} {
+			t.Fatalf("categoria %q difere do summary.json", c.Category)
+		}
+		catSum += c.Cents
+	}
+	if catSum != summary.TotalCents || cb.TotalCents != summary.TotalCents {
+		t.Fatalf("categorias somam %d, totalCents %d, summary %d", catSum, cb.TotalCents, summary.TotalCents)
+	}
+	t.Logf("fornecedores: %d rótulos (%d sem chave), %d células do fornecedores.json conferidas (%d por detalhe em %d requisições, %d sem chave por total), %d categorias somando %d centavos, em %s",
+		seenLabels, keyless, fileCells, keyedCells, detailReqs, keylessCells, len(cb.Categories), catSum, time.Since(supStart).Round(time.Millisecond))
 	t.Logf("publicação %s: %d deputados com dados, %d sem dados (listas vazias), %d registros iguais ao despesas.json, %d meses retidos com cents null, %d registros avulsos, %d requisições em %s",
 		pub, withData, empty, records, heldMonths, singles, requests, time.Since(start).Round(time.Millisecond))
 }
