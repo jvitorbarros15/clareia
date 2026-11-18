@@ -32,7 +32,9 @@ export function buildPeopleCoverage(temporal:TemporalReport,crosscheck:Crosschec
       const key=monthKey(m.year,m.month),compared=check.months.find(x=>x.year===m.year&&x.month===m.month);
       if(!compared)throw new Error('Competência sem cruzamento de fontes');
       const uncrossed=m.exercise!=='outside'&&(stale||compared.comparison==='unavailable'||check.partyComparisonStatus==='unavailable'),exerciseReview=compared.comparison==='potential-conflict'||uncrossed,partyReview=exerciseReview||firstDispute!==null&&key>=firstDispute;
-      return {personId:person.id,year:m.year,month:m.month,exercise:m.exercise,partyStatus:partyReview?'review':m.party.status,party:partyReview||m.party.status!=='single'?null:m.party.value,partyValues:m.party.status==='changed'&&!partyReview?m.party.values:[],ufStatus:exerciseReview?'review':m.uf.status,uf:exerciseReview||m.uf.status!=='single'?null:m.uf.value,review:partyReview,partialScope:m.partialScope};
+      // The cross-check never compares UF: only a contradicted month blanks it, a month with no second source keeps its own.
+      const ufReview=compared.comparison==='potential-conflict';
+      return {personId:person.id,year:m.year,month:m.month,exercise:m.exercise,partyStatus:partyReview?'review':m.party.status,party:partyReview||m.party.status!=='single'?null:m.party.value,partyValues:m.party.status==='changed'&&!partyReview?m.party.values:[],ufStatus:ufReview?'review':m.uf.status,uf:ufReview||m.uf.status!=='single'?null:m.uf.value,review:partyReview,partialScope:m.partialScope};
     });
   });
   const body={schema:'clareia.people-coverage.v1' as const,metric:'camara.people.monthly-coverage.v1' as const,scope:temporal.scope,temporalSha256,crosscheckSha256:hash(canonical(crosscheck)),collectedAt:temporal.createdAt,rows};
@@ -94,7 +96,7 @@ export async function auditPeopleCoverage(db:DB,id:string,temporal:TemporalRepor
     const conflict=crosscheck.people.find(p=>p.id===row.personId)?.months.find(m=>m.year===row.year&&m.month===row.month)?.comparison==='potential-conflict';
     const exerciseHold=conflict||source.exercise!=='outside'&&(exerciseFlag.has(key)||crossUnavailable.has(row.personId)),partyHold=exerciseHold||(partyFrom.has(row.personId)&&stamp(row.year,row.month)>=partyFrom.get(row.personId)!);
     if(row.review!==partyHold||row.exercise!==source.exercise||row.partialScope!==source.partialScope)failures.push('state-'+key);
-    const expectedParty=partyHold?{s:'review',v:null}:{s:source.party.status,v:source.party.status==='single'?source.party.value:null},expectedUf=exerciseHold?{s:'review',v:null}:{s:source.uf.status,v:source.uf.status==='single'?source.uf.value:null};
+    const expectedParty=partyHold?{s:'review',v:null}:{s:source.party.status,v:source.party.status==='single'?source.party.value:null},expectedUf=conflict?{s:'review',v:null}:{s:source.uf.status,v:source.uf.status==='single'?source.uf.value:null};
     const expectedValues=!partyHold&&source.party.status==='changed'?source.party.values:[];
     if(row.partyStatus!==expectedParty.s||row.party!==expectedParty.v||row.ufStatus!==expectedUf.s||row.uf!==expectedUf.v||canonical(row.partyValues)!==canonical(expectedValues))failures.push('attribution-'+key);
   }

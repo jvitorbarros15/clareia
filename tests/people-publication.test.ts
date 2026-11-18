@@ -35,10 +35,10 @@ test('a party change only one source reports puts that month and every later mon
   const later=temporal(),rows=buildPeopleCoverage(later,crosscheck(later,'no-automatic-resolution',[{legacyRow:0,v2Row:null,day:'2025-02-10',before:'PL',after:'PSD',status:'v2-only-change'}]),passed(later),published).rows;
   assert.deepEqual(rows.map(r=>[r.month,r.party,r.review]),[[1,'PL',false],[2,null,true]]);
 });
-test('a month the cross-check could not run publishes no party or UF, unless the person was outside',()=>{
+test('a month the cross-check could not run publishes no party but keeps its own UF, unless the person was outside',()=>{
   const t=temporal();t.people[0].months[1].exercise='outside';t.people[0].months[1].party={status:'not-applicable',value:null,values:[],rows:[]};t.people[0].months[1].uf={status:'not-applicable',value:null,values:[],rows:[]};
   const rows=buildPeopleCoverage(t,crosscheck(t,'unavailable'),passed(t),published).rows;
-  assert.deepEqual(rows.map(r=>[r.partyStatus,r.party,r.uf,r.review]),[['review',null,null,true],['not-applicable',null,null,false]]);
+  assert.deepEqual(rows.map(r=>[r.partyStatus,r.party,r.uf,r.review]),[['review',null,'SP',true],['not-applicable',null,null,false]]);
 });
 test('a month with a party change lists the parties without choosing one',()=>{
   const t=temporal();t.people[0].months[0].party={status:'changed',value:null,values:['PL','PSD'],rows:[0,1]};
@@ -89,9 +89,21 @@ test('a party conflict sends that month and the following ones to review',()=>{
 test('an event of another legislature after the last known state holds the person, unless it agrees',async()=>{
   const event=(disposition:string,time:string,siglaPartido:string)=>({row:0,precision:'minute',disposition,time,original:{id:1,idLegislatura:disposition==='usable'?57:56,dataHora:time,situacao:'Exercício',condicaoEleitoral:'Titular',siglaPartido,siglaUf:'SP',descricaoStatus:'x'}}) as TemporalReport['people'][number]['events'][number];
   const held=temporal();held.people[0].events=[event('usable','2023-02-01T12:00:00','PL'),event('other-legislature','2023-03-01T12:00:00','PSD')];
-  const rows=buildPeopleCoverage(held,crosscheck(held),passed(held),published).rows;assert.deepEqual(rows.map(r=>[r.party,r.uf,r.review]),[[null,null,true],[null,null,true]]);
+  const rows=buildPeopleCoverage(held,crosscheck(held),passed(held),published).rows;assert.deepEqual(rows.map(r=>[r.party,r.uf,r.review]),[[null,'SP',true],[null,'SP',true]]);
   const before=temporal();before.people[0].events=[event('other-legislature','2023-01-30T12:00:00','PSD'),event('usable','2023-02-01T12:00:00','PL')];
   assert.equal(buildPeopleCoverage(before,crosscheck(before),passed(before),published).rows[0].party,'PL');
   const db=await openDB(true);
   try{const c=crosscheck(held),v=buildPeopleCoverage(held,c,passed(held),published);await storePeopleCoverage(db,v);assert.equal((await auditPeopleCoverage(db,v.id,held,c)).status,'passed');}finally{await db.close();}
+});
+
+test('the audit passes on UF kept for a month with no second source and fails if that UF is tampered with',async()=>{
+  const db=await openDB(true);
+  try{
+    const t=temporal(),c=crosscheck(t,'unavailable'),coverage=buildPeopleCoverage(t,c,passed(t),published);
+    assert.deepEqual(coverage.rows.map(r=>[r.ufStatus,r.uf,r.partyStatus]),[['single','SP','review'],['single','SP','review']]);
+    await storePeopleCoverage(db,coverage);
+    assert.equal((await auditPeopleCoverage(db,coverage.id,t,c)).status,'passed');
+    await db.query(`UPDATE people_coverage_v1 SET record=jsonb_set(record,'{uf}','"RJ"') WHERE publication_id=$1 AND month=1`,[coverage.id]);
+    const tampered=await auditPeopleCoverage(db,coverage.id,t,c);assert.equal(tampered.status,'failed');assert.ok(tampered.failures.includes('attribution-1:2025:1')||tampered.failures.some(f=>f.startsWith('attribution-')));
+  }finally{await db.close();}
 });
