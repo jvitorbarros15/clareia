@@ -19,6 +19,8 @@ import type {SiteOptions} from './prerender.ts';
 import {generateShareImages} from './share-images.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
 import type {SiteCeiling} from './ceiling-site.ts';
+import {fileEntry,monthlyTables,quirkCounts,zipOf} from './open-data.ts';
+import type {OpenData} from './open-data.ts';
 
 const DOMAINS:Domain[]=['pessoas','despesas','votacoes','projetos','eleicoes','emendas'];
 const MAX_FILES=15000,MAX_BYTES=10*1024*1024;
@@ -108,7 +110,9 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const supplierSummary=buildSupplierSummary(summary,allRecords,supplierNames),suppliers=JSON.stringify(supplierSummary);if(scanCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
   await fs.writeFile(path.join(data,'fornecedores.json'),suppliers);
   const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
-  await fs.writeFile(path.join(data,'index.json'),JSON.stringify({...meta,snapshotId,withoutData,...siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)}));
+  const indexJson=JSON.stringify({...meta,snapshotId,withoutData,...siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)});
+  await fs.writeFile(path.join(data,'index.json'),indexJson);
+  await writeOpenData(data,active.scope.ids.flatMap(id=>recordsOf.get(id)??[]),{summary:summaryJson,suppliers,index:indexJson},summary.people.flatMap(p=>p.months.filter(m=>m.held).map(()=>({personId:p.id}))),{year:active.scope.year,publishedAt:active.publishedAt,collectedAt:active.collectedAt});
   for(const file of ['index.html','404.html','data.js','pages.js','analytics.js','app.js','portal.js','styles.css','_headers','icon.svg','apple-touch-icon.png','favicon-32.png','site.webmanifest','icon-192.png','icon-512.png','icon-maskable-512.png'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
   await fs.mkdir(path.join(outDir,'fonts'));
   for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
@@ -123,12 +127,24 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names);
   await writeStaticPages(outDir,siteOptions);
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
-  checkLimits(files.length,Math.max(...sizes));
+  // The all-months zip is the one file allowed past 10 MiB; zipOf already keeps it under the 25 MiB Workers asset limit.
+  checkLimits(files.length,Math.max(...sizes.filter((_,i)=>!files[i].endsWith('.zip'))));
   await fs.rm(finalDir,{recursive:true,force:true});
   await fs.rename(outDir,finalDir);
   return {publicationId,files:files.length,names:{withheld:rows(withheldNames),kept:rows(keptNames)},review:[...ufReviewItems(active.people),...[...oddIds].map(([id,n])=>({id,name:active.people.find(p=>p.id===id)?.name??'',used:n+' registros',from:'identificador do fornecedor fora do formato'}))]};
 }
 
+// Everything is cut from the same records written for the site, so a download is never newer or wider than the pages.
+async function writeOpenData(data:string,records:ReturnType<typeof withSupplierLabels>,json:{summary:string;suppliers:string;index:string},held:{personId:number}[],meta:{year:number;publishedAt:string;collectedAt:string}):Promise<void>{
+  const dir=path.join(data,'abertos'),tables=monthlyTables(records),files:OpenData['files']=[],zipName=`despesas-${meta.year}.zip`;
+  await fs.mkdir(dir);
+  const zip=zipOf(tables,meta.publishedAt);
+  if(zip){await fs.writeFile(path.join(dir,zipName),zip);files.push(fileEntry(zipName,'abertos/'+zipName,zip,'zip',records.length));}
+  for(const t of tables){await fs.writeFile(path.join(dir,t.name),t.text);files.push(fileEntry(t.name,'abertos/'+t.name,t.text,'month',t.records));}
+  for(const [name,text] of [['summary.json',json.summary],['fornecedores.json',json.suppliers],['index.json',json.index]])files.push(fileEntry(name,name,text,'json'));
+  const manifest:OpenData={schema:'clareia.open-data.v1',year:meta.year,publishedAt:meta.publishedAt,collectedAt:meta.collectedAt,files,quirks:quirkCounts(records,held,{withheld:WITHHELD,individual:'Fornecedor pessoa física'})};
+  await fs.writeFile(path.join(data,'dados-abertos.json'),JSON.stringify(manifest));
+}
 const WITHHELD='Nome não exibido pelo Clareia',LABELS=new Set(['Fornecedor pessoa física',WITHHELD,'Fornecedor não informado']);
 const rows=(m:Map<string,{count:number;cents:number}>)=>[...m].map(([name,t])=>({name,...t})).sort((a,c)=>c.cents-a.cents);
 // Typed supplier names the owner approved to stay public (config/supplier-names-public.json, exact names).
