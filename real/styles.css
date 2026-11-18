@@ -1087,3 +1087,7 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 
 .doc-main h4.api-h{text-transform:none;letter-spacing:0;font-size:16px;margin:40px 0 10px}
 .doc-table+.doc-table{margin-top:24px}
+
+.pix-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:12px 0 0}
+.pix-key{font-size:18px;font-weight:700;overflow-wrap:anywhere;user-select:all}
+.pix-copy{min-height:44px;min-width:44px}
