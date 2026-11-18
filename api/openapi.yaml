@@ -86,12 +86,99 @@ paths:
         '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/ExpenseOne'}}}}
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /v1/suppliers:
+    get:
+      summary: Supplier labels with totals, ordered by label
+      operationId: listSuppliers
+      description: |
+        One row per label (`supplierLabel` when published, else `supplier`). Rows with a verified CNPJ key have `key` and
+        `verified: true`. Labels without a key (generic labels such as an individual or a withheld name) appear as one row each
+        with `key: null`, `verified: false` and no detail page; they are never split or merged. `q` is a substring match on the
+        label, ignoring case and the common Portuguese accents (á, ç, ñ and so on). Order is by label in byte order, so pages are stable.
+        `nextCursor` is tied to one publication (409 after it changes).
+      parameters:
+        - {name: q, in: query, required: false, description: 'Substring of the label, 3 to 100 characters.', schema: {type: string, minLength: 3, maxLength: 100}}
+        - {name: cursor, in: query, required: false, description: '`nextCursor` of the previous page.', schema: {type: string}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 500, default: 100}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierList'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /v1/suppliers/{key}:
+    get:
+      summary: Cells of one verified supplier, per deputy, month and category
+      operationId: getSupplier
+      description: Only verified CNPJ keys. An unknown key, or a label without key, answers 404.
+      parameters:
+        - {name: key, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{64}$'}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierDetail'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /v1/categories:
+    get:
+      summary: Total per category, summed from the per-person categories
+      operationId: listCategories
+      description: The server checks that the categories add up to `totalCents` (and the records to `records`); if not it answers 500 instead of a wrong total.
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/CategoryTotals'}}}}
 components:
   responses:
     Error:
       description: Error. 400 bad_request, 404 not_found, 405 method_not_allowed, 409 stale_cursor, 503 unavailable.
       content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
   schemas:
+    SupplierRow:
+      type: object
+      required: [label, key, verified, totalCents, records, deputies]
+      additionalProperties: false
+      properties:
+        label: {type: string}
+        key: {type: [string, 'null'], description: 'CNPJ-derived key (64 hex); null for labels without a verified key.'}
+        verified: {type: boolean}
+        totalCents: {type: integer}
+        records: {type: integer}
+        deputies: {type: integer, description: Number of distinct deputies with cells under this label.}
+    SupplierList:
+      type: object
+      required: [publication, suppliers, nextCursor]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        suppliers: {type: array, items: {$ref: '#/components/schemas/SupplierRow'}}
+        nextCursor: {type: [string, 'null'], description: Null on the last page.}
+    SupplierCell:
+      type: object
+      required: [deputyId, month, category, cents, records]
+      additionalProperties: false
+      properties:
+        deputyId: {type: integer}
+        month: {type: integer, minimum: 1, maximum: 12}
+        category: {type: string}
+        cents: {type: integer}
+        records: {type: integer}
+    SupplierDetail:
+      type: object
+      required: [publication, key, label, verified, totalCents, records, deputies, cells]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        key: {type: string}
+        label: {type: string}
+        verified: {type: boolean}
+        totalCents: {type: integer}
+        records: {type: integer}
+        deputies: {type: integer}
+        cells: {type: array, items: {$ref: '#/components/schemas/SupplierCell'}}
+    CategoryTotals:
+      type: object
+      required: [publication, totalCents, records, categories]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        totalCents: {type: integer}
+        records: {type: integer}
+        categories: {type: array, items: {$ref: '#/components/schemas/Category'}}
     Error:
       type: object
       required: [error, message]

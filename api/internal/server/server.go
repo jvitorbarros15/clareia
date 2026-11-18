@@ -42,6 +42,9 @@ func New(pool *pgxpool.Pool, version string) http.Handler {
 	s.route("/v1/deputies/{id}", s.deputy)
 	s.route("/v1/deputies/{id}/expenses", s.expenses)
 	s.route("/v1/expenses/{public_id}", s.expense)
+	s.route("/v1/suppliers", s.suppliers)
+	s.route("/v1/suppliers/{key}", s.supplier)
+	s.route("/v1/categories", s.categories)
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errNotFound("rota não existe"))
 	})
