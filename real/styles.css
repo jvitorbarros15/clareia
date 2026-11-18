@@ -412,7 +412,7 @@ body[data-model=editorial] .map-canvas{padding:32px}
 body[data-model=editorial] .uf-map{display:block;width:100%;max-width:640px;height:auto;margin:8px auto 0}
 body[data-model=editorial] .uf-tile.strong text{fill:var(--on-accent)}
 body[data-model=editorial] .atlas-detail{padding:32px 0 32px 40px}
-@media (max-width:760px){
+@media (max-width:800px){
   body[data-model=editorial] .atlas-grid{grid-template-columns:1fr}
   body[data-model=editorial] .map-canvas{display:flex;flex-direction:column;padding:20px 16px;margin:0 -16px}
   body[data-model=editorial] .map-canvas>.map-select{order:-1;margin:0 0 16px}
