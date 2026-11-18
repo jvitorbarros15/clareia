@@ -2,6 +2,9 @@ package loader_test
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
+	"strings"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +28,7 @@ func TestLoadFixture(t *testing.T) {
 	if len(rep.Results) < 15 {
 		t.Errorf("só %d conferências rodaram", len(rep.Results))
 	}
-	if got := e.scalar(t, `SELECT count(*) FROM api.expenses`); got != itoa(pub.Summary.Records) {
+	if got := e.scalar(t, `SELECT count(*) FROM api.expenses`); got != strconv.Itoa(pub.Summary.Records) {
 		t.Errorf("api.expenses tem %s linhas, summary diz %d", got, pub.Summary.Records)
 	}
 	if got := e.states(t); got != pub.FolderID+"=active" {
@@ -33,7 +36,7 @@ func TestLoadFixture(t *testing.T) {
 	}
 
 	held := e.scalar(t, `SELECT count(*) FROM api.deputy_months WHERE held AND cents IS NULL AND held_reasons IS NOT NULL`)
-	if held != itoa(len(pub.Validation.HeldCompetences)) || held == "0" {
+	if held != strconv.Itoa(len(pub.Validation.HeldCompetences)) || held == "0" {
 		t.Errorf("meses retidos com cents nulo e motivos: %s, esperado %d", held, len(pub.Validation.HeldCompetences))
 	}
 	for _, id := range pub.Index.WithoutData {
@@ -73,23 +76,17 @@ func TestLoadFixture(t *testing.T) {
 	}
 }
 
-func TestInterruptedLoadIsRedone(t *testing.T) {
+func TestLoadedSchemaIsNeverReloaded(t *testing.T) {
 	e := newEnv(t)
-	dir := fixtureDir(t)
-	pub, _ := loader.Read(dir)
-	ctx := context.Background()
-	if err := loader.EnsureBase(ctx, e.conn, e.opts); err != nil {
-		t.Fatal(err)
+	dir := fixtureCopy(t, "aaaaaaaaaaaa")
+	e.load(t, dir)
+	before := e.scalar(t, `SELECT sum(cents) FROM api.expenses`)
+	editRecords(t, firstExpenses(t, dir), func(r []map[string]any) { r[0]["cents"] = json.Number("1") })
+	if rep := e.load(t, dir); rep.Skipped == "" {
+		t.Fatalf("pasta ativa devia ser no-op, veio %+v", rep)
 	}
-	if _, err := e.conn.Exec(ctx, `CREATE SCHEMA pub_`+pub.FolderID+`; CREATE TABLE pub_`+pub.FolderID+`.publication (verified boolean); INSERT INTO pub_`+pub.FolderID+`.publication VALUES (false)`); err != nil {
-		t.Fatal(err)
-	}
-	rep := e.load(t, dir)
-	if rep.Skipped != "" || len(rep.Results) == 0 {
-		t.Fatalf("schema sem a marca devia ser recarregado: %+v", rep)
-	}
-	if got := e.scalar(t, `SELECT count(*) FROM api.expenses`); got != itoa(pub.Summary.Records) {
-		t.Errorf("api.expenses: %s", got)
+	if got := e.scalar(t, `SELECT sum(cents) FROM api.expenses`); got != before {
+		t.Fatalf("a recarga mexeu no schema ativo: %s -> %s", before, got)
 	}
 }
 
@@ -97,7 +94,7 @@ func TestInterruptedLoadIsRedone(t *testing.T) {
 func TestChecksRefuseTamperedFolders(t *testing.T) {
 	cases := map[string]func(t *testing.T, dir string){
 		"valor de um registro": func(t *testing.T, dir string) {
-			editRecords(t, firstExpenses(t, dir), func(r []map[string]any) { r[0]["cents"] = jsonNumber("1") })
+			editRecords(t, firstExpenses(t, dir), func(r []map[string]any) { r[0]["cents"] = json.Number("1") })
 		},
 		"fornecedor de um registro": func(t *testing.T, dir string) {
 			editRecords(t, firstExpenses(t, dir), func(r []map[string]any) { r[0]["supplier"] = "OUTRO FORNECEDOR LTDA"; delete(r[0], "supplierLabel") })
@@ -108,7 +105,7 @@ func TestChecksRefuseTamperedFolders(t *testing.T) {
 			}
 		},
 		"total do summary": func(t *testing.T, dir string) {
-			editJSON(t, filepath.Join(dir, "summary.json"), func(m map[string]any) { m["totalCents"] = jsonNumber("1") })
+			editJSON(t, filepath.Join(dir, "summary.json"), func(m map[string]any) { m["totalCents"] = json.Number("1") })
 		},
 		"mês retido fora de heldCompetences": func(t *testing.T, dir string) {
 			editJSON(t, filepath.Join(dir, "index.json"), func(m map[string]any) {
@@ -118,14 +115,14 @@ func TestChecksRefuseTamperedFolders(t *testing.T) {
 		},
 		"deputado com dados em withoutData": func(t *testing.T, dir string) {
 			editJSON(t, filepath.Join(dir, "index.json"), func(m map[string]any) {
-				m["withoutData"] = append(m["withoutData"].([]any), jsonNumber(filepath.Base(filepath.Dir(firstExpenses(t, dir)))))
+				m["withoutData"] = append(m["withoutData"].([]any), json.Number(filepath.Base(filepath.Dir(firstExpenses(t, dir)))))
 			})
 		},
 		"célula de fornecedor": func(t *testing.T, dir string) {
 			editJSON(t, filepath.Join(dir, "fornecedores.json"), func(m map[string]any) {
 				for _, cells := range m["people"].(map[string]any) {
 					if list := cells.([]any); len(list) > 0 {
-						list[0].([]any)[3] = jsonNumber("1")
+						list[0].([]any)[3] = json.Number("1")
 						return
 					}
 				}
@@ -245,5 +242,38 @@ func TestOnlyOnePreviousIsKept(t *testing.T) {
 	}
 	if e.schemaExists(t, "aaaaaaaaaaaa") {
 		t.Fatal("a terceira publicação mais antiga devia ter sido apagada")
+	}
+}
+
+func TestActivationSurvivesChangedViewColumns(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.load(t, fixtureCopy(t, "aaaaaaaaaaaa"))
+	if _, err := e.conn.Exec(ctx, `DROP VIEW api.publication; CREATE VIEW api.publication AS SELECT folder_id, 1 AS extra FROM pub_aaaaaaaaaaaa.publication`); err != nil {
+		t.Fatal(err)
+	}
+	e.load(t, publicationB(t, "bbbbbbbbbbbb"))
+	if got := e.states(t); got != "aaaaaaaaaaaa=previous,bbbbbbbbbbbb=active" {
+		t.Fatalf("estados: %s", got)
+	}
+}
+
+func TestOlderThanActiveIsRefused(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	at := func(dir, ts string) string {
+		editJSON(t, filepath.Join(dir, "index.json"), func(m map[string]any) { m["publishedAt"] = ts })
+		return dir
+	}
+	e.load(t, at(fixtureCopy(t, "aaaaaaaaaaaa"), "2026-06-10T00:00:00Z"))
+	if _, err := loader.Load(ctx, e.conn, at(publicationB(t, "bbbbbbbbbbbb"), "2026-06-09T00:00:00Z"), e.opts); err == nil || !strings.Contains(err.Error(), "--rollback") {
+		t.Fatalf("publicação mais antiga devia ser recusada: %v", err)
+	}
+	if e.schemaExists(t, "bbbbbbbbbbbb") || e.states(t) != "aaaaaaaaaaaa=active" {
+		t.Fatalf("a recusa deixou rastro: %s", e.states(t))
+	}
+	e.load(t, at(publicationB(t, "cccccccccccc"), "2026-06-11T00:00:00Z"))
+	if _, err := loader.Rollback(ctx, e.conn, e.opts); err != nil {
+		t.Fatalf("rollback devia seguir permitido: %v", err)
 	}
 }

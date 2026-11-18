@@ -19,7 +19,7 @@ type Result struct {
 
 type Options struct {
 	RoleName     string
-	RolePassword string
+	RolePassword string // only Setup uses it
 	Out          io.Writer
 }
 
@@ -33,7 +33,6 @@ type Report struct {
 	FolderID string
 	Skipped  string
 	Results  []Result
-	Elapsed  time.Duration
 }
 
 func schemaOf(id string) string { return "pub_" + id }
@@ -42,7 +41,6 @@ const lockKey = 7415220
 
 // Load puts one publication folder in schema pub_<id>, checks it against the files, and makes it the active one.
 func Load(ctx context.Context, conn *pgx.Conn, dir string, o Options) (*Report, error) {
-	start := time.Now()
 	pub, err := Read(dir)
 	if err != nil {
 		return nil, err
@@ -63,44 +61,33 @@ func Load(ctx context.Context, conn *pgx.Conn, dir string, o Options) (*Report, 
 	if state != nil && *state == "revoked" {
 		return nil, fmt.Errorf("publicação %s foi revogada e não volta", pub.FolderID)
 	}
-	loaded, err := loadedAndVerified(ctx, conn, pub.FolderID)
-	if err != nil {
-		return nil, err
-	}
-	switch {
-	case loaded && state != nil:
-		rep.Skipped = "já carregada e conferida, estado " + *state
-		rep.Elapsed = time.Since(start)
-		return rep, nil
-	case loaded:
-		o.printf("pub_%s já conferida mas sem ativação: só ativa\n", pub.FolderID)
-	default:
-		if _, err := conn.Exec(ctx, `DROP SCHEMA IF EXISTS `+schemaOf(pub.FolderID)+` CASCADE`); err != nil {
+	if state == nil {
+		if err := refuseOlderThanActive(ctx, conn, pub); err != nil {
 			return nil, err
 		}
+	}
+	var exists bool
+	if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = $1)`, schemaOf(pub.FolderID)).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if string(pub.DomainVersion) == "{}" {
+		o.printf("aviso: manifest.json ausente ou sem domínios, domain_versions fica vazio\n")
+	}
+	// A schema exists only if its load committed with every check passed, so it is never dropped or reloaded.
+	switch {
+	case exists && state != nil:
+		rep.Skipped = "já carregada e conferida, estado " + *state
+		return rep, nil
+	case exists:
+		o.printf("pub_%s já conferida mas sem ativação: só ativa\n", pub.FolderID)
+	default:
 		results, err := loadAndCheck(ctx, conn, pub, o)
 		rep.Results = results
 		if err != nil {
 			return rep, err
 		}
 	}
-	if err := activate(ctx, conn, pub, o); err != nil {
-		return rep, err
-	}
-	rep.Elapsed = time.Since(start)
-	return rep, nil
-}
-
-func loadedAndVerified(ctx context.Context, conn *pgx.Conn, id string) (bool, error) {
-	var exists bool
-	if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = $1)`, schemaOf(id)).Scan(&exists); err != nil || !exists {
-		return false, err
-	}
-	var verified bool
-	if err := conn.QueryRow(ctx, `SELECT coalesce((SELECT verified FROM `+schemaOf(id)+`.publication), false)`).Scan(&verified); err != nil {
-		return false, nil
-	}
-	return verified, nil
+	return rep, activate(ctx, conn, pub, o)
 }
 
 func loadAndCheck(ctx context.Context, conn *pgx.Conn, pub *Publication, o Options) ([]Result, error) {
@@ -134,9 +121,6 @@ func loadAndCheck(ctx context.Context, conn *pgx.Conn, pub *Publication, o Optio
 		if !r.OK {
 			return results, fmt.Errorf("conferência falhou: %s (%s); nada foi carregado", r.Name, r.Detail)
 		}
-	}
-	if _, err := tx.Exec(ctx, `UPDATE publication SET verified = true`); err != nil {
-		return results, err
 	}
 	return results, tx.Commit(ctx)
 }
@@ -266,3 +250,26 @@ UPDATE supplier_cells c SET supplier_key = k.supplier_key
 FROM (SELECT coalesce(record->>'supplierLabel', record->>'supplier') AS label, min(supplier_key) AS supplier_key
       FROM expenses WHERE verified GROUP BY 1) k
 WHERE c.label = k.label`
+
+// A folder published before the active one could bring back data a newer publication withheld. Going back is --rollback only.
+func refuseOlderThanActive(ctx context.Context, conn *pgx.Conn, pub *Publication) error {
+	at, err := time.Parse(time.RFC3339, pub.Index.PublishedAt)
+	if err != nil {
+		return fmt.Errorf("index.publishedAt inválido: %w", err)
+	}
+	var activeID string
+	if err := conn.QueryRow(ctx, `SELECT folder_id FROM api.publications WHERE state = 'active'`).Scan(&activeID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	var activeAt *time.Time
+	if err := conn.QueryRow(ctx, `SELECT published_at FROM `+schemaOf(activeID)+`.publication`).Scan(&activeAt); err != nil {
+		return err
+	}
+	if activeAt != nil && at.Before(*activeAt) {
+		return fmt.Errorf("publicação %s (publishedAt %s) é mais antiga que a ativa %s (%s): para voltar use --rollback", pub.FolderID, at.Format(time.RFC3339), activeID, activeAt.Format(time.RFC3339))
+	}
+	return nil
+}

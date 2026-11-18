@@ -12,8 +12,7 @@ CREATE TABLE publication (
   min_months integer NOT NULL,
   ceiling jsonb,
   limitations jsonb,
-  validation jsonb NOT NULL,
-  verified boolean NOT NULL DEFAULT false
+  validation jsonb NOT NULL
 );
 CREATE TABLE deputies (
   id integer PRIMARY KEY,
