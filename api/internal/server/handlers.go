@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,6 +12,7 @@ import (
 )
 
 func internal(err error) *apiError {
+	log.Printf("erro de banco: %v", err)
 	return &apiError{http.StatusInternalServerError, "internal", "erro ao consultar o banco"}
 }
 

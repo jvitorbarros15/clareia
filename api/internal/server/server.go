@@ -10,10 +10,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -79,26 +81,36 @@ func (s *Server) route(pattern string, h handler) {
 }
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request, h handler) {
-	ctx := r.Context()
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
+		log.Printf("erro de banco ao abrir transação: %v", err)
 		writeError(w, unavailable())
 		return
 	}
 	defer tx.Rollback(context.Background())
 	var pub string
 	if err := tx.QueryRow(ctx, `SELECT folder_id FROM api.publication`).Scan(&pub); err != nil {
+		log.Printf("erro de banco ao ler a publicação ativa: %v", err)
 		writeError(w, unavailable())
 		return
 	}
-	tag := s.etag(pub, r)
-	w.Header().Set("ETag", tag)
-	w.Header().Set("Cache-Control", cacheControl)
-	if matches(r.Header.Get("If-None-Match"), tag) {
-		w.WriteHeader(http.StatusNotModified)
-		return
+	cacheable := r.URL.Path != "/healthz"
+	if cacheable {
+		tag := s.etag(pub, r)
+		w.Header().Set("ETag", tag)
+		w.Header().Set("Cache-Control", cacheControl)
+		if matches(r.Header.Get("If-None-Match"), tag) {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	} else {
+		w.Header().Set("Cache-Control", "no-store")
 	}
 	body, aerr := h(ctx, tx, r, pub)
+	// Free the pool connection before a slow client can hold it while we write.
+	_ = tx.Rollback(context.Background())
 	if aerr != nil {
 		w.Header().Del("ETag")
 		writeError(w, aerr)
@@ -106,6 +118,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, h handler) {
 	}
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
+		log.Printf("erro ao montar a resposta: %v", err)
 		w.Header().Del("ETag")
 		writeError(w, &apiError{http.StatusInternalServerError, "internal", "falha ao montar a resposta"})
 		return
@@ -128,7 +141,7 @@ func (s *Server) etag(pub string, r *http.Request) string {
 func matches(header, tag string) bool {
 	for _, p := range strings.Split(header, ",") {
 		p = strings.TrimPrefix(strings.TrimSpace(p), "W/")
-		if p == "*" || p == tag {
+		if p == tag {
 			return true
 		}
 	}
@@ -146,7 +159,7 @@ func decodeCursor(c string) (pub string, seq int, err error) {
 	}
 	p, n, ok := strings.Cut(string(b), ":")
 	seq, convErr := strconv.Atoi(n)
-	if !ok || convErr != nil || seq < 0 || !folderPattern.MatchString(p) {
+	if !ok || convErr != nil || seq < 0 || seq > 1<<31-1 || !folderPattern.MatchString(p) {
 		return "", 0, errors.New("cursor inválido")
 	}
 	return p, seq, nil
