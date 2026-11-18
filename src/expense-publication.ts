@@ -8,6 +8,27 @@ import type {DB} from './store.ts';
 
 export type ExpenseLotRun={runId:string;manifest:{runId:string;status:string;reportSha256:string;proposalSha256:string;inputSha256:string};input:{schema:string;proposal:any;temporal:TemporalReport};report:ExpenseBatch;audit:{status:string;reportSha256:string;proposalSha256:string;checkedAt:string;competences:number}};
 
+const MONTHS=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+// Parties that ceased to exist in 2023, the party that succeeded them and the day the TSE approved it (Câmara events keep the old label afterwards).
+const MERGERS:Record<string,{to:string;on:string}>={PATRIOTA:{to:'PRD',on:'2023-11-09'},PTB:{to:'PRD',on:'2023-11-09'},PSC:{to:'PODE',on:'2023-06-15'},PROS:{to:'SOLIDARIEDADE',on:'2023-02-14'}};
+const monthYear=(day:string)=>`${MONTHS[Number(day.slice(5,7))-1]}/${day.slice(0,4)}`;
+type PartyEvent={time:string|null;original:{idLegislatura:number;siglaPartido?:string|null}};
+// The party the legislature's own events give for the expense period: only events up to the period's last day count, so a later switch never leaks in. Without a party, note says why.
+export function partyFromEvents(events:PartyEvent[],legislature:number,start:string,end:string):{value:string|null;note:string}{
+  const none=(note:string)=>({value:null,note});
+  if(events.some(e=>e.original.idLegislatura!==legislature&&e.time&&e.time>=start&&e.time<=end+'T23:59:59'))return none('evento de outra legislatura dentro do período');
+  const own=events.filter(e=>e.original.idLegislatura===legislature);
+  if(own.some(e=>!e.time))return none('evento sem data válida');
+  const upto=own.filter(e=>e.time!<=end+'T23:59:59').sort((a,b)=>a.time!.localeCompare(b.time!));
+  if(!upto.length)return none('sem eventos até o fim do período');
+  if(upto.some(e=>!e.original.siglaPartido?.trim()))return none('evento sem partido');
+  const party=(e:PartyEvent)=>e.original.siglaPartido!.trim(),last=upto.at(-1)!,day=last.time!.slice(0,10);
+  if(new Set(upto.filter(e=>e.time===last.time).map(party)).size>1)return none('eventos de partidos diferentes no mesmo instante');
+  const merger=MERGERS[party(last)];
+  if(merger&&merger.on<=end)return {value:merger.to,note:`${party(last)} registrado em ${monthYear(day)}; partido extinto, sucedido pelo ${merger.to} (${monthYear(merger.on)})`};
+  const agree=new Set(upto.map(party)).size===1&&day>=start;
+  return {value:party(last),note:agree?'partido dos eventos da legislatura':`partido registrado em ${monthYear(day)}, nos eventos da legislatura`};
+}
 export const SIGN_NOTE='sinal corrigido conforme a página da Câmara';
 export const SIGN_CATEGORIES=['COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA','PASSAGEM AÉREA - MISSÃO OFICIAL'];
 // The source reports document > 0, no glosa and net = -document; the Câmara's own pages count it as positive. Only this shape in the two listed categories is flipped (the signed source net stays in sourceCents); the same shape elsewhere stops the build for a human decision.
@@ -34,6 +55,7 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   if(new Set(ids).size!==ids.length||ids.length!==first.universeSize||hash(canonical([...ids].sort((a,b)=>a-b)))!==first.universeSha256)throw Error('Pessoas dos lotes não formam o universo declarado');
   const temporal=ordered[0].input.temporal;
   if(hash(canonical(temporal))!==first.temporalSha256||temporal.historySha256!==hash(canonical(history)))throw Error('Histórico de pessoas diverge do usado na coleta');
+  const periodStart=`${first.year}-${String(Math.min(...first.months)).padStart(2,'0')}-01`,lastMonth=Math.max(...first.months),periodEnd=new Date(Date.UTC(first.year,lastMonth,0)).toISOString().slice(0,10);
   const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[],duplicateCompetences:{personId:number;month:number;reason:DuplicateReason}[]=[];let cellTotal=0n,fixCount=0,fixDelta=0n;
   for(const l of ordered)for(const c of l.report.cells){
     if(c.status==='complete'||c.status==='no-expenses-confirmed'){
@@ -51,8 +73,8 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
     // The UF is fixed for the legislature, so any confirmed month serves. Without one, the UF the legislature's own events all agree on stands, marked; a month showing two UFs (changed/conflict) is never settled this way.
     const months=[...t.months].reverse(),temporalUf=months.find(m=>m.uf.status==='single')?.uf.value??null,contested=months.some(m=>m.uf.status==='changed'||m.uf.status==='conflict');
     const eventUfs=new Set(t.events.filter(e=>e.original.idLegislatura===temporal.scope.legislature).map(e=>e.original.siglaUf)),only=eventUfs.size===1?[...eventUfs][0]:null;
-    const fallback=temporalUf===null&&!contested&&only&&UFS.has(only)?only:null,uf=temporalUf??fallback,party=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null;
-    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,...(fallback?{ufNote:'UF dos eventos da legislatura'}:{}),party};
+    const fallback=temporalUf===null&&!contested&&only&&UFS.has(only)?only:null,uf=temporalUf??fallback,confirmed=months.find(m=>m.year===first.year&&m.party.status==='single')?.party.value??null,partyContested=months.some(m=>m.year===first.year&&(m.party.status==='changed'||m.party.status==='conflict')),eventParty=confirmed!==null?null:partyContested?{value:null,note:'mês do ano com partido em disputa'}:partyFromEvents(t.events,temporal.scope.legislature,periodStart,periodEnd),party=confirmed??eventParty?.value??null;
+    return {id,name:h.profile.name,photo:h.profile.photo,sourceUrl:'https://www.camara.leg.br/deputados/'+id,profileFetchedAt:h.profile.source.fetchedAt,uf,...(fallback?{ufNote:'UF dos eventos da legislatura'}:{}),party,...(eventParty?{partyNote:eventParty.note}:{})};
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
   const body={metric:'camara.ceap.valor-liquido-uniao-fontes.v1',scope:{year:first.year,months:first.months,ids,legislature:temporal.scope.legislature},people,records,collectedAt,publishedAt:now,pages:[],
