@@ -318,3 +318,18 @@ test('an inverted row and a legitimate refund of the same value complete in eith
     const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.totalCents,0);assert.equal(c.diagnostics?.apiSignCorrected,1);
   }
 });
+const withGlosa=(net:string,face:string,glosa:string)=>annualLine().replace(';10.21;10.21;0;',`;${net};${face};${glosa};`);
+const invertedGlosa=(overrides:Record<string,unknown>={})=>invertedApi({valorDocumento:10.21,valorGlosa:2,valorLiquido:-8.21,...overrides});
+test('an inverted API row with glosa takes the annual value when document and glosa match, and is counted',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','2')]):invertedGlosa()(url));
+  const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.totalCents,821);assert.equal(c.records[0].cents,821);assert.equal(c.records[0].documentCents,1021);assert.equal(c.records[0].disallowedCents,200);assert.equal(c.records[0].origin,'both');assert.equal(c.diagnostics?.apiSignCorrected,1);
+});
+test('an inverted API row with glosa stays held unless the annual net, document and glosa all match',async t=>{
+  const held=async(reply:(url:string)=>unknown,code='unreconciled-source-occurrences')=>{const r=await setup(t,reply as any);assert.deepEqual(r.report.cells[0].reasons,[code]);assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.cells[0].diagnostics?.apiSignCorrected,undefined);};
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','11.21','3')]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('7.21','9.21','2')]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','0')].map(l=>l.replace(';8.21;10.21;0;',';10.21;10.21;0;'))):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','2').replace('COMBUSTÍVEIS','PASSAGEM AÉREA - SIGEPA')]):invertedGlosa({tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})(url),'financial-normalization-failed');
+  await held(url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedGlosa({valorDocumento:5,valorGlosa:8,valorLiquido:3})(url),'financial-normalization-failed');
+});

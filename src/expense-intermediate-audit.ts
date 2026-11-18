@@ -44,7 +44,7 @@ export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csv
   return {id:occurrence,personId:id,year,month,category,supplier:identity.length===11?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,...(odd?{supplierIdOdd:true as const}:{}),documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
 }
 // Written again on purpose; the collector's predicate is not imported.
-const inverted=(face:number,glosa:number|null,net:number,category:string)=>face>0&&glosa===0&&net===-face&&!/AERE|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
+const inverted=(face:number,glosa:number|null,net:number,category:string)=>glosa!==null&&glosa>=0&&face>0&&face-glosa>0&&net===-(face-glosa)&&!/AERE|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
 // A blank document is 'Não informado' in the annual file and '' in the API.
 const blank=(s:string)=>s==='Não informado'?'':s;
 // Independent of markDuplicates: repeated rows stay published; identical ones get distinct ids by occurrence order.
@@ -165,14 +165,13 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
         if(!reasons.length){const first=new Map<string,string>();annual.forEach((r,i)=>{const raw=canonical(r.raw),seen=first.get(ar[i].id);if(seen!==undefined&&seen!==raw){reasons=['supplier-only-difference'];dup=null;}first.set(ar[i].id,raw);});}
         if(!reasons.length){
           const key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
-          // Leftover-only rule: an API row with net = -document takes the annual value when an annual leftover has exactly that value.
-          const taken=new Map<string,number>(),spare=new Map<string,number>(),tally=(m:Map<string,number>,k:string)=>m.set(k,(m.get(k)??0)+1);
-          for(const r of ar)tally(spare,key(r));const plain=(r:Expense)=>r.financialBasis||r.documentCents===null||!inverted(r.documentCents,r.disallowedCents,r.cents,r.category),credited=new Set<Expense>();
-          for(const r of [...br.filter(plain),...br.filter(r=>!plain(r))]){const k=key(r);if((spare.get(k)??0)>(taken.get(k)??0)){tally(taken,k);credited.add(r);}}
-          for(const [k,n] of taken)spare.set(k,(spare.get(k)??0)-n);
+          // Leftover-only rule: an inverted API row takes the annual value when an annual leftover has that net, the same document value and the same glosa (a zero glosa may be blank in the annual file).
+          const spare=new Map<string,Expense[]>();
+          for(const r of ar)spare.set(key(r),[...(spare.get(key(r))??[]),r]);const plain=(r:Expense)=>r.financialBasis||r.documentCents===null||!inverted(r.documentCents,r.disallowedCents,r.cents,r.category),credited=new Set<Expense>();
+          for(const r of [...br.filter(plain),...br.filter(r=>!plain(r))]){const list=spare.get(key(r));if(list?.length){list.shift();credited.add(r);}}
           let signFixed=0;
           br=br.map(r=>{if(credited.has(r)||plain(r))return r;
-            const face=r.documentCents!,want=key({...r,cents:face}),n=spare.get(want)??0;if(!n)return r;spare.set(want,n-1);signFixed++;return {...r,cents:face};});
+            const face=r.documentCents!,glosa=r.disallowedCents!,net=face-glosa,list=spare.get(key({...r,cents:net}))??[],at=list.findIndex(a=>(a.documentCents===null?glosa===0:a.documentCents===face)&&(glosa===0?(a.disallowedCents??0)===0:a.disallowedCents===glosa));if(at<0)return r;list.splice(at,1);signFixed++;return {...r,cents:net};});
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
           for(const r of ar){const list=pool.get(key(r));if(list?.length)matches.push({a:r,b:list.shift()!});else left.push(r);}
           const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right),...(signFixed?{apiSignCorrected:signFixed}:{})};

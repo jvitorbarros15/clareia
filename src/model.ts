@@ -82,8 +82,8 @@ export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|n
     u.protocol='https:';return u.href;
   }catch{return null;}
 }
-// The API sometimes reports a positive document with net = -document and no glosa; the annual file carries the real value. Airfare, mission and housing keep their own sign handling.
-export const invertedApiShape=(face:number|null,glosa:number|null,net:number,category:string)=>face!==null&&face>0&&glosa===0&&net===-face&&!/AERE|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
+// The API sometimes reports a positive document with net = -(document - glosa); the annual file carries the real value. Airfare, mission and housing keep their own sign handling.
+export const invertedApiShape=(face:number|null,glosa:number|null,net:number,category:string)=>face!==null&&glosa!==null&&glosa>=0&&face>0&&face-glosa>0&&net===-(face-glosa)&&!/AERE|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
 export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceRef,basis?:FinancialBasis):Expense {
   const r=expenseSchema.parse(raw);
   if(!scope.ids.includes(personId)||r.ano!==scope.year||!scope.months.includes(r.mes))throw new Error('Registro fora do recorte contratado');
