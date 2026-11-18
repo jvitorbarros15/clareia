@@ -17,7 +17,7 @@ const run=(label:string,command:string,commandArgs:string[],env:Record<string,st
   spawn(command,commandArgs,{stdio:'inherit',env:{...childEnv,...env}}).on('exit',code=>code===0?resolve():reject(new Error(`${label} falhou (código ${code})`)));
 });
 // wrangler runs from the lockfile and only sees what it needs to find node, its config and the Cloudflare credentials.
-const WRANGLER_ENV=Object.fromEntries(Object.entries(process.env).filter(([k])=>['PATH','Path','SYSTEMROOT','SystemRoot','APPDATA','LOCALAPPDATA','USERPROFILE','HOME','TEMP','TMP','TMPDIR','HTTPS_PROXY','HTTP_PROXY','NO_PROXY'].includes(k)||k.startsWith('CLOUDFLARE_'))) as NodeJS.ProcessEnv;
+const WRANGLER_ENV=Object.fromEntries(Object.entries(process.env).filter(([k])=>['PATH','Path','SYSTEMROOT','SystemRoot','APPDATA','LOCALAPPDATA','USERPROFILE','HOME','TEMP','TMP','TMPDIR','XDG_CONFIG_HOME','HTTPS_PROXY','HTTP_PROXY','NO_PROXY'].includes(k)||k==='CLOUDFLARE_API_TOKEN'||k==='CLOUDFLARE_ACCOUNT_ID')) as NodeJS.ProcessEnv;
 const wranglerBin=path.resolve('node_modules','wrangler','bin','wrangler.js');
 const node=process.execPath,tsx=(script:string,...rest:string[])=>['--import','tsx','--max-old-space-size=8192',script,...rest];
 await run('1/5 build do site completo',node,tsx('scripts/build-full-site.ts','--out',OUT,'--portraits',portraits,'--noindex',...value('--url')?['--site-url',value('--url')]:[],...passthrough,...args.includes('--allow-missing-portraits')?['--allow-missing-portraits']:[],...args.includes('--share-images')?['--share-images']:[]));
