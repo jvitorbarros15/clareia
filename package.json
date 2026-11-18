@@ -2,14 +2,15 @@
   "name": "clareia",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
+    "api:pdf": "tsx scripts/build-api-pdf.ts",
     "build:site": "tsx scripts/build-site.ts",
     "deploy:test": "tsx scripts/deploy-test.ts",
     "build:full": "tsx --max-old-space-size=8192 scripts/build-full-site.ts",
     "fetch:portraits": "tsx scripts/fetch-portraits.ts",
-    "collect": "tsx src/collect.ts",
     "discover:people": "tsx scripts/discover-people.ts",
     "collect:people": "tsx scripts/collect-people-history.ts",
     "collect:people:legacy": "tsx scripts/collect-people-legacy.ts",
@@ -32,8 +33,6 @@
     "test": "tsx --test tests/*.test.ts",
     "verify:browser": "node scripts/verify-real.cjs",
     "verify:ui": "node scripts/verify-ui.cjs",
-    "verify:annual": "tsx scripts/reconcile-annual.ts",
-    "verify:api-annual": "tsx scripts/reconcile-api-annual.ts",
     "cache:portraits": "tsx scripts/cache-portraits.ts",
     "unlock": "tsx scripts/unlock.ts",
     "migrate:snapshot": "tsx scripts/migrate-snapshot.ts",
@@ -45,7 +44,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.5.14",
+    "@electric-sql/pglite": "^0.5.15",
     "aws4fetch": "^1.0.20",
     "csv-parse": "^7.0.3",
     "fast-xml-parser": "5.12.0",
@@ -58,7 +57,10 @@
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "esbuild": "^0.28.2",
+    "playwright": "1.65.0",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "wrangler": "4.160.0",
+    "yaml": "2.9.1"
   }
 }

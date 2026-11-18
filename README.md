@@ -41,15 +41,13 @@ A interface combina direção editorial, retratos, gráficos interativos e a per
 
 ### Cobertura atual
 
-Esta `main` contém um **piloto com dados reais de três deputados, em janeiro e fevereiro de 2025**, na legislatura 57. O recorte está definido em [`config/pilot.json`](config/pilot.json).
+O site publicado cobre os deputados da legislatura 57 em 2025. O banco local de desenvolvimento usa um recorte de três deputados, em janeiro e fevereiro de 2025.
 
 - A amostra é técnica: as ordenações não representam um ranking nacional.
 - Os valores medem despesas registradas na CEAP no período, não o custo total nem a qualidade de um mandato.
 - Com uma cobertura de pessoas aprovada, partido e UF são os de cada mês de competência; sem ela, o site mostra o cadastro atual, marcado como “(atual)”. Quem não tem exercício confirmado no ano aparece assim, nunca com R$ 0,00.
 - Projetos de lei e votações nominais têm coletores e publicações próprios e só aparecem no site depois de aprovados. Emendas já têm coletor, mas ainda não são exibidas; eleições e patrimônio ainda não foram coletados.
 - A busca atual não usa um modelo de IA ou RAG. O acompanhamento salva favoritos localmente, sem enviar notificações.
-
-O coletor de despesas da `main` restringe o piloto a três IDs e dois meses. Ampliar a cobertura exige validar o pipeline; não basta alterar a configuração.
 
 ## Dados e metodologia
 
@@ -63,7 +61,9 @@ O coletor de despesas da `main` restringe o piloto a três IDs e dois meses. Amp
 
 A segunda implementação ajuda a detectar diferenças de processamento. Ela compartilha regras metodológicas com o coletor e **não constitui uma revisão independente dessas regras**, nem comprova completude da fonte ou legitimidade de uma despesa.
 
-Fornecedores pessoa física são apresentados como “Fornecedor pessoa física”. Os originais ficam fora do Git e do diretório público. Na automação, originais arquivados e cópias do banco recebem criptografia AES-256-GCM, e o site gerado e o dump do banco passam por uma varredura de CPF antes da persistência da nova cópia.
+Fornecedores pessoa física são apresentados como “Fornecedor pessoa física”. Nomes de fornecedores sem CNPJ válido que não parecem de empresa não são exibidos, para proteger possíveis pessoas físicas. A regra roda na montagem do site (`src/build-site.ts`); os nomes ocultados e os mantidos pela regra de empresa vão para `output/review`, que não é publicado, e a lista de nomes aprovados fica em `config/supplier-names-public.json`.
+
+Os identificadores públicos das despesas são refeitos na montagem a partir de campos sem o fornecedor e só valem dentro de uma publicação: a mesma despesa pode ter outro id na publicação seguinte. Lotes já coletados com identificadores de fornecedor fora do formato (`supplierIdOdd`) não passam em nova auditoria, porque a regra de coleta mudou; os demais campos continuam sendo comparados. Os originais ficam fora do Git e do diretório público. Na automação, originais arquivados e cópias do banco recebem criptografia AES-256-GCM, e o site gerado e o dump do banco passam por uma varredura de CPF antes da persistência da nova cópia.
 
 Fontes utilizadas: [API de Dados Abertos da Câmara](https://dadosabertos.camara.leg.br/api/v2/api-docs) e [arquivo anual CEAP de 2025](https://www.camara.leg.br/cotas/Ano-2025.csv.zip). As [notas técnicas do piloto](real/README.md) registram a conciliação, capturas anteriores e limitações encontradas; os dados servidos em cada build são identificados pelo seu `manifest.json`.
 
@@ -77,22 +77,23 @@ cd clareia
 npm ci
 ```
 
-Colete o recorte, confira os originais e gere a primeira versão do site, avançando apenas quando cada comando concluir com sucesso:
+Colete as despesas, audite as capturas, publique a versão e gere o site, avançando apenas quando cada comando concluir com sucesso. Substitua os `ID` pelos identificadores das execuções (`--selection-run` vem de `collect:people:legacy` e `--history-run` de `collect:people`); `--help` lista as opções de cada comando:
 
 ```sh
-npm run collect
-npm run verify:annual
+npm run collect:expenses:intermediate -- --local --selection-run ID --run ID
+npm run verify:expenses:intermediate -- --local --run ID
+npm run publish:expenses -- --history-run ID --run ID --approve --local
 npm run build:site
 npm run dev
 ```
 
 Abra **[http://127.0.0.1:4174](http://127.0.0.1:4174)**.
 
-`collect` grava uma versão candidata de despesas. `verify:annual` registra a auditoria que permite sua ativação. `build:site` gera `dist/` a partir da versão ativa; `dev` apenas serve essa pasta, sem recompilar automaticamente. Se ainda não houver uma versão aprovada, o build recusa a publicação.
+`collect:expenses:intermediate` grava capturas cifradas, sem publicação, e `verify:expenses:intermediate` as audita. `publish:expenses` reúne os lotes auditados numa versão, que só fica ativa com `--approve`. `build:site` gera `dist/` a partir da versão ativa; `dev` apenas serve essa pasta, sem recompilar automaticamente. Se ainda não houver uma versão aprovada, o build recusa a publicação.
 
 Cobertura de pessoas, projetos, votações e emendas seguem o mesmo princípio, com comandos próprios: `collect:people`, `collect:bills`, `collect:votes` e `collect:amendments` geram e auditam a coleta; `publish:people`, `publish:bills`, `publish:votes` e `publish:amendments` aceitam `--dry-run` para conferir e `--approve` para ativar. Sem `DATABASE_URL`, os comandos de publicação exigem `--local`.
 
-O banco local fica em `data/local/postgres`; as capturas da coleta, em `data/runs/`. Ambos são ignorados pelo Git. Após editar a interface, execute `npm run build:site` novamente e recarregue a página. Interrompa o servidor antes de repetir a sequência de coleta, auditoria e build.
+O banco local fica em `data/local/postgres`; as capturas da coleta, em `data/private/`. Ambos são ignorados pelo Git. Após editar a interface, execute `npm run build:site` novamente e recarregue a página. Interrompa o servidor antes de repetir a sequência de coleta, auditoria e build.
 
 ### Configuração opcional
 
@@ -118,8 +119,7 @@ npm test
 Para conferir os dados locais coletados:
 
 ```sh
-npm run verify:annual
-npm run verify:api-annual
+npm run verify:expenses:intermediate -- --local --run ID
 ```
 
 Para testar a interface, instale a dependência opcional de navegador e mantenha `npm run dev` ativo em outro terminal:
@@ -142,6 +142,8 @@ npm run fetch:portraits -- --out <fotos>
 npm run build:full -- --out <saida> --portraits <fotos> [--noindex] [--dry-run]
 ```
 
+Com `--share-images`, o build gera por deputado um PNG 1200×630 (usado como `og:image`) e um 1080×1080 (botão "Baixar imagem") em `data/<publicação>/share/`, com Playwright. Requer `npx playwright install chromium` (uma vez). Nomes com hash do conteúdo; as imagens já geradas ficam em `<saida>.share-cache` e só mudam as de quem teve o fato alterado.
+
 `npm run deploy:test -- --portraits <fotos>` encadeia build em `build/site`, `scan:cpf`, `verify:browser` (amostra de 30 deputados; `node scripts/verify-real.cjs --all` confere todos), `wrangler deploy` e uma conferência do site publicado. Qualquer falha interrompe a cadeia, e sem `--yes` nada é publicado (`--dry-run` simula o deploy; os dois não podem ser usados juntos). `verify:ui` (a suíte de interface, que lê os arquivos publicados e escolhe os deputados pelos dados) roda por padrão depois de `verify:browser`; `--skip-verify-ui` pula essa suíte. Fora do `deploy:test`, `node scripts/verify-ui.cjs` aceita `--seed N` (amostra de deputados), `--all` (todos) e `--only TEXTO` (só os testes cujo nome contém o texto). O build do teste usa `--noindex`, que só pode ir para o Worker `clareia`; qualquer outro nome de Worker com `noindex` é recusado. O build também falha se faltar o retrato de quem tem foto oficial (`--allow-missing-portraits` libera isso só em montagens locais) e se o `_headers` não tiver exatamente um bloco `/*` com CSP, HSTS e, no teste, `X-Robots-Tag`.
 
 O Worker em `worker/index.ts` não roda para arquivos que existem: o Cloudflare os serve direto dos assets, com o `Cache-Control` imutável do `_headers`. Só pedidos sem arquivo chegam ao Worker, que marca a resposta de erro como `no-store`, para que um 404 não fique em cache como arquivo imutável.
@@ -158,7 +160,7 @@ npx wrangler@4.160.0 rollback [version-id]
 
 Sem `version-id`, o `rollback` volta à implantação imediatamente anterior. Depois, repita a conferência abrindo o site de teste.
 
-A busca de CPF do deploy roda sem `--known`, então CPFs de 11 dígitos sem formatação só são pegos pela varredura agendada do `collect`. Quem tem localmente o arquivo de CPFs conhecidos pode passá-lo com `--known <arquivo>` em `deploy:test`.
+A busca de CPF do deploy roda sem `--known`. Quem tem localmente o arquivo de CPFs conhecidos pode passá-lo com `--known <arquivo>` em `deploy:test`.
 
 As datas `publishedAt` e `checkedAt` do build completo vêm das auditorias das próprias execuções de entrada (a mais recente), ou de `publishedAt` em `config/full-site.json`, para que o mesmo conjunto de entradas gere sempre os mesmos bytes em `data/<hash>/`.
 
@@ -194,19 +196,15 @@ clareia/
 ├── src/                 Coleta, conciliação, banco, publicação e servidor local
 ├── scripts/             Auditorias, build e verificações de navegador
 ├── tests/               Testes automatizados
-├── config/              Recorte do piloto
-└── .github/workflows/   CI e automações de coleta
+├── config/              Build, publicação e listas de apoio
+└── .github/workflows/   CI e sondagem das fontes
 ```
 
 `dist/`, `data/` nas pastas de execução e `output/qa/` são artefatos locais; não fazem parte da distribuição do código.
 
 ### Atualização e publicação
 
-O [workflow de coleta](.github/workflows/collect.yml) está definido para três execuções diárias, além da execução manual. Ele restaura o banco cifrado do R2, verifica alterações, coleta, gera o site e preserva o estado. A auditoria da nova versão depende da variável de repositório `PUBLISH_ENABLED=true`.
-
-Na `main`, `--if-changed` verifica a impressão digital do **arquivo anual**: uma mudança apenas na API ainda não dispara uma nova coleta. Portanto, a agenda não equivale a uma garantia de atualização de todas as fontes.
-
-O build produz `dist/` para hospedagem estática. A versão de teste é publicada manualmente no Cloudflare Workers, como site estático e fora dos buscadores; o workflow de coleta ainda não faz deploy. O [CI](.github/workflows/ci.yml) executa a checagem de tipos e os testes em pushes e pull requests.
+O build produz `dist/` para hospedagem estática. A versão de teste é publicada manualmente no Cloudflare Workers, como site estático e fora dos buscadores. O [CI](.github/workflows/ci.yml) executa a checagem de tipos e os testes em pushes e pull requests.
 
 ## Evolução da plataforma
 
@@ -227,3 +225,9 @@ Abra uma [issue](https://github.com/jvitorbarros15/clareia/issues) com o comport
 Pull requests devem explicar o problema, o comportamento resultante e a verificação realizada. Mudanças metodológicas precisam preservar a rastreabilidade e manter casos incertos explícitos. Execute `npm run typecheck` e `npm test` quando alterar código, acrescentando verificações de navegador para mudanças de interação.
 
 O protótipo com dados fictícios está preservado na tag [`mvp-final`](https://github.com/jvitorbarros15/clareia/tree/mvp-final). A interface atual consome as publicações reais aprovadas.
+
+## Licença
+
+© 2026 João Vitor Barros. Todos os direitos reservados. O código deste repositório não tem licença de uso: ler é permitido, copiar, modificar ou reutilizar não.
+
+Os dados de despesas, projetos e votações vêm dos dados abertos da Câmara dos Deputados e continuam públicos. Ao reutilizá-los, cite a fonte oficial.

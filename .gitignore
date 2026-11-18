@@ -16,6 +16,7 @@ data/local/
 data/runs/
 data/pilot.lock
 output/qa/
+output/review/
 playwright-report/
 test-results/
 

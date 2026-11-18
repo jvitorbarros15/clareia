@@ -1,0 +1,7 @@
+﻿{
+    "exitCode":  99,
+    "wallS":  20.7,
+    "k6CpuCores":  1.03,
+    "serverCpuCores":  1.79,
+    "postgresContainerCpuPctMidRun":  "265.80%"
+}

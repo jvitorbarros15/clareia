@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,13 +10,15 @@ import {buildSite} from '../src/build-site.ts';
 import {createApp} from '../src/app.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
-import {UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
+import {partyFieldsOf} from '../src/site-summary.ts';
+import {deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
+import {loadSpec} from '../src/api-docs.ts';
 
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
-const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11]};
+const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11],minMonths:6};
 const SITE='https://example.test';
-const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',party:'PL (atual)',partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,heldMonths:[],cents:123456789,hasCells:true,projects:7};
+const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyNote:null,partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,comparable:true,heldMonths:[],cents:123456789,hasCells:true,projects:7};
 const meta=(html:string,key:string)=>new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)">`).exec(html)?.[1];
 
 test('slugs follow the rule of real/app.js',()=>{
@@ -85,6 +88,7 @@ test('state pages are factual and cover all 27 UFs',()=>{
   const list:Deputy[]=[normal,{...normal,id:101,cents:1000,heldMonths:[1]},{...normal,id:102,uf:'BA'},{...normal,id:103,noExercise:true,cents:0}];
   assert.equal(inState(list,'SP').length,2);
   assert.equal(stateDescription('SP',list,period),`São Paulo: 2 deputados neste recorte. Cota total em Jan–Dez 2025: R$ 1.234.577,89 (valor exato). Inclui 1 deputado com total parcial; meses em revisão ficam fora da soma. Dados oficiais da Câmara dos Deputados.`);
+  assert.match(stateDescription('SP',[{...normal,ufNote:'UF dos eventos da legislatura'}],period),/Inclui 1 deputado com UF não confirmada mês a mês\./);
   assert.equal(stateDescription('AC',list,period),'Acre: nenhum deputado neste recorte. Indisponível não significa zero.');
   assert.equal(Object.keys(UFS).length,27);
   const html=renderState(shell,'SP',list,period,SITE);
@@ -151,7 +155,9 @@ test('a build writes deputy, state and home pages and rebuilds byte for byte',()
   assert.equal(meta(ana,'og:image'),`${SITE}/data/${id}/portraits/1.jpg`);
   assert.equal(meta(ana,'og:image:width'),'300');
   assert.equal(meta(ana,'og:image:height'),'400');
-  assert.ok(ana.includes('<script defer src="/view.js"></script>'));
+  assert.match(ana,/<script defer src="\/view\.js\?v=[0-9a-f]{10}"><\/script>/);
+  const home=await fs.readFile(path.join(dist,'index.html'),'utf8'),loader=await fs.readFile(path.join(dist,'data.js'),'utf8');
+  for(const asset of ['app','portal']){const url=loader.match(new RegExp(`'(/${asset}\\.js\\?v=[0-9a-f]{10})'`))?.[1];assert.ok(url,asset);assert.ok(home.includes(`<link rel="preload" href="${url}" as="script">`),`${asset} preload matches the loaded URL`);}
   const ze=await fs.readFile(path.join(dist,'deputado','2-ze-avila.html'),'utf8');
   assert.equal(meta(ze,'og:image'),`${SITE}/icon-512.png`);
   assert.equal((await fs.readdir(path.join(dist,'estado'))).length,27);
@@ -180,4 +186,73 @@ test('the local server answers a prerendered route with its own page',async()=>{
     assert.equal(await (await fetch(url+'/deputado/2-outro')).text(),'home');
     assert.equal((await fetch(url+'/data/x/nao-existe.json')).status,404);
   }finally{server.close();await fs.rm(dir,{recursive:true,force:true});}
+});
+test('static pages are prerendered at their own route, with the same meta tags as the other pages',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-static-'));
+  try{
+    await fs.writeFile(path.join(dir,'index.html'),shell);
+    await writeStaticPages(dir,resolveOptions({siteUrl:SITE}));
+    for(const route of ['sobre','correcoes','metodologia']){
+      const html=await fs.readFile(path.join(dir,route+'.html'),'utf8');
+      assert.match(html,/<title>[^<]+ — Clareia<\/title>/);
+      assert.ok(html.includes(`<link rel="canonical" href="${SITE}/${route}">`));
+      assert.ok(html.includes(`<meta property="og:url" content="${SITE}/${route}">`));
+      assert.match(html,/<meta name="description" content="[^"]+">/);
+      assert.ok(html.includes('<noscript><main id="main">'));
+    }
+    assert.equal(await fs.readFile(path.join(dir,'corrections.json'),'utf8'),await fs.readFile(path.join(import.meta.dirname,'..','config','corrections.json'),'utf8'));
+  }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('the corrections page shows the placeholder while no contact address is set, and escapes contact and entries',async()=>{
+  const pages=await loadStaticPages();
+  assert.equal(pages.CONTACT_EMAIL,'');
+  const empty=pages.pages.correcoes.body([],pages.CONTACT_EMAIL);
+  assert.ok(empty.includes('Canal de correções em configuração.'));
+  assert.ok(!empty.includes('mailto:'));
+  assert.ok(empty.includes('Nenhuma correção registrada até agora.'));
+  assert.ok(empty.includes(pages.POLICY));
+  const set=pages.pages.correcoes.body([],'a&"<b>');
+  assert.ok(set.includes('href="mailto:a&amp;&quot;&lt;b&gt;"'));
+  assert.ok(!set.includes('<b>'));
+  const entry=pages.pages.correcoes.body([{date:'2026-11-12',title:'<script>x</script>',detail:'a & b'}],'');
+  assert.ok(!entry.includes('<script>'));
+  assert.ok(entry.includes('&lt;script&gt;x&lt;/script&gt;'));
+  assert.ok(entry.includes('<time datetime="2026-11-12">12/11/2026</time>'));
+});
+test('the about and methodology texts name the project, not a person, and carry no contact address',async()=>{
+  const pages=await loadStaticPages();
+  const text=[pages.pages.sobre.body(),pages.pages.correcoes.body([],''),pages.pages.metodologia.naoConcluimos,pages.pages.metodologia.privacidade].join(' ');
+  assert.ok(text.includes('Projeto Clareia'));
+  assert.ok(text.includes('Gasto maior não significa irregularidade'));
+  assert.doesNotMatch(text,/[\w.+-]+@[\w-]+\.[\w.]+/);
+});
+
+test('a party taken from the events is shown with its note',()=>{
+  assert.match(deputyDescription({...normal,party:'PP',partyNote:'partido dos eventos da legislatura'},period),/PP \(partido dos eventos da legislatura\)/);
+});
+
+const shown=(status:string|null,party='PP',note='partido registrado em fev/2023, nos eventos da legislatura')=>{
+  const month=status?[{month:1,partyStatus:status,party:status==='single'?'PL':null,partyValues:[],exercise:'unknown',records:0,cents:0,held:false}]:[];
+  const d=deputiesOf({ids:[1],people:[{id:1,name:'A',photo:null,sourceUrl:'',profileFetchedAt:'',uf:'SP',party,partyNote:note}],summary:{coverageId:status===null?null:'c',people:[{id:1,months:month,...partyFieldsOf(month as any,status===null?null:'c',party,note),exercisedMonths:0,noExercise:false,heldMonths:[],comparable:false}],ceiling:null} as any,suppliers:{people:{}} as any})[0];
+  return [d.party,d.partyNote];
+};
+test('the events party shows only when the coverage has nothing better: confirmed and in-review win over the note',()=>{
+  assert.deepEqual(shown('unknown'),['PP','partido registrado em fev/2023, nos eventos da legislatura']);
+  assert.deepEqual(shown('review'),['Partido em revisão',null]);
+  assert.deepEqual(shown('single'),['PL',null]);
+  assert.deepEqual(shown(null),['PP','partido registrado em fev/2023, nos eventos da legislatura']);
+});
+test('a build writes the /api page without scripts, with every path of api/openapi.yaml',()=>built({siteUrl:SITE},async dist=>{
+  const html=await fs.readFile(path.join(dist,'api.html'),'utf8'),spec=await loadSpec(path.join(import.meta.dirname,'..'));
+  assert.ok(html.includes(`<link rel="canonical" href="${SITE}/api">`));
+  assert.ok(html.includes('A API ainda não é pública'));
+  assert.ok(html.includes('href="/dados-abertos"'));
+  assert.ok(!/<script/.test(html));
+  assert.ok(Object.keys(spec.paths).length>0);
+  for(const route of Object.keys(spec.paths))assert.ok(html.includes(`<code>GET ${route}</code>`),route);
+}));
+test('real/clareia-api.pdf was generated from the current api/openapi.yaml',async()=>{
+  const root=path.join(import.meta.dirname,'..'),sha=createHash('sha256').update(await fs.readFile(path.join(root,'api','openapi.yaml'))).digest('hex').slice(0,16);
+  const pdf=(await fs.readFile(path.join(root,'real','clareia-api.pdf'))).toString('latin1');
+  assert.ok(pdf.includes(`sha256:${sha}`),'api/openapi.yaml changed since real/clareia-api.pdf was generated: run npm run api:pdf');
 });

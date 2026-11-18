@@ -1,0 +1,354 @@
+openapi: 3.1.0
+info:
+  title: API pública da Clareia
+  version: 1.0.0
+  description: |
+    API somente leitura sobre a publicação ativa da Clareia (despesas CEAP dos deputados federais brasileiros).
+    Apenas GET e HEAD. Toda resposta de sucesso traz `publication`, o id da pasta de publicação de onde foi lida.
+    Valores monetários são sempre um número inteiro de centavos (int64), nunca uma string formatada.
+
+    Pontos importantes antes de usar os dados:
+
+    - Os registros de despesa são entregues exatamente como publicados (`Expense`). A ordem das chaves não é garantida (o armazenamento é jsonb).
+    - `date` é nulo em todo registro cuja `origin` é `annual` (cerca de 8.400 registros). Esses registros ainda têm `month`.
+    - `month` é o mês de competência e `year` o ano de competência. O mês ou o ano dentro de `date` podem diferir deles
+      (cerca de 16.700 registros diferem pelo mês, cerca de 1.000 pelo ano). Filtre por `month`, nunca pelo mês de `date`.
+      `date` não tem fuso horário.
+    - Registros cujo fornecedor não é verificado (`supplierVerified` false) não têm `supplierKey` e muitas vezes não têm `source.sha256`.
+    - `duplicateFlag: "possible"` marca registros que parecem duplicatas de outro registro da mesma pessoa. É uma
+      pista, não um veredito, e a publicação atual pode não conter nenhuma.
+    - `cents` pode ser negativo (estornos, glosas) ou zero. Isso não é um erro.
+    - Um mês que a geração dos dados retém é `{"held": true, "cents": null, "reasons": [...]}`. Ele é nulo, não zero, e não tem registros.
+    - Deputados sem dados publicados (`withoutData`) respondem 200 com lista vazia em `/expenses`, não 404.
+    - `nextCursor` é opaco e vinculado a uma publicação. Depois que a publicação ativa muda, um cursor antigo responde 409.
+    - As respostas trazem `ETag` (publicação + versão do binário + hash da consulta) e `Cache-Control: public, max-age=300`;
+      `If-None-Match` responde 304. `/healthz` nunca é armazenado em cache. Qualquer rota pode responder 503 quando não há publicação ativa
+      ou o banco de dados está indisponível.
+servers:
+  - url: http://127.0.0.1:8787
+paths:
+  /healthz:
+    get:
+      summary: Status do serviço e publicação ativa
+      operationId: healthz
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Health'}}}}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/meta:
+    get:
+      summary: Identificação e totais da publicação ativa
+      operationId: meta
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Meta'}}}}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/deputies:
+    get:
+      summary: Listar deputados
+      operationId: listDeputies
+      parameters:
+        - {name: uf, in: query, required: false, schema: {type: string, pattern: '^[A-Za-z]{2}$'}}
+        - {name: party, in: query, required: false, description: Busca sem distinção de maiúsculas em `party` (o partido do período)., schema: {type: string, maxLength: 200}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/DeputyList'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+  /v1/deputies/{id}:
+    get:
+      summary: Perfil do deputado com meses e categorias
+      operationId: getDeputy
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/DeputyProfile'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /v1/deputies/{id}/expenses:
+    get:
+      summary: Registros de despesa de um deputado, na ordem de publicação
+      operationId: listExpenses
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, minimum: 1}}
+        - {name: month, in: query, required: false, description: Mês de competência (o campo `month`; não o mês de `date`)., schema: {type: integer, minimum: 1, maximum: 12}}
+        - {name: category, in: query, required: false, description: Texto exato da categoria., schema: {type: string, maxLength: 200}}
+        - {name: cursor, in: query, required: false, description: '`nextCursor` da página anterior.', schema: {type: string}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 500, default: 100}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/ExpenseList'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /v1/expenses/{public_id}:
+    get:
+      summary: Um registro de despesa pelo seu id
+      operationId: getExpense
+      parameters:
+        - {name: public_id, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{64}$'}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/ExpenseOne'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /v1/suppliers:
+    get:
+      summary: Nomes de fornecedores com totais, ordenados pelo nome
+      operationId: listSuppliers
+      description: |
+        Uma linha por nome (`supplierLabel` quando publicado, senão `supplier`). Linhas com chave de CNPJ verificada têm `key` e
+        `verified: true`. Nomes sem chave (nomes genéricos, como pessoa física ou nome omitido) aparecem como uma linha cada
+        com `key: null`, `verified: false` e sem página de detalhe; nunca são divididos nem unidos. `q` é uma busca por trecho no
+        nome, sem diferenciar maiúsculas e acentos comuns do português (á, ç, ñ e similares). A ordem é pelo nome, em ordem de bytes, então as páginas são estáveis.
+        `nextCursor` está vinculado a uma publicação (409 depois que ela muda).
+      parameters:
+        - {name: q, in: query, required: false, description: 'Trecho do nome, de 3 a 100 caracteres.', schema: {type: string, minLength: 3, maxLength: 100}}
+        - {name: cursor, in: query, required: false, description: '`nextCursor` da página anterior.', schema: {type: string}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 500, default: 100}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierList'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /v1/suppliers/{key}:
+    get:
+      summary: Células de um fornecedor verificado, por deputado, mês e categoria
+      operationId: getSupplier
+      description: Somente chaves de CNPJ verificadas. Uma chave desconhecida, ou um nome sem chave, responde 404. Sem paginação; a maior resposta da publicação atual tem cerca de 5.177 células (cerca de 488 KB), e 99% dos fornecedores têm 36 células ou menos.
+      parameters:
+        - {name: key, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{64}$'}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierDetail'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /v1/categories:
+    get:
+      summary: Total por categoria, somado a partir das categorias por pessoa
+      operationId: listCategories
+      description: O servidor confere se as categorias somam `totalCents` (e os registros, `records`); se não somarem, responde 500 em vez de um total errado.
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/CategoryTotals'}}}}
+        '500': {$ref: '#/components/responses/Error'}
+components:
+  responses:
+    Error:
+      description: Erro. 400 bad_request, 404 not_found, 405 method_not_allowed, 409 stale_cursor, 500 internal, 503 unavailable.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+  schemas:
+    SupplierRow:
+      type: object
+      required: [label, key, verified, totalCents, records, deputies]
+      additionalProperties: false
+      properties:
+        label: {type: string}
+        key: {type: [string, 'null'], description: 'Chave derivada do CNPJ (64 hex); null para nomes sem chave verificada.'}
+        verified: {type: boolean}
+        totalCents: {type: integer}
+        records: {type: integer}
+        deputies: {type: integer, description: Número de deputados distintos com células sob este nome.}
+    SupplierList:
+      type: object
+      required: [publication, suppliers, nextCursor]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        suppliers: {type: array, items: {$ref: '#/components/schemas/SupplierRow'}}
+        nextCursor: {type: [string, 'null'], description: Nulo na última página.}
+    SupplierCell:
+      type: object
+      required: [deputyId, month, category, cents, records]
+      additionalProperties: false
+      properties:
+        deputyId: {type: integer}
+        month: {type: integer, minimum: 1, maximum: 12}
+        category: {type: string}
+        cents: {type: integer}
+        records: {type: integer}
+    SupplierDetail:
+      type: object
+      required: [publication, key, label, verified, totalCents, records, deputies, cells]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        key: {type: string}
+        label: {type: string}
+        verified: {type: boolean}
+        totalCents: {type: integer}
+        records: {type: integer}
+        deputies: {type: integer}
+        cells: {type: array, items: {$ref: '#/components/schemas/SupplierCell'}}
+    CategoryTotals:
+      type: object
+      required: [publication, totalCents, records, categories]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        totalCents: {type: integer}
+        records: {type: integer}
+        categories: {type: array, items: {$ref: '#/components/schemas/Category'}}
+    Error:
+      type: object
+      required: [error, message]
+      additionalProperties: false
+      properties:
+        error: {type: string}
+        message: {type: string}
+    Health:
+      type: object
+      required: [status, publication]
+      additionalProperties: false
+      properties:
+        status: {type: string}
+        publication: {type: string}
+    Meta:
+      type: object
+      required: [publication, expensesVersion, domainVersions, publishedAt, totalCents, records, minMonths, ceiling, limitations, links]
+      additionalProperties: false
+      properties:
+        publication: {type: string, description: Id da pasta de publicação (12 hex).}
+        expensesVersion: {type: string, description: Versão dos dados de despesas (64 hex). Diferente de `publication`.}
+        domainVersions: {type: object, additionalProperties: true}
+        publishedAt: {type: [string, 'null'], format: date-time}
+        totalCents: {type: integer}
+        records: {type: integer}
+        minMonths: {type: integer}
+        ceiling: {description: Teto bruto por UF e mês conforme publicado. O uso não é calculado., type: [object, array, 'null']}
+        limitations: {description: Limitações conforme publicadas., type: [object, array, 'null']}
+        links:
+          type: object
+          description: Caminhos relativos à origem do site, não a esta API.
+          required: [methodology, corrections, openData]
+          additionalProperties: false
+          properties:
+            methodology: {type: string}
+            corrections: {type: string}
+            openData: {type: string}
+    Deputy:
+      type: object
+      required: [id, name, uf, ufNote, party, partyNote, partyInReview, lastConfirmedParty, currentParty, photoUrl, sourceUrl, comparable, exercisedMonths, noExercise, heldMonths, totalCents, records, withoutData]
+      additionalProperties: false
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        uf: {type: [string, 'null']}
+        ufNote: {type: [string, 'null']}
+        party: {type: [string, 'null']}
+        partyNote: {type: [string, 'null']}
+        partyInReview: {type: boolean}
+        lastConfirmedParty: {type: [string, 'null']}
+        currentParty: {type: [string, 'null']}
+        photoUrl: {type: [string, 'null']}
+        sourceUrl: {type: [string, 'null']}
+        comparable: {type: boolean}
+        exercisedMonths: {type: integer}
+        noExercise: {type: boolean}
+        heldMonths: {type: array, items: {type: integer}}
+        totalCents: {type: integer}
+        records: {type: integer}
+        withoutData: {type: boolean}
+    DeputyList:
+      type: object
+      required: [publication, deputies]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        deputies: {type: array, items: {$ref: '#/components/schemas/Deputy'}}
+    Month:
+      type: object
+      description: Quando `held` é true, `cents` é nulo e `reasons` está presente.
+      required: [month, held, cents, records, exercise, party, partyStatus, partyValues, uf, ufStatus]
+      additionalProperties: false
+      properties:
+        month: {type: integer, minimum: 1, maximum: 12}
+        held: {type: boolean}
+        cents: {type: [integer, 'null']}
+        reasons: {type: array, items: {type: string}}
+        records: {type: integer}
+        exercise: {type: [string, 'null']}
+        party: {type: [string, 'null']}
+        partyStatus: {type: string}
+        partyValues: {type: array, items: {type: string}}
+        uf: {type: [string, 'null']}
+        ufStatus: {type: string}
+    Category:
+      type: object
+      required: [category, cents, records]
+      additionalProperties: false
+      properties:
+        category: {type: string}
+        cents: {type: integer}
+        records: {type: integer}
+    DeputyProfile:
+      type: object
+      required: [publication, id, name, uf, ufNote, party, partyNote, partyInReview, lastConfirmedParty, currentParty, photoUrl, sourceUrl, comparable, exercisedMonths, noExercise, heldMonths, totalCents, records, withoutData, months, categories]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        id: {type: integer}
+        name: {type: string}
+        uf: {type: [string, 'null']}
+        ufNote: {type: [string, 'null']}
+        party: {type: [string, 'null']}
+        partyNote: {type: [string, 'null']}
+        partyInReview: {type: boolean}
+        lastConfirmedParty: {type: [string, 'null']}
+        currentParty: {type: [string, 'null']}
+        photoUrl: {type: [string, 'null']}
+        sourceUrl: {type: [string, 'null']}
+        comparable: {type: boolean}
+        exercisedMonths: {type: integer}
+        noExercise: {type: boolean}
+        heldMonths: {type: array, items: {type: integer}}
+        totalCents: {type: integer}
+        records: {type: integer}
+        withoutData: {type: boolean}
+        months: {type: array, items: {$ref: '#/components/schemas/Month'}}
+        categories: {type: array, items: {$ref: '#/components/schemas/Category'}}
+    Expense:
+      type: object
+      description: O registro publicado, sem alterações. `cents` negativo e zero são válidos.
+      required: [id, lot, date, year, cents, month, origin, source, receipt, category, personId, supplier, documentId, documentCents, documentNumber, disallowedCents, supplierVerified]
+      additionalProperties: false
+      properties:
+        id: {type: string}
+        lot: {type: string}
+        date: {type: [string, 'null'], description: 'Horário local, sem fuso. Nulo para origin "annual".'}
+        year: {type: integer}
+        cents: {type: integer}
+        month: {type: integer, minimum: 1, maximum: 12}
+        origin: {type: string, enum: [both, annual, api]}
+        source:
+          type: object
+          required: [row, url, fetchedAt]
+          additionalProperties: false
+          properties:
+            row: {type: integer}
+            url: {type: string}
+            sha256: {type: string, description: Ausente em registros com fornecedor não verificado.}
+            fetchedAt: {type: string}
+        receipt: {type: [string, 'null']}
+        category: {type: string}
+        personId: {type: integer}
+        supplier: {type: string}
+        supplierLabel: {type: string}
+        supplierKey: {type: string, description: Ausente quando `supplierVerified` é false.}
+        supplierVerified: {type: boolean}
+        supplierIdOdd: {type: boolean}
+        documentId: {type: string}
+        documentCents: {type: [integer, 'null']}
+        documentNumber: {type: string}
+        disallowedCents: {type: [integer, 'null']}
+        note: {type: string}
+        sourceCents: {type: integer}
+        financialBasis: {type: string}
+        duplicateFlag: {type: string, enum: [possible]}
+    ExpenseList:
+      type: object
+      required: [publication, deputyId, expenses, nextCursor]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        deputyId: {type: integer}
+        expenses: {type: array, items: {$ref: '#/components/schemas/Expense'}}
+        nextCursor: {type: [string, 'null'], description: Nulo na última página.}
+    ExpenseOne:
+      type: object
+      required: [publication, expense]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        expense: {$ref: '#/components/schemas/Expense'}

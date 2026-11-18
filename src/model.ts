@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { validCpf } from './cpf-scan.ts';
 
 export const BASE = 'https://dadosabertos.camara.leg.br/api/v2';
-export const METRIC = 'camara.ceap.valor-liquido-api.v1';
 export const hash = (text: string | Uint8Array) => createHash('sha256').update(text).digest('hex');
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
@@ -22,8 +22,17 @@ export function snapshotId(snapshot:object):string{
   return hash(canonical({schema:SNAPSHOT_SCHEMA,body:withoutCaptureTimes(body)}));
 }
 // Some suppliers are individuals with a CPF inside the trade name; it never reaches a published record.
-export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
+const PLAIN_CPF=/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/;
+// The usual forms are masked whatever their check digits; the extra separators (spaces, NBSP, en dash, "/") only count with a valid CPF checksum, so ordinary numbers in a name survive.
+export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./])\d{3}[.  -]{0,2}\d{3}[.  -]{0,2}\d{3}[-–./  ]{0,3}\d{2}(?![\d/])/g,m=>PLAIN_CPF.test(m)||validCpf(m.replace(/\D/g,''))?'[CPF oculto]':m);
 // An individual paid by the quota is not a public figure: the name stays out until a legal opinion says otherwise.
+// 11 digits is a CPF. Any other id that is not a valid CNPJ (short, padded, letters stripped) is flagged for review; the build decides whether its name stays public.
+export const oddId=(id:string)=>id.length>0&&id.length!==11&&(!validCnpj(id)||id.length===14&&id.startsWith('000')&&validCpf(id.slice(3)));
+// The occurrence id is an unsalted hash, so for anyone but a verified CNPJ the supplier id and name stay out of it: a guessed name would otherwise let the ~10^9 CPFs be tried against the published id.
+export function occurrenceId(personId:number,raw:Record<string,unknown>,verified:boolean,idField:string,nameField:string):string{
+  return hash(canonical({personId,raw:verified?raw:{...raw,[idField]:null,[nameField]:null}}));
+}
+export const COMPANY_NAME=/(?<![\p{L}\p{N}])(LTDA|S\.A|S\/A|EIRELI|EPP|COMPANHIA|LINHAS A[ÉE]REAS|AIRLINES|HOTEL|APARTMENTS|TELEF[ÔO]NICA|CELULAR FUNCIONAL)(?![\p{L}\p{N}])/u;
 export function publicSupplier(name:string,rawId:string):{name:string;key:'cnpj'|'person'|'unknown'}{
   const id=rawId.replace(/\D/g,'');
   if(id.length===11)return {name:'Fornecedor pessoa física',key:'person'};
@@ -32,11 +41,6 @@ export function publicSupplier(name:string,rawId:string):{name:string;key:'cnpj'
 // The Câmara API drops connections for tens of seconds at a time; a run is long, so retries wait long.
 export const RETRY_WAITS=[2000,5000,15000,30000];
 export const retryWait=(attempt:number)=>Math.round(RETRY_WAITS[attempt]*(0.75+Math.random()/2));
-export function sourceError(url:string,error:unknown):Error{
-  const e=error as {message?:string;cause?:{code?:string;message?:string}}|undefined;
-  const cause=e?.cause?.code||e?.cause?.message;
-  return new Error(`${url}: ${e?.message??String(error)}${cause?` (${cause})`:''}`,{cause:error});
-}
 export async function readLimited(response:Response,limit:number):Promise<Uint8Array> {
   if(Number(response.headers.get('content-length'))>limit)throw new Error('Resposta excede limite');
   const parts:Uint8Array[]=[];let size=0;
@@ -60,16 +64,15 @@ export const expenseSchema=z.object({
   cnpjCpfFornecedor:z.string().nullable(),dataDocumento:z.string().nullable(),urlDocumento:z.string().nullable(),
   valorDocumento:z.number(),valorGlosa:z.number().nullable(),valorLiquido:z.number()
 }).passthrough();
-export const envelopeSchema=z.object({dados:z.array(z.unknown()),links:z.array(z.object({rel:z.string(),href:z.string()}))});
 export type Scope={year:number;months:number[];ids:number[];legislature:number};
-// uf and party are the Câmara's current status at collection time (statusDate), not a historical attribution.
-export type Person={id:number;name:string;photo:string|null;sourceUrl:string;profileFetchedAt:string;uf?:string|null;party?:string|null;statusDate?:string|null};
+// uf: temporal single-month UF, else the UF unanimous across the legislature's events, else null. party: the single confirmed month's party, else the legislature events' party at the period end (partyNote says how; with no party it says why), else null.
+export type Person={id:number;name:string;photo:string|null;sourceUrl:string;profileFetchedAt:string;uf?:string|null;ufNote?:string|null;party?:string|null;partyNote?:string|null;statusDate?:string|null};
 export const UFS=new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
-export type SourceRef={url:string;sha256:string;row:number;fetchedAt:string};
+export type SourceRef={url:string;sha256?:string;row:number;fetchedAt:string};
 export type FinancialBasis='reported-installment'|'balanced-document-split';
-export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey:string;supplierVerified:boolean;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis};
+export type Expense={id:string;personId:number;year:number;month:number;category:string;supplier:string;supplierKey?:string;supplierVerified:boolean;supplierIdOdd?:true;documentId:string;documentNumber:string;date:string|null;lot?:string;receipt:string|null;cents:number;documentCents:number|null;disallowedCents:number|null;source:SourceRef;origin?:'both'|'annual'|'api';financialBasis?:FinancialBasis;sourceCents?:number;note?:string;duplicateFlag?:'possible'};
 export type Page={url:string;sha256:string;file:string;fetchedAt:string;pass:number;count:number|null};
-export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
+export type Snapshot={id:string;metric:string;scope:Scope;people:Person[];records:Expense[];collectedAt:string;publishedAt:string;pages:Page[];validation:{stablePasses:number;recordCount:number;totalCents:number;independentTotalCents:string;duplicatePolicy:string;limitations:string[];apiComparison?:{apiRecords:number;annualRecords:number;missingInApi:number;extraInApi:number;netDifferenceCents:number;paired?:number;originCents?:{both:number;annual:number;api:number}};sourceKind?:string;removedFromPrevious?:{personId:number;month:number;category:string;cents:number}[];heldMonths?:Record<string,number>;heldCompetences?:{personId:number;month:number;reasons:string[]}[];duplicateCompetences?:{personId:number;month:number;reason:DuplicateReason}[];signFix?:{count:number;deltaCents:number};lots?:{runId:string;lot:number;reportSha256:string;contentSha256:string;auditCheckedAt:string}[]}};
 
 export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|null {
   try {const u=new URL(input);if(u.protocol!=='https:'&&u.protocol!=='http:')return null;
@@ -87,16 +90,31 @@ export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceR
   const supplierId=(r.cnpjCpfFornecedor||'').replace(/\D/g,'');
   // Only validated CNPJ businesses are grouped across records. CPF/missing IDs remain separate.
   const verified=validCnpj(supplierId),supplier=publicSupplier(r.nomeFornecedor,supplierId);
-  const occurrence=hash(canonical({personId,raw}));
-  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:r.codLote===null?'':String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
+  const occurrence=occurrenceId(personId,raw as Record<string,unknown>,verified,'cnpjCpfFornecedor','nomeFornecedor');
+  return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,...(oddId(supplierId)?{supplierIdOdd:true as const}:{}),documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:r.codLote===null?'':String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }
+// A CPF zero-padded to 14 digits can pass the CNPJ check; it only counts as a company when its branch digits look like a real CNPJ branch.
+const PADDED_CPF_BRANCH=/^000\d{5}000[1-9]\d{2}$/;
 export function validCnpj(id:string):boolean {
   if(!/^\d{14}$/.test(id)||/^(\d)\1+$/.test(id))return false;
+  if(id.startsWith('000')&&validCpf(id.slice(3))&&!PADDED_CPF_BRANCH.test(id))return false;
   const check=(s:string)=>{let weight=s.length-7;const sum=[...s].reduce((n,c)=>{n+=Number(c)*weight;weight=weight===2?9:weight-1;return n;},0);const mod=sum%11;return mod<2?0:11-mod;};
   return check(id.slice(0,12))===Number(id[12])&&check(id.slice(0,13))===Number(id[13]);
+}
+// A blank document is 'Não informado' in the annual file and '' in the API.
+export const blank=(s:string)=>s==='Não informado'?'':s;
+export type DuplicateReason='sigepa-unit-unconfirmed'|'ambiguous-identical-occurrences';
+// Repeated rows stay published, as the Câmara counts them: each gets a flag, and identical rows get ids told apart by occurrence order.
+export function markDuplicates(records:Expense[]):Expense[]{
+  const key=(r:Expense)=>canonical(r.category==='PASSAGEM AÉREA - SIGEPA'?[r.category,blank(r.documentId),blank(r.documentNumber),r.cents]:[r.category,blank(r.documentId),blank(r.documentNumber),r.cents,r.date,r.lot,r.supplier,r.documentCents,r.disallowedCents]);
+  const size=new Map<string,number>(),seen=new Map<string,number>();for(const r of records)size.set(key(r),(size.get(key(r))??0)+1);
+  return records.map(r=>{const n=seen.get(r.id)??0;seen.set(r.id,n+1);const id=n?hash(canonical({id:r.id,occurrence:n})):r.id;return {...r,id,...(r.supplierKey===r.id?{supplierKey:id}:{}),...(size.get(key(r))!>1?{duplicateFlag:'possible' as const}:{})};});
 }
 export function stableDigest(rows:{personId:number;raw:unknown}[]):string {
   const keys=rows.map(({personId,raw})=>canonical({personId,raw})).sort();
   for(let i=1;i<keys.length;i++)if(keys[i]===keys[i-1])throw new Error('Linhas idênticas ambíguas: não deduplicar nem publicar automaticamente');
+  // Occurrence ids leave the supplier out for anyone but a verified CNPJ: two rows that differ only there would share an id.
+  const ids=rows.map(({personId,raw})=>{const r=raw as Record<string,unknown>,api='cnpjCpfFornecedor' in r,idField=api?'cnpjCpfFornecedor':'txtCNPJCPF';return occurrenceId(personId,r,validCnpj(String(r[idField]||'').replace(/\D/g,'')),idField,api?'nomeFornecedor':'txtFornecedor');}).sort();
+  for(let i=1;i<ids.length;i++)if(ids[i]===ids[i-1])throw new Error('Linhas que só diferem no fornecedor teriam o mesmo id: não publicar automaticamente');
   return hash(keys.join('\n'));
 }

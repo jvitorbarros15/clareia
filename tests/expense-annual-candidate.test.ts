@@ -15,7 +15,7 @@ const all=Array.from({length:12},(_,i)=>i+1);
 function segment(year:number,months:number[],legislature:number,ids=[1]){
   const period=expensePeriod(year,months),scope={year,months,legislature,ids};
   const history:any={scope:{legislature},legislature:{id:legislature,...period},people:ids.map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2026-11-10T00:00:00Z'}}}))};
-  const temporal:any={scope:{legislature,...period},historySha256:hash(canonical(history)),people:ids.map(id=>({id,months:months.map(month=>({year,month,partialScope:false,exercise:'full',uf:{status:'single',value:'SP'},party:{status:'single',value:legislature===56?'A':'B'}}))}))};
+  const temporal:any={scope:{legislature,...period},historySha256:hash(canonical(history)),people:ids.map(id=>({id,events:[],months:months.map(month=>({year,month,partialScope:false,exercise:'full',uf:{status:'single',value:'SP'},party:{status:'single',value:legislature===56?'A':'B'}}))}))};
   const proposal={schema:'clareia.expense-lot.v1',year,months,lot:0,lotSize:50,lots:1,universeSize:ids.length,universeSha256:hash(canonical(ids)),people:ids.map(id=>({id})),temporalSha256:hash(canonical(temporal)),crosscheckSha256:'c'};
   const proposalSha256=hash(canonical(proposal)),input={schema:'clareia.expense-lot-input.v1',proposal,temporal};
   const cells=ids.flatMap(personId=>months.map(month=>({personId,year,month,status:month===3?'held-review':'complete',reasons:month===3?['unknown-exercise']:[],totalCents:month===3?null:month===2?-25:100,records:month===3?[]:[{id:`${year}-${month}-${personId}`,personId,year,month,cents:month===2?-25:100}]})));

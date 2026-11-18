@@ -9,6 +9,9 @@ const seed = seedAt < 0 ? 20261110 : Number(argv[seedAt + 1]), only = onlyAt < 0
 const base = process.env.BASE_URL || 'http://127.0.0.1:4174';
 const checks = [];
 const check = (name, fn) => checks.push({ name, fn });
+// The published data may lack the case a check needs (e.g. no negative category after the housing sign fix): skip, don't fail.
+class NoCase extends Error {}
+const needCase = (ok, message) => { if (!ok) throw new NoCase(message); };
 const text = async locator => (await locator.innerText()).replace(/\s+/g, ' ').trim();
 const clean = value => value.replace(/\s+/g, ' ').trim();
 const random = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -84,8 +87,7 @@ let ranked;
 async function rankedIds(page) {
   if (ranked) return ranked;
   const probe = page || await at(1440);
-  while (await probe.locator('#comparison [data-action=bars-more]').count()) await probe.locator('#comparison [data-action=bars-more]').click();
-  ranked = await probe.locator('.bar-row').evaluateAll(rows => rows.map(r => Number(r.dataset.id)));
+  ranked = await probe.evaluate(() => window.Clareia.ranking('gastos', true).map(p => p.officialId));
   if (!page) await probe.close();
   assert.ok(ranked.length >= 3, 'the ranking has deputies');
   return ranked;
@@ -179,7 +181,7 @@ check('adjustments explained', async () => {
   const page = await at(1440);
   const data = await published(page);
   const negative = Object.values(data.categories).filter(c => c < 0).reduce((n, c) => n + c, 0);
-  assert.ok(negative < 0, 'the published sample has a negative category');
+  needCase(negative < 0, 'the published sample has a negative category');
   const body = clean(await page.evaluate(() => document.body.innerText));
   assert.ok(body.includes(clean(`Ajustes negativos de ${brl(negative)} não entram nas fatias`)), `adjustment line for ${brl(negative)}`);
   await page.close();
@@ -215,7 +217,7 @@ check('copy', async () => {
   if (data.summary.votesId) assert.ok(body.includes(`Votações nominais de ${data.summary.votesYears.join(', ')}.`), 'votações copy for collected votes');
   else assert.ok(body.includes('Votações nominais ainda não foram coletadas'), 'votações copy');
   const negative = Object.values(data.categories).find(c => c < 0);
-  assert.ok(negative < 0, 'the published sample has a negative category');
+  needCase(negative < 0, 'the published sample has a negative category');
   await page.locator('#despesas [data-p=more-cats]').click();
   const listed = clean(await page.locator('#despesas .donut-legend').innerText());
   assert.ok(listed.includes(clean(brlCompact(negative))), `negative compact value ${brlCompact(negative)} in the category list`);
@@ -228,6 +230,23 @@ check('copy', async () => {
 const settle = page => page.waitForTimeout(500);
 const peopleOf = page => sampleIds(page, 4);
 
+const jpegBox = bytes => { for (let i = 2; i + 9 < bytes.length; i += 2 + bytes.readUInt16BE(i + 2)) { if (bytes[i] !== 0xff) return null; if (bytes[i + 1] >= 0xc0 && bytes[i + 1] <= 0xc3) return { width: bytes.readUInt16BE(i + 7), height: bytes.readUInt16BE(i + 5) }; } return null; };
+check('share images: og:image is a 1200x630 JPEG and "Baixar imagem" downloads the square one', async () => {
+  const manifest = await (await fetch(`${base}/manifest.json`)).json(), index = await (await fetch(`${base}/${manifest.base}/index.json`)).json();
+  if (!index.shareImages) return;
+  const p = index.people[0], slug = p.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''), route = `deputado/${p.id}-${slug}`;
+  const html = await (await fetch(`${base}/${route}`)).text(), meta = key => new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)">`).exec(html)?.[1];
+  assert.equal(meta('twitter:card'), 'summary_large_image'); assert.equal(meta('og:image:width'), '1200'); assert.equal(meta('og:image:height'), '630'); assert.equal(meta('og:image:type'), 'image/jpeg');
+  const res = await fetch(base + new URL(meta('og:image')).pathname), bytes = Buffer.from(await res.arrayBuffer());
+  assert.equal(res.status, 200); assert.equal(res.headers.get('content-type'), 'image/jpeg'); assert.deepEqual(jpegBox(bytes), { width: 1200, height: 630 }); assert.ok(bytes.length < 300 * 1024, `og:image with ${bytes.length} bytes`);
+  const page = await at(1440, { search: route });
+  try {
+    const button = page.locator('#detail [data-action="share-image"]'); await button.waitFor();
+    const [download] = await Promise.all([page.waitForEvent('download'), button.click()]);
+    assert.ok(download.suggestedFilename().endsWith('.jpg'));
+    assert.deepEqual(jpegBox(await require('node:fs/promises').readFile(await download.path())), { width: 1080, height: 1080 });
+  } finally { await page.close(); }
+});
 check('record amount visible', async () => {
   for (const width of [1440, 390]) {
     const page = await at(width);
@@ -427,7 +446,9 @@ check('donut panel', async () => {
 check('negative category', async () => {
   const page = await at(1440);
   const data = await published(page);
-  const [name, cents] = Object.entries(data.categories).find(([, c]) => c < 0);
+  const found = Object.entries(data.categories).find(([, c]) => c < 0);
+  needCase(found, 'the published sample has a negative category');
+  const [name, cents] = found;
   await page.locator('#despesas [data-p=more-cats]').click();
   const row = page.locator(`.donut-legend [data-p-highlight="${name}"]`);
   const rowText = clean(await row.innerText());
@@ -437,7 +458,7 @@ check('negative category', async () => {
   await page.close();
 });
 
-check('comparison stacks on mobile', async () => {
+check('comparison keeps the two people side by side on mobile', async () => {
   const page = await at(390);
   await page.locator('#comparacao').scrollIntoViewIfNeeded();
   const info = await page.evaluate(() => {
@@ -446,9 +467,9 @@ check('comparison stacks on mobile', async () => {
       const label = row.querySelector('b').getBoundingClientRect();
       return { height: label.height, lines: Math.round(label.height / parseFloat(getComputedStyle(row.querySelector('b')).lineHeight || 16)), right: row.getBoundingClientRect().right };
     });
-    return { stacked: b.top >= a.bottom - 1, rows, scroll: document.documentElement.scrollWidth <= innerWidth };
+    return { stacked: b.left >= a.right - 1 && Math.abs(b.top - a.top) < 4, rows, scroll: document.documentElement.scrollWidth <= innerWidth };
   });
-  assert.ok(info.stacked, 'the two people stack');
+  assert.ok(info.stacked, 'the two people sit side by side');
   assert.ok(info.scroll, 'no horizontal scroll');
   assert.ok(info.rows.every(r => r.lines <= 2 && r.right <= 390), `category labels: ${JSON.stringify(info.rows)}`);
   await page.close();
@@ -620,7 +641,7 @@ for (const width of [1440, 768, 390]) {
     await page.locator('.bar-row').first().click();
     await page.waitForSelector('#detail[open]');
     await page.locator('#detail [data-action=records]').click();
-    await page.waitForTimeout(300);
+    await recordsShown(page);
     const list = await measureTargets(page, [['dialog close', '#detail .close-button'], ['record Conferir', '#detail .record-go button'], ['dialog buttons', '#detail .action-row button']]);
     await page.locator('#detail .record-row').first().click();
     await page.waitForTimeout(300);
@@ -704,7 +725,7 @@ check('panorama dialog reuses the record rows', async () => {
 check('supplier note names companies and individuals', async () => {
   const page = await at(1440);
   const body = clean(await page.evaluate(() => document.body.innerText));
-  assert.ok(body.includes("Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'."), 'N5 note');
+  assert.ok(body.includes("Fornecedores com CNPJ aparecem pela razão social, que pode ser o nome de um empresário individual. Pessoa física sem CNPJ aparece como 'Fornecedor pessoa física'. Nomes de fornecedores sem CNPJ válido que não parecem de empresa não são exibidos, para proteger possíveis pessoas físicas."), 'N5 note');
   assert.ok(!body.includes('Fornecedor pessoa física aparece sem nome'), 'old note gone');
   await page.close();
 });
@@ -922,14 +943,14 @@ check('mobile comparison', async () => {
     const cats = [...document.querySelectorAll('.compare-category')];
     const overflow = cats.flatMap(c => [...c.children].filter(k => k.getBoundingClientRect().right > section.right + 0.5).map(k => k.textContent.trim()));
     return {
-      stacked: people[1].top >= people[0].bottom - 1,
+      stacked: people[1].left >= people[0].right - 1 && Math.abs(people[1].top - people[0].top) < 4,
       totals: [...board.querySelectorAll('.compare-total')].map(e => ({ text: e.innerText.replace(/\s+/g, ' '), lines: lines(e) })),
       labels: cats.map(c => ({ text: c.querySelector('b').innerText, lines: lineCount(c.querySelector('b')) })),
       overflow,
       scroll: document.documentElement.scrollWidth - window.innerWidth,
     };
   });
-  assert.ok(m.stacked, 'the two people stack');
+  assert.ok(m.stacked, 'the two people sit side by side');
   for (const t of m.totals) assert.equal(t.lines, 1, `arrow stays on the value line: ${t.text}`);
   for (const l of m.labels) assert.ok(l.lines <= 2, `category label ≤ 2 lines: ${l.text} (${l.lines})`);
   assert.deepEqual(m.overflow, [], 'category values stay inside the section');
@@ -955,7 +976,7 @@ async function adjustmentPair(data) {
     if (!zero && !values.length && await uniqueFirst(p.name)) zero = p;
     if (negative && zero) break;
   }
-  assert.ok(negative && zero, 'the published data has a deputy with negative adjustments and one with none in the category');
+  needCase(negative && zero, 'the published data has a deputy with negative adjustments and one with none in the category');
   return adjusted = { negative, zero };
 }
 const pickPair = async (page, data, a, b) => {
@@ -1281,7 +1302,7 @@ const stub = ({ months, records } = {}) => async page => {
     const res = await route.fetch(), f = await res.json(), rows = await shaped, cells = {};
     for (const [id, list] of Object.entries(rows)) {
       const groups = new Map();
-      for (const r of list) { const k = [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplier)].join(':'), g = groups.get(k) || [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplier), 0, 0]; g[3] += r.cents; g[4]++; groups.set(k, g); }
+      for (const r of list) { const k = [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplierLabel ?? r.supplier)].join(':'), g = groups.get(k) || [r.month, f.categories.indexOf(r.category), f.suppliers.indexOf(r.supplierLabel ?? r.supplier), 0, 0]; g[3] += r.cents; g[4]++; groups.set(k, g); }
       cells[id] = [...groups.values()];
     }
     f.people = cells;
@@ -1289,7 +1310,12 @@ const stub = ({ months, records } = {}) => async page => {
   });
   await page.route('**/summary.json', async route => {
     const res = await route.fetch(), s = await res.json(), rows = await shaped;
-    for (const p of s.people) { const list = rows[p.id] || []; p.cents = list.reduce((n, r) => n + r.cents, 0); p.records = list.length; }
+    for (const p of s.people) {
+      const list = rows[p.id] || [];
+      p.cents = list.reduce((n, r) => n + r.cents, 0); p.records = list.length;
+      // The page sums each category from these totals, so they are regrouped from the same stubbed records.
+      p.categories = p.categories.map(c => { const rs = list.filter(r => r.category === c.category); return { ...c, cents: rs.reduce((n, r) => n + r.cents, 0), records: rs.length }; }).filter(c => c.records);
+    }
     await route.fulfill({ response: res, json: s });
   });
 };
@@ -1493,10 +1519,11 @@ check('comparison breakdown bars use magnitudes', async () => {
     const vals = cats.map(c => [sumCents(data, a, c), sumCents(data, b, c)]);
     const max = Math.max(1, ...vals.flat().map(Math.abs));
     const widths = await page.locator('.compare-category').evaluateAll(rows => rows.map(r => [r.querySelector('.left-bar i').style.width, r.querySelector('.right-bar i').style.width].map(w => w === '' ? NaN : parseFloat(w))));
-    assert.equal(widths.length, cats.length);
+    const shown = vals.filter(v => v[0] || v[1]);
+    assert.equal(widths.length, shown.length);
     widths.forEach(([l, r], i) => {
-      assert.ok(Math.abs(l - Math.abs(vals[i][0]) / max * 100) < 1e-3, `${a} bar ${i}: ${l} vs ${vals[i][0]}`);
-      assert.ok(Math.abs(r - Math.abs(vals[i][1]) / max * 100) < 1e-3, `${b} bar ${i}: ${r} vs ${vals[i][1]}`);
+      assert.ok(Math.abs(l - Math.abs(shown[i][0]) / max * 100) < 1e-3, `${a} bar ${i}: ${l} vs ${shown[i][0]}`);
+      assert.ok(Math.abs(r - Math.abs(shown[i][1]) / max * 100) < 1e-3, `${b} bar ${i}: ${r} vs ${shown[i][1]}`);
     });
   }
   await page.close();
@@ -1562,7 +1589,7 @@ check('shared link with a question keeps defaults the reader chose, and short li
 check('a link without uf never matches deputies who have no uf, so a question still renders the page', async () => {
   const data = await published();
   const noUf = data.summary.people.filter(q => inOffice(q) && !data.index.people.find(p => p.id === q.id).uf);
-  assert.ok(noUf.length > 0, 'the published data has deputies in office without a uf');
+  needCase(noUf.length > 0, 'the published data has deputies in office without a uf');
   for (const search of [`?q=${encodeURIComponent('Quem mais gastou?')}`, `?q=${encodeURIComponent('Quem mais gastou?')}&uf=`]) {
     const page = await at(1440, { search });
     assert.equal(await page.evaluate(() => window.Clareia.state.uf), 'Brasil', `uf stays Brasil for ${search}`);
@@ -1614,7 +1641,7 @@ check('map shades only positive values and gives net-negative tiles their own st
   const cat = await page.evaluate(() => window.Clareia.state.category);
   const byUf = {};
   for (const p of data.people.filter(p => p.uf && p.uf !== smallest[0])) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p, cat);
-  assert.ok(Object.values(byUf).some(v => v < 0), 'real data has a net-negative state for this category');
+  needCase(Object.values(byUf).some(v => v < 0), 'real data has a net-negative state for this category');
   const maxPositive = Math.max(0, ...Object.values(byUf).filter(v => v > 0));
   const read = uf => page.locator(`[data-p-uf="${uf}"]`).evaluate(g => {
     const path = g.querySelectorAll('path')[1], cs = getComputedStyle(path);
@@ -1879,7 +1906,7 @@ check('every aggregate equals the published records, and categories keep their o
     const D = window.ClareiaData, out = [], byCategory = new Map();
     for (const p of D.dataset()) {
       const res = await fetch(D.recordsUrl(p.officialId)), raw = res.status === 404 ? [] : await res.json(), want = new Map();
-      for (const r of raw) { const k = [r.month - 1, r.category, r.supplier].join('|'), w = want.get(k) || [0, 0]; w[0] += r.cents; w[1]++; want.set(k, w); byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.cents)); }
+      for (const r of raw) { const k = [r.month - 1, r.category, r.supplierLabel ?? r.supplier].join('|'), w = want.get(k) || [0, 0]; w[0] += r.cents; w[1]++; want.set(k, w); byCategory.set(r.category, (byCategory.get(r.category) || 0) + Math.abs(r.cents)); }
       const got = new Map(p.cells.map(c => [[c.month, c.category, c.supplier].join('|'), [c.amount, c.count]]));
       if (got.size !== want.size) out.push(`${p.name}: ${got.size} cells for ${want.size} groups`);
       for (const [k, w] of want) { const g = got.get(k); if (!g || g[0] !== w[0] || g[1] !== w[1]) out.push(`${p.name} ${k}: ${g} vs ${w}`); }
@@ -1988,7 +2015,7 @@ check('a deputy with a held month shows a partial total outside rankings, and on
   const partial = data.summary.people.find(q => !data.withoutData.includes(q.id) && q.months.filter(m => m.held).length === 1 && q.records > 0).id;
   const held = data.people.find(p => p.id !== partial).id;
   const page = await at(1440, { before: async p => {
-    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); for (const q of s.people) if (q.id === held) { for (const m of q.months) Object.assign(m, { held: true, exercise: 'full', cents: 0, records: 0 }); Object.assign(q, { cents: 0, records: 0 }); } await route.fulfill({ response: res, json: s }); });
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); for (const q of s.people) if (q.id === held) { for (const m of q.months) Object.assign(m, { held: true, exercise: 'full', cents: 0, records: 0 }); Object.assign(q, { cents: 0, records: 0, heldMonths: q.months.map(m => m.month), comparable: false }); } await route.fulfill({ response: res, json: s }); });
     await p.route('**/fornecedores.json', async route => { const res = await route.fetch(), f = await res.json(); f.people[held] = []; await route.fulfill({ response: res, json: f }); });
   } });
   const ranked = await page.evaluate(() => window.Clareia.ranking('gastos').map(p => p.officialId));
@@ -2110,6 +2137,25 @@ check('projects tab ranks approved projects by count then name, hides Total / Po
   await page.close();
 });
 
+check('comparison shows each deputy approved projects apart from the money bars, never mixed with spending', async () => {
+  const page = await at(1440, { before: approvedSummary(i => i % 4 + 1, { drop: 0 }) });
+  await page.locator('#comparacao').scrollIntoViewIfNeeded();
+  const got = await page.evaluate(() => {
+    const C = window.Clareia, ids = ['#compare-a', '#compare-b'].map(s => document.querySelector(s).value);
+    return { ids, expected: ids.map(id => C.approvedText(C.all().find(p => String(p.id) === id))), shown: [...document.querySelectorAll('.compare-projects button b')].map(e => e.textContent), inBars: document.querySelectorAll('.compare-breakdown .compare-projects, .compare-category .compare-projects').length, board: document.querySelector('.comparison-board').innerText, block: document.querySelector('.compare-projects')?.innerText };
+  });
+  needCase(got.shown.length === 2, 'the comparison shows the projects block');
+  assert.deepEqual(got.shown, got.expected);
+  assert.equal(got.inBars, 0, 'projects are not a category row');
+  assert.match(got.block, /Projetos aprovados\s*2023–2026/); assert.match(got.block, /não tem relação com o valor gasto/);
+  assert.doesNotMatch(got.block, /%|R\$/, 'no ratio or money in the projects block');
+  assert.doesNotMatch(got.board, /projeto/i, 'the spending board does not mention projects');
+  assert.equal(await page.locator('.compare-projects [data-kind=projetos]').count(), 2);
+  // the mocked summary points at activity files that the local build does not have
+  assert.deepEqual(page.errors.filter(e => !/404/.test(e)), []);
+  await page.close();
+});
+
 check('every ranking tab renders rows or an explicit empty message with its reason', async () => {
   for (const [label, before] of [['without bills', undefined], ['with bills', approvedSummary(i => i % 4)], ['bills collected for nobody', approvedSummary(() => 0, { drop: 10000 })]]) {
     for (const tab of ['gastos', 'menos', 'projetos']) {
@@ -2122,18 +2168,235 @@ check('every ranking tab renders rows or an explicit empty message with its reas
   }
 });
 
+// Independent of the page: the share of the ceiling recomputed from the summary's months and ceiling table with plain BigInt arithmetic.
+async function expectedShares(page) {
+  const raw = await page.evaluate(async () => { const m = await (await fetch('/manifest.json')).json(), s = await (await fetch(`/${m.base}/summary.json`)).json(), i = await (await fetch(`/${m.base}/index.json`)).json(); return { s, names: Object.fromEntries(i.people.map(p => [p.id, p.name])) }; });
+  const rows = [];
+  for (const p of raw.s.people) {
+    const held = p.months.some(m => m.held), exercised = p.months.filter(m => m.exercise !== 'outside' || m.records > 0).length, none = p.records === 0 && p.months.every(m => !m.exercise || ['unknown', 'outside', 'conflict'].includes(m.exercise));
+    if (none || held || exercised < Math.min(6, p.months.length)) continue;
+    const counted = p.months.filter(m => (m.exercise !== 'outside' || m.records > 0) && !m.held && m.exercise !== 'partial');
+    if (!counted.length || counted.some(m => m.exercise !== 'full' || m.ufStatus !== 'single' || !raw.s.ceiling.byUf[m.uf])) continue;
+    const num = counted.reduce((n, m) => n + BigInt(m.cents), 0n), den = counted.reduce((n, m) => n + BigInt(raw.s.ceiling.byUf[m.uf][m.month - 1]), 0n);
+    rows.push({ id: p.id, name: raw.names[p.id], num, den, tenths: (num * 2000n + den) / (2n * den), counted, excluded: p.months.filter(m => (m.exercise !== 'outside' || m.records > 0) && (m.held || m.exercise === 'partial')) });
+  }
+  return { rows, ceiling: raw.s.ceiling };
+}
+const pct1 = tenths => (Number(tenths) / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+const reais = cents => clean((Number(cents) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/^-/, '−'));
+
+check('the ranking is always in reais: no measure switch, a stale ?medida=teto link is ignored', async () => {
+  for (const search of ['', '?medida=teto']) {
+    const page = await at(1440, { search });
+    assert.equal(await page.locator('.measure-toggle, [data-measure]').count(), 0, 'no measure switch');
+    assert.equal(await page.locator('.metric-toggle [data-metric=mensal]').count(), 1, 'Total / Por mês stays');
+    assert.equal(await page.locator('#comparison .bar-money').count(), 0);
+    const names = await page.evaluate(() => window.Clareia.ranking('gastos').slice(0, 3).map(p => p.name));
+    assert.deepEqual(await page.locator('.rank-card .person-name').allTextContents(), names);
+    assert.doesNotMatch(await text(page.locator('.rank-card .value-button').first()), /%/);
+    if (!search) assert.deepEqual([...(await searchOf(page)).keys()].filter(k => k !== 'destaque'), [], 'a plain link carries no default parameters');
+    assert.equal(page.errors.length, 0, page.errors.join('|'));
+    await page.close();
+  }
+});
+
+check('each top-3 card has a pill with the % of the ceiling, or "% não confirmado", only on the expense tabs with all categories', async () => {
+  const page = await at(1440), exp = await expectedShares(page), byId = new Map(exp.rows.map(r => [String(r.id), r]));
+  assert.ok(exp.rows.length > 3, 'some deputies have a confirmed ceiling');
+  for (const tab of ['gastos', 'menos']) {
+    await page.locator(`[data-tab=${tab}]`).click();
+    const cards = await page.locator('.rank-card').evaluateAll(els => els.map(el => [el.dataset.person, el.querySelector('.ceiling-pill')?.textContent.trim() ?? null, el.querySelector('.ceiling-pill')?.tagName ?? null]));
+    assert.equal(cards.length, 3);
+    cards.forEach(([id, pill, tag], i) => {
+      const r = byId.get(id);
+      assert.equal(pill, r ? `${pct1(r.tenths)} do teto` : '% não confirmado', `${tab} card ${i + 1} pill`);
+      assert.equal(tag, r ? 'BUTTON' : 'SPAN', `${tab} card ${i + 1} pill is clickable only when confirmed`);
+    });
+  }
+  await page.locator('[data-tab=projetos]').click();
+  assert.equal(await page.locator('.ceiling-pill').count(), 0, 'no pill on Projetos');
+  await page.close();
+  const data = await published(), cat = Object.keys(data.categories)[0];
+  const filtered = await at(1440, { search: `?categoria=${encodeURIComponent(cat)}` });
+  assert.ok(await filtered.locator('.rank-card').count() > 0);
+  assert.equal(await filtered.locator('.ceiling-pill').count(), 0, 'no pill with a category filter: the % is only valid for all categories');
+  await filtered.close();
+});
+
+// The deputies whose pill is a confirmed % on the two expense tabs, with the tab each one is on.
+async function pillTargets(page, exp) {
+  const out = [];
+  for (const tab of ['gastos', 'menos']) {
+    await page.locator(`[data-tab=${tab}]`).click();
+    for (const id of await page.locator('.rank-card button.ceiling-pill').evaluateAll(els => els.map(el => el.dataset.id))) out.push({ tab, row: exp.rows.find(r => String(r.id) === id) });
+  }
+  assert.ok(out.length && out.every(t => t.row), 'confirmed pills match the data');
+  return out;
+}
+
+check('the pill opens the % evidence dialog: subtitle, warning with the count above 100%, counted months, both sums and the division', async () => {
+  const page = await at(1440), exp = await expectedShares(page);
+  const first = await page.locator('.rank-card .ceiling-pill:is(button)').first();
+  const id = await first.getAttribute('data-id'), target = exp.rows.find(r => String(r.id) === id);
+  assert.ok(target, 'the first pill is a confirmed %');
+  await first.click();
+  await page.waitForSelector('#detail[open] .ceiling-table');
+  assert.equal(clean(await text(page.locator('#detail .dialog-subtitle'))), 'A porcentagem do teto, passo a passo');
+  const warning = clean(await text(page.locator('#detail .ceiling-warning')));
+  assert.ok(warning.includes(`Atenção: ${exp.rows.filter(r => r.num > r.den).length} de ${exp.rows.length} deputados comparáveis do país aparecem acima de 100% no ano`), 'warning counts comparable deputies nationwide strictly above 100%');
+  assert.match(warning, /adicionais de líderes/); assert.match(warning, /além da cota/); assert.doesNotMatch(warning, /levemente/);
+  const rows = await page.locator('#detail .ceiling-table tbody tr').evaluateAll(trs => trs.map(tr => [...tr.children].map(td => td.textContent.trim())));
+  assert.equal(rows.length, target.counted.length, 'one row per counted month');
+  const foot = await page.locator('#detail .ceiling-table tfoot td').allTextContents();
+  assert.equal(clean(foot[0]), reais(target.num)); assert.equal(clean(foot[1]), reais(target.den));
+  const body = await text(page.locator('#detail-body'));
+  assert.ok(body.includes(`${reais(target.num)} ÷ ${reais(target.den)} × 100`), 'the division is written out');
+  assert.ok(body.includes(pct1(target.tenths)), 'the result is the pill %');
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
+
+check('% evidence dialog shows the counted months, both sums, the division and the excluded months, matching the data', async () => {
+  const page = await at(1440), exp = await expectedShares(page);
+  const pills = await pillTargets(page, exp), pick = pills.find(t => t.row.excluded.length) || pills[0], target = pick.row;
+  await page.locator(`[data-tab=${pick.tab}]`).click();
+  await page.locator(`.rank-card button.ceiling-pill[data-id="${target.id}"]`).click();
+  await page.waitForSelector('#detail[open] .ceiling-table');
+  const rows = await page.locator('#detail .ceiling-table tbody tr').evaluateAll(trs => trs.map(tr => [...tr.children].map(td => td.textContent.trim())));
+  assert.equal(rows.length, target.counted.length, 'one row per counted month');
+  target.counted.forEach((m, i) => { assert.equal(rows[i][1], m.uf); assert.equal(clean(rows[i][2]), reais(m.cents)); assert.equal(clean(rows[i][3]), reais(exp.ceiling.byUf[m.uf][m.month - 1])); });
+  const foot = await page.locator('#detail .ceiling-table tfoot td').allTextContents();
+  assert.equal(clean(foot[0]), reais(target.num)); assert.equal(clean(foot[1]), reais(target.den));
+  const body = await text(page.locator('#detail-body'));
+  assert.ok(body.includes(`${reais(target.num)} ÷ ${reais(target.den)} × 100`), 'the division is written out');
+  assert.ok(body.includes(pct1(target.tenths)), 'the result is the pill %');
+  assert.match(body, new RegExp(`${target.excluded.length} (meses|mês) excluídos?|Nenhum mês excluído`));
+  for (const m of target.excluded) assert.ok(body.includes(m.exercise === 'partial' ? 'mês parcial' : 'mês em revisão'), 'the reason of each excluded month');
+  assert.ok(body.includes('Ato da Mesa nº 270/2023'), 'cites the act');
+  assert.equal(await page.locator('#detail [data-action=methodology]').count(), 1);
+  await page.locator('#detail [data-action=methodology]').click();
+  const method = await text(page.locator('#detail-body'));
+  assert.match(method, /% do teto da cota usado/); assert.match(method, /Ato da Mesa nº 43\/2009/); assert.match(method, /Ato da Mesa nº 270\/2023/);
+  assert.ok(await page.locator('#detail-body a[href^="https://www2.camara.leg.br/legin/int/atomes/2009/"]').count() > 0, 'the methodology links the source');
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
+
+check('the % warning count stays nationwide when a UF filter is active', async () => {
+  const page = await at(1440, { search: '?uf=SP' }), exp = await expectedShares(page);
+  const pill = page.locator('.rank-card button.ceiling-pill').first();
+  assert.ok(await pill.count(), 'a confirmed pill exists in SP');
+  await pill.click();
+  await page.waitForSelector('#detail[open] .ceiling-warning');
+  assert.ok(clean(await text(page.locator('#detail .ceiling-warning'))).includes(`Atenção: ${exp.rows.filter(r => r.num > r.den).length} de ${exp.rows.length} deputados comparáveis do país`), 'same national count under ?uf=SP');
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
+
+check('the % numerator is the exact sum of the raw records of the counted months', async () => {
+  const page = await at(1440), exp = await expectedShares(page);
+  for (const { row: target } of await pillTargets(page, exp)) {
+    const sum = await page.evaluate(async ([id, months]) => { const m = await (await fetch('/manifest.json')).json(), r = await (await fetch(`/${m.base}/deputados/${id}/despesas.json`)).json(); return r.filter(x => months.includes(x.month)).reduce((n, x) => n + x.cents, 0); }, [target.id, target.counted.map(m => m.month)]);
+    assert.equal(BigInt(sum), target.num);
+  }
+  await page.close();
+});
+
+check('static pages load at their own URLs and the footer links reach them', async () => {
+  const pages = [['sobre', 'Sobre o Clareia'], ['correcoes', 'Correções'], ['metodologia', 'Metodologia']];
+  for (const [route, heading] of pages) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(`${base}/${route}`);
+    await page.waitForSelector('#main h1');
+    assert.equal(clean(await page.locator('#main h1').innerText()), heading, route);
+    assert.match(await page.title(), /— Clareia$/, route);
+    assert.deepEqual(errors, [], `${route} errors`);
+    await page.close();
+  }
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(base);
+  await page.waitForSelector('.footer');
+  for (const [route, heading] of pages) {
+    await page.locator(`.footer a[href="/${route}"]`).click();
+    await page.waitForSelector('#main h1');
+    assert.equal(new URL(page.url()).pathname, `/${route}`);
+    assert.equal(clean(await page.locator('#main h1').innerText()), heading, `footer to ${route}`);
+    await page.goto(base);
+    await page.waitForSelector('.footer');
+  }
+  await page.close();
+});
+
+check('the open data page links every download, shows each SHA-256 and documents every record field', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(base);
+  await page.waitForSelector('.footer');
+  await page.locator('.footer a[href="/dados-abertos"]').click();
+  await page.waitForSelector('#main h1');
+  assert.equal(new URL(page.url()).pathname, '/dados-abertos');
+  assert.equal(clean(await page.locator('#main h1').innerText()), 'Dados abertos');
+  await page.waitForSelector('.doc-table a[download]');
+  const { manifest, sample, indexSha } = await page.evaluate(async () => {
+    const m = await (await fetch('/manifest.json')).json(), open = await (await fetch(`/${m.base}/dados-abertos.json`)).json();
+    const ids = (await (await fetch(`/${m.base}/index.json`)).json()).scope.ids;
+    let rows = [];
+    for (const id of ids) { rows = await (await fetch(`/${m.base}/deputados/${id}/despesas.json`)).json().catch(() => []); if (rows.length) break; }
+    const bytes = await (await fetch(`/${m.base}/index.json`)).arrayBuffer(), digest = await crypto.subtle.digest('SHA-256', bytes);
+    return { manifest: { ...open, base: m.base }, sample: rows, indexSha: [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('') };
+  });
+  assert.ok(manifest.files.some(f => f.kind === 'month'), 'monthly files listed');
+  assert.equal(indexSha, manifest.files.find(f => f.name === 'index.json').sha256, 'index.json matches its SHA-256');
+  const hrefs = await page.locator('.doc-table a[download]').evaluateAll(links => links.map(a => a.getAttribute('href')));
+  assert.deepEqual(hrefs.sort(), manifest.files.map(f => `/${manifest.base}/${f.path}`).sort());
+  const text = await page.locator('#main').innerText();
+  for (const f of manifest.files) {
+    const response = await page.request.get(`${base}/${manifest.base}/${f.path}`);
+    assert.equal(response.status(), 200, f.name);
+    assert.equal((await response.body()).length, f.bytes, `${f.name} size`);
+    assert.ok(text.includes(f.sha256), `${f.name} SHA-256 shown`);
+  }
+  assert.deepEqual(errors, []);
+  needCase(sample.length > 0, 'the published sample has a deputy with expense records');
+  const fields = new Set(sample.flatMap(r => [...Object.keys(r), ...Object.keys(r.source).map(k => `source.${k}`)]).filter(k => k !== 'source'));
+  const listed = new Set(await page.locator('.doc-table code').allInnerTexts());
+  for (const field of fields) assert.ok(listed.has(field), `dictionary lists ${field}`);
+  await page.close();
+});
+
+check('the record detail shows the possible-duplicate line only for a flagged record', async () => {
+  const open = async flag => {
+    const page = await at(1440, { before: flag ? page => page.route(/despesas\.json/, async route => { const res = await route.fetch(), rows = await res.json(); await route.fulfill({ response: res, json: Array.isArray(rows) ? rows.map(r => ({ ...r, duplicateFlag: 'possible' })) : rows }); }) : undefined });
+    await page.locator('.bar-row').first().click();
+    await page.waitForSelector('#detail[open]');
+    await page.locator('#detail [data-action=records]').click();
+    await page.locator('#detail .record-row').first().click();
+    await page.waitForFunction(() => document.querySelector('#detail-title').textContent === 'O registro por trás do valor');
+    return clean(await page.locator('#detail').innerText());
+  };
+  const line = 'Possível duplicidade: a fonte traz outro lançamento com o mesmo documento e valor. Somamos todos, como a Câmara.';
+  assert.ok((await open(true)).includes(line), 'flagged record shows the line');
+  assert.ok(!(await open(false)).includes('Possível duplicidade'), 'an unflagged record does not');
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
-  let failed = 0, ran = 0;
+  let failed = 0, ran = 0, skipped = 0;
   try {
     for (const { name, fn } of checks) {
       if (only && !name.toLowerCase().includes(only)) continue;
       ran++;
       try { await fn(); console.log(`PASS ${name}`); }
-      catch (error) { failed++; console.log(`FAIL ${name}\n  ${String(error.message).split('\n').join('\n  ')}`); }
+      catch (error) {
+        if (error instanceof NoCase) { skipped++; console.log(`SKIP ${name}\n  sem caso no dado: ${error.message}`); }
+        else { failed++; console.log(`FAIL ${name}\n  ${String(error.message).split('\n').join('\n  ')}`); }
+      }
       for (const page of browser.contexts().flatMap(context => context.pages())) await page.close().catch(() => {});
     }
   } finally { await browser.close(); }
-  console.log(`${ran - failed} of ${ran} checks passed`);
+  console.log(`${ran - failed - skipped} of ${ran - skipped} checks passed${skipped ? `, ${skipped} skipped (no case in the data)` : ''}`);
   if (failed) process.exitCode = 1;
 })();
