@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { validCpf } from './cpf-scan.ts';
 
 export const BASE = 'https://dadosabertos.camara.leg.br/api/v2';
 export const hash = (text: string | Uint8Array) => createHash('sha256').update(text).digest('hex');
@@ -90,8 +91,11 @@ export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceR
   const occurrence=occurrenceId(personId,raw as Record<string,unknown>,verified,'cnpjCpfFornecedor','nomeFornecedor');
   return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,...(oddId(supplierId)?{supplierIdOdd:true as const}:{}),documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:r.codLote===null?'':String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }
+// A CPF zero-padded to 14 digits can pass the CNPJ check; it only counts as a company when its branch digits look like a real CNPJ branch.
+const PADDED_CPF_BRANCH=/^000\d{5}000[1-9]\d{2}$/;
 export function validCnpj(id:string):boolean {
   if(!/^\d{14}$/.test(id)||/^(\d)\1+$/.test(id))return false;
+  if(id.startsWith('000')&&validCpf(id.slice(3))&&!PADDED_CPF_BRANCH.test(id))return false;
   const check=(s:string)=>{let weight=s.length-7;const sum=[...s].reduce((n,c)=>{n+=Number(c)*weight;weight=weight===2?9:weight-1;return n;},0);const mod=sum%11;return mod<2?0:11-mod;};
   return check(id.slice(0,12))===Number(id[12])&&check(id.slice(0,13))===Number(id[13]);
 }
