@@ -153,7 +153,9 @@ test('a build writes deputy, state and home pages and rebuilds byte for byte',()
   assert.equal(meta(ana,'og:image'),`${SITE}/data/${id}/portraits/1.jpg`);
   assert.equal(meta(ana,'og:image:width'),'300');
   assert.equal(meta(ana,'og:image:height'),'400');
-  assert.ok(ana.includes('<script defer src="/view.js"></script>'));
+  assert.match(ana,/<script defer src="\/view\.js\?v=[0-9a-f]{10}"><\/script>/);
+  const home=await fs.readFile(path.join(dist,'index.html'),'utf8'),loader=await fs.readFile(path.join(dist,'data.js'),'utf8');
+  for(const asset of ['app','portal']){const url=loader.match(new RegExp(`'(/${asset}\\.js\\?v=[0-9a-f]{10})'`))?.[1];assert.ok(url,asset);assert.ok(home.includes(`<link rel="preload" href="${url}" as="script">`),`${asset} preload matches the loaded URL`);}
   const ze=await fs.readFile(path.join(dist,'deputado','2-ze-avila.html'),'utf8');
   assert.equal(meta(ze,'og:image'),`${SITE}/icon-512.png`);
   assert.equal((await fs.readdir(path.join(dist,'estado'))).length,27);
