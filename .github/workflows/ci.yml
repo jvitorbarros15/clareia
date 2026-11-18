@@ -33,3 +33,37 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run scan:cpf -- real
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres@sha256:dd2bf3ce2dc83a81674cf7f217fcfd8a5009a4b325dda5b843bfee82a06cff6f # postgres:16
+        env:
+          POSTGRES_PASSWORD: clareia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CLAREIA_API_TEST_DSN: postgresql://postgres:clareia@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - run: npm ci --ignore-scripts
+      - run: npm run scan:cpf -- api/testdata
+      - run: go vet ./...
+        working-directory: api
+      - run: go test -count=1 ./...
+        working-directory: api
