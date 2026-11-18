@@ -51,6 +51,16 @@ async function assertServedIsAudited(db:DB,active:Publication):Promise<void>{
   const outside=all.filter(r=>!active.scope.ids.includes(r.personId)).length;
   if(outside)throw new Error(`${outside} registros fora do recorte da versão`);
 }
+// A content hash in every script and stylesheet URL: a browser that kept a file from an earlier deploy cannot pair it with a new page.
+async function versionAssets(outDir:string):Promise<void>{
+  const tagged=async(file:string,assets:string[])=>{
+    let text=await fs.readFile(path.join(outDir,file),'utf8');
+    for(const asset of assets){const v=hash(await fs.readFile(path.join(outDir,asset))).slice(0,10);text=text.replaceAll(`'/${asset}'`,`'/${asset}?v=${v}'`).replaceAll(`"/${asset}"`,`"/${asset}?v=${v}"`);}
+    await fs.writeFile(path.join(outDir,file),text);
+  };
+  await tagged('data.js',['app.js','portal.js']);
+  for(const page of ['index.html','404.html'])await tagged(page,['view.js','pages.js','data.js','analytics.js','app.js','portal.js','styles.css']);
+}
 export async function buildSite(db:DB,finalDir:string,portraitsDir:string,options:SiteOptions={},ceiling:SiteCeiling|null=null):Promise<{publicationId:string;files:number;review:ReviewItem[];names:ReviewNames;partyReview:ReviewItem[]}>{
   const siteOptions=resolveOptions(options);
   // Everything is built aside: a refusal at any step leaves the previous output in place.
@@ -117,6 +127,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.mkdir(path.join(outDir,'fonts'));
   for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});
+  await versionAssets(outDir);
   const deputies=deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary}),period={year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1),minMonths:summary.minMonths};
   // The cache sits beside the output so an unchanged image is copied, not rendered again; the output folder itself is rebuilt every time.
   const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId:STAGING,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache'}):null;
