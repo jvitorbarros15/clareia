@@ -58,7 +58,9 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
     const months=[...scope.months].sort((a,b)=>a-b).map<MonthSummary>(month=>{
       const rows=own.filter(r=>r.month===month),row=attribution.get(id+':'+scope.year+':'+month);
       if(heldKeys.has(id+':'+month)&&rows.length)throw new Error('Competência retida com registros');
-      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,held:heldKeys.has(id+':'+month)};
+      // The UF of representation is fixed for the legislature: a confirmed one (no ufNote) fills a month in exercise that review blanked, never one with its own UF status.
+      const inherit=row?.ufStatus==='review'&&(row.exercise==='full'||row.exercise==='partial')&&person.uf&&!person.ufNote;
+      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:inherit?'single':row?.ufStatus??'unavailable',uf:inherit?person.uf!:row?.uf??null,held:heldKeys.has(id+':'+month)};
     });
     // With an approved version, a deputy absent from it has zero counted bills; without one the count is unknown.
     const counted=billsOf.get(id);
