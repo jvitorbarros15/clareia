@@ -22,7 +22,7 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT seq, record FROM api.expenses WHERE deputy_id 
 EXPLAIN (ANALYZE, BUFFERS) SELECT EXISTS (SELECT 1 FROM api.deputies WHERE id = :wid);
 \echo === expense by public_id
 EXPLAIN (ANALYZE, BUFFERS) SELECT record FROM api.expenses WHERE public_id = :'pid';
-\echo === suppliers list: first page, limit 100 (aggregation over all cells)
+\echo === OLD aggregation (before suppliers table), suppliers list: first page, limit 100 (aggregation over all cells)
 EXPLAIN (ANALYZE, BUFFERS)
 WITH s AS (
   SELECT label, supplier_key, sum(cents)::bigint AS cents, sum(records)::bigint AS records, count(DISTINCT deputy_id)::int AS deputies
@@ -30,7 +30,7 @@ WITH s AS (
 SELECT label, supplier_key, cents, records, deputies FROM s
 WHERE (NOT false OR strpos(label, 'x') > 0) AND (NOT false OR label COLLATE "C" > 'x' COLLATE "C")
 ORDER BY label COLLATE "C" LIMIT 101;
-\echo === suppliers list: search q (accent-folded substring over all labels)
+\echo === OLD aggregation (before suppliers table), suppliers list: search q (accent-folded substring over all labels)
 EXPLAIN (ANALYZE, BUFFERS)
 WITH s AS (
   SELECT label, supplier_key, sum(cents)::bigint AS cents, sum(records)::bigint AS records, count(DISTINCT deputy_id)::int AS deputies
@@ -39,7 +39,7 @@ SELECT label, supplier_key, cents, records, deputies FROM s
 WHERE (NOT true OR strpos(translate(lower(label), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'), translate(lower(:'term'::text), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) > 0)
   AND (NOT false OR label COLLATE "C" > 'x' COLLATE "C")
 ORDER BY label COLLATE "C" LIMIT 51;
-\echo === suppliers list: cursor page (label > cursor)
+\echo === OLD aggregation (before suppliers table), suppliers list: cursor page (label > cursor)
 EXPLAIN (ANALYZE, BUFFERS)
 WITH s AS (
   SELECT label, supplier_key, sum(cents)::bigint AS cents, sum(records)::bigint AS records, count(DISTINCT deputy_id)::int AS deputies
@@ -53,3 +53,19 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT deputy_id, month, category, label, cents, reco
 EXPLAIN (ANALYZE, BUFFERS) SELECT category, sum(cents)::bigint, sum(records)::bigint FROM api.deputy_categories GROUP BY category ORDER BY 2 DESC, category COLLATE "C";
 \echo === meta
 EXPLAIN (ANALYZE, BUFFERS) SELECT expenses_version, domain_versions, published_at, total_cents, records, min_months, ceiling, limitations FROM api.publication;
+\echo === NEW suppliers table: first page, limit 100 (what the server runs now)
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT label, supplier_key, total_cents, records, deputies FROM api.suppliers
+WHERE (NOT false OR strpos(label, 'x') > 0) AND (NOT false OR label COLLATE "C" > 'x' COLLATE "C")
+ORDER BY label COLLATE "C" LIMIT 101;
+\echo === NEW suppliers table: search q (what the server runs now)
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT label, supplier_key, total_cents, records, deputies FROM api.suppliers
+WHERE (NOT true OR strpos(translate(lower(label), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'), translate(lower(:'term'::text), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) > 0)
+  AND (NOT false OR label COLLATE "C" > 'x' COLLATE "C")
+ORDER BY label COLLATE "C" LIMIT 51;
+\echo === NEW suppliers table: cursor page (what the server runs now)
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT label, supplier_key, total_cents, records, deputies FROM api.suppliers
+WHERE (NOT false OR strpos(label, 'x') > 0) AND (NOT true OR label COLLATE "C" > :'lbl'::text COLLATE "C")
+ORDER BY label COLLATE "C" LIMIT 101;

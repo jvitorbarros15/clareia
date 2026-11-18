@@ -1,0 +1,25 @@
+﻿{
+    "step":  "noidx",
+    "refRate":  100,
+    "warmSecs":  20,
+    "runSecs":  90,
+    "probeSecs":  20,
+    "runs":  [
+                 "run1",
+                 "run2",
+                 "run3",
+                 "run4",
+                 "run5"
+             ],
+    "runCount":  5,
+    "probes":  [
+                   50,
+                   75,
+                   112,
+                   168,
+                   252,
+                   378,
+                   567
+               ],
+    "maxSustainableRate":  378
+}

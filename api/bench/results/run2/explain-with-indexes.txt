@@ -1,0 +1,271 @@
+﻿=== publication (every request)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Seq Scan on publication  (cost=0.00..13.30 rows=330 width=32) (actual time=0.005..0.005 rows=1 loops=1)
+   Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=47
+ Planning Time: 0.066 ms
+ Execution Time: 0.009 ms
+(6 rows)
+
+=== profile: deputy row
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Index Scan using deputies_pkey on deputies  (cost=0.28..8.29 rows=1 width=261) (actual time=0.008..0.008 rows=1 loops=1)
+   Index Cond: (id = 220554)
+   Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=77
+ Planning Time: 0.086 ms
+ Execution Time: 0.018 ms
+(7 rows)
+
+=== profile: months
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using deputy_months_pkey on deputy_months  (cost=0.28..27.74 rows=12 width=82) (actual time=0.010..0.011 rows=12 loops=1)
+   Index Cond: (deputy_id = 220554)
+   Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=69
+ Planning Time: 0.094 ms
+ Execution Time: 0.016 ms
+(7 rows)
+
+=== profile: categories
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using deputy_categories_pkey on deputy_categories  (cost=0.28..24.22 rows=11 width=49) (actual time=0.006..0.008 rows=11 loops=1)
+   Index Cond: (deputy_id = 220554)
+   Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=36
+ Planning Time: 0.081 ms
+ Execution Time: 0.012 ms
+(7 rows)
+
+=== expenses: worst case, last page (deputy with most records)
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..10.21 rows=2 width=870) (actual time=0.015..0.043 rows=100 loops=1)
+   Buffers: shared hit=18
+   ->  Index Scan using expenses_pkey on expenses  (cost=0.42..10.21 rows=2 width=870) (actual time=0.015..0.038 rows=100 loops=1)
+         Index Cond: ((deputy_id = 220554) AND (seq > 1784))
+         Buffers: shared hit=18
+ Planning:
+   Buffers: shared hit=15
+ Planning Time: 0.069 ms
+ Execution Time: 0.050 ms
+(9 rows)
+
+=== expenses: first page
+                                                               QUERY PLAN                                                               
+----------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..186.22 rows=101 width=870) (actual time=0.028..0.063 rows=101 loops=1)
+   Buffers: shared hit=18
+   ->  Index Scan using expenses_pkey on expenses  (cost=0.42..3460.73 rows=1881 width=870) (actual time=0.027..0.059 rows=101 loops=1)
+         Index Cond: ((deputy_id = 220554) AND (seq > '-1'::integer))
+         Buffers: shared hit=18
+ Planning Time: 0.031 ms
+ Execution Time: 0.070 ms
+(7 rows)
+
+=== expenses: deputy exists check
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=8.29..8.30 rows=1 width=1) (actual time=0.011..0.012 rows=1 loops=1)
+   Buffers: shared hit=3
+   InitPlan 1 (returns $0)
+     ->  Index Only Scan using deputies_pkey on deputies  (cost=0.28..8.29 rows=1 width=0) (actual time=0.011..0.011 rows=1 loops=1)
+           Index Cond: (id = 220554)
+           Heap Fetches: 1
+           Buffers: shared hit=3
+ Planning Time: 0.042 ms
+ Execution Time: 0.018 ms
+(9 rows)
+
+=== expense by public_id
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using expenses_public_id_key on expenses  (cost=0.42..8.44 rows=1 width=866) (actual time=0.008..0.009 rows=1 loops=1)
+   Index Cond: (public_id = '0120d43ced589a960b4f349a6d261bbcab2cc860e9272cc110334c2bae0333c6'::text)
+   Buffers: shared hit=4
+ Planning Time: 0.030 ms
+ Execution Time: 0.012 ms
+(5 rows)
+
+=== OLD aggregation (before suppliers table), suppliers list: first page, limit 100 (aggregation over all cells)
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=25918.98..25919.23 rows=101 width=147) (actual time=146.834..146.841 rows=101 loops=1)
+   Buffers: shared hit=2900 read=1619, temp read=1820 written=1824
+   ->  Sort  (cost=25918.98..25949.85 rows=12350 width=147) (actual time=146.833..146.836 rows=101 loops=1)
+         Sort Key: s.label COLLATE "C"
+         Sort Method: top-N heapsort  Memory: 51kB
+         Buffers: shared hit=2900 read=1619, temp read=1820 written=1824
+         ->  Subquery Scan on s  (cost=23377.40..25446.08 rows=12350 width=147) (actual time=103.597..144.435 rows=21677 loops=1)
+               Buffers: shared hit=2900 read=1619, temp read=1820 written=1824
+               ->  GroupAggregate  (cost=23377.40..25446.08 rows=12350 width=115) (actual time=103.596..143.401 rows=21677 loops=1)
+                     Group Key: supplier_cells.label, supplier_cells.supplier_key
+                     Buffers: shared hit=2900 read=1619, temp read=1820 written=1824
+                     ->  Sort  (cost=23377.40..23686.16 rows=123504 width=111) (actual time=103.583..128.954 rows=123504 loops=1)
+                           Sort Key: supplier_cells.label, supplier_cells.supplier_key, supplier_cells.deputy_id
+                           Sort Method: external merge  Disk: 14560kB
+                           Buffers: shared hit=2900 read=1619, temp read=1820 written=1824
+                           ->  Seq Scan on supplier_cells  (cost=0.00..5754.04 rows=123504 width=111) (actual time=0.003..9.137 rows=123504 loops=1)
+                                 Buffers: shared hit=2900 read=1619
+ Planning:
+   Buffers: shared hit=17
+ Planning Time: 0.073 ms
+ Execution Time: 148.164 ms
+(21 rows)
+
+=== OLD aggregation (before suppliers table), suppliers list: search q (accent-folded substring over all labels)
+                                                                                                      QUERY PLAN                                                                                                       
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=13681.16..13681.29 rows=51 width=147) (actual time=189.850..191.136 rows=51 loops=1)
+   Buffers: shared hit=3060 read=1587
+   ->  Sort  (cost=13681.16..13711.50 rows=12136 width=147) (actual time=189.848..191.132 rows=51 loops=1)
+         Sort Key: s.label COLLATE "C"
+         Sort Method: top-N heapsort  Memory: 38kB
+         Buffers: shared hit=3060 read=1587
+         ->  Subquery Scan on s  (cost=7754.61..13276.28 rows=12136 width=147) (actual time=162.421..189.233 rows=15009 loops=1)
+               Buffers: shared hit=3060 read=1587
+               ->  GroupAggregate  (cost=7754.61..13276.28 rows=12136 width=115) (actual time=162.420..188.423 rows=15009 loops=1)
+                     Group Key: supplier_cells.label, supplier_cells.supplier_key
+                     Buffers: shared hit=3060 read=1587
+                     ->  Gather Merge  (cost=7754.61..12549.30 rows=41168 width=111) (actual time=162.408..179.951 rows=67849 loops=1)
+                           Workers Planned: 2
+                           Workers Launched: 2
+                           Buffers: shared hit=3060 read=1587
+                           ->  Sort  (cost=6754.59..6797.47 rows=17153 width=111) (actual time=160.056..161.122 rows=22616 loops=3)
+                                 Sort Key: supplier_cells.label, supplier_cells.supplier_key, supplier_cells.deputy_id
+                                 Sort Method: quicksort  Memory: 3785kB
+                                 Buffers: shared hit=3060 read=1587
+                                 Worker 0:  Sort Method: quicksort  Memory: 3683kB
+                                 Worker 1:  Sort Method: quicksort  Memory: 3743kB
+                                 ->  Parallel Seq Scan on supplier_cells  (cost=0.00..5548.20 rows=17153 width=111) (actual time=0.027..137.285 rows=22616 loops=3)
+                                       Filter: (strpos(translate(lower(label), '├í├á├ó├ú├ñ├⌐├¿├¬├½├¡├¼├«├»├│├▓├┤├╡├╢├║├╣├╗├╝├º├▒├ü├Ç├é├â├ä├ë├ê├è├ï├ì├î├Ä├Å├ô├Æ├ö├ò├û├Ü├Ö├¢├£├ç├æ'::text, 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'::text), 'ltda'::text) > 0)
+                                       Rows Removed by Filter: 18552
+                                       Buffers: shared hit=2932 read=1587
+ Planning:
+   Buffers: shared hit=2
+ Planning Time: 0.136 ms
+ Execution Time: 191.262 ms
+(29 rows)
+
+=== OLD aggregation (before suppliers table), suppliers list: cursor page (label > cursor)
+                                                                     QUERY PLAN                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=21897.82..21898.07 rows=101 width=147) (actual time=114.828..114.835 rows=101 loops=1)
+   Buffers: shared hit=3028 read=1491, temp read=1410 written=1413
+   ->  Sort  (cost=21897.82..21928.69 rows=12350 width=147) (actual time=114.827..114.830 rows=101 loops=1)
+         Sort Key: s.label COLLATE "C"
+         Sort Method: top-N heapsort  Memory: 61kB
+         Buffers: shared hit=3028 read=1491, temp read=1410 written=1413
+         ->  Subquery Scan on s  (cost=19752.21..21424.92 rows=12350 width=147) (actual time=82.825..112.964 rows=16880 loops=1)
+               Buffers: shared hit=3028 read=1491, temp read=1410 written=1413
+               ->  GroupAggregate  (cost=19752.21..21424.92 rows=12350 width=115) (actual time=82.825..112.164 rows=16880 loops=1)
+                     Group Key: supplier_cells.label, supplier_cells.supplier_key
+                     Buffers: shared hit=3028 read=1491, temp read=1410 written=1413
+                     ->  Sort  (cost=19752.21..19994.97 rows=97106 width=111) (actual time=82.813..100.921 rows=97176 loops=1)
+                           Sort Key: supplier_cells.label, supplier_cells.supplier_key, supplier_cells.deputy_id
+                           Sort Method: external merge  Disk: 11280kB
+                           Buffers: shared hit=3028 read=1491, temp read=1410 written=1413
+                           ->  Seq Scan on supplier_cells  (cost=0.00..6062.80 rows=97106 width=111) (actual time=0.004..10.194 rows=97176 loops=1)
+                                 Filter: ((label)::text > 'BURATTI SISTEMAS DE SEGURAN├çA'::text COLLATE "C")
+                                 Rows Removed by Filter: 26328
+                                 Buffers: shared hit=3028 read=1491
+ Planning:
+   Buffers: shared hit=2
+ Planning Time: 0.154 ms
+ Execution Time: 115.816 ms
+(23 rows)
+
+=== supplier detail: most records
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=5211.36..5224.12 rows=5101 width=85) (actual time=2.526..2.633 rows=5177 loops=1)
+   Sort Key: supplier_cells.deputy_id, supplier_cells.month, supplier_cells.category
+   Sort Method: quicksort  Memory: 678kB
+   Buffers: shared hit=2368
+   ->  Bitmap Heap Scan on supplier_cells  (cost=99.95..4897.23 rows=5101 width=85) (actual time=0.312..1.764 rows=5177 loops=1)
+         Recheck Cond: (supplier_key = '3ef6e3554fe6466d6768744e289065ae3fc2e15345b79473a9f1d67df69abd41'::text)
+         Heap Blocks: exact=2357
+         Buffers: shared hit=2365
+         ->  Bitmap Index Scan on supplier_cells_supplier_key_idx  (cost=0.00..98.67 rows=5101 width=0) (actual time=0.153..0.154 rows=5177 loops=1)
+               Index Cond: (supplier_key = '3ef6e3554fe6466d6768744e289065ae3fc2e15345b79473a9f1d67df69abd41'::text)
+               Buffers: shared hit=8
+ Planning:
+   Buffers: shared hit=6
+ Planning Time: 0.094 ms
+ Execution Time: 2.733 ms
+(15 rows)
+
+=== categories
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=129.09..129.14 rows=21 width=85) (actual time=0.721..0.722 rows=21 loops=1)
+   Sort Key: ((sum(deputy_categories.cents))::bigint) DESC, deputy_categories.category COLLATE "C"
+   Sort Method: quicksort  Memory: 27kB
+   Buffers: shared hit=50
+   ->  HashAggregate  (cost=128.31..128.63 rows=21 width=85) (actual time=0.713..0.716 rows=21 loops=1)
+         Group Key: deputy_categories.category
+         Batches: 1  Memory Usage: 24kB
+         Buffers: shared hit=50
+         ->  Seq Scan on deputy_categories  (cost=0.00..94.75 rows=4475 width=49) (actual time=0.003..0.232 rows=4475 loops=1)
+               Buffers: shared hit=50
+ Planning Time: 0.033 ms
+ Execution Time: 0.734 ms
+(12 rows)
+
+=== meta
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Seq Scan on publication  (cost=0.00..13.30 rows=330 width=152) (actual time=0.003..0.004 rows=1 loops=1)
+   Buffers: shared hit=1
+ Planning Time: 0.016 ms
+ Execution Time: 0.007 ms
+(4 rows)
+
+=== NEW suppliers table: first page, limit 100 (what the server runs now)
+                                                                QUERY PLAN                                                                 
+-------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.41..8.58 rows=101 width=145) (actual time=0.007..0.023 rows=101 loops=1)
+   Buffers: shared hit=13
+   ->  Index Scan using suppliers_pkey on suppliers  (cost=0.41..1753.58 rows=21677 width=145) (actual time=0.007..0.019 rows=101 loops=1)
+         Buffers: shared hit=13
+ Planning:
+   Buffers: shared hit=39
+ Planning Time: 0.109 ms
+ Execution Time: 0.030 ms
+(8 rows)
+
+=== NEW suppliers table: search q (what the server runs now)
+                                                                                       QUERY PLAN                                                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.41..14.32 rows=51 width=145) (actual time=0.008..0.292 rows=51 loops=1)
+   Buffers: shared hit=11
+   ->  Index Scan using suppliers_pkey on suppliers  (cost=0.41..1970.35 rows=7226 width=145) (actual time=0.008..0.290 rows=51 loops=1)
+         Filter: (strpos(translate(lower(label), '├í├á├ó├ú├ñ├⌐├¿├¬├½├¡├¼├«├»├│├▓├┤├╡├╢├║├╣├╗├╝├º├▒├ü├Ç├é├â├ä├ë├ê├è├ï├ì├î├Ä├Å├ô├Æ├ö├ò├û├Ü├Ö├¢├£├ç├æ'::text, 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'::text), 'ltda'::text) > 0)
+         Rows Removed by Filter: 4
+         Buffers: shared hit=11
+ Planning Time: 0.023 ms
+ Execution Time: 0.298 ms
+(8 rows)
+
+=== NEW suppliers table: cursor page (what the server runs now)
+                                                                QUERY PLAN                                                                 
+-------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.41..8.96 rows=101 width=145) (actual time=0.011..0.077 rows=101 loops=1)
+   Buffers: shared hit=38
+   ->  Index Scan using suppliers_pkey on suppliers  (cost=0.41..1431.41 rows=16905 width=145) (actual time=0.011..0.072 rows=101 loops=1)
+         Index Cond: (label > 'BURATTI SISTEMAS DE SEGURAN├çA'::text COLLATE "C")
+         Buffers: shared hit=38
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.031 ms
+ Execution Time: 0.084 ms
+(9 rows)
+
