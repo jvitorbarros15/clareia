@@ -8,6 +8,8 @@ const REPO=path.join(import.meta.dirname,'..'),SITE='https://clareia.clareia.wor
 const sha=crypto.createHash("sha256").update(await fs.readFile(path.join(REPO,"api","openapi.yaml"))).digest("hex").slice(0,16);
 const spec=await loadSpec(REPO),version=spec.info.version;
 const logo=(await fs.readFile(path.join(REPO,'real','app.js'),'utf8')).match(/const logo = '(<svg class="logo-mark"[\s\S]*?<\/svg>)'/)![1];
+// The header template cannot reach the page's CSS, so the logo travels as a standalone image with its colors inline.
+const headerLogo='data:image/svg+xml;base64,'+Buffer.from(logo.replace('<svg class="logo-mark"','<svg xmlns="http://www.w3.org/2000/svg" fill="#0b0e18"').replace('class="brand-rays"','fill="none" stroke="#e8ac43" stroke-width="3.3" stroke-linecap="round"')).toString('base64');
 const font=async(f:string)=>`url(data:font/woff2;base64,${(await fs.readFile(path.join(REPO,'real','fonts',f))).toString('base64')}) format("woff2")`;
 const date=new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric',timeZone:'America/Sao_Paulo'});
 const body=apiDocsInner(spec).replace(/<div class="doc-callout">[\s\S]*?<\/div>/,'');
@@ -58,7 +60,7 @@ try{
   const tpl=(inner:string)=>`<div style="width:100%;height:100%;overflow:hidden;padding:0 18mm;font:8pt 'Helvetica Neue',Arial,sans-serif;color:#656977;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact">${inner}</div>`;
   const out=path.join(REPO,'real','clareia-api.pdf');
   await page.pdf({path:out,format:'A4',printBackground:true,preferCSSPageSize:true,displayHeaderFooter:true,
-    headerTemplate:tpl(`<span style="font:italic 600 11pt Georgia,serif;color:#0b0e18">Clareia<span style="color:#e8ac43">&#x2735;</span></span><span>Contrato da API · v${version}</span>`),
+    headerTemplate:tpl(`<img src="${headerLogo}" alt="Clareia" style="height:12pt;width:auto"><span>Contrato da API · v${version}</span>`),
     footerTemplate:tpl(`<span>${SITE}</span><span>Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>`)});
   console.log('wrote',out);
 }finally{await browser.close();}
