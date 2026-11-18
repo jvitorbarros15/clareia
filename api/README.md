@@ -1,6 +1,6 @@
-# API pública do Clareia: carga (Fase 1) e servidor (Fase 2)
+# API pública do Clareia: carga (Fase 1), servidor (Fase 2) e fornecedores e categorias (Fase 3)
 
-Carregador e servidor HTTP somente leitura (`/healthz`, `/v1/meta`, `/v1/deputies`, `/v1/deputies/{id}`, `/v1/deputies/{id}/expenses`, `/v1/expenses/{public_id}`). Fornecedores e categorias ficam para a Fase 3. Plano: `agents/API-PUBLICA-PLANO-2026-11-17.md`.
+Carregador e servidor HTTP somente leitura (`/healthz`, `/v1/meta`, `/v1/deputies`, `/v1/deputies/{id}`, `/v1/deputies/{id}/expenses`, `/v1/expenses/{public_id}`, `/v1/suppliers`, `/v1/suppliers/{key}`, `/v1/categories`). Plano: `agents/API-PUBLICA-PLANO-2026-11-17.md`.
 
 ## Postgres local
 
@@ -78,9 +78,17 @@ cd api; go run -ldflags "-X main.version=<versão>" ./cmd/server     # escuta em
 - `ETag` = publicação + versão do binário (`-X main.version`) + hash da query; `If-None-Match` dá 304. `Cache-Control: public, max-age=300`.
 - Contrato e peculiaridades dos dados: `api/openapi.yaml` (conferido por `TestOpenAPIMatchesServer`).
 
+## Fornecedores e categorias
+
+- `GET /v1/suppliers?q=&cursor=&limit=`: um registro por rótulo (`supplierLabel` se existir, senão `supplier`), com `totalCents`, `records`, `deputies` (deputados distintos), `key` e `verified`. Os 49 rótulos sem chave (pessoa física, nome não exibido etc.) aparecem uma vez cada, com `key: null`, `verified: false` e sem página de detalhe: nunca são divididos nem somados a outros. Ordem por rótulo em ordem de bytes (estável); cursor leva a publicação (409 se mudou); `limit` 1 a 500, padrão 100.
+- `q` (3 a 100 caracteres) é busca por trecho do rótulo sem diferenciar maiúsculas nem os acentos comuns do português (á, ç, ñ etc., tratados em SQL dos dois lados). Não usa `unicode`/`unaccent`: letras fora dessa lista só casam iguais.
+- `GET /v1/suppliers/{key}`: só chave verificada (64 hex). Devolve `label`, totais e `cells` por deputado, mês e categoria (`cents`, `records`), sem paginação. Chave desconhecida ou de rótulo sem chave: 404; chave malformada: 400.
+- `GET /v1/categories`: soma de `deputy_categories` por categoria, maior primeiro. O servidor confere que a soma fecha com `totalCents` e `records` da publicação; se não fechar, responde 500 em vez de um total errado.
+- Nenhuma mudança de schema na Fase 3: usa as views `api.supplier_cells`, `api.deputy_categories` e `api.publication` que já existiam. O servidor varre `supplier_cells` (123 mil linhas) em vez de usar índice.
+
 ## Teste de contrato contra a publicação real (local, fora da CI)
 
-Percorre `/expenses` de todos os deputados da publicação ativa e exige registros idênticos aos `despesas.json` da pasta, na mesma ordem, perfis iguais ao `summary.json` (mês retido = `cents` null) e lista vazia para os `withoutData`.
+Percorre `/expenses` de todos os deputados da publicação ativa, e depois `/v1/suppliers`, `/v1/suppliers/{key}` de toda chave verificada e `/v1/categories` (células iguais ao `fornecedores.json`, categorias iguais ao `summary.json`). Exige registros idênticos aos `despesas.json` da pasta, na mesma ordem, perfis iguais ao `summary.json` (mês retido = `cents` null) e lista vazia para os `withoutData`.
 
 ```
 $env:CLAREIA_API_CONTRACT = "1"
