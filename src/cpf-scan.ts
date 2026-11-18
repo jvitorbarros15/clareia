@@ -12,10 +12,10 @@ export function validCpf(digits:string):boolean{
 }
 // Official free text can carry a formatted CPF; it must not reach any report or the site.
 const LABELLED=/\bC\.?P\.?F\.?[^0-9]{0,30}(?<!\d)(\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\/.\s]?\d{2})(?!\d)/gi;
-// A CPF is exactly 11 digits with valid check digits, bounded by non-digits ("MEI-<cpf>" counts, "MEI<cpf>" too), with or without punctuation (dots or spaces between the groups; "- . /" or a space before the check digits).
+// A CPF is exactly 11 digits with valid check digits, bounded by non-digits ("MEI-<cpf>" counts, "MEI<cpf>" too), with or without punctuation (up to two of dot, hyphen, space or NBSP between the groups; up to three of hyphen, en dash, dot, slash, space or NBSP before the check digits).
 // A run of 12 or more digits is a longer number (CNPJ, protocol, bank key) and is never cut into an 11-digit piece, and a CNPJ's
 // punctuation ("/") breaks the pattern. Lowercase hex tokens (hashes, ids) are blanked first so their digit stretches are not read as numbers.
-const DIGIT_CPF=/(?<!\d)(?<!\d\.)\d{3}[. ]?\d{3}[. ]?\d{3}[-./ ]?\d{2}(?!\d)/g;
+const DIGIT_CPF=/(?<!\d)(?<!\d\.)\d{3}[.  -]{0,2}\d{3}[.  -]{0,2}\d{3}[-–./  ]{0,3}\d{2}(?!\d)/g;
 const HEX_TOKEN=/(?<![0-9A-Za-z])(?=[0-9a-f]*[a-f])[0-9a-f]{12,}(?![0-9A-Za-z])/g;
 export function cpfRuns(text:string):string[]{
   return [...text.replace(HEX_TOKEN,m=>'x'.repeat(m.length)).matchAll(DIGIT_CPF)].map(m=>m[0].replace(/\D/g,'')).filter(validCpf);

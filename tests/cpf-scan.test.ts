@@ -117,3 +117,14 @@ test('phone numbers, a CNPJ and a bad checksum are not read as a CPF',()=>{
   }
   assert.equal(publicSupplier(`ACME ${a} ${b} ${c} ${bad}`,CNPJ).name,`ACME ${a} ${b} ${c} ${bad}`);
 });
+
+test('wider separators are redacted, masked and scanned; tab and money are not',()=>{
+  const [a,b,c,d]=groups(CPF),nb=' ',forms=[`${a}-${b}-${c}-${d}`,`${a}-${b}-${c}-${d}`.replace(/-/g,'.'),`${a}  ${b}  ${c}  ${d}`,`${a}${nb}${b}${nb}${c}${nb}${d}`,`${a}.${b}.${c} - ${d}`,`${a}.${b}.${c}–${d}`,`${a}.${b}.${c}. ${d}`,`${a}. ${b}. ${c}. ${d}`];
+  for(const f of forms){
+    assert.equal(redactCpf('MEI '+f+' LTDA'),'MEI [CPF omitido] LTDA',f);
+    assert.equal(publicSupplier('MEI '+f+' LTDA',CNPJ).name,'MEI [CPF oculto] LTDA',f);
+    assert.equal(scanCpfs(JSON.stringify({s:'MEI '+f}),new Set()),1,f);
+  }
+  const bad=(Number(d[1])+1)%10,money=['1.234.567.890,12','R$ 123.456.789,01'];
+  for(const text of [...money,`${a}-${b}-${c}-${d[0]}${bad}`,`${a}${nb}${b}${nb}${c}${nb}${d[0]}${bad}`,'(11) 98765-4321 / 11 98765 4321']){assert.equal(redactCpf(text),text,text);assert.equal(scanCpfs(text,new Set()),0,text);}
+});
