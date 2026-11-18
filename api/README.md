@@ -84,7 +84,7 @@ cd api; go run -ldflags "-X main.version=<versão>" ./cmd/server     # escuta em
 - `q` (3 a 100 caracteres) é busca por trecho do rótulo sem diferenciar maiúsculas nem os acentos comuns do português (á, ç, ñ etc., tratados em SQL dos dois lados). Não usa `unicode`/`unaccent`: letras fora dessa lista só casam iguais.
 - `GET /v1/suppliers/{key}`: só chave verificada (64 hex). Devolve `label`, totais e `cells` por deputado, mês e categoria (`cents`, `records`), sem paginação. Chave desconhecida ou de rótulo sem chave: 404; chave malformada: 400.
 - `GET /v1/categories`: soma de `deputy_categories` por categoria, maior primeiro. O servidor confere que a soma fecha com `totalCents` e `records` da publicação; se não fechar, responde 500 em vez de um total errado.
-- Nenhuma mudança de schema na Fase 3: usa as views `api.supplier_cells`, `api.deputy_categories` e `api.publication` que já existiam. O servidor varre `supplier_cells` (123 mil linhas) em vez de usar índice.
+- Usa as views `api.supplier_cells`, `api.deputy_categories` e `api.publication` que já existiam. Índice `supplier_cells(supplier_key)` (`supplier_cells_supplier_key_idx`): publicações novas o criam na carga; uma já carregada o recebe no próximo `load.ps1 <pasta>` (no-op que roda `CREATE INDEX IF NOT EXISTS`). Rótulo acima de 137 bytes faz a carga recusar (o cursor da listagem estouraria o teto de 200 bytes do parâmetro).
 
 ## Teste de contrato contra a publicação real (local, fora da CI)
 

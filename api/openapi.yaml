@@ -108,7 +108,7 @@ paths:
     get:
       summary: Cells of one verified supplier, per deputy, month and category
       operationId: getSupplier
-      description: Only verified CNPJ keys. An unknown key, or a label without key, answers 404.
+      description: Only verified CNPJ keys. An unknown key, or a label without key, answers 404. Not paginated; the largest response in the current publication has about 5,177 cells (about 488 KB), and 99% of suppliers have 36 cells or fewer.
       parameters:
         - {name: key, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{64}$'}}
       responses:
@@ -122,10 +122,11 @@ paths:
       description: The server checks that the categories add up to `totalCents` (and the records to `records`); if not it answers 500 instead of a wrong total.
       responses:
         '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/CategoryTotals'}}}}
+        '500': {$ref: '#/components/responses/Error'}
 components:
   responses:
     Error:
-      description: Error. 400 bad_request, 404 not_found, 405 method_not_allowed, 409 stale_cursor, 503 unavailable.
+      description: Error. 400 bad_request, 404 not_found, 405 method_not_allowed, 409 stale_cursor, 500 internal, 503 unavailable.
       content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
   schemas:
     SupplierRow:

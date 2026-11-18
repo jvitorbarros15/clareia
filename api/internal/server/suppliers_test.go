@@ -178,6 +178,11 @@ func TestSuppliersErrors(t *testing.T) {
 	e, pub := loaded(t)
 	for path, want := range map[string]int{
 		"/v1/suppliers?q=ab":                       400,
+		"/v1/suppliers?q=abc%00": 400,
+		"/v1/suppliers?q=%ff%ff%ff": 400,
+		"/v1/deputies?party=%ff": 400,
+		"/v1/deputies/" + dep493 + "/expenses?category=a%00b": 400,
+		"/v1/suppliers?cursor=%ff": 400,
 		"/v1/suppliers?q=" + strings.Repeat("a", 101): 400,
 		"/v1/suppliers?q=":                         400,
 		"/v1/suppliers?q=abc&q=def":                400,

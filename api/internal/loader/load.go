@@ -76,6 +76,11 @@ func Load(ctx context.Context, conn *pgx.Conn, dir string, o Options) (*Report, 
 	if string(pub.DomainVersion) == "{}" {
 		o.printf("aviso: manifest.json ausente ou sem domínios, domain_versions fica vazio\n")
 	}
+	if exists {
+		if err := ensureIndexes(ctx, conn, pub.FolderID); err != nil {
+			return nil, fmt.Errorf("índice de pub_%s: %w", pub.FolderID, err)
+		}
+	}
 	// A schema exists only if its load committed with every check passed, so it is never dropped or reloaded.
 	switch {
 	case exists && state != nil:
@@ -223,6 +228,11 @@ func insertAll(ctx context.Context, tx pgx.Tx, pub *Publication, schema string) 
 
 	var cells [][]any
 	f := pub.Suppliers
+	for _, l := range f.Suppliers {
+		if len(l) > maxLabelBytes {
+			return fmt.Errorf("fornecedores: rótulo de %d bytes passa de %d e quebraria o cursor de /v1/suppliers", len(l), maxLabelBytes)
+		}
+	}
 	ids := make([]string, 0, len(f.People))
 	for k := range f.People {
 		ids = append(ids, k)
@@ -275,4 +285,13 @@ func refuseOlderThanActive(ctx context.Context, conn *pgx.Conn, pub *Publication
 		return fmt.Errorf("publicação %s (publishedAt %s) é mais antiga que a ativa %s (%s): para voltar use --rollback", pub.FolderID, at.Format(time.RFC3339), activeID, activeAt.Format(time.RFC3339))
 	}
 	return nil
+}
+
+// The server caps a query parameter at 200 bytes and the cursor is base64 of "<12 hex>:<label>", so a label over 137 bytes would make its own nextCursor a 400.
+const maxLabelBytes = 137
+
+// Indexes added after a publication was first loaded. Idempotent, so existing pub_ schemas get them on the no-op path without a reload.
+func ensureIndexes(ctx context.Context, conn *pgx.Conn, folderID string) error {
+	_, err := conn.Exec(ctx, `CREATE INDEX IF NOT EXISTS supplier_cells_supplier_key_idx ON `+schemaOf(folderID)+`.supplier_cells (supplier_key)`)
+	return err
 }

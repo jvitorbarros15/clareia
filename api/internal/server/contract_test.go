@@ -219,6 +219,7 @@ func TestContractAgainstRealPublication(t *testing.T) {
 	}
 	wantCells := map[string]map[cellKey][2]int64{}
 	wantTotal := map[string][3]int64{}
+	wantDeps := map[string]map[int]bool{}
 	fileCells := 0
 	for k, cells := range f.People {
 		var dep int
@@ -231,6 +232,10 @@ func TestContractAgainstRealPublication(t *testing.T) {
 			}
 			wantCells[l][ck] = [2]int64{int64(c[3]), int64(c[4])}
 			w := wantTotal[l]
+			if wantDeps[l] == nil {
+				wantDeps[l] = map[int]bool{}
+			}
+			wantDeps[l][dep] = true
 			wantTotal[l] = [3]int64{w[0] + int64(c[3]), w[1] + int64(c[4]), 0}
 			fileCells++
 		}
@@ -256,6 +261,7 @@ func TestContractAgainstRealPublication(t *testing.T) {
 				Verified   bool    `json:"verified"`
 				TotalCents int64   `json:"totalCents"`
 				Records    int64   `json:"records"`
+				Deputies   int     `json:"deputies"`
 			} `json:"suppliers"`
 			NextCursor *string `json:"nextCursor"`
 		}
@@ -271,6 +277,9 @@ func TestContractAgainstRealPublication(t *testing.T) {
 			w, ok := wantCells[s.Label]
 			if !ok {
 				t.Fatalf("rótulo da API que não está no fornecedores.json: %q", s.Label)
+			}
+			if s.Deputies != len(wantDeps[s.Label]) {
+				t.Fatalf("rótulo %q: %d deputados pela API, %d no arquivo", s.Label, s.Deputies, len(wantDeps[s.Label]))
 			}
 			if tot := wantTotal[s.Label]; s.TotalCents != tot[0] || s.Records != tot[1] {
 				t.Fatalf("rótulo %q: total da API %d/%d, arquivo %d/%d", s.Label, s.TotalCents, s.Records, tot[0], tot[1])

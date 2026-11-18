@@ -118,6 +118,11 @@ func TestChecksRefuseTamperedFolders(t *testing.T) {
 				m["withoutData"] = append(m["withoutData"].([]any), json.Number(filepath.Base(filepath.Dir(firstExpenses(t, dir)))))
 			})
 		},
+		"rótulo longo demais para o cursor": func(t *testing.T, dir string) {
+			editJSON(t, filepath.Join(dir, "fornecedores.json"), func(m map[string]any) {
+				m["suppliers"].([]any)[0] = strings.Repeat("X", 138)
+			})
+		},
 		"célula de fornecedor": func(t *testing.T, dir string) {
 			editJSON(t, filepath.Join(dir, "fornecedores.json"), func(m map[string]any) {
 				for _, cells := range m["people"].(map[string]any) {
@@ -309,4 +314,25 @@ func TestMissingActiveSchemaGivesClearError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "apagado à mão") {
 		t.Fatalf("erro devia explicar o schema ausente: %v", err)
 	}
+}
+
+// A publication loaded before the index existed gets it on the next (no-op) load, without a reload.
+func TestExistingPublicationGetsSupplierKeyIndex(t *testing.T) {
+	e := newEnv(t)
+	dir := fixtureCopy(t, "aaaaaaaaaaaa")
+	e.load(t, dir)
+	count := `SELECT count(*) FROM pg_indexes WHERE schemaname = 'pub_aaaaaaaaaaaa' AND indexname = 'supplier_cells_supplier_key_idx'`
+	if got := e.scalar(t, count); got != "1" {
+		t.Fatalf("carga nova sem o índice: %s", got)
+	}
+	if _, err := e.conn.Exec(context.Background(), `DROP INDEX pub_aaaaaaaaaaaa.supplier_cells_supplier_key_idx`); err != nil {
+		t.Fatal(err)
+	}
+	if rep := e.load(t, dir); rep.Skipped == "" {
+		t.Fatalf("devia ser no-op, veio %+v", rep)
+	}
+	if got := e.scalar(t, count); got != "1" {
+		t.Fatalf("o no-op não recriou o índice: %s", got)
+	}
+	e.load(t, dir)
 }

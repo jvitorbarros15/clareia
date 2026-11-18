@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -16,7 +15,6 @@ import (
 // norm makes q match without case or accents. It is applied in SQL to both sides so they always agree.
 const norm = `translate(lower(%s), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')`
 
-var supplierKey = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type supplierRow struct {
 	Label      string  `json:"label"`
@@ -78,7 +76,7 @@ func (s *Server) suppliers(ctx context.Context, tx pgx.Tx, r *http.Request, pub 
 			return nil, errBadRequest(err.Error())
 		}
 		if cp != pub {
-			return nil, &apiError{http.StatusConflict, "stale_cursor", "o cursor é da publicação " + cp + " e a ativa é " + pub + ": recomece a listagem sem cursor"}
+			return nil, staleCursor(cp, pub)
 		}
 		after, hasAfter = label, true
 	}
@@ -125,7 +123,7 @@ type cellBody struct {
 
 func (s *Server) supplier(ctx context.Context, tx pgx.Tx, r *http.Request, pub string) (any, *apiError) {
 	key := r.PathValue("key")
-	if !supplierKey.MatchString(key) {
+	if !publicID.MatchString(key) {
 		return nil, errBadRequest("chave de fornecedor inválida (64 hex)")
 	}
 	rows, err := tx.Query(ctx, `SELECT deputy_id, month, category, label, cents, records FROM api.supplier_cells

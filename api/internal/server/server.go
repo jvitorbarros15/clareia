@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -131,6 +132,10 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, h handler) {
 	_, _ = w.Write(buf.Bytes())
 }
 
+func staleCursor(cursorPub, pub string) *apiError {
+	return &apiError{http.StatusConflict, "stale_cursor", "o cursor é da publicação " + cursorPub + " e a ativa é " + pub + ": recomece a listagem sem cursor"}
+}
+
 func unavailable() *apiError {
 	return &apiError{http.StatusServiceUnavailable, "unavailable", "sem publicação ativa ou banco indisponível"}
 }
@@ -187,7 +192,7 @@ func opt(q map[string][]string, key string) (string, bool, *apiError) {
 	if !ok {
 		return "", false, nil
 	}
-	if len(v) != 1 || v[0] == "" || len(v[0]) > 200 {
+	if len(v) != 1 || v[0] == "" || len(v[0]) > 200 || !utf8.ValidString(v[0]) || strings.ContainsRune(v[0], 0) {
 		return "", false, errBadRequest(fmt.Sprintf("parâmetro %s inválido", key))
 	}
 	return v[0], true, nil
