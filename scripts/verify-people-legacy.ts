@@ -29,8 +29,11 @@ try{
   if(audit.status==='passed'){
     await fs.writeFile(path.join(folder,audit.crosscheckSha256+'.crosscheck.json'),JSON.stringify(cross,null,2));
     await fs.writeFile(path.join(root,'crosscheck.json'),JSON.stringify(cross,null,2));
-    const proposal=proposeIntermediate(discovery,history,temporal,legacy,cross);
-    await fs.writeFile(path.join(root,'intermediate-proposal.json'),JSON.stringify(proposal,null,2));
+    // The representative sample needs the whole of 2025 in the discovery; other scopes only feed lots.
+    if(history.scope.start<='2025-01-01'&&history.scope.end>='2025-12-31'){
+      const proposal=proposeIntermediate(discovery,history,temporal,legacy,cross);
+      await fs.writeFile(path.join(root,'intermediate-proposal.json'),JSON.stringify(proposal,null,2));
+    }
   }else process.exitCode=1;
   const months=cross.people.flatMap(p=>p.months),parties=cross.people.flatMap(p=>p.partyChanges),counts=(rows:any[],field:string)=>rows.reduce<Record<string,number>>((out,row)=>{out[row[field]]=(out[row[field]]||0)+1;return out;},{});
   console.log(JSON.stringify({audit,exerciseComparison:counts(months,'comparison'),partyComparison:counts(parties,'status')},null,2));

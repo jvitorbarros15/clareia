@@ -5,8 +5,9 @@ import type {HistoryReport} from './people-history.ts';
 import type {TemporalReport} from './people-temporal.ts';
 import {readPublication} from './publications.ts';
 import type {DB} from './store.ts';
+import {validateExpenseTemporal} from './expense-period.ts';
 
-export type ExpenseLotRun={runId:string;manifest:{runId:string;status:string;reportSha256:string;proposalSha256:string;inputSha256:string};input:{schema:string;proposal:any;temporal:TemporalReport};report:ExpenseBatch;audit:{status:string;reportSha256:string;proposalSha256:string;checkedAt:string;competences:number}};
+export type ExpenseLotRun={runId:string;manifest:{runId:string;status:string;reportSha256:string;proposalSha256:string;inputSha256:string};input:{schema:string;proposal:any;temporal:TemporalReport};report:ExpenseBatch;audit:{status:string;reportSha256:string;proposalSha256:string;checkedAt:string;competences:number;scope:ExpenseBatch['scope'];peopleVersion:string}};
 
 const MONTHS=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 // Parties that ceased to exist in 2023, the party that succeeded them and the day the TSE approved it (Câmara events keep the old label afterwards).
@@ -46,6 +47,13 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
     if(l.input.schema!=='clareia.expense-lot-input.v1'||l.manifest.runId!==l.runId||l.manifest.status!=='review-required')throw Error(`Lote ${l.runId} não é uma coleta por lote concluída`);
     if(l.audit.status!=='passed'||l.audit.reportSha256!==reportSha||l.manifest.reportSha256!==reportSha)throw Error(`Lote ${l.runId} sem auditoria aprovada do mesmo relatório`);
     if(hash(canonical(l.input))!==l.manifest.inputSha256||hash(canonical(l.input.proposal))!==l.manifest.proposalSha256||l.audit.proposalSha256!==l.manifest.proposalSha256||l.report.proposalSha256!==l.manifest.proposalSha256)throw Error(`Lote ${l.runId} com seleção divergente`);
+    const p=l.input.proposal,t=l.input.temporal,scope={year:p.year,months:p.months,ids:p.people.map((person:{id:number})=>person.id),legislature:t.scope.legislature};
+    validateExpenseTemporal(scope,t);
+    if(canonical(scope)!==canonical(l.report.scope)||canonical(scope)!==canonical(l.audit.scope)||l.audit.peopleVersion!==hash(canonical(t))||l.report.peopleVersion!==hash(canonical(t))||p.temporalSha256!==hash(canonical(t)))throw Error('Escopo ou origem do lote diverge');
+    if(history.scope?.legislature!==scope.legislature||history.legislature?.id!==scope.legislature||history.legislature.start>t.scope.start||history.legislature.end<t.scope.end)throw Error('Histórico fora da legislatura');
+    const expected=scope.ids.flatMap((id:number)=>scope.months.map((month:number)=>`${id}:${month}`)).sort(),actual=l.report.cells.map(c=>`${c.personId}:${c.month}`).sort();
+    if(canonical(expected)!==canonical(actual)||l.audit.competences!==expected.length)throw Error('Competências incompletas ou repetidas');
+    for(const c of l.report.cells)if(c.year!==scope.year||c.records.some(r=>r.year!==scope.year||r.month!==c.month||r.personId!==c.personId||!Number.isSafeInteger(r.cents)))throw Error('Registro fora da competência');
   }
   const first=lots[0].input.proposal,same=(key:string)=>lots.every(l=>canonical(l.input.proposal[key])===canonical(first[key]));
   if(!['year','months','lotSize','lots','universeSize','universeSha256','temporalSha256','crosscheckSha256'].every(same))throw Error('Lotes de universos ou versões diferentes');
@@ -56,11 +64,12 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   const temporal=ordered[0].input.temporal;
   if(hash(canonical(temporal))!==first.temporalSha256||temporal.historySha256!==hash(canonical(history)))throw Error('Histórico de pessoas diverge do usado na coleta');
   const periodStart=`${first.year}-${String(Math.min(...first.months)).padStart(2,'0')}-01`,lastMonth=Math.max(...first.months),periodEnd=new Date(Date.UTC(first.year,lastMonth,0)).toISOString().slice(0,10);
-  const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[],duplicateCompetences:{personId:number;month:number;reason:DuplicateReason}[]=[];let cellTotal=0n,fixCount=0,fixDelta=0n;
+  const records:Expense[]=[],heldMonths:Record<string,number>={},heldCompetences:{personId:number;month:number;reasons:string[]}[]=[],duplicateCompetences:{personId:number;month:number;reason:DuplicateReason}[]=[];let cellTotal=0n,fixCount=0,fixDelta=0n,apiSignCount=0;
   for(const l of ordered)for(const c of l.report.cells){
     if(c.status==='complete'||c.status==='no-expenses-confirmed'){
       if(c.status==='no-expenses-confirmed'&&c.records.length)throw Error('Célula sem despesas com registros');
-      const fixed=c.records.map(fixSign);records.push(...fixed);cellTotal+=BigInt(c.totalCents??0);for(const r of fixed)if(r.sourceCents!==undefined){fixCount++;fixDelta+=BigInt(r.cents-r.sourceCents);}
+      if(c.totalCents===null||!Number.isSafeInteger(c.totalCents)||c.records.reduce((n,r)=>n+BigInt(r.cents),0n)!==BigInt(c.totalCents))throw Error('Soma diverge das células auditadas');
+      const fixed=c.records.map(fixSign);records.push(...fixed);cellTotal+=BigInt(c.totalCents??0);apiSignCount+=c.diagnostics?.apiSignCorrected??0;for(const r of fixed)if(r.sourceCents!==undefined){fixCount++;fixDelta+=BigInt(r.cents-r.sourceCents);}
       if(c.duplicateReason)duplicateCompetences.push({personId:c.personId,month:c.month,reason:c.duplicateReason});
     }else if(c.status==='held-review'||c.status==='source-failure'){if(c.records.length)throw Error('Célula retida com registros');heldMonths[c.personId]=(heldMonths[c.personId]??0)+1;heldCompetences.push({personId:c.personId,month:c.month,reasons:[...c.reasons].sort()});}
     else throw Error('Situação de célula desconhecida');
@@ -78,7 +87,7 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   });
   const collectedAt=ordered.map(l=>l.report.createdAt).sort().at(-1)!;
   const body={metric:'camara.ceap.valor-liquido-uniao-fontes.v1',scope:{year:first.year,months:first.months,ids,legislature:temporal.scope.legislature},people,records,collectedAt,publishedAt:now,pages:[],
-    validation:{sourceKind:'annual-api-union',stablePasses:2,recordCount:records.length,totalCents:Number(total),independentTotalCents:String(cellTotal+fixDelta),signFix:{count:fixCount,deltaCents:Number(fixDelta)},duplicatePolicy:'Documento não é chave. Ocorrências do CSV preservadas; linhas repetidas são publicadas, como a Câmara as conta, e sinalizadas como possível duplicidade.',limitations:['Competências retidas para revisão ficam fora dos totais e são indicadas por deputado.'],heldMonths,heldCompetences:heldCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),duplicateCompetences:duplicateCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),lots:ordered.map(l=>({runId:l.runId,lot:l.input.proposal.lot,reportSha256:l.manifest.reportSha256,contentSha256:l.report.contentSha256,auditCheckedAt:l.audit.checkedAt}))}};
+    validation:{sourceKind:'annual-api-union',stablePasses:2,recordCount:records.length,totalCents:Number(total),independentTotalCents:String(cellTotal+fixDelta),signFix:{count:fixCount,deltaCents:Number(fixDelta)},...(apiSignCount?{apiSignFix:{count:apiSignCount}}:{}),duplicatePolicy:'Documento não é chave. Ocorrências do CSV preservadas; linhas repetidas são publicadas, como a Câmara as conta, e sinalizadas como possível duplicidade.',limitations:['Competências retidas para revisão ficam fora dos totais e são indicadas por deputado.'],heldMonths,heldCompetences:heldCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),duplicateCompetences:duplicateCompetences.sort((a,b)=>a.personId-b.personId||a.month-b.month),lots:ordered.map(l=>({runId:l.runId,lot:l.input.proposal.lot,reportSha256:l.manifest.reportSha256,contentSha256:l.report.contentSha256,auditCheckedAt:l.audit.checkedAt}))}};
   return {...body,id:snapshotId(body)};
 }
 // Re-reads what the database now holds; the lot audits already re-derived every competence from the sealed originals.
@@ -100,6 +109,7 @@ export async function auditExpenseVersion(db:DB,version:Snapshot,lots:ExpenseLot
     const fix=version.validation.signFix;
     if(source!==cells.reduce((n,c)=>n+BigInt(c.totalCents??0),0n))failures.push('audited-total');
     if(bad||count!==fix?.count||Number(delta)!==fix?.deltaCents)failures.push('sign-correction');
+    if(cells.reduce((n,c)=>n+(c.diagnostics?.apiSignCorrected??0),0)!==(version.validation.apiSignFix?.count??0))failures.push('api-sign-count');
   }
   return {checkedAt:new Date().toISOString(),status:failures.length?'failed' as const:'passed' as const,failures,lots:lots.length,competences:lots.reduce((n,l)=>n+l.audit.competences,0),selected:version.records.length};
 }
