@@ -1,59 +1,59 @@
 openapi: 3.1.0
 info:
-  title: Clareia public API
+  title: API pública da Clareia
   version: 1.0.0
   description: |
-    Read-only API over the active Clareia publication (CEAP expenses of Brazilian federal deputies).
-    Only GET and HEAD. Every successful response carries `publication`, the id of the publication folder it was read from.
-    Money is always an integer number of cents (int64), never a formatted string.
+    API somente leitura sobre a publicação ativa da Clareia (despesas CEAP dos deputados federais brasileiros).
+    Apenas GET e HEAD. Toda resposta de sucesso traz `publication`, o id da pasta de publicação de onde foi lida.
+    Valores monetários são sempre um número inteiro de centavos (int64), nunca uma string formatada.
 
-    Things worth knowing before using the data:
+    Pontos importantes antes de usar os dados:
 
-    - Expense records are served exactly as published (`Expense`). Key order is not guaranteed (the store is jsonb).
-    - `date` is null in every record whose `origin` is `annual` (about 8,400 records). Those records still have `month`.
-    - `month` is the competence month and `year` the competence year. The month or year inside `date` can differ from them
-      (about 16,700 records differ by month, about 1,000 by year). Filter by `month`, never by the month of `date`.
-      `date` has no time zone.
-    - Records whose supplier is not verified (`supplierVerified` false) have no `supplierKey` and often no `source.sha256`.
-    - `duplicateFlag: "possible"` marks records that look like duplicates of another record of the same person. It is a
-      hint, not a verdict, and the current publication may contain none.
-    - `cents` can be negative (refunds, glosa) or zero. That is not an error.
-    - A month the build holds back is `{"held": true, "cents": null, "reasons": [...]}`. It is null, not zero, and has no records.
-    - Deputies without published data (`withoutData`) answer 200 with an empty list on `/expenses`, not 404.
-    - `nextCursor` is opaque and tied to one publication. After the active publication changes, an old cursor answers 409.
-    - Responses carry `ETag` (publication + binary version + query hash) and `Cache-Control: public, max-age=300`;
-      `If-None-Match` answers 304. `/healthz` is never cached. Any route can answer 503 when there is no active publication
-      or the database is unavailable.
+    - Os registros de despesa são entregues exatamente como publicados (`Expense`). A ordem das chaves não é garantida (o armazenamento é jsonb).
+    - `date` é nulo em todo registro cuja `origin` é `annual` (cerca de 8.400 registros). Esses registros ainda têm `month`.
+    - `month` é o mês de competência e `year` o ano de competência. O mês ou o ano dentro de `date` podem diferir deles
+      (cerca de 16.700 registros diferem pelo mês, cerca de 1.000 pelo ano). Filtre por `month`, nunca pelo mês de `date`.
+      `date` não tem fuso horário.
+    - Registros cujo fornecedor não é verificado (`supplierVerified` false) não têm `supplierKey` e muitas vezes não têm `source.sha256`.
+    - `duplicateFlag: "possible"` marca registros que parecem duplicatas de outro registro da mesma pessoa. É uma
+      pista, não um veredito, e a publicação atual pode não conter nenhuma.
+    - `cents` pode ser negativo (estornos, glosas) ou zero. Isso não é um erro.
+    - Um mês que a geração dos dados retém é `{"held": true, "cents": null, "reasons": [...]}`. Ele é nulo, não zero, e não tem registros.
+    - Deputados sem dados publicados (`withoutData`) respondem 200 com lista vazia em `/expenses`, não 404.
+    - `nextCursor` é opaco e vinculado a uma publicação. Depois que a publicação ativa muda, um cursor antigo responde 409.
+    - As respostas trazem `ETag` (publicação + versão do binário + hash da consulta) e `Cache-Control: public, max-age=300`;
+      `If-None-Match` responde 304. `/healthz` nunca é armazenado em cache. Qualquer rota pode responder 503 quando não há publicação ativa
+      ou o banco de dados está indisponível.
 servers:
   - url: http://127.0.0.1:8787
 paths:
   /healthz:
     get:
-      summary: Liveness plus the active publication
+      summary: Status do serviço e publicação ativa
       operationId: healthz
       responses:
         '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Health'}}}}
         '503': {$ref: '#/components/responses/Error'}
   /v1/meta:
     get:
-      summary: Identity and totals of the active publication
+      summary: Identificação e totais da publicação ativa
       operationId: meta
       responses:
         '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Meta'}}}}
         '503': {$ref: '#/components/responses/Error'}
   /v1/deputies:
     get:
-      summary: List deputies
+      summary: Listar deputados
       operationId: listDeputies
       parameters:
         - {name: uf, in: query, required: false, schema: {type: string, pattern: '^[A-Za-z]{2}$'}}
-        - {name: party, in: query, required: false, description: Case-insensitive match on `party` (the party of the period)., schema: {type: string, maxLength: 200}}
+        - {name: party, in: query, required: false, description: Busca sem distinção de maiúsculas em `party` (o partido do período)., schema: {type: string, maxLength: 200}}
       responses:
         '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/DeputyList'}}}}
         '400': {$ref: '#/components/responses/Error'}
   /v1/deputies/{id}:
     get:
-      summary: Deputy profile with months and categories
+      summary: Perfil do deputado com meses e categorias
       operationId: getDeputy
       parameters:
         - {name: id, in: path, required: true, schema: {type: integer, minimum: 1}}
@@ -63,13 +63,13 @@ paths:
         '404': {$ref: '#/components/responses/Error'}
   /v1/deputies/{id}/expenses:
     get:
-      summary: Expense records of one deputy, in publication order
+      summary: Registros de despesa de um deputado, na ordem de publicação
       operationId: listExpenses
       parameters:
         - {name: id, in: path, required: true, schema: {type: integer, minimum: 1}}
-        - {name: month, in: query, required: false, description: Competence month (the `month` field, not the month of `date`)., schema: {type: integer, minimum: 1, maximum: 12}}
-        - {name: category, in: query, required: false, description: Exact category text., schema: {type: string, maxLength: 200}}
-        - {name: cursor, in: query, required: false, description: '`nextCursor` of the previous page.', schema: {type: string}}
+        - {name: month, in: query, required: false, description: Mês de competência (o campo `month`; não o mês de `date`)., schema: {type: integer, minimum: 1, maximum: 12}}
+        - {name: category, in: query, required: false, description: Texto exato da categoria., schema: {type: string, maxLength: 200}}
+        - {name: cursor, in: query, required: false, description: '`nextCursor` da página anterior.', schema: {type: string}}
         - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 500, default: 100}}
       responses:
         '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/ExpenseList'}}}}
@@ -78,7 +78,7 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
   /v1/expenses/{public_id}:
     get:
-      summary: One expense record by its id
+      summary: Um registro de despesa pelo seu id
       operationId: getExpense
       parameters:
         - {name: public_id, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{64}$'}}
@@ -88,17 +88,17 @@ paths:
         '404': {$ref: '#/components/responses/Error'}
   /v1/suppliers:
     get:
-      summary: Supplier labels with totals, ordered by label
+      summary: Nomes de fornecedores com totais, ordenados pelo nome
       operationId: listSuppliers
       description: |
-        One row per label (`supplierLabel` when published, else `supplier`). Rows with a verified CNPJ key have `key` and
-        `verified: true`. Labels without a key (generic labels such as an individual or a withheld name) appear as one row each
-        with `key: null`, `verified: false` and no detail page; they are never split or merged. `q` is a substring match on the
-        label, ignoring case and the common Portuguese accents (á, ç, ñ and so on). Order is by label in byte order, so pages are stable.
-        `nextCursor` is tied to one publication (409 after it changes).
+        Uma linha por nome (`supplierLabel` quando publicado, senão `supplier`). Linhas com chave de CNPJ verificada têm `key` e
+        `verified: true`. Nomes sem chave (nomes genéricos, como pessoa física ou nome omitido) aparecem como uma linha cada
+        com `key: null`, `verified: false` e sem página de detalhe; nunca são divididos nem unidos. `q` é uma busca por trecho no
+        nome, sem diferenciar maiúsculas e acentos comuns do português (á, ç, ñ e similares). A ordem é pelo nome, em ordem de bytes, então as páginas são estáveis.
+        `nextCursor` está vinculado a uma publicação (409 depois que ela muda).
       parameters:
-        - {name: q, in: query, required: false, description: 'Substring of the label, 3 to 100 characters.', schema: {type: string, minLength: 3, maxLength: 100}}
-        - {name: cursor, in: query, required: false, description: '`nextCursor` of the previous page.', schema: {type: string}}
+        - {name: q, in: query, required: false, description: 'Trecho do nome, de 3 a 100 caracteres.', schema: {type: string, minLength: 3, maxLength: 100}}
+        - {name: cursor, in: query, required: false, description: '`nextCursor` da página anterior.', schema: {type: string}}
         - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 500, default: 100}}
       responses:
         '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierList'}}}}
@@ -106,9 +106,9 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
   /v1/suppliers/{key}:
     get:
-      summary: Cells of one verified supplier, per deputy, month and category
+      summary: Células de um fornecedor verificado, por deputado, mês e categoria
       operationId: getSupplier
-      description: Only verified CNPJ keys. An unknown key, or a label without key, answers 404. Not paginated; the largest response in the current publication has about 5,177 cells (about 488 KB), and 99% of suppliers have 36 cells or fewer.
+      description: Somente chaves de CNPJ verificadas. Uma chave desconhecida, ou um nome sem chave, responde 404. Sem paginação; a maior resposta da publicação atual tem cerca de 5.177 células (cerca de 488 KB), e 99% dos fornecedores têm 36 células ou menos.
       parameters:
         - {name: key, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{64}$'}}
       responses:
@@ -117,16 +117,16 @@ paths:
         '404': {$ref: '#/components/responses/Error'}
   /v1/categories:
     get:
-      summary: Total per category, summed from the per-person categories
+      summary: Total por categoria, somado a partir das categorias por pessoa
       operationId: listCategories
-      description: The server checks that the categories add up to `totalCents` (and the records to `records`); if not it answers 500 instead of a wrong total.
+      description: O servidor confere se as categorias somam `totalCents` (e os registros, `records`); se não somarem, responde 500 em vez de um total errado.
       responses:
         '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/CategoryTotals'}}}}
         '500': {$ref: '#/components/responses/Error'}
 components:
   responses:
     Error:
-      description: Error. 400 bad_request, 404 not_found, 405 method_not_allowed, 409 stale_cursor, 500 internal, 503 unavailable.
+      description: Erro. 400 bad_request, 404 not_found, 405 method_not_allowed, 409 stale_cursor, 500 internal, 503 unavailable.
       content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
   schemas:
     SupplierRow:
@@ -135,11 +135,11 @@ components:
       additionalProperties: false
       properties:
         label: {type: string}
-        key: {type: [string, 'null'], description: 'CNPJ-derived key (64 hex); null for labels without a verified key.'}
+        key: {type: [string, 'null'], description: 'Chave derivada do CNPJ (64 hex); null para nomes sem chave verificada.'}
         verified: {type: boolean}
         totalCents: {type: integer}
         records: {type: integer}
-        deputies: {type: integer, description: Number of distinct deputies with cells under this label.}
+        deputies: {type: integer, description: Número de deputados distintos com células sob este nome.}
     SupplierList:
       type: object
       required: [publication, suppliers, nextCursor]
@@ -147,7 +147,7 @@ components:
       properties:
         publication: {type: string}
         suppliers: {type: array, items: {$ref: '#/components/schemas/SupplierRow'}}
-        nextCursor: {type: [string, 'null'], description: Null on the last page.}
+        nextCursor: {type: [string, 'null'], description: Nulo na última página.}
     SupplierCell:
       type: object
       required: [deputyId, month, category, cents, records]
@@ -199,18 +199,18 @@ components:
       required: [publication, expensesVersion, domainVersions, publishedAt, totalCents, records, minMonths, ceiling, limitations, links]
       additionalProperties: false
       properties:
-        publication: {type: string, description: Publication folder id (12 hex).}
-        expensesVersion: {type: string, description: Version of the expenses data (64 hex). Different from `publication`.}
+        publication: {type: string, description: Id da pasta de publicação (12 hex).}
+        expensesVersion: {type: string, description: Versão dos dados de despesas (64 hex). Diferente de `publication`.}
         domainVersions: {type: object, additionalProperties: true}
         publishedAt: {type: [string, 'null'], format: date-time}
         totalCents: {type: integer}
         records: {type: integer}
         minMonths: {type: integer}
-        ceiling: {description: Raw ceiling per UF and month as published. Usage is not computed., type: [object, array, 'null']}
-        limitations: {description: Limitations as published., type: [object, array, 'null']}
+        ceiling: {description: Teto bruto por UF e mês conforme publicado. O uso não é calculado., type: [object, array, 'null']}
+        limitations: {description: Limitações conforme publicadas., type: [object, array, 'null']}
         links:
           type: object
-          description: Paths relative to the site origin, not to this API.
+          description: Caminhos relativos à origem do site, não a esta API.
           required: [methodology, corrections, openData]
           additionalProperties: false
           properties:
@@ -249,7 +249,7 @@ components:
         deputies: {type: array, items: {$ref: '#/components/schemas/Deputy'}}
     Month:
       type: object
-      description: When `held` is true, `cents` is null and `reasons` is present.
+      description: Quando `held` é true, `cents` é nulo e `reasons` está presente.
       required: [month, held, cents, records, exercise, party, partyStatus, partyValues, uf, ufStatus]
       additionalProperties: false
       properties:
@@ -300,13 +300,13 @@ components:
         categories: {type: array, items: {$ref: '#/components/schemas/Category'}}
     Expense:
       type: object
-      description: The published record, unchanged. Negative and zero `cents` are valid.
+      description: O registro publicado, sem alterações. `cents` negativo e zero são válidos.
       required: [id, lot, date, year, cents, month, origin, source, receipt, category, personId, supplier, documentId, documentCents, documentNumber, disallowedCents, supplierVerified]
       additionalProperties: false
       properties:
         id: {type: string}
         lot: {type: string}
-        date: {type: [string, 'null'], description: 'Local time, no zone. Null for origin "annual".'}
+        date: {type: [string, 'null'], description: 'Horário local, sem fuso. Nulo para origin "annual".'}
         year: {type: integer}
         cents: {type: integer}
         month: {type: integer, minimum: 1, maximum: 12}
@@ -318,14 +318,14 @@ components:
           properties:
             row: {type: integer}
             url: {type: string}
-            sha256: {type: string, description: Absent in records with an unverified supplier.}
+            sha256: {type: string, description: Ausente em registros com fornecedor não verificado.}
             fetchedAt: {type: string}
         receipt: {type: [string, 'null']}
         category: {type: string}
         personId: {type: integer}
         supplier: {type: string}
         supplierLabel: {type: string}
-        supplierKey: {type: string, description: Absent when `supplierVerified` is false.}
+        supplierKey: {type: string, description: Ausente quando `supplierVerified` é false.}
         supplierVerified: {type: boolean}
         supplierIdOdd: {type: boolean}
         documentId: {type: string}
@@ -344,7 +344,7 @@ components:
         publication: {type: string}
         deputyId: {type: integer}
         expenses: {type: array, items: {$ref: '#/components/schemas/Expense'}}
-        nextCursor: {type: [string, 'null'], description: Null on the last page.}
+        nextCursor: {type: [string, 'null'], description: Nulo na última página.}
     ExpenseOne:
       type: object
       required: [publication, expense]
