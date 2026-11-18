@@ -81,10 +81,7 @@ func (s *Server) suppliers(ctx context.Context, tx pgx.Tx, r *http.Request, pub 
 		after, hasAfter = label, true
 	}
 	rows, err := tx.Query(ctx, `
-		WITH s AS (
-		  SELECT label, supplier_key, sum(cents)::bigint AS cents, sum(records)::bigint AS records, count(DISTINCT deputy_id)::int AS deputies
-		  FROM api.supplier_cells GROUP BY label, supplier_key)
-		SELECT label, supplier_key, cents, records, deputies FROM s
+		SELECT label, supplier_key, total_cents, records, deputies FROM api.suppliers
 		WHERE (NOT $1::boolean OR strpos(`+nf("label")+`, `+nf("$2::text")+`) > 0)
 		  AND (NOT $3::boolean OR label COLLATE "C" > $4::text COLLATE "C")
 		ORDER BY label COLLATE "C" LIMIT $5`, hasQ, term, hasAfter, after, limit+1)

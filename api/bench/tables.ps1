@@ -5,19 +5,20 @@ $dir = Join-Path $PSScriptRoot "results\$Name"
 function J($p) { Get-Content $p -Raw | ConvertFrom-Json }
 function Med($v) { $s = @($v | Sort-Object); $s[[int][math]::Floor(($s.Count - 1) / 2)] }
 function F($x, $d = 1) { ([double]$x).ToString("N$d", [Globalization.CultureInfo]::InvariantCulture) }
+function NRuns($d) { @(Get-ChildItem $d -Filter 'run*.json' | ? Name -notlike '*proc*').Count }
 function Tri($v, $d = 1) { "$(F (Med $v) $d) ($(F ($v | Measure-Object -Minimum).Minimum $d) to $(F ($v | Measure-Object -Maximum).Maximum $d))" }
 $names = @{ static = '(0) static files'; noidx = '(a) API, full-scan cost (no extra indexes)'; idx = '(b) API, with indexes' }
 $o = New-Object System.Collections.Generic.List[string]
 
-$o.Add("### Three runs per step ($Name): median (min to max), ms")
+$o.Add("### Runs per step at the reference rate ($Name): median (min to max), ms")
 $o.Add('')
 $o.Add('| step | rate | p50 | p95 | p99 | achieved req/s | dropped | error rate | KB/response | server CPU cores | k6 CPU cores |')
 $o.Add('|---|---|---|---|---|---|---|---|---|---|---|')
 foreach ($s in 'static', 'noidx', 'idx') {
   $d = Join-Path $dir $s
   if (-not (Test-Path $d)) { continue }
-  $r = 1..3 | ForEach-Object { J (Join-Path $d "run$_.json") }
-  $pr = 1..3 | ForEach-Object { J (Join-Path $d "run$_.proc.json") }
+  $n = NRuns $d; $r = 1..$n | ForEach-Object { J (Join-Path $d "run$_.json") }
+  $pr = 1..$n | ForEach-Object { J (Join-Path $d "run$_.proc.json") }
   $o.Add("| $($names[$s]) | $($r[0].rate)/s | $(Tri ($r | % { $_.latencyMs.p50 }) 2) | $(Tri ($r | % { $_.latencyMs.p95 }) 2) | $(Tri ($r | % { $_.latencyMs.p99 }) 2) | $(Tri ($r | % { $_.rps }) 1) | $(($r | % { $_.dropped }) -join '/') | $(($r | % { F ($_.failedRate * 100) 3 }) -join '/')% | $(F (Med ($r | % { $_.kbPerReq })) 1) | $(Tri ($pr | % { $_.serverCpuCores }) 2) | $(Tri ($pr | % { $_.k6CpuCores }) 2) |")
 }
 
@@ -30,7 +31,7 @@ $o.Add('|---|' + (($eps | % { '---' }) -join '|') + '|')
 foreach ($s in 'static', 'noidx', 'idx') {
   $d = Join-Path $dir $s
   if (-not (Test-Path $d)) { continue }
-  $r = 1..3 | ForEach-Object { J (Join-Path $d "run$_.json") }
+  $n = NRuns $d; $r = 1..$n | ForEach-Object { J (Join-Path $d "run$_.json") }
   $cells = $eps | ForEach-Object { $e = $_; $v = $r | ? { $_.byEndpoint.$e } | % { $_.byEndpoint.$e.p95 }; if ($v -and (Med $v) -gt 0) { F (Med $v) 2 } else { '-' } }
   $o.Add("| $($names[$s]) | $($cells -join ' | ') |")
 }

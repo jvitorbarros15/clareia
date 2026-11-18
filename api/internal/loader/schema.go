@@ -1,5 +1,16 @@
 package loader
 
+// The supplier list pre-aggregated from supplier_cells; label is in byte order ("C") so the list order and cursor are stable. Idempotent so existing schemas can get it.
+const ddlSuppliers = `
+CREATE TABLE IF NOT EXISTS suppliers (
+  label text COLLATE "C" PRIMARY KEY,
+  supplier_key text,
+  verified boolean NOT NULL,
+  total_cents bigint NOT NULL,
+  records bigint NOT NULL,
+  deputies integer NOT NULL
+);`
+
 // Tables of one publication. Every statement runs with search_path set to pub_<id>.
 const ddlPublication = `
 CREATE TABLE publication (
@@ -79,12 +90,14 @@ CREATE TABLE supplier_cells (
   PRIMARY KEY (deputy_id, month, category, label)
 );
 CREATE INDEX ON expenses (supplier_key);
+` + ddlSuppliers + `
 CREATE INDEX ON supplier_cells (label);
 CREATE INDEX supplier_cells_supplier_key_idx ON supplier_cells (supplier_key);
 `
 
 // Tables the api views point to. publication goes first: requests hold a lock on api.publication, so activation waits for them before it touches any other view (the reverse order deadlocks).
-var apiTables = []string{"publication", "expenses", "deputies", "deputy_months", "deputy_categories", "supplier_cells"}
+// suppliers is the supplier list pre-aggregated from supplier_cells, so /v1/suppliers does not aggregate 123 thousand rows per request.
+var apiTables = []string{"publication", "expenses", "deputies", "deputy_months", "deputy_categories", "supplier_cells", "suppliers"}
 
 const ddlAPI = `
 CREATE SCHEMA IF NOT EXISTS api;

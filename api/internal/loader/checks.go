@@ -37,6 +37,12 @@ FULL JOIN (SELECT deputy_id, month, category, coalesce(record->>'supplierLabel',
   ON e.deputy_id = c.deputy_id AND e.month = c.month AND e.category = c.category AND e.label = c.label
 WHERE c.deputy_id IS NULL OR e.deputy_id IS NULL OR c.cents <> e.cents OR c.records <> e.n`
 
+	sqlSuppliersTable = `
+SELECT count(*) FROM suppliers s
+FULL JOIN (SELECT label, supplier_key, sum(cents)::bigint AS cents, sum(records)::bigint AS n, count(DISTINCT deputy_id)::int AS d FROM supplier_cells GROUP BY 1, 2) a ON a.label = s.label
+WHERE s.label IS NULL OR a.label IS NULL OR s.supplier_key IS DISTINCT FROM a.supplier_key OR s.verified <> (a.supplier_key IS NOT NULL)
+   OR s.total_cents <> a.cents OR s.records <> a.n OR s.deputies <> a.d`
+
 	sqlLabelKeys = `
 SELECT count(*) FROM (
   SELECT label FROM (SELECT coalesce(record->>'supplierLabel', record->>'supplier') AS label, supplier_key, verified FROM expenses GROUP BY 1, 2, 3) g
@@ -139,6 +145,12 @@ func runChecks(ctx context.Context, tx pgx.Tx, pub *Publication) ([]Result, erro
 	}
 	c.add("células de fornecedor: contagem e rótulos", cellCount == int64(expectedCells) && labels == int64(len(pub.Suppliers.Suppliers)) && len(unique) == len(pub.Suppliers.Suppliers), "%d células, %d rótulos", cellCount, labels)
 	c.zero("células de fornecedor = despesas agrupadas", sqlSupplierCells, "células divergentes de fornecedores.json")
+	c.zero("tabela suppliers = células agrupadas", sqlSuppliersTable, "fornecedores divergentes de supplier_cells")
+	var nSuppliers int64
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM suppliers`).Scan(&nSuppliers); err != nil {
+		return nil, err
+	}
+	c.add("tabela suppliers: um por rótulo de fornecedores.json", nSuppliers == int64(len(pub.Suppliers.Suppliers)), "%d fornecedores, %d rótulos", nSuppliers, len(pub.Suppliers.Suppliers))
 	c.zero("um rótulo = uma chave", sqlLabelKeys, "rótulos com mais de uma chave ou verificação")
 	c.zero("uma chave = um rótulo", sqlKeyLabels, "chaves com mais de um rótulo")
 	c.zero("colunas de filtro = record", sqlFilterColumns, "registros com colunas diferentes do record")

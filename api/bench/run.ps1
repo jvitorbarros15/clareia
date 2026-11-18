@@ -3,7 +3,8 @@ param(
   [string]$StaticData = 'C:\Users\jvito\AppData\Local\Temp\claude\cb8a46fb6ccacb9e\060c9b41-8c17-4412-8c9f-6ac4e9983ff8\scratchpad\fb-api\data\b571fe73c261',
   [int]$RefRate = 100,
   [int]$WarmSecs = 20,
-  [int]$RunSecs = 45,
+  [int]$RunSecs = 90,
+  [int]$Runs = 5,
   [int]$ProbeSecs = 20,
   [int]$StartProbe = 50,
   [int]$MaxProbe = 12000,
@@ -96,10 +97,10 @@ function Setup-NoIdx {
   $sql = @"
 DO `$`$ DECLARE r record; BEGIN
   FOR r IN SELECT conrelid::regclass::text AS t, conname FROM pg_constraint WHERE contype IN ('p','u') AND connamespace = '$sch'::regnamespace
-           AND conrelid::regclass::text IN ('$sch.expenses','$sch.supplier_cells','$sch.deputy_months','$sch.deputy_categories') LOOP
+           AND conrelid::regclass::text IN ('$sch.expenses','$sch.supplier_cells','$sch.deputy_months','$sch.deputy_categories','$sch.suppliers') LOOP
     EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.t, r.conname);
   END LOOP;
-  FOR r IN SELECT schemaname, indexname FROM pg_indexes WHERE schemaname = '$sch' AND tablename IN ('expenses','supplier_cells','deputy_months','deputy_categories') LOOP
+  FOR r IN SELECT schemaname, indexname FROM pg_indexes WHERE schemaname = '$sch' AND tablename IN ('expenses','supplier_cells','deputy_months','deputy_categories','suppliers') LOOP
     EXECUTE format('DROP INDEX %I.%I', r.schemaname, r.indexname);
   END LOOP;
 END `$`$;
@@ -166,10 +167,10 @@ function Run-Step([string]$step) {
   }
   try {
     $common = @("BASE=$base", "TARGET=$target", "FIXTURE=$($fixture -replace '\\','/')", "SEED=$Seed")
-    $log = [ordered]@{ step = $step; refRate = $RefRate; warmSecs = $WarmSecs; runSecs = $RunSecs; probeSecs = $ProbeSecs; runs = @(); probes = @() }
+    $log = [ordered]@{ step = $step; refRate = $RefRate; warmSecs = $WarmSecs; runSecs = $RunSecs; probeSecs = $ProbeSecs; runs = @(); runCount = $Runs; probes = @() }
     Write-Host "[$step] warm-up ${WarmSecs}s @ $RefRate/s"
     $null = Run-K6 'mix.js' ($common + @("RATE=$RefRate", "DURATION=${WarmSecs}s")) 'warmup' $dir $svc $WarmSecs
-    foreach ($i in 1..3) {
+    foreach ($i in 1..$Runs) {
       Write-Host "[$step] run $i ${RunSecs}s @ $RefRate/s"
       $p = Run-K6 'mix.js' ($common + @("RATE=$RefRate", "DURATION=${RunSecs}s")) "run$i" $dir $svc $RunSecs
       $log.runs += "run$i"

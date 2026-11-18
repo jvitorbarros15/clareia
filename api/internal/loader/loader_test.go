@@ -336,3 +336,37 @@ func TestExistingPublicationGetsSupplierKeyIndex(t *testing.T) {
 	}
 	e.load(t, dir)
 }
+
+// A publication loaded before the suppliers table existed gets it, filled and verified, and the api view, on the next (no-op) load.
+func TestExistingPublicationGetsSuppliersTable(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	dir := fixtureCopy(t, "aaaaaaaaaaaa")
+	e.load(t, dir)
+	want := e.scalar(t, `SELECT count(*) FROM pub_aaaaaaaaaaaa.suppliers`)
+	if want == "0" {
+		t.Fatal("carga nova sem a tabela suppliers preenchida")
+	}
+	if _, err := e.conn.Exec(ctx, `DROP VIEW api.suppliers; DROP TABLE pub_aaaaaaaaaaaa.suppliers`); err != nil {
+		t.Fatal(err)
+	}
+	if rep := e.load(t, dir); rep.Skipped == "" {
+		t.Fatalf("devia ser no-op, veio %+v", rep)
+	}
+	if got := e.scalar(t, `SELECT count(*) FROM api.suppliers`); got != want {
+		t.Fatalf("api.suppliers: %s, esperado %s", got, want)
+	}
+	ro := e.roConn(t)
+	var n int
+	if err := ro.QueryRow(ctx, `SELECT count(*) FROM api.suppliers`).Scan(&n); err != nil {
+		t.Fatalf("o papel devia ler api.suppliers: %v", err)
+	}
+	e.load(t, dir)
+
+	if _, err := e.conn.Exec(ctx, `UPDATE pub_aaaaaaaaaaaa.suppliers SET records = records + 1 WHERE label = (SELECT min(label) FROM pub_aaaaaaaaaaaa.suppliers)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loader.Load(ctx, e.conn, dir, e.opts); err == nil || !strings.Contains(err.Error(), "divergentes") {
+		t.Fatalf("linha adulterada devia ser recusada: %v", err)
+	}
+}

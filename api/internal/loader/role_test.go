@@ -19,7 +19,7 @@ func TestReadOnlyRoleCannotWrite(t *testing.T) {
 	if err := ro.QueryRow(ctx, `SELECT count(*) FROM api.expenses`).Scan(&n); err != nil || n == 0 {
 		t.Fatalf("o papel devia ler api.expenses: %d %v", n, err)
 	}
-	for _, view := range []string{"deputies", "deputy_months", "deputy_categories", "supplier_cells", "publication"} {
+	for _, view := range []string{"deputies", "deputy_months", "deputy_categories", "supplier_cells", "suppliers", "publication"} {
 		if err := ro.QueryRow(ctx, `SELECT count(*) FROM api.`+view).Scan(&n); err != nil {
 			t.Errorf("api.%s: %v", view, err)
 		}
