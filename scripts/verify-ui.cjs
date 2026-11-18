@@ -9,6 +9,9 @@ const seed = seedAt < 0 ? 20261110 : Number(argv[seedAt + 1]), only = onlyAt < 0
 const base = process.env.BASE_URL || 'http://127.0.0.1:4174';
 const checks = [];
 const check = (name, fn) => checks.push({ name, fn });
+// The published data may lack the case a check needs (e.g. no negative category after the housing sign fix): skip, don't fail.
+class NoCase extends Error {}
+const needCase = (ok, message) => { if (!ok) throw new NoCase(message); };
 const text = async locator => (await locator.innerText()).replace(/\s+/g, ' ').trim();
 const clean = value => value.replace(/\s+/g, ' ').trim();
 const random = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -178,7 +181,7 @@ check('adjustments explained', async () => {
   const page = await at(1440);
   const data = await published(page);
   const negative = Object.values(data.categories).filter(c => c < 0).reduce((n, c) => n + c, 0);
-  assert.ok(negative < 0, 'the published sample has a negative category');
+  needCase(negative < 0, 'the published sample has a negative category');
   const body = clean(await page.evaluate(() => document.body.innerText));
   assert.ok(body.includes(clean(`Ajustes negativos de ${brl(negative)} não entram nas fatias`)), `adjustment line for ${brl(negative)}`);
   await page.close();
@@ -214,7 +217,7 @@ check('copy', async () => {
   if (data.summary.votesId) assert.ok(body.includes(`Votações nominais de ${data.summary.votesYears.join(', ')}.`), 'votações copy for collected votes');
   else assert.ok(body.includes('Votações nominais ainda não foram coletadas'), 'votações copy');
   const negative = Object.values(data.categories).find(c => c < 0);
-  assert.ok(negative < 0, 'the published sample has a negative category');
+  needCase(negative < 0, 'the published sample has a negative category');
   await page.locator('#despesas [data-p=more-cats]').click();
   const listed = clean(await page.locator('#despesas .donut-legend').innerText());
   assert.ok(listed.includes(clean(brlCompact(negative))), `negative compact value ${brlCompact(negative)} in the category list`);
@@ -443,7 +446,9 @@ check('donut panel', async () => {
 check('negative category', async () => {
   const page = await at(1440);
   const data = await published(page);
-  const [name, cents] = Object.entries(data.categories).find(([, c]) => c < 0);
+  const found = Object.entries(data.categories).find(([, c]) => c < 0);
+  needCase(found, 'the published sample has a negative category');
+  const [name, cents] = found;
   await page.locator('#despesas [data-p=more-cats]').click();
   const row = page.locator(`.donut-legend [data-p-highlight="${name}"]`);
   const rowText = clean(await row.innerText());
@@ -971,7 +976,7 @@ async function adjustmentPair(data) {
     if (!zero && !values.length && await uniqueFirst(p.name)) zero = p;
     if (negative && zero) break;
   }
-  assert.ok(negative && zero, 'the published data has a deputy with negative adjustments and one with none in the category');
+  needCase(negative && zero, 'the published data has a deputy with negative adjustments and one with none in the category');
   return adjusted = { negative, zero };
 }
 const pickPair = async (page, data, a, b) => {
@@ -1584,7 +1589,7 @@ check('shared link with a question keeps defaults the reader chose, and short li
 check('a link without uf never matches deputies who have no uf, so a question still renders the page', async () => {
   const data = await published();
   const noUf = data.summary.people.filter(q => inOffice(q) && !data.index.people.find(p => p.id === q.id).uf);
-  assert.ok(noUf.length > 0, 'the published data has deputies in office without a uf');
+  needCase(noUf.length > 0, 'the published data has deputies in office without a uf');
   for (const search of [`?q=${encodeURIComponent('Quem mais gastou?')}`, `?q=${encodeURIComponent('Quem mais gastou?')}&uf=`]) {
     const page = await at(1440, { search });
     assert.equal(await page.evaluate(() => window.Clareia.state.uf), 'Brasil', `uf stays Brasil for ${search}`);
@@ -1636,7 +1641,7 @@ check('map shades only positive values and gives net-negative tiles their own st
   const cat = await page.evaluate(() => window.Clareia.state.category);
   const byUf = {};
   for (const p of data.people.filter(p => p.uf && p.uf !== smallest[0])) byUf[p.uf] = (byUf[p.uf] || 0) + sumOf(p, cat);
-  assert.ok(Object.values(byUf).some(v => v < 0), 'real data has a net-negative state for this category');
+  needCase(Object.values(byUf).some(v => v < 0), 'real data has a net-negative state for this category');
   const maxPositive = Math.max(0, ...Object.values(byUf).filter(v => v > 0));
   const read = uf => page.locator(`[data-p-uf="${uf}"]`).evaluate(g => {
     const path = g.querySelectorAll('path')[1], cs = getComputedStyle(path);
@@ -2322,16 +2327,19 @@ check('the record detail shows the possible-duplicate line only for a flagged re
 
 (async () => {
   browser = await chromium.launch({ headless: true });
-  let failed = 0, ran = 0;
+  let failed = 0, ran = 0, skipped = 0;
   try {
     for (const { name, fn } of checks) {
       if (only && !name.toLowerCase().includes(only)) continue;
       ran++;
       try { await fn(); console.log(`PASS ${name}`); }
-      catch (error) { failed++; console.log(`FAIL ${name}\n  ${String(error.message).split('\n').join('\n  ')}`); }
+      catch (error) {
+        if (error instanceof NoCase) { skipped++; console.log(`SKIP ${name}\n  sem caso no dado: ${error.message}`); }
+        else { failed++; console.log(`FAIL ${name}\n  ${String(error.message).split('\n').join('\n  ')}`); }
+      }
       for (const page of browser.contexts().flatMap(context => context.pages())) await page.close().catch(() => {});
     }
   } finally { await browser.close(); }
-  console.log(`${ran - failed} of ${ran} checks passed`);
+  console.log(`${ran - failed - skipped} of ${ran - skipped} checks passed${skipped ? `, ${skipped} skipped (no case in the data)` : ''}`);
   if (failed) process.exitCode = 1;
 })();
