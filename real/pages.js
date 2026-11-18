@@ -56,6 +56,7 @@
     ['id_deputado', 'número', 'Igual a <code>personId</code>.'],
     ['ano', 'número', 'Igual a <code>year</code>.'],
     ['mes', 'número', 'Igual a <code>month</code>: a competência.'],
+    ['data_documento', 'texto ou vazio', 'Igual a <code>date</code>: data do documento. Vazia em parte dos registros, e pode cair em outro mês que a competência.'],
     ['categoria', 'texto', 'Igual a <code>category</code>.'],
     ['fornecedor', 'texto', 'Igual a <code>supplier</code>.'],
     ['documento', 'texto', 'Igual a <code>documentId</code>.'],
