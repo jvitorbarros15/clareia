@@ -75,3 +75,5 @@ cd api; go vet ./...; go test ./...
 Sem `CLAREIA_API_TEST_DSN` ou sem `npx`, os testes são pulados localmente e **falham quando `CI` está definido** (o GitHub Actions define). Cada teste cria e apaga o próprio banco e o próprio papel, sem mexer em `clareia_api`. Os testes das recusas e do portão precisam de Node.
 
 `api/testdata/` guarda 3 deputados recortados de um build real por `api/scripts/make-fixture.ts` (nunca editar à mão). É dado real de publicação, mantido de propósito no repositório público: retirar um dado exige regenerar a fixture, e o histórico do git não se apaga. Depois de regenerar: `npm run scan:cpf -- api/testdata`. O teste do CPF gera o número em tempo de execução; nenhum CPF vai para o git.
+
+Atenção: o `--setup` (que cada teste chama) tira o `CONNECT` em `postgres` e `template1` do `PUBLIC` no servidor inteiro. Aponte `CLAREIA_API_TEST_DSN` só para um servidor dedicado a isto (o contêiner `clareia-api-pg` ou o serviço do CI), nunca para um compartilhado.

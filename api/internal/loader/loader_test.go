@@ -237,7 +237,7 @@ func TestOnlyOnePreviousIsKept(t *testing.T) {
 	e.load(t, fixtureCopy(t, "aaaaaaaaaaaa"))
 	e.load(t, publicationB(t, "bbbbbbbbbbbb"))
 	e.load(t, publicationB(t, "cccccccccccc"))
-	if got := e.states(t); got != "bbbbbbbbbbbb=previous,cccccccccccc=active" {
+	if got := e.states(t); got != "aaaaaaaaaaaa=retired,bbbbbbbbbbbb=previous,cccccccccccc=active" {
 		t.Fatalf("estados: %s", got)
 	}
 	if e.schemaExists(t, "aaaaaaaaaaaa") {
@@ -275,5 +275,38 @@ func TestOlderThanActiveIsRefused(t *testing.T) {
 	e.load(t, at(publicationB(t, "cccccccccccc"), "2026-06-11T00:00:00Z"))
 	if _, err := loader.Rollback(ctx, e.conn, e.opts); err != nil {
 		t.Fatalf("rollback devia seguir permitido: %v", err)
+	}
+}
+
+func TestRetiredPublicationCannotComeBack(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	a := fixtureCopy(t, "aaaaaaaaaaaa")
+	e.load(t, a)
+	e.load(t, publicationB(t, "bbbbbbbbbbbb"))
+	e.load(t, publicationB(t, "cccccccccccc"))
+	if _, err := loader.Load(ctx, e.conn, a, e.opts); err == nil || !strings.Contains(err.Error(), "substituída") {
+		t.Fatalf("pasta substituída (mesmo publishedAt) devia ser recusada: %v", err)
+	}
+	if e.schemaExists(t, "aaaaaaaaaaaa") {
+		t.Fatal("a recusa recriou o schema")
+	}
+	if _, err := e.conn.Exec(ctx, `DELETE FROM api.publications WHERE state = 'active'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loader.Load(ctx, e.conn, a, e.opts); err == nil {
+		t.Fatal("sem publicação ativa a pasta substituída ainda devia ser recusada")
+	}
+}
+
+func TestMissingActiveSchemaGivesClearError(t *testing.T) {
+	e := newEnv(t)
+	e.load(t, fixtureCopy(t, "aaaaaaaaaaaa"))
+	if _, err := e.conn.Exec(context.Background(), `DROP SCHEMA pub_aaaaaaaaaaaa CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loader.Load(context.Background(), e.conn, publicationB(t, "bbbbbbbbbbbb"), e.opts)
+	if err == nil || !strings.Contains(err.Error(), "apagado à mão") {
+		t.Fatalf("erro devia explicar o schema ausente: %v", err)
 	}
 }

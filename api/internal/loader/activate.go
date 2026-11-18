@@ -103,16 +103,20 @@ func activate(ctx context.Context, conn *pgx.Conn, pub *Publication, o Options) 
 		if _, err := tx.Exec(ctx, `DROP SCHEMA IF EXISTS `+schemaOf(id)+` CASCADE`); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM api.publications WHERE folder_id = $1`, id); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE api.publications SET state = 'retired' WHERE folder_id = $1`, id); err != nil {
 			return err
 		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE api.publications SET state = 'previous' WHERE state = 'active' AND folder_id <> $1`, pub.FolderID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO api.publications (folder_id, state, expenses_version, activated_at) VALUES ($1, 'active', $2, now())
-		ON CONFLICT (folder_id) DO UPDATE SET state = 'active', activated_at = now() WHERE api.publications.state <> 'revoked'`, pub.FolderID, pub.Summary.PublicationID); err != nil {
+	tag, err := tx.Exec(ctx, `INSERT INTO api.publications (folder_id, state, expenses_version, activated_at) VALUES ($1, 'active', $2, now())
+		ON CONFLICT (folder_id) DO UPDATE SET state = 'active', activated_at = now() WHERE api.publications.state NOT IN ('revoked', 'retired')`, pub.FolderID, pub.Summary.PublicationID)
+	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("publicação %s não pôde ser ativada (revogada ou substituída)", pub.FolderID)
 	}
 	return tx.Commit(ctx)
 }

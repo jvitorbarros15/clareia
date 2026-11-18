@@ -59,7 +59,7 @@ func repoRoot() (string, error) {
 func withoutSecrets(env []string) []string {
 	var out []string
 	for _, e := range env {
-		if !strings.HasPrefix(strings.ToUpper(e), "CLAREIA_API_") {
+		if u := strings.ToUpper(e); !strings.HasPrefix(u, "CLAREIA_API_") && !strings.HasPrefix(u, "PG") {
 			out = append(out, e)
 		}
 	}

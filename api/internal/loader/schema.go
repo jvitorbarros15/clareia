@@ -89,10 +89,12 @@ const ddlAPI = `
 CREATE SCHEMA IF NOT EXISTS api;
 CREATE TABLE IF NOT EXISTS api.publications (
   folder_id text PRIMARY KEY,
-  state text NOT NULL CHECK (state IN ('active', 'previous', 'revoked')),
+  state text NOT NULL CHECK (state IN ('active', 'previous', 'revoked', 'retired')),
   expenses_version text,
   loaded_at timestamptz NOT NULL DEFAULT now(),
   activated_at timestamptz,
   revoked_at timestamptz
 );
+ALTER TABLE api.publications DROP CONSTRAINT IF EXISTS publications_state_check;
+ALTER TABLE api.publications ADD CONSTRAINT publications_state_check CHECK (state IN ('active', 'previous', 'revoked', 'retired'));
 `

@@ -61,6 +61,9 @@ func Load(ctx context.Context, conn *pgx.Conn, dir string, o Options) (*Report, 
 	if state != nil && *state == "revoked" {
 		return nil, fmt.Errorf("publicação %s foi revogada e não volta", pub.FolderID)
 	}
+	if state != nil && *state == "retired" {
+		return nil, fmt.Errorf("publicação %s já foi substituída e não volta; carregue uma reconstrução nova", pub.FolderID)
+	}
 	if state == nil {
 		if err := refuseOlderThanActive(ctx, conn, pub); err != nil {
 			return nil, err
@@ -266,7 +269,7 @@ func refuseOlderThanActive(ctx context.Context, conn *pgx.Conn, pub *Publication
 	}
 	var activeAt *time.Time
 	if err := conn.QueryRow(ctx, `SELECT published_at FROM `+schemaOf(activeID)+`.publication`).Scan(&activeAt); err != nil {
-		return err
+		return fmt.Errorf("a publicação ativa %s está em api.publications mas o schema %s não pôde ser lido (apagado à mão?): %w", activeID, schemaOf(activeID), err)
 	}
 	if activeAt != nil && at.Before(*activeAt) {
 		return fmt.Errorf("publicação %s (publishedAt %s) é mais antiga que a ativa %s (%s): para voltar use --rollback", pub.FolderID, at.Format(time.RFC3339), activeID, activeAt.Format(time.RFC3339))
