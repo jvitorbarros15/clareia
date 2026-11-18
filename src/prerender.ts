@@ -159,7 +159,7 @@ async function writeApiPage(outDir:string,shell:string,pages:StaticPages,options
   const s=pages.sections(apiDocsInner(await loadSpec(REPO)));
   const body=`<body data-model="editorial">
   <a class="skip-link" href="#main">Ir para o conteúdo</a>
-  <div class="site"><header class="site-header"><a class="logo" href="/">Clareia</a></header><main id="main" class="text-page">${pages.layout('api','Contrato da API','API','O contrato da API somente leitura do Clareia: endpoints, parâmetros e respostas.',s.html,s.toc)}</main></div>
+  <div class="site"><header class="site-header"><a class="logo" href="/" aria-label="Clareia, início">${(await fs.readFile(path.join(REPO,'real','app.js'),'utf8')).match(/const logo = '(<svg class="logo-mark"[\s\S]*?<\/svg>)'/)![1]}</a></header><main id="main" class="text-page">${pages.layout('api','Contrato da API','API','O contrato da API somente leitura do Clareia: endpoints, parâmetros e respostas.',s.html,s.toc)}</main></div>
 </body>`;
   const html=page(shell,{title,description,url:options.siteUrl+'/api',type:'website',image:icon(options.siteUrl)})
     .replace(/<script[^>]*><\/script>\s*/g,'').replace(/<link rel="preload"[^>]*as="(?:script|font)"[^>]*>\s*/g,'').replace(/<body[\s\S]*<\/body>/,()=>body);
