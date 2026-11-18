@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
+    "api:pdf": "tsx scripts/build-api-pdf.ts",
     "build:site": "tsx scripts/build-site.ts",
     "deploy:test": "tsx scripts/deploy-test.ts",
     "build:full": "tsx --max-old-space-size=8192 scripts/build-full-site.ts",
@@ -59,6 +60,7 @@
     "playwright": "1.65.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "wrangler": "4.160.0"
+    "wrangler": "4.160.0",
+    "yaml": "2.9.1"
   }
 }

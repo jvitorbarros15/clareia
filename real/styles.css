@@ -1085,3 +1085,5 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .doc-quirks li{margin-bottom:12px}
 @media(max-width:600px){.doc-table td:first-child code{word-break:break-all}.doc-table th,.doc-table td{padding-right:10px}}
 
+.doc-main h4.api-h{text-transform:none;letter-spacing:0;font-size:16px;margin:40px 0 10px}
+.doc-table+.doc-table{margin-top:24px}

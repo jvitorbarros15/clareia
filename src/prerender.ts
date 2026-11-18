@@ -5,6 +5,7 @@ import type {Person} from './model.ts';
 import {ceilingUse} from './ceiling-use.ts';
 import type {CeilingUse} from './ceiling-use.ts';
 import type {SiteSummary,SupplierSummary} from './site-summary.ts';
+import {apiDocsInner,loadSpec} from './api-docs.ts';
 
 const REPO=path.join(import.meta.dirname,'..');
 export const DEFAULT_SITE_URL='https://clareia.clareia.workers.dev';
@@ -136,7 +137,7 @@ export function robotsTxt(o:ResolvedOptions):string{
 }
 
 export type CorrectionEntry={date:string;title:string;detail:string};
-type StaticPages={CONTACT_EMAIL:string;POLICY:string;layout:(name:string,eyebrow:string,title:string,lede:string,inner:string,toc?:string)=>string;pages:{sobre:{title:string;description:string;body:()=>string};correcoes:{title:string;description:string;body:(list:CorrectionEntry[],email:string)=>string};metodologia:{title:string;description:string;naoConcluimos:string;privacidade:string};'dados-abertos':{title:string;description:string;body:(manifest:unknown,base:string)=>string}}};
+type StaticPages={CONTACT_EMAIL:string;POLICY:string;layout:(name:string,eyebrow:string,title:string,lede:string,inner:string,toc?:string)=>string;sections:(html:string)=>{html:string;toc:string};pages:{sobre:{title:string;description:string;body:()=>string};correcoes:{title:string;description:string;body:(list:CorrectionEntry[],email:string)=>string};metodologia:{title:string;description:string;naoConcluimos:string;privacidade:string};'dados-abertos':{title:string;description:string;body:(manifest:unknown,base:string)=>string}}};
 // real/pages.js is the one copy of these texts: the browser loads it as a script, and here it is run in an empty sandbox.
 export async function loadStaticPages():Promise<StaticPages>{
   const sandbox:{window:{ClareiaPages?:StaticPages}}={window:{}};
@@ -152,6 +153,18 @@ export async function loadCorrections():Promise<CorrectionEntry[]>{
 async function readOpenData(outDir:string):Promise<{manifest:unknown;base:string}|null>{
   try{const base=JSON.parse(await fs.readFile(path.join(outDir,'manifest.json'),'utf8')).base as string;return {base:'/'+base,manifest:JSON.parse(await fs.readFile(path.join(outDir,base,'dados-abertos.json'),'utf8'))};}catch{return null;}
 }
+// The API page needs no script: it drops the app's scripts and renders the contract from api/openapi.yaml at build time.
+async function writeApiPage(outDir:string,shell:string,pages:StaticPages,options:ResolvedOptions):Promise<void>{
+  const title='API — Clareia',description='O contrato da API somente leitura do Clareia: endpoints, parâmetros e respostas. A API ainda não é pública.';
+  const s=pages.sections(apiDocsInner(await loadSpec(REPO)));
+  const body=`<body data-model="editorial">
+  <a class="skip-link" href="#main">Ir para o conteúdo</a>
+  <div class="site"><header class="site-header"><a class="logo" href="/">Clareia</a></header><main id="main" class="text-page">${pages.layout('api','Contrato da API','API','O contrato da API somente leitura do Clareia: endpoints, parâmetros e respostas.',s.html,s.toc)}</main></div>
+</body>`;
+  const html=page(shell,{title,description,url:options.siteUrl+'/api',type:'website',image:icon(options.siteUrl)})
+    .replace(/<script[^>]*><\/script>\s*/g,'').replace(/<link rel="preload"[^>]*as="(?:script|font)"[^>]*>\s*/g,'').replace(/<body[\s\S]*<\/body>/,()=>body);
+  await fs.writeFile(path.join(outDir,'api.html'),html);
+}
 export async function writeStaticPages(outDir:string,options:ResolvedOptions):Promise<void>{
   const shell=await fs.readFile(path.join(outDir,'index.html'),'utf8');
   const pages=await loadStaticPages(),corrections=await loadCorrections();
@@ -164,6 +177,7 @@ export async function writeStaticPages(outDir:string,options:ResolvedOptions):Pr
     // Same rule as the deputy pages: <route>.html, so the route answers without a redirect.
     await fs.writeFile(path.join(outDir,`${name}.html`),page(shell,{title:entry.title,description:entry.description,url:options.siteUrl+`/${name}`,type:'website',image:icon(options.siteUrl)},noscript));
   }
+  await writeApiPage(outDir,shell,pages,options);
 }
 
 export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions,shares:Map<number,{name:string;alt:string}>=new Map()):Promise<void>{

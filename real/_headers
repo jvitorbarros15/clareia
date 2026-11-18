@@ -41,6 +41,9 @@
 /styles.css
   Cache-Control: max-age=0, must-revalidate
 
+/clareia-api.pdf
+  Cache-Control: max-age=0, must-revalidate
+
 /deputado/*
   Cache-Control: max-age=0, must-revalidate
 
