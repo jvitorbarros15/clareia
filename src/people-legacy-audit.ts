@@ -91,7 +91,7 @@ export async function auditLegacy(legacy:LegacyReport,cross:CrosscheckReport,his
     });
     if(canonical(months)!==canonical(actual.months))fail('monthly-crosscheck',p.id);
     const transitions:{row:number;time:string;minute:boolean;before:string;after:string}[]=[],groups=new Map<string,typeof v2.events>();
-    const comparable=data!==null&&v2.collectionStatus==='stable'&&v2.events.every(e=>e.disposition!=='invalid-date'&&e.disposition!=='outside-legislature');
+    const comparable=data!==null&&v2.collectionStatus==='stable'&&v2.events.every(e=>e.disposition!=='invalid-date');
     if(actual.partyComparisonStatus!==(comparable?'compared':'unavailable'))fail('party-comparison-eligibility',p.id);
     if(comparable)for(const e of v2.events)if(e.disposition==='usable')groups.set(e.time!,[...(groups.get(e.time!)??[]),e]);
     let before:string|null=null;

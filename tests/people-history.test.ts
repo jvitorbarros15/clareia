@@ -76,6 +76,23 @@ test('independent temporal audit checks raw events, monthly affiliations, eviden
   const partial=structuredClone(history);partial.people.pop();partial.coverage.expected--;partial.coverage.stable--;assert.ok((await auditTemporalHistory(partial,deriveTemporalHistory(partial),captured.read,discovery())).failures.some(f=>f.code==='person-coverage'));
   const otherDiscovery=discovery([1]);assert.ok((await auditTemporalHistory(history,temporal,captured.read,otherDiscovery)).failures.some(f=>f.code==='discovery-version-or-scope'));
 });
+test('temporal audit agrees with the builder on convocation and out-of-legislature events',async t=>{
+  const base=historyEvent(1),states={dados:['Exercício','Licença','Suplência','Convocado','Afastado'].map((nome,i)=>({sigla:String(i),nome}))};
+  const cases:Record<string,Record<string,unknown>[]>={
+    sameMinute:[base,{...base,id:1,dataHora:'2025-02-03T16:30',situacao:'Convocado'},{...base,id:1,dataHora:'2025-02-03T16:30'}],
+    soon:[base,{...base,dataHora:'2025-02-03T15:59',situacao:'Convocado'},{...base,dataHora:'2025-02-14T16:30'}],
+    last:[base,{...base,dataHora:'2025-02-03T15:59',situacao:'Convocado'}],
+    late:[base,{...base,dataHora:'2025-02-03T15:59',situacao:'Convocado'},{...base,dataHora:'2025-08-14T16:30',situacao:'Afastado'}],
+    suplencia:[base,{...base,dataHora:'2025-02-03T16:30',situacao:'Convocado'},{...base,dataHora:'2025-02-03T16:30',situacao:'Suplência'}],
+    legislature:[base,{...base,dataHora:'2022-03-31T10:00',situacao:'Suplência'}]
+  };
+  for(const [name,events] of Object.entries(cases)){
+    const captured=await setup(t,url=>url.endsWith('/codSituacao')?states:url.endsWith('/historico')?{dados:events,links:[]}:undefined);
+    const history=await collectHistory(discovery([1]),captured.one,captured.two,{wait:async()=>{}}),temporal=deriveTemporalHistory(history);
+    const audit=await auditTemporalHistory(history,temporal,captured.read,discovery([1]));
+    assert.equal(audit.status,'passed',name+JSON.stringify(audit.failures));
+  }
+});
 test('CLI refuses a different discovery without overwriting the existing history run manifest',async t=>{
   const cwd=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-history-cli-'));t.after(()=>fs.rm(cwd,{recursive:true,force:true}));
   const d=discovery([1]),discoveryDir=path.join(cwd,'data/private/people-discovery/test-discovery'),historyDir=path.join(cwd,'data/private/people-history/test-history');

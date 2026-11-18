@@ -76,10 +76,17 @@ test('an event from another legislature dated outside the window does not block 
   assert.ok(!result.issues.includes('other-legislature-event-in-window'));assert.equal(result.months.find(m=>m.month===7)!.party.value,'PL');
 });
 
-test('a convocation counts as out of office until the oath, so the month is partial',()=>{
-  const m=month([event(),event({situacao:'Convocado',dataHora:'2025-02-03T15:59'}),event({situacao:'Exercício',dataHora:'2025-02-03T16:30'})],2);
+test('CONVOCADO then Exercício 11 days later gives out of office then in office (partial month)',()=>{
+  const m=month([event(),event({situacao:'Convocado',dataHora:'2025-02-03T15:59'}),event({situacao:'Exercício',dataHora:'2025-02-14T16:30'})],2);
   assert.equal(m.exercise,'partial');
-  assert.equal(month([event({situacao:'Convocado'})],1).exercise,'outside');
+  assert.equal(month([event(),event({situacao:'Convocado',dataHora:'2025-02-03T15:59'}),event({situacao:'Exercício',dataHora:'2025-02-03T16:30'})],2).exercise,'partial');
+});
+test('CONVOCADO as last event gives unknown',()=>{
+  assert.equal(month([event(),event({situacao:'Convocado',dataHora:'2025-02-03T15:59'})],2).exercise,'unknown');
+  assert.equal(month([event({situacao:'Convocado'})],1).exercise,'unknown');
+});
+test('CONVOCADO then Afastado 6 months later gives unknown',()=>{
+  assert.equal(month([event(),event({situacao:'Convocado',dataHora:'2025-02-03T15:59'}),event({situacao:'Afastado',dataHora:'2025-08-03T15:59'})],3).exercise,'unknown');
 });
 test('same-minute Convocado with Exercício is in office, with Suplência is out of office',()=>{
   assert.equal(month([event({situacao:'Convocado',dataHora:'2025-02-03T16:30'}),event({situacao:'Exercício',dataHora:'2025-02-03T16:30'})],3).exercise,'full');

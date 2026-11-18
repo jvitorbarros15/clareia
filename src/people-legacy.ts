@@ -96,7 +96,7 @@ export function compareLegacy(legacy:LegacyReport,history:HistoryReport,temporal
       const state=!data||uncertain?'unknown':interior?'reported-exercise':boundary?'boundary-only':'no-listed-period';
       return {year:m.year,month:m.month,v2Exercise:m.exercise,legacy:state,periodRows,openEnd,comparison:state==='unknown'?'unavailable':interior&&m.exercise==='unknown'?'corroborating-unknown':interior&&m.exercise==='outside'||state==='no-listed-period'&&(m.exercise==='full'||m.exercise==='partial')||state==='boundary-only'&&m.exercise==='full'?'potential-conflict':'no-automatic-resolution'};
     });
-    const partyComparisonStatus:'compared'|'unavailable'=data&&person.collectionStatus==='stable'&&!person.events.some(e=>e.disposition==='invalid-date'||e.disposition==='outside-legislature')?'compared':'unavailable';
+    const partyComparisonStatus:'compared'|'unavailable'=data&&person.collectionStatus==='stable'&&!person.events.some(e=>e.disposition==='invalid-date')?'compared':'unavailable';
     const partyChanges:CrosscheckParty[]=[],events=partyComparisonStatus==='compared'?person.events.filter(e=>e.disposition==='usable').sort((a,b)=>a.time!.localeCompare(b.time!)||a.row-b.row):[],changes:{row:number;time:string;precision:string;before:string;after:string}[]=[];
     // Simultaneous conflicting events cannot establish a party transition.
     let previous:string|null=null;

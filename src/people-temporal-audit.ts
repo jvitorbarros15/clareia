@@ -69,7 +69,7 @@ export async function auditTemporalHistory(history:HistoryReport,temporal:Tempor
     if(!value)return null;const state=clean(value);
     if(!allowedStates.has(state)&&!(state==='fim_mandato'&&allowedStates.has('fim de mandato')))return null;
     if(state==='exercicio')return 'in-office';
-    if(['convocado','afastado','licenca','suplencia','suspenso','vacancia','fim de mandato','fim_mandato'].includes(state))return 'out-of-office';return null;
+    if(['afastado','licenca','suplencia','suspenso','vacancia','fim de mandato','fim_mandato'].includes(state))return 'out-of-office';return null;
   };
   let stable=0,changed=0,failed=0;
   const windowStart=history.scope.start+'T00:00:00',windowEnd=dayAfter(history.scope.end)+'T00:00:00',legStart=leg.dataInicio+'T00:00:00',legEnd=dayAfter(leg.dataFim)+'T00:00:00';
@@ -109,8 +109,12 @@ export async function auditTemporalHistory(history:HistoryReport,temporal:Tempor
       if(blocked)return vacant();
       const previous=usable.filter(e=>e.time!<=time).sort((a,b)=>b.time!.localeCompare(a.time!))[0]?.time;
       if(!previous)return vacant();
-      const latest=usable.filter(e=>e.time===previous),convocado=(e:typeof latest[number])=>clean(e.original.situacao??'')==='convocado',exerciseEvents=latest.some(e=>!convocado(e)&&inOffice(e.original.situacao)==='in-office')?latest.filter(e=>!convocado(e)):latest;
-      return {exercise:merge(exerciseEvents.map(e=>({row:e.row,value:inOffice(e.original.situacao)}))),party:merge(latest.map(e=>({row:e.row,value:e.original.siglaPartido?.trim()||null}))),uf:merge(latest.map(e=>({row:e.row,value:allowedUfs.has(e.original.siglaUf??'')?e.original.siglaUf:null})))};
+      const latest=usable.filter(e=>e.time===previous),convocado=(e:typeof latest[number])=>clean(e.original.situacao??'')==='convocado';
+      const next=usable.map(e=>e.time!).filter(t=>t>previous).sort()[0]??null;
+      // Suplente's posse deadline: a convocation only counts as absence when the next event is within 30 days.
+      const soon=next!==null&&Date.parse(next+'Z')-Date.parse(previous+'Z')<=30*86400000;
+      const decided=latest.some(e=>!convocado(e)&&inOffice(e.original.situacao)!==null),exerciseEvents=decided?latest.filter(e=>!convocado(e)):latest;
+      return {exercise:merge(exerciseEvents.map(e=>({row:e.row,value:convocado(e)&&allowedStates.has('convocado')?(soon?'out-of-office':null):inOffice(e.original.situacao)}))),party:merge(latest.map(e=>({row:e.row,value:e.original.siglaPartido?.trim()||null}))),uf:merge(latest.map(e=>({row:e.row,value:allowedUfs.has(e.original.siglaUf??'')?e.original.siglaUf:null})))};
     };
     const boundaries=[...new Set([windowStart,windowEnd,...usable.map(e=>e.time!).filter(t=>t>windowStart&&t<windowEnd)])].sort();
     const expectedIntervals=boundaries.slice(0,-1).map((start,i)=>({start,end:boundaries[i+1],...stateAt(start)}));

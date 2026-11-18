@@ -13,7 +13,7 @@ const unique=(values:number[])=>[...new Set(values)].sort((a,b)=>a-b);
 const UFS=new Set('AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' '));
 const fold=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
 const STATES:Record<string,'in-office'|'out-of-office'|null>={
-  exercicio:'in-office',afastado:'out-of-office',licenca:'out-of-office',suplencia:'out-of-office',suspenso:'out-of-office',vacancia:'out-of-office','fim de mandato':'out-of-office',fim_mandato:'out-of-office',convocado:'out-of-office'
+  exercicio:'in-office',afastado:'out-of-office',licenca:'out-of-office',suplencia:'out-of-office',suspenso:'out-of-office',vacancia:'out-of-office','fim de mandato':'out-of-office',fim_mandato:'out-of-office',convocado:null
 };
 // Civil timestamps stay in the source's calendar. No implicit timezone conversion.
 export function historyTime(value:string|null):{time:string|null;precision:'minute'|'second'|'unsupported'}{
@@ -32,14 +32,17 @@ function join(values:Dimension[]):Dimension{
   if(values.some(v=>v.status==='unknown')||known.length!==1)return {status:'unknown',value:null,rows,reasons};
   return {status:'known',value:known[0],rows,reasons};
 }
+// A suplente must take the oath within 30 days of the convocation.
+const CONVOCATION_DAYS=30;
 const isConvocado=(e:NormalizedEvent)=>!!e.original.situacao&&fold(e.original.situacao)==='convocado';
-function stateFor(events:NormalizedEvent[],references:Set<string>){
-  const inOfficeSameMinute=events.some(e=>!isConvocado(e)&&e.original.situacao&&STATES[fold(e.original.situacao)]==='in-office');
-  const exercise=(inOfficeSameMinute?events.filter(e=>!isConvocado(e)):events).map(({row,original:e})=>{
+const withinConvocationWindow=(from:string,next:string|null)=>next!==null&&Date.parse(next+'Z')-Date.parse(from+'Z')<=CONVOCATION_DAYS*86400000;
+function stateFor(events:NormalizedEvent[],references:Set<string>,next:string|null=null){
+  const known=(raw:string)=>!!STATES[raw]&&(references.has(raw)||(raw==='fim_mandato'&&references.has('fim de mandato'))),decided=events.some(e=>!isConvocado(e)&&!!e.original.situacao&&known(fold(e.original.situacao)));
+  const exercise=(decided?events.filter(e=>!isConvocado(e)):events).map(({row,time,original:e})=>{
     if(!e.situacao)return unknown('missing-exercise-state',[row]);
     const raw=fold(e.situacao),isAlias=raw==='fim_mandato'&&references.has('fim de mandato');
     if(!references.has(raw)&&!isAlias)return unknown('unrecognized-exercise-state',[row]);
-    const value=Object.hasOwn(STATES,raw)?STATES[raw]:null;
+    const value=raw==='convocado'?(withinConvocationWindow(time!,next)?'out-of-office' as const:null):Object.hasOwn(STATES,raw)?STATES[raw]:null;
     return value?{status:'known' as const,value,rows:[row],reasons:[]}:unknown('unconfirmed-exercise-state',[row]);
   });
   const party=events.map(({row,original:e})=>e.siglaPartido?.trim()?{status:'known' as const,value:e.siglaPartido.trim(),rows:[row],reasons:[]}:unknown('missing-party',[row]));
@@ -81,7 +84,7 @@ export function deriveTemporalPerson(person:HistoryPerson,report:Pick<HistoryRep
     const since=points[i],until=points[i+1];
     const preceding=[...groups.keys()].filter(t=>t<=since).sort().at(-1);
     const reason=blocked?'history-not-eligible-for-derivation':'no-prior-history-event';
-    const state=blocked||!preceding?{exercise:unknown(reason),party:unknown(reason),uf:unknown(reason)}:stateFor(groups.get(preceding)!,references);
+    const state=blocked||!preceding?{exercise:unknown(reason),party:unknown(reason),uf:unknown(reason)}:stateFor(groups.get(preceding)!,references,[...groups.keys()].sort().find(t=>t>preceding)??null);
     intervals.push({start:since,end:until,...state});
   }
   const months:MonthlyCoverage[]=[];
