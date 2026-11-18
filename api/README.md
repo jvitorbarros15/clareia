@@ -76,7 +76,7 @@ cd api; go run -ldflags "-X main.version=<versão>" ./cmd/server     # escuta em
 - Só GET e HEAD; outros métodos dão 405. Erros são `{error, message}`. Todo corpo traz `publication`.
 - O servidor lê só as views `api.*`: ao ativar outra publicação (ou `--rollback`) ele passa a servir a nova sem reiniciar. Cursor de outra publicação dá 409.
 - `ETag` = publicação + versão do binário (`-X main.version`) + hash da query; `If-None-Match` dá 304. `Cache-Control: public, max-age=300`.
-- Ordem de atualização: rode o carregador (`load.ps1 <pasta da publicação ativa>`, mesmo que seja no-op) antes de subir um servidor novo. O servidor lê `api.suppliers`; sem essa view, `/v1/suppliers` responde 500. O no-op cria e confere `pub_<id>.suppliers` em publicações já carregadas e `--rollback` faz o mesmo na anterior. Se a conferência acusar divergência, apague `pub_<id>.suppliers` e rode a carga da pasta de novo.
+- Ordem de atualização: rode o carregador (`load.ps1 <pasta da publicação ativa>`, mesmo que seja no-op) antes de subir um servidor novo. O servidor lê `api.suppliers` e a coluna `label_norm`; sem a view ou a coluna, `/v1/suppliers` responde 500. O no-op cria, completa (`label_norm`) e confere `pub_<id>.suppliers` em publicações já carregadas e `--rollback` faz o mesmo na anterior. Se a conferência acusar divergência, apague `pub_<id>.suppliers` e rode a carga da pasta de novo.
 - Contrato e peculiaridades dos dados: `api/openapi.yaml` (conferido por `TestOpenAPIMatchesServer`).
 
 ## Fornecedores e categorias
@@ -85,7 +85,7 @@ cd api; go run -ldflags "-X main.version=<versão>" ./cmd/server     # escuta em
 - `q` (3 a 100 caracteres) é busca por trecho do rótulo sem diferenciar maiúsculas nem os acentos comuns do português (á, ç, ñ etc., tratados em SQL dos dois lados). Não usa `unicode`/`unaccent`: letras fora dessa lista só casam iguais.
 - `GET /v1/suppliers/{key}`: só chave verificada (64 hex). Devolve `label`, totais e `cells` por deputado, mês e categoria (`cents`, `records`), sem paginação. Chave desconhecida ou de rótulo sem chave: 404; chave malformada: 400.
 - `GET /v1/categories`: soma de `deputy_categories` por categoria, maior primeiro. O servidor confere que a soma fecha com `totalCents` e `records` da publicação; se não fechar, responde 500 em vez de um total errado.
-- Usa as views `api.supplier_cells`, `api.deputy_categories` e `api.publication` que já existiam. Índice `supplier_cells(supplier_key)` (`supplier_cells_supplier_key_idx`): publicações novas o criam na carga; uma já carregada o recebe no próximo `load.ps1 <pasta>` (no-op que roda `CREATE INDEX IF NOT EXISTS`). Rótulo acima de 137 bytes faz a carga recusar (o cursor da listagem estouraria o teto de 200 bytes do parâmetro).
+- Usa as views `api.supplier_cells`, `api.deputy_categories` e `api.publication` que já existiam. Índice `supplier_cells(supplier_key)` (`supplier_cells_supplier_key_idx`): publicações novas o criam na carga. `suppliers.label_norm` (rótulo sem maiúsculas e acentos, coluna gerada) serve a busca `q`; uma publicação já carregada a recebe no próximo `load.ps1 <pasta>` (no-op que adiciona a coluna e recria a view `api.suppliers`, trocando o servidor só depois). Rótulo acima de 137 bytes faz a carga recusar (o cursor da listagem estouraria o teto de 200 bytes do parâmetro).
 
 ## Teste de contrato contra a publicação real (local, fora da CI)
 

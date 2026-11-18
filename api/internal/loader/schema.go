@@ -1,5 +1,9 @@
 package loader
 
+// label_norm is the label without case or accents, computed once so the search does not translate 21 thousand labels per request.
+// It must stay the same expression as norm in internal/server/suppliers.go, which normalizes the search term.
+const labelNormExpr = `translate(lower(label), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')`
+
 // The supplier list pre-aggregated from supplier_cells; label is in byte order ("C") so the list order and cursor are stable. Idempotent so existing schemas can get it.
 const ddlSuppliers = `
 CREATE TABLE IF NOT EXISTS suppliers (
@@ -8,8 +12,10 @@ CREATE TABLE IF NOT EXISTS suppliers (
   verified boolean NOT NULL,
   total_cents bigint NOT NULL,
   records bigint NOT NULL,
-  deputies integer NOT NULL
-);`
+  deputies integer NOT NULL,
+  label_norm text GENERATED ALWAYS AS (` + labelNormExpr + `) STORED
+);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS label_norm text GENERATED ALWAYS AS (` + labelNormExpr + `) STORED;`
 
 // Tables of one publication. Every statement runs with search_path set to pub_<id>.
 const ddlPublication = `

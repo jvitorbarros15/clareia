@@ -316,27 +316,6 @@ func TestMissingActiveSchemaGivesClearError(t *testing.T) {
 	}
 }
 
-// A publication loaded before the index existed gets it on the next (no-op) load, without a reload.
-func TestExistingPublicationGetsSupplierKeyIndex(t *testing.T) {
-	e := newEnv(t)
-	dir := fixtureCopy(t, "aaaaaaaaaaaa")
-	e.load(t, dir)
-	count := `SELECT count(*) FROM pg_indexes WHERE schemaname = 'pub_aaaaaaaaaaaa' AND indexname = 'supplier_cells_supplier_key_idx'`
-	if got := e.scalar(t, count); got != "1" {
-		t.Fatalf("carga nova sem o índice: %s", got)
-	}
-	if _, err := e.conn.Exec(context.Background(), `DROP INDEX pub_aaaaaaaaaaaa.supplier_cells_supplier_key_idx`); err != nil {
-		t.Fatal(err)
-	}
-	if rep := e.load(t, dir); rep.Skipped == "" {
-		t.Fatalf("devia ser no-op, veio %+v", rep)
-	}
-	if got := e.scalar(t, count); got != "1" {
-		t.Fatalf("o no-op não recriou o índice: %s", got)
-	}
-	e.load(t, dir)
-}
-
 // A publication loaded before the suppliers table existed gets it, filled and verified, and the api view, on the next (no-op) load.
 func TestExistingPublicationGetsSuppliersTable(t *testing.T) {
 	e := newEnv(t)
@@ -368,6 +347,31 @@ func TestExistingPublicationGetsSuppliersTable(t *testing.T) {
 	}
 	if _, err := loader.Load(ctx, e.conn, dir, e.opts); err == nil || !strings.Contains(err.Error(), "divergentes") {
 		t.Fatalf("linha adulterada devia ser recusada: %v", err)
+	}
+}
+
+// A publication whose suppliers table predates label_norm gets the column and a recreated api.suppliers view on the next (no-op) load.
+func TestExistingPublicationGetsLabelNorm(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	dir := fixtureCopy(t, "aaaaaaaaaaaa")
+	e.load(t, dir)
+	want := e.scalar(t, `SELECT count(*) FROM pub_aaaaaaaaaaaa.suppliers`)
+	if _, err := e.conn.Exec(ctx, `DROP VIEW api.suppliers; ALTER TABLE pub_aaaaaaaaaaaa.suppliers DROP COLUMN label_norm; CREATE VIEW api.suppliers AS SELECT * FROM pub_aaaaaaaaaaaa.suppliers`); err != nil {
+		t.Fatal(err)
+	}
+	if rep := e.load(t, dir); rep.Skipped == "" {
+		t.Fatalf("devia ser no-op, veio %+v", rep)
+	}
+	for _, rel := range []string{"pub_aaaaaaaaaaaa.suppliers", "api.suppliers"} {
+		if got := e.scalar(t, `SELECT count(*) FROM `+rel+` WHERE label_norm = translate(lower(label), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')`); got != want {
+			t.Fatalf("%s: label_norm certo em %s de %s linhas", rel, got, want)
+		}
+	}
+	ro := e.roConn(t)
+	var n int
+	if err := ro.QueryRow(ctx, `SELECT count(*) FROM api.suppliers WHERE strpos(label_norm, 'a') > 0`).Scan(&n); err != nil {
+		t.Fatalf("o papel devia ler label_norm em api.suppliers: %v", err)
 	}
 }
 

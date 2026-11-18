@@ -77,9 +77,6 @@ func Load(ctx context.Context, conn *pgx.Conn, dir string, o Options) (*Report, 
 		o.printf("aviso: manifest.json ausente ou sem domínios, domain_versions fica vazio\n")
 	}
 	if exists {
-		if err := ensureIndexes(ctx, conn, pub.FolderID); err != nil {
-			return nil, fmt.Errorf("índice de pub_%s: %w", pub.FolderID, err)
-		}
 		if err := ensureSuppliers(ctx, conn, pub.FolderID, state, o); err != nil {
 			return nil, fmt.Errorf("tabela suppliers de pub_%s: %w", pub.FolderID, err)
 		}
@@ -264,7 +261,7 @@ func insertAll(ctx context.Context, tx pgx.Tx, pub *Publication, schema string) 
 }
 
 const sqlFillSuppliers = `
-INSERT INTO suppliers
+INSERT INTO suppliers (label, supplier_key, verified, total_cents, records, deputies)
 SELECT label, supplier_key, supplier_key IS NOT NULL, sum(cents)::bigint, sum(records)::bigint, count(DISTINCT deputy_id)::int
 FROM supplier_cells GROUP BY label, supplier_key`
 
@@ -301,12 +298,6 @@ func refuseOlderThanActive(ctx context.Context, conn *pgx.Conn, pub *Publication
 // The server caps a query parameter at 200 bytes and the cursor is base64 of "<12 hex>:<label>", so a label over 137 bytes would make its own nextCursor a 400.
 const maxLabelBytes = 137
 
-// Indexes added after a publication was first loaded. Idempotent, so existing pub_ schemas get them on the no-op path without a reload.
-func ensureIndexes(ctx context.Context, conn *pgx.Conn, folderID string) error {
-	_, err := conn.Exec(ctx, `CREATE INDEX IF NOT EXISTS supplier_cells_supplier_key_idx ON `+schemaOf(folderID)+`.supplier_cells (supplier_key)`)
-	return err
-}
-
 // The suppliers table was added after the first publication was loaded. For an existing schema this creates and fills it from supplier_cells,
 // verifies it against them, and (if the publication is the active one) exposes it through api.suppliers, all in one transaction. Idempotent.
 func ensureSuppliers(ctx context.Context, conn *pgx.Conn, folderID string, state *string, o Options) error {
@@ -324,6 +315,20 @@ func ensureSuppliers(ctx context.Context, conn *pgx.Conn, folderID string, state
 // Same as ensureSuppliers inside the caller's transaction (Rollback uses it before it repoints the views to an older publication).
 func ensureSuppliersTx(ctx context.Context, tx pgx.Tx, folderID string, state *string, o Options) error {
 	schema := schemaOf(folderID)
+	active := state != nil && *state == "active"
+	needView := false
+	if active {
+		// The view was created with SELECT *, so it lacks columns added later and must be recreated.
+		if err := tx.QueryRow(ctx, `SELECT NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('api.suppliers') AND attname = 'label_norm' AND NOT attisdropped)`).Scan(&needView); err != nil {
+			return err
+		}
+		if needView {
+			// Same lock order as repoint: requests hold api.publication first, so take it before altering suppliers (the reverse order deadlocks).
+			if _, err := tx.Exec(ctx, `LOCK TABLE api.publication IN ACCESS EXCLUSIVE MODE`); err != nil {
+				return err
+			}
+		}
+	}
 	if _, err := tx.Exec(ctx, `SELECT set_config('search_path', $1, true)`, schema); err != nil {
 		return err
 	}
@@ -346,18 +351,12 @@ func ensureSuppliersTx(ctx context.Context, tx pgx.Tx, folderID string, state *s
 	if bad != 0 {
 		return fmt.Errorf("%d fornecedores divergentes de supplier_cells: se a tabela foi alterada à mão, apague pub_%s.suppliers (DROP TABLE) e rode a carga da pasta de novo para refazê-la", bad, folderID)
 	}
-	if state != nil && *state == "active" {
-		var has bool
-		if err := tx.QueryRow(ctx, `SELECT to_regclass('api.suppliers') IS NOT NULL`).Scan(&has); err != nil {
+	if needView {
+		if _, err := tx.Exec(ctx, fmt.Sprintf(`DROP VIEW IF EXISTS api.suppliers; CREATE VIEW api.suppliers AS SELECT * FROM %s.suppliers`, schema)); err != nil {
 			return err
 		}
-		if !has {
-			if _, err := tx.Exec(ctx, fmt.Sprintf(`CREATE VIEW api.suppliers AS SELECT * FROM %s.suppliers`, schema)); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, fmt.Sprintf(`GRANT SELECT ON api.suppliers TO %s`, pgx.Identifier{roleOf(o)}.Sanitize())); err != nil {
-				return err
-			}
+		if _, err := tx.Exec(ctx, fmt.Sprintf(`GRANT SELECT ON api.suppliers TO %s`, pgx.Identifier{roleOf(o)}.Sanitize())); err != nil {
+			return err
 		}
 	}
 	return nil

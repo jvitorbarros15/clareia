@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -239,5 +240,64 @@ func TestCategoriesSumToTotal(t *testing.T) {
 	}
 	if len(b.Categories) < 2 {
 		t.Fatal("poucas categorias")
+	}
+}
+
+// The search uses the stored label_norm; it must match exactly what normalizing the label on the fly matched.
+func TestSupplierSearchMatchesOnTheFlyNormalization(t *testing.T) {
+	e, _ := loaded(t)
+	f := readFornecedores(t, fixtureDir(t))
+	const onTheFly = `SELECT label FROM api.suppliers
+		WHERE strpos(translate(lower(label), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'),
+		                    translate(lower($1::text), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) > 0
+		ORDER BY label COLLATE "C"`
+	terms := []string{"pessoa", "FISICA", "Física", "ltda", "ção", "CAO", "são", "SAO", "eira", "ñ", "ÇÃO"}
+	for i, l := range f.Suppliers {
+		if r := []rune(l); len(r) >= 5 && i%7 == 0 {
+			terms = append(terms, string(r[1:5]), strings.ToUpper(string(r[1:5])))
+		}
+	}
+	accented := 0
+	for _, l := range f.Suppliers {
+		if strings.ContainsAny(strings.ToLower(l), "áàâãäéèêëíìîïóòôõöúùûüçñ") {
+			accented++
+		}
+	}
+	if accented == 0 {
+		t.Fatal("a fixture deveria ter rótulos com acento")
+	}
+	nonEmpty := 0
+	for _, term := range terms {
+		if len([]rune(term)) < 3 {
+			continue
+		}
+		rows, err := e.conn.Query(context.Background(), onTheFly, term)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want []string
+		for rows.Next() {
+			var l string
+			if err := rows.Scan(&l); err != nil {
+				t.Fatal(err)
+			}
+			want = append(want, l)
+		}
+		rows.Close()
+		got := walkSuppliers(t, e, "&q="+url.QueryEscape(term), 7)
+		if len(got) != len(want) {
+			t.Fatalf("q=%q: %d resultados, esperado %d", term, len(got), len(want))
+		}
+		for i := range got {
+			if got[i].Label != want[i] {
+				t.Fatalf("q=%q posição %d: %q, esperado %q", term, i, got[i].Label, want[i])
+			}
+		}
+		if len(want) > 0 {
+			nonEmpty++
+		}
+	}
+	if nonEmpty < 5 {
+		t.Fatalf("poucos termos com resultado: %d", nonEmpty)
 	}
 }
