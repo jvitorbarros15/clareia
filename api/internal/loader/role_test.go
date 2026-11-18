@@ -4,6 +4,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func TestReadOnlyRoleCannotWrite(t *testing.T) {
@@ -55,5 +57,18 @@ func TestReadOnlyRoleCannotWrite(t *testing.T) {
 	}
 	if _, err := ro.Exec(ctx, `CREATE TEMP TABLE t (a int)`); err == nil {
 		t.Error("CREATE TEMP TABLE depois de desligar o modo somente-leitura devia falhar por falta de TEMPORARY")
+	}
+	if _, err := ro.Exec(ctx, `SELECT lo_create(0)`); err == nil {
+		t.Error("lo_create devia falhar para o papel (large objects)")
+	}
+	if _, err := ro.Exec(ctx, `SELECT lo_from_bytea(0, 'x'::bytea)`); err == nil {
+		t.Error("lo_from_bytea devia falhar para o papel (large objects)")
+	}
+
+	cfg := ro.Config().Copy()
+	cfg.Database = "postgres"
+	if c, err := pgx.ConnectConfig(ctx, cfg); err == nil {
+		c.Close(ctx)
+		t.Error("o papel não devia conectar no banco postgres")
 	}
 }

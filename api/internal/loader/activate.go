@@ -10,18 +10,30 @@ import (
 
 const DefaultRole = "clareia_api_ro"
 
-// EnsureBase creates the api schema, the state table and the read-only role. It is safe to repeat.
+// EnsureBase creates the api schema and the state table, and checks that the read-only role exists.
 func EnsureBase(ctx context.Context, conn *pgx.Conn, o Options) error {
 	if _, err := conn.Exec(ctx, ddlAPI); err != nil {
 		return err
 	}
-	role := o.RoleName
-	if role == "" {
-		role = DefaultRole
+	var exists bool
+	if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)`, roleOf(o)).Scan(&exists); err != nil {
+		return err
 	}
+	if !exists {
+		return fmt.Errorf("papel %s não existe: rode load --setup uma vez", roleOf(o))
+	}
+	return nil
+}
+
+// Setup creates or resets the read-only role and closes what PUBLIC leaves open. Run once, by a superuser, not on every load.
+func Setup(ctx context.Context, conn *pgx.Conn, o Options) error {
 	if o.RolePassword == "" {
 		return errors.New("senha do papel somente-leitura não informada")
 	}
+	if _, err := conn.Exec(ctx, ddlAPI); err != nil {
+		return err
+	}
+	role := roleOf(o)
 	var exists bool
 	if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)`, role).Scan(&exists); err != nil {
 		return err
@@ -45,8 +57,10 @@ func EnsureBase(ctx context.Context, conn *pgx.Conn, o Options) error {
 		}
 	}
 	var grants string
-	err := conn.QueryRow(ctx, `SELECT format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC; REVOKE ALL ON DATABASE %I FROM %I; GRANT CONNECT ON DATABASE %I TO %I; GRANT USAGE ON SCHEMA api TO %I',
-		current_database(), current_database(), $1::text, current_database(), $1::text, $1::text)`, role).Scan(&grants)
+	err := conn.QueryRow(ctx, `SELECT format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC; REVOKE ALL ON DATABASE %I FROM %I; GRANT CONNECT ON DATABASE %I TO %I; `+
+		`REVOKE CONNECT ON DATABASE postgres, template1 FROM PUBLIC; `+
+		`REVOKE EXECUTE ON FUNCTION lo_create(oid), lo_creat(integer), lo_from_bytea(oid, bytea) FROM PUBLIC',
+		current_database(), current_database(), $1::text, current_database(), $1::text)`, role).Scan(&grants)
 	if err != nil {
 		return err
 	}
@@ -97,7 +111,7 @@ func activate(ctx context.Context, conn *pgx.Conn, pub *Publication, o Options) 
 		return err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO api.publications (folder_id, state, expenses_version, activated_at) VALUES ($1, 'active', $2, now())
-		ON CONFLICT (folder_id) DO UPDATE SET state = 'active', activated_at = now()`, pub.FolderID, pub.Summary.PublicationID); err != nil {
+		ON CONFLICT (folder_id) DO UPDATE SET state = 'active', activated_at = now() WHERE api.publications.state <> 'revoked'`, pub.FolderID, pub.Summary.PublicationID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -105,12 +119,13 @@ func activate(ctx context.Context, conn *pgx.Conn, pub *Publication, o Options) 
 
 func repoint(ctx context.Context, tx pgx.Tx, id string, o Options) error {
 	for _, t := range apiTables {
-		if _, err := tx.Exec(ctx, fmt.Sprintf(`CREATE OR REPLACE VIEW api.%s AS SELECT * FROM %s.%s`, t, schemaOf(id), t)); err != nil {
+		// DROP + CREATE, not CREATE OR REPLACE: a publication with other columns or column order must still activate.
+		if _, err := tx.Exec(ctx, fmt.Sprintf(`DROP VIEW IF EXISTS api.%s; CREATE VIEW api.%s AS SELECT * FROM %s.%s`, t, t, schemaOf(id), t)); err != nil {
 			return fmt.Errorf("view api.%s: %w", t, err)
 		}
 	}
 	var stmt string
-	err := tx.QueryRow(ctx, `SELECT format('GRANT SELECT ON api.expenses, api.deputies, api.deputy_months, api.deputy_categories, api.supplier_cells, api.publication TO %I', $1::text)`, roleOf(o)).Scan(&stmt)
+	err := tx.QueryRow(ctx, `SELECT format('GRANT USAGE ON SCHEMA api TO %I; GRANT SELECT ON api.expenses, api.deputies, api.deputy_months, api.deputy_categories, api.supplier_cells, api.publication TO %I', $1::text, $1::text)`, roleOf(o)).Scan(&stmt)
 	if err != nil {
 		return err
 	}
