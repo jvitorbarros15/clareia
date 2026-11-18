@@ -41,18 +41,9 @@ export type Period={year:string;coverage:number[];minMonths:number};
 // Eligibility fields are read from the published summary, the same ones the app reads.
 export function deputiesOf(input:{ids:number[];people:Person[];summary:SiteSummary;suppliers:SupplierSummary}):Deputy[]{
   const {summary,suppliers}=input,summaryOf=new Map(summary.people.map(p=>[p.id,p]));
-  const partyOfPeriod=(id:number,current:string|null,note:string|null|undefined)=>{
-    if(!summary.coverageId)return current?(note?current:`${current} (atual)`):null;
-    const months=summaryOf.get(id)?.months??[],served=months.filter(m=>m.partyStatus!=='not-applicable');
-    const doubt=served.some(m=>m.partyStatus==='review'||m.partyStatus==='conflict');
-    if(!served.length||served.some(m=>m.partyStatus==='unavailable'||m.partyStatus==='unknown'))return note&&current&&!doubt?current:'Partido indisponível';
-    if(doubt)return 'Partido em revisão';
-    return [...new Set(served.flatMap(m=>m.party?[m.party]:m.partyValues))].join(' / ');
-  };
   return input.ids.map(id=>{
-    const info=input.people.find(p=>p.id===id),own=summaryOf.get(id)!,party=partyOfPeriod(id,info?.party??null,info?.partyNote);
-    const last=[...(own?.months??[])].filter(m=>m.partyStatus==='single'&&m.party).sort((a,b)=>b.month-a.month)[0]?.party??null;
-    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??null,ufNote:info?.ufNote??null,party,partyNote:info?.party&&party===info.party&&!(own?.months??[]).some(m=>m.partyStatus==='single')?info.partyNote??null:null,partyInReview:party==='Partido em revisão',lastConfirmedParty:last,sourceUrl:info?.sourceUrl??'',exercisedMonths:own.exercisedMonths,noExercise:own.noExercise,heldMonths:own.heldMonths.map(m=>m-1),comparable:own.comparable,cents:own?.cents??0,use:ceilingUse(own?.months??[],summary.ceiling,Boolean(summary.coverageId)),hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null};
+    const info=input.people.find(p=>p.id===id),own=summaryOf.get(id)!;
+    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??null,ufNote:info?.ufNote??null,party:own.party,partyNote:own.partyNote,partyInReview:own.partyInReview,lastConfirmedParty:own.lastConfirmedParty,sourceUrl:info?.sourceUrl??'',exercisedMonths:own.exercisedMonths,noExercise:own.noExercise,heldMonths:own.heldMonths.map(m=>m-1),comparable:own.comparable,cents:own?.cents??0,use:ceilingUse(own?.months??[],summary.ceiling,Boolean(summary.coverageId)),hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null};
   });
 }
 

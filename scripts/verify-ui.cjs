@@ -2015,7 +2015,7 @@ check('a deputy with a held month shows a partial total outside rankings, and on
   const partial = data.summary.people.find(q => !data.withoutData.includes(q.id) && q.months.filter(m => m.held).length === 1 && q.records > 0).id;
   const held = data.people.find(p => p.id !== partial).id;
   const page = await at(1440, { before: async p => {
-    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); for (const q of s.people) if (q.id === held) { for (const m of q.months) Object.assign(m, { held: true, exercise: 'full', cents: 0, records: 0 }); Object.assign(q, { cents: 0, records: 0 }); } await route.fulfill({ response: res, json: s }); });
+    await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); for (const q of s.people) if (q.id === held) { for (const m of q.months) Object.assign(m, { held: true, exercise: 'full', cents: 0, records: 0 }); Object.assign(q, { cents: 0, records: 0, heldMonths: q.months.map(m => m.month), comparable: false }); } await route.fulfill({ response: res, json: s }); });
     await p.route('**/fornecedores.json', async route => { const res = await route.fetch(), f = await res.json(); f.people[held] = []; await route.fulfill({ response: res, json: f }); });
   } });
   const ranked = await page.evaluate(() => window.Clareia.ranking('gastos').map(p => p.officialId));
