@@ -22,7 +22,8 @@ info:
     - Deputies without published data (`withoutData`) answer 200 with an empty list on `/expenses`, not 404.
     - `nextCursor` is opaque and tied to one publication. After the active publication changes, an old cursor answers 409.
     - Responses carry `ETag` (publication + binary version + query hash) and `Cache-Control: public, max-age=300`;
-      `If-None-Match` answers 304.
+      `If-None-Match` answers 304. `/healthz` is never cached. Any route can answer 503 when there is no active publication
+      or the database is unavailable.
 servers:
   - url: http://127.0.0.1:8787
 paths:
@@ -121,6 +122,7 @@ components:
         limitations: {description: Limitations as published., type: [object, array, 'null']}
         links:
           type: object
+          description: Paths relative to the site origin, not to this API.
           required: [methodology, corrections, openData]
           additionalProperties: false
           properties:

@@ -86,6 +86,17 @@ func (s *spec) check(path string, v any, sch map[string]any) []string {
 			return []string{fmt.Sprintf("%s: tipo %s, o spec diz %v", path, got, ts)}
 		}
 	}
+	if enum, ok := sch["enum"].([]any); ok {
+		found := false
+		for _, en := range enum {
+			if en == v {
+				found = true
+			}
+		}
+		if !found {
+			errs = append(errs, fmt.Sprintf("%s: valor %v fora do enum %v", path, v, enum))
+		}
+	}
 	switch x := v.(type) {
 	case map[string]any:
 		props, _ := sch["properties"].(map[string]any)
@@ -123,8 +134,7 @@ func (s *spec) response(path, method, status string) map[string]any {
 	op, _ := s.Paths[path][method].(map[string]any)
 	resps, _ := op["responses"].(map[string]any)
 	r, _ := resps[status].(map[string]any)
-	if ref, ok := r["$ref"].(string); ok {
-		_ = ref
+	if _, ok := r["$ref"]; ok {
 		return map[string]any{"$ref": "#/components/schemas/Error"}
 	}
 	content, _ := r["content"].(map[string]any)
@@ -153,7 +163,7 @@ func TestOpenAPIMatchesServer(t *testing.T) {
 		{"/v1/deputies/{id}", "/v1/deputies/" + depNone, "200"},
 		{"/v1/deputies/{id}", "/v1/deputies/abc", "400"},
 		{"/v1/deputies/{id}", "/v1/deputies/999999999", "404"},
-		{"/v1/deputies/{id}/expenses", "/v1/deputies/" + dep493 + "/expenses?limit=5", "200"},
+		{"/v1/deputies/{id}/expenses", "/v1/deputies/" + dep493 + "/expenses?limit=500", "200"},
 		{"/v1/deputies/{id}/expenses", "/v1/deputies/" + depNone + "/expenses", "200"},
 		{"/v1/deputies/{id}/expenses", "/v1/deputies/" + dep493 + "/expenses?limit=501", "400"},
 		{"/v1/deputies/{id}/expenses", "/v1/deputies/999999999/expenses", "404"},
@@ -199,8 +209,8 @@ func TestOpenAPIMatchesServer(t *testing.T) {
 		}
 	}
 
-	// Stale cursor and 405 are documented as error responses too.
-	for _, st := range []string{"404", "409", "400"} {
+	// The 409 is only reachable with a stale cursor (tested elsewhere); it must be documented.
+	for _, st := range []string{"409"} {
 		if s.response("/v1/deputies/{id}/expenses", "get", st) == nil {
 			t.Errorf("expenses sem resposta %s no spec", st)
 		}

@@ -91,6 +91,16 @@ func TestContractAgainstRealPublication(t *testing.T) {
 	}
 	pub := filepath.Base(dir)
 
+	sp := loadSpec(t)
+	conforms := func(route, path string, r resp) {
+		var body any
+		if err := json.Unmarshal(r.body, &body); err != nil {
+			t.Fatal(err)
+		}
+		if errs := sp.check(path, body, sp.response(route, "get", "200")); len(errs) > 0 {
+			t.Fatalf("%s não bate com o openapi.yaml: %s", path, errs[0])
+		}
+	}
 	start := time.Now()
 	requests := 0
 	get := func(path, dumpName string) resp {
@@ -116,7 +126,9 @@ func TestContractAgainstRealPublication(t *testing.T) {
 	for _, p := range summary.People {
 		id := fmt.Sprint(p.ID)
 
-		prof := get("/v1/deputies/"+id, "deputies/"+id+"/profile.json").json(t)
+		profResp := get("/v1/deputies/"+id, "deputies/"+id+"/profile.json")
+		conforms("/v1/deputies/{id}", "/v1/deputies/"+id, profResp)
+		prof := profResp.json(t)
 		months := prof["months"].([]any)
 		if len(months) != len(p.Months) || int64(prof["totalCents"].(float64)) != p.Cents || int(prof["records"].(float64)) != p.Records {
 			t.Fatalf("deputado %s: perfil não bate com summary.json", id)
@@ -162,6 +174,7 @@ func TestContractAgainstRealPublication(t *testing.T) {
 			if err := json.Unmarshal(r.body, &pg); err != nil {
 				t.Fatal(err)
 			}
+			conforms("/v1/deputies/{id}/expenses", path, r)
 			got = append(got, pg.Expenses...)
 			if pg.NextCursor == nil {
 				break
