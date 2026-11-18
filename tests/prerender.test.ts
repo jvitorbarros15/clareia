@@ -12,6 +12,7 @@ import type {Expense,Snapshot} from '../src/model.ts';
 import {partyFieldsOf} from '../src/site-summary.ts';
 import {deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
+import {loadSpec} from '../src/api-docs.ts';
 
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
 const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11],minMonths:6};
@@ -240,3 +241,12 @@ test('the events party shows only when the coverage has nothing better: confirme
   assert.deepEqual(shown('single'),['PL',null]);
   assert.deepEqual(shown(null),['PP','partido registrado em fev/2023, nos eventos da legislatura']);
 });
+test('a build writes the /api page without scripts, with every path of api/openapi.yaml',()=>built({siteUrl:SITE},async dist=>{
+  const html=await fs.readFile(path.join(dist,'api.html'),'utf8'),spec=await loadSpec(path.join(import.meta.dirname,'..'));
+  assert.ok(html.includes(`<link rel="canonical" href="${SITE}/api">`));
+  assert.ok(html.includes('A API ainda não é pública'));
+  assert.ok(html.includes('href="/dados-abertos"'));
+  assert.ok(!/<script/.test(html));
+  assert.ok(Object.keys(spec.paths).length>0);
+  for(const route of Object.keys(spec.paths))assert.ok(html.includes(`<code>GET ${route}</code>`),route);
+}));
