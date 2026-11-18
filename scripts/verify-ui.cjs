@@ -2147,7 +2147,7 @@ check('comparison shows each deputy approved projects apart from the money bars,
   needCase(got.shown.length === 2, 'the comparison shows the projects block');
   assert.deepEqual(got.shown, got.expected);
   assert.equal(got.inBars, 0, 'projects are not a category row');
-  assert.match(got.block, /Projetos aprovados · 2023–2026/); assert.match(got.block, /não tem relação com o valor gasto/);
+  assert.match(got.block, /Projetos aprovados\s*2023–2026/); assert.match(got.block, /não tem relação com o valor gasto/);
   assert.doesNotMatch(got.block, /%|R\$/, 'no ratio or money in the projects block');
   assert.doesNotMatch(got.board, /projeto/i, 'the spending board does not mention projects');
   assert.equal(await page.locator('.compare-projects [data-kind=projetos]').count(), 2);
