@@ -661,7 +661,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { parseRoute, openRoute, deputyPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, byTotal, compareValues };
+  window.Clareia = { parseRoute, openRoute, deputyPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, approvedText, billsPeriod, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false, fromURL);
 })();

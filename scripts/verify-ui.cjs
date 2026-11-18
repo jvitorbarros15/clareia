@@ -2137,6 +2137,25 @@ check('projects tab ranks approved projects by count then name, hides Total / Po
   await page.close();
 });
 
+check('comparison shows each deputy approved projects apart from the money bars, never mixed with spending', async () => {
+  const page = await at(1440, { before: approvedSummary(i => i % 4 + 1, { drop: 0 }) });
+  await page.locator('#comparacao').scrollIntoViewIfNeeded();
+  const got = await page.evaluate(() => {
+    const C = window.Clareia, ids = ['#compare-a', '#compare-b'].map(s => document.querySelector(s).value);
+    return { ids, expected: ids.map(id => C.approvedText(C.all().find(p => String(p.id) === id))), shown: [...document.querySelectorAll('.compare-projects button b')].map(e => e.textContent), inBars: document.querySelectorAll('.compare-breakdown .compare-projects, .compare-category .compare-projects').length, board: document.querySelector('.comparison-board').innerText, block: document.querySelector('.compare-projects')?.innerText };
+  });
+  needCase(got.shown.length === 2, 'the comparison shows the projects block');
+  assert.deepEqual(got.shown, got.expected);
+  assert.equal(got.inBars, 0, 'projects are not a category row');
+  assert.match(got.block, /Projetos aprovados · 2023–2026/); assert.match(got.block, /não tem relação com o valor gasto/);
+  assert.doesNotMatch(got.block, /%|R\$/, 'no ratio or money in the projects block');
+  assert.doesNotMatch(got.board, /projeto/i, 'the spending board does not mention projects');
+  assert.equal(await page.locator('.compare-projects [data-kind=projetos]').count(), 2);
+  // the mocked summary points at activity files that the local build does not have
+  assert.deepEqual(page.errors.filter(e => !/404/.test(e)), []);
+  await page.close();
+});
+
 check('every ranking tab renders rows or an explicit empty message with its reason', async () => {
   for (const [label, before] of [['without bills', undefined], ['with bills', approvedSummary(i => i % 4)], ['bills collected for nobody', approvedSummary(() => 0, { drop: 10000 })]]) {
     for (const tab of ['gastos', 'menos', 'projetos']) {
