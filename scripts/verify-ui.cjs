@@ -2200,6 +2200,21 @@ check('the ranking is always in reais: no measure switch, a stale ?medida=teto l
   }
 });
 
+
+check('the comparisons block counts the deputies with a confirmed % of the ceiling, and its note adds up to the rest', async () => {
+  const page = await at(1440);
+  const s = await page.evaluate(async () => { const m = await (await fetch('/manifest.json')).json(); return (await fetch(`/${m.base}/summary.json`)).json(); });
+  if (!s.ceiling) { await page.close(); return; }
+  const ok = s.people.filter(p => { const c = p.months.filter(m => !m.held && (m.exercise !== 'outside' || m.records > 0) && m.exercise !== 'partial'); return c.length && c.every(m => m.exercise === 'full' && m.ufStatus === 'single' && s.ceiling.byUf[m.uf]?.[m.month - 1]); }).length;
+  const step = page.locator('.universe-step').filter({ hasText: 'com % do teto da cota confirmada' });
+  assert.equal(await step.count(), 1);
+  assert.equal(await text(step.locator('strong')), String(ok));
+  const note = await text(step.locator('small')), [total, ...parts] = (note.match(/\d+/g) ?? []).map(Number);
+  assert.equal(total, s.people.length - ok, note);
+  assert.equal(parts.reduce((a, b) => a + b, 0), total, `the reasons add up: ${note}`);
+  assert.equal(page.errors.length, 0, page.errors.join('|'));
+  await page.close();
+});
 check('each top-3 card has a pill with the % of the ceiling, or "% não confirmado", only on the expense tabs with all categories', async () => {
   const page = await at(1440), exp = await expectedShares(page), byId = new Map(exp.rows.map(r => [String(r.id), r]));
   assert.ok(exp.rows.length > 3, 'some deputies have a confirmed ceiling');
