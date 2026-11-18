@@ -332,4 +332,18 @@ test('an inverted API row with glosa stays held unless the annual net, document 
   await held(url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedGlosa()(url));
   await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','2').replace('COMBUSTÍVEIS','PASSAGEM AÉREA - SIGEPA')]):invertedGlosa({tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})(url),'financial-normalization-failed');
   await held(url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedGlosa({valorDocumento:5,valorGlosa:8,valorLiquido:3})(url),'financial-normalization-failed');
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','')]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','','2')]):invertedGlosa()(url));
+  await held(url=>url.endsWith('.zip')?annual([withGlosa('10.21','12.21','2')]):invertedApi()(url));
+});
+test('an annual row with the inverted shape is never fixed: the month stays held in the collector and the audit',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([withGlosa('-8.21','10.21','2')]):url.includes('/despesas')?{dados:[],links:[]}:undefined);
+  assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.cells[0].diagnostics,null);
+});
+test('an inverted row finds its annual partner whichever order the annual rows come in',async t=>{
+  const plain=withGlosa('8.21','8.21','0'),glosa=withGlosa('8.21','10.21','2'),dados=[apiRow(1,{valorDocumento:10.21,valorGlosa:2,valorLiquido:8.21}),apiRow(1,{valorDocumento:8.21,valorGlosa:0,valorLiquido:-8.21})];
+  for(const lines of [[plain,glosa],[glosa,plain]]){
+    const r=await setup(t,url=>url.endsWith('.zip')?annual(lines):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados,links:[]}:undefined);
+    const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.totalCents,1642);assert.equal(c.diagnostics?.apiSignCorrected,1);
+  }
 });

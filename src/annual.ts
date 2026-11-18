@@ -19,19 +19,21 @@ export function unionRecords(annual:Expense[],api:Expense[]) {
   const sum=(origin:Expense['origin'])=>records.filter(r=>r.origin===origin).reduce((n,r)=>n+r.cents,0);
   return {records,paired:pairing.matched.length,onlyAnnual:pairing.onlyAnnual.length,onlyApi:pairing.onlyApi.length,onlyApiCents:pairing.onlyApiCents,originCents:{both:sum('both'),annual:sum('annual'),api:sum('api')}};
 }
-// After the normal match, an API leftover with net = -document pairs with an annual leftover of the same key whose value equals the document; the API value is then taken from the annual file.
+// After the normal match, an inverted API leftover (net = -(document - glosa)) takes the annual value: it pairs with an annual row of the same key at cents = document - glosa, the same document value and the same glosa (a zero glosa may be blank in the annual file).
 export function pairApiSign(annual:Expense[],api:Expense[]):{api:Expense[];fixed:number}{
-  const key=(r:Expense,c=r.cents)=>canonical([r.personId,r.month,blank(r.documentId),r.category,c]),spare=new Map<string,Expense[]>(),credited=new Set<Expense>();
+  const key=(r:Expense,c=r.cents)=>canonical([r.personId,r.month,blank(r.documentId),r.category,c]),rows=new Map<string,Expense[]>(),credit=new Map<string,number>(),credited=new Set<Expense>(),used=new Set<Expense>();
   const inverted=(r:Expense)=>!r.financialBasis&&invertedApiShape(r.documentCents,r.disallowedCents,r.cents,r.category);
-  for(const r of annual)spare.set(key(r),[...(spare.get(key(r))??[]),r]);
-  for(const r of [...api.filter(r=>!inverted(r)),...api.filter(inverted)]){const list=spare.get(key(r));if(list?.length){list.shift();credited.add(r);}}
+  for(const r of annual)rows.set(key(r),[...(rows.get(key(r))??[]),r]);
+  const left=(k:string)=>(rows.get(k)?.length??0)-(credit.get(k)??0);
+  for(const r of [...api.filter(r=>!inverted(r)),...api.filter(inverted)]){const k=key(r);if(left(k)>0){credit.set(k,(credit.get(k)??0)+1);credited.add(r);}}
   let fixed=0;
   const out=api.map(r=>{
     if(credited.has(r)||!inverted(r))return r;
-    const face=r.documentCents!,glosa=r.disallowedCents!,net=face-glosa,list=spare.get(key(r,net))??[];
-    const at=list.findIndex(a=>(a.documentCents===null?glosa===0:a.documentCents===face)&&(glosa===0?(a.disallowedCents??0)===0:a.disallowedCents===glosa));
-    if(at<0)return r;
-    list.splice(at,1);fixed++;return {...r,cents:net};
+    const face=r.documentCents!,glosa=r.disallowedCents!,net=face-glosa,k=key(r,net);
+    if(left(k)<=0)return r;
+    const partner=(rows.get(k)??[]).find(a=>!used.has(a)&&(a.documentCents===null?glosa===0:a.documentCents===face)&&(glosa===0?(a.disallowedCents??0)===0:a.disallowedCents===glosa));
+    if(!partner)return r;
+    used.add(partner);credit.set(k,(credit.get(k)??0)+1);fixed++;return {...r,cents:net};
   });
   return {api:out,fixed};
 }

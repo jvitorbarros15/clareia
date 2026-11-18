@@ -36,7 +36,7 @@ export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csv
   }
   const category=annual?r.txtDescricao:r.tipoDespesa;if(typeof category!=='string'||!category.trim())throw Error();
   const money=(field:string)=>annual&&!r[field]?.trim()||!annual&&field==='valorGlosa'&&r[field]===null?null:amount(r[field]);
-  const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis&&!inverted(face,glosa,net,category))throw Error();
+  const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis&&!(!annual&&inverted(face,glosa,net,category)))throw Error();
   const identity=String((annual?r.txtCNPJCPF:r.cnpjCpfFornecedor)||'').replace(/\D/g,''),verified=verifiedCnpj(identity),odd=identity.length>0&&identity.length!==11&&(!verified||identity.length===14&&identity.startsWith('000')&&cpfDigits(identity.slice(3)));
   const name=String((annual?r.txtFornecedor:r.nomeFornecedor)||'Fornecedor não informado').replace(/(?<![\d./])\d{3}[.  -]{0,2}\d{3}[.  -]{0,2}\d{3}[-–./  ]{0,3}\d{2}(?![\d/])/g,m=>/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/.test(m)||cpfDigits(m.replace(/\D/g,''))?'[CPF oculto]':m);
   let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(identity.length!==11&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
@@ -166,12 +166,14 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
         if(!reasons.length){
           const key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
           // Leftover-only rule: an inverted API row takes the annual value when an annual leftover has that net, the same document value and the same glosa (a zero glosa may be blank in the annual file).
-          const spare=new Map<string,Expense[]>();
-          for(const r of ar)spare.set(key(r),[...(spare.get(key(r))??[]),r]);const plain=(r:Expense)=>r.financialBasis||r.documentCents===null||!inverted(r.documentCents,r.disallowedCents,r.cents,r.category),credited=new Set<Expense>();
-          for(const r of [...br.filter(plain),...br.filter(r=>!plain(r))]){const list=spare.get(key(r));if(list?.length){list.shift();credited.add(r);}}
+          const rows=new Map<string,Expense[]>(),credit=new Map<string,number>(),used=new Set<Expense>(),credited=new Set<Expense>(),spare=(k:string)=>(rows.get(k)?.length??0)-(credit.get(k)??0);
+          for(const r of ar)rows.set(key(r),[...(rows.get(key(r))??[]),r]);const plain=(r:Expense)=>r.financialBasis||r.documentCents===null||!inverted(r.documentCents,r.disallowedCents,r.cents,r.category);
+          for(const r of [...br.filter(plain),...br.filter(r=>!plain(r))]){const k=key(r);if(spare(k)>0){credit.set(k,(credit.get(k)??0)+1);credited.add(r);}}
           let signFixed=0;
           br=br.map(r=>{if(credited.has(r)||plain(r))return r;
-            const face=r.documentCents!,glosa=r.disallowedCents!,net=face-glosa,list=spare.get(key({...r,cents:net}))??[],at=list.findIndex(a=>(a.documentCents===null?glosa===0:a.documentCents===face)&&(glosa===0?(a.disallowedCents??0)===0:a.disallowedCents===glosa));if(at<0)return r;list.splice(at,1);signFixed++;return {...r,cents:net};});
+            const face=r.documentCents!,glosa=r.disallowedCents!,net=face-glosa,k=key({...r,cents:net});if(spare(k)<=0)return r;
+            const partner=(rows.get(k)??[]).find(a=>!used.has(a)&&(a.documentCents===null?glosa===0:a.documentCents===face)&&(glosa===0?(a.disallowedCents??0)===0:a.disallowedCents===glosa));if(!partner)return r;
+            used.add(partner);credit.set(k,(credit.get(k)??0)+1);signFixed++;return {...r,cents:net};});
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
           for(const r of ar){const list=pool.get(key(r));if(list?.length)matches.push({a:r,b:list.shift()!});else left.push(r);}
           const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right),...(signFixed?{apiSignCorrected:signFixed}:{})};
