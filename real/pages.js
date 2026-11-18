@@ -80,6 +80,11 @@
     ['people[].months[].exercise', 'texto', 'Exercício do mandato no mês: <code>full</code>, <code>partial</code>, <code>outside</code> ou <code>unknown</code>.'],
     ['people[].months[].party, uf', 'texto', 'Partido e UF do deputado no mês, com <code>partyStatus</code> e <code>ufStatus</code> dizendo se são únicos, mudaram, estão em revisão ou não se aplicam.'],
     ['people[].bills, votes', 'objeto', 'Projetos e votações do deputado, quando publicados.'],
+    ['people[].exercisedMonths', 'número', 'Meses do recorte que contam como exercício: todos, menos os marcados como fora do mandato que não têm despesa.'],
+    ['people[].noExercise', 'verdadeiro ou falso', 'Sem exercício de mandato confirmado no recorte: o deputado não aparece com R$ 0,00.'],
+    ['people[].heldMonths', 'lista de números', 'Meses (1 a 12) retidos para revisão, fora dos totais.'],
+    ['people[].comparable', 'verdadeiro ou falso', 'Entra nos rankings e comparações: tem exercício confirmado, nenhum mês retido e pelo menos <code>minMonths</code> meses de exercício.'],
+    ['minMonths', 'número', 'Mínimo de meses de exercício para entrar nos rankings (6, ou o total de meses do recorte se for menor).'],
     ['ceiling', 'objeto', 'Teto mensal da cota por UF, em centavos, com o ato da Mesa que o define.']
   ];
   const INDEX_FIELDS = [

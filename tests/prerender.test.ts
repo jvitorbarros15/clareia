@@ -13,9 +13,9 @@ import {deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputy
 import type {Deputy,Period} from '../src/prerender.ts';
 
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
-const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11]};
+const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11],minMonths:6};
 const SITE='https://example.test';
-const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyNote:null,partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,heldMonths:[],cents:123456789,hasCells:true,projects:7};
+const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyNote:null,partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,comparable:true,heldMonths:[],cents:123456789,hasCells:true,projects:7};
 const meta=(html:string,key:string)=>new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)">`).exec(html)?.[1];
 
 test('slugs follow the rule of real/app.js',()=>{
@@ -228,7 +228,7 @@ test('a party taken from the events is shown with its note',()=>{
 
 const shown=(status:string|null,party='PP',note='partido registrado em fev/2023, nos eventos da legislatura')=>{
   const month=status?[{month:1,partyStatus:status,party:status==='single'?'PL':null,partyValues:[],exercise:'unknown',records:0,cents:0,held:false}]:[];
-  const d=deputiesOf({ids:[1],people:[{id:1,name:'A',photo:null,sourceUrl:'',profileFetchedAt:'',uf:'SP',party,partyNote:note}],summary:{coverageId:status===null?null:'c',people:[{id:1,months:month}],ceiling:null} as any,suppliers:{people:{}} as any,months:[1]})[0];
+  const d=deputiesOf({ids:[1],people:[{id:1,name:'A',photo:null,sourceUrl:'',profileFetchedAt:'',uf:'SP',party,partyNote:note}],summary:{coverageId:status===null?null:'c',people:[{id:1,months:month,exercisedMonths:0,noExercise:false,heldMonths:[],comparable:false}],ceiling:null} as any,suppliers:{people:{}} as any})[0];
   return [d.party,d.partyNote];
 };
 test('the events party shows only when the coverage has nothing better: confirmed and in-review win over the note',()=>{

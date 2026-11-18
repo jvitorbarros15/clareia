@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {hash} from './model.ts';
-import {esc,jpegSize,minMonths} from './prerender.ts';
+import {esc,jpegSize} from './prerender.ts';
 import type {Deputy,Period} from './prerender.ts';
 import {ufStandings} from './ceiling-use.ts';
 import {DISCLAIMER,FORMATS,JPEG_QUALITY,SOURCE,monogram,monogramColors,nameSize,shareFactOf,shareHash,shareName,valueSize} from './share-facts.ts';
@@ -138,7 +138,7 @@ const exists=(file:string)=>fs.access(file).then(()=>true,()=>false);
 export async function generateShareImages(o:{outDir:string;publicationId:string;deputies:Deputy[];period:Period;portraitsDir:string;pageDir:string;cacheDir:string;renderer?:Renderer}):Promise<ShareResult>{
   const started=Date.now(),assets=await loadShareAssets(o.pageDir),dir=path.join(o.outDir,'data',o.publicationId,'share');
   await fs.mkdir(dir,{recursive:true});await fs.mkdir(o.cacheDir,{recursive:true});
-  const standings=ufStandings(o.deputies.map(p=>({id:p.id,name:p.name,use:p.use,comparable:!p.noExercise&&!p.heldMonths.length&&p.exercisedMonths>=minMonths(o.period)})));
+  const standings=ufStandings(o.deputies.map(p=>({id:p.id,name:p.name,use:p.use,comparable:p.comparable})));
   const plan=await Promise.all(o.deputies.map(async p=>{
     const portrait=await fs.readFile(path.join(o.portraitsDir,`${p.id}.jpg`)).catch(()=>null),fact=shareFactOf(p,o.period,standings.get(p.id)??null),h=shareHash(fact,portrait,assets.sha);
     return {id:p.id,fact,portrait,hash:h};

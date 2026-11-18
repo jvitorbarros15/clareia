@@ -117,7 +117,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.mkdir(path.join(outDir,'fonts'));
   for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});
-  const deputies=deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary,months:active.scope.months}),period={year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1)};
+  const deputies=deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary}),period={year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1),minMonths:summary.minMonths};
   // The cache sits beside the output so an unchanged image is copied, not rendered again; the output folder itself is rebuilt every time.
   const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId:STAGING,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache'}):null;
   if(share)console.error(`Imagens de compartilhamento: ${share.rendered} geradas, ${share.reused} reaproveitadas, ${(share.ms/1000).toFixed(1)} s`);

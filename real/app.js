@@ -11,9 +11,9 @@
   const totalOf = p => p.cells.reduce((n, r) => n + r.amount, 0);
   // A month held for review is missing, not zero: a partial total never enters a ranking or a comparison.
   // Rankings and comparisons need at least six months of exercise (or the whole period when it is shorter).
-  const MIN_MONTHS = Math.min(6, D.coverage.length);
-  const fewMonths = p => (p.exercisedMonths ?? D.coverage.length) < MIN_MONTHS;
-  const comparable = p => !p.noExercise && !p.heldMonths?.length && !fewMonths(p);
+  const MIN_MONTHS = D.minMonths;
+  const fewMonths = p => p.exercisedMonths < MIN_MONTHS;
+  const comparable = p => p.comparable;
   // Each total is computed once per sort: summing inside the comparator repeats it thousands of times with hundreds of deputies.
   const sortedBy = (people, key) => people.map(p => [p, key(p)]).sort((a, b) => b[1] - a[1] || a[0].name.localeCompare(b[0].name, 'pt-BR')).map(([p]) => p);
   // The published totals never change after load, so the order is computed once.
