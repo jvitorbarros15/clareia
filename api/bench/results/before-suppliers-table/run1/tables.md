@@ -1,4 +1,4 @@
-﻿### Three runs per step (run1): median (min to max), ms
+﻿### Runs per step at the reference rate (before-suppliers-table/run1): median (min to max), ms
 
 | step | rate | p50 | p95 | p99 | achieved req/s | dropped | error rate | KB/response | server CPU cores | k6 CPU cores |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -6,7 +6,7 @@
 | (a) API, full-scan cost (no extra indexes) | 100/s | 7.78 (6.86 to 7.99) | 86.34 (65.79 to 89.05) | 304.98 (270.69 to 317.24) | 100.0 (100.0 to 100.0) | 0/0/0 | 0.000/0.000/0.000% | 20.5 | 0.18 (0.10 to 0.18) | 0.10 (0.08 to 0.11) |
 | (b) API, with indexes | 100/s | 5.84 (5.73 to 5.87) | 27.95 (27.55 to 30.19) | 272.32 (249.83 to 276.59) | 100.0 (100.0 to 100.0) | 0/0/0 | 0.000/0.000/0.000% | 20.5 | 0.15 (0.14 to 0.17) | 0.09 (0.08 to 0.10) |
 
-### p95 by endpoint at the reference rate, median of 3 runs, ms
+### p95 by endpoint at the reference rate, median of the runs of each step, ms
 
 | step | profile | expenses | expenses_worst | suppliers_list | suppliers_search | supplier_detail | meta |
 |---|---|---|---|---|---|---|---|

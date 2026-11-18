@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)][string]$Name,
-  [string]$StaticData = 'C:\Users\jvito\AppData\Local\Temp\claude\cb8a46fb6ccacb9e\060c9b41-8c17-4412-8c9f-6ac4e9983ff8\scratchpad\fb-api\data\b571fe73c261',
+  [Parameter(Mandatory = $true)][string]$StaticData,
   [int]$RefRate = 100,
   [int]$WarmSecs = 20,
   [int]$RunSecs = 90,
@@ -29,6 +29,11 @@ $staticPort = 8788
 $cfg = @{}
 Get-Content (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.clareia/api-pg.env') | ForEach-Object { if ($_ -match '^([A-Z_]+)=(.*)$') { $cfg[$Matches[1]] = $Matches[2] } }
 $realDb = $cfg['API_PG_DB']
+if ($realDb -eq $benchDb) { throw "API_PG_DB não pode ser ${benchDb}: esse banco é apagado e recriado pelo passo (a)" }
+foreach ($p in $apiPort, $staticPort) {
+  $c = New-Object Net.Sockets.TcpClient
+  try { $c.Connect('127.0.0.1', $p); throw "a porta $p já está em uso: o benchmark mediria outro servidor" } catch [Net.Sockets.SocketException] { } finally { $c.Close() }
+}
 $env:PGPASSWORD = $cfg['API_PG_OWNER_PASSWORD']
 function Esc($s) { [uri]::EscapeDataString($s) }
 function RoDsn($db) { "postgres://clareia_api_ro:$(Esc $cfg['API_PG_RO_PASSWORD'])@127.0.0.1:$($cfg['API_PG_PORT'])/$db" }
@@ -150,6 +155,7 @@ function Run-K6([string]$script, [string[]]$kv, [string]$name, [string]$dir, $sv
 function Run-Step([string]$step) {
   $dir = Join-Path $out $step
   New-Item -ItemType Directory -Force $dir | Out-Null
+  Get-ChildItem $dir -File | Remove-Item -Force
   $svc = $null
   $env:CLAREIA_API_RO_DSN = $null
   if ($step -eq 'static') {

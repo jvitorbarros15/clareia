@@ -370,3 +370,21 @@ func TestExistingPublicationGetsSuppliersTable(t *testing.T) {
 		t.Fatalf("linha adulterada devia ser recusada: %v", err)
 	}
 }
+
+// A previous publication loaded before the suppliers table existed can still be rolled back to.
+func TestRollbackToPublicationWithoutSuppliersTable(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.load(t, fixtureCopy(t, "aaaaaaaaaaaa"))
+	e.load(t, publicationB(t, "bbbbbbbbbbbb"))
+	want := e.scalar(t, `SELECT count(*) FROM pub_aaaaaaaaaaaa.suppliers`)
+	if _, err := e.conn.Exec(ctx, `DROP TABLE pub_aaaaaaaaaaaa.suppliers`); err != nil {
+		t.Fatal(err)
+	}
+	if id, err := loader.Rollback(ctx, e.conn, e.opts); err != nil || id != "aaaaaaaaaaaa" {
+		t.Fatalf("rollback: %q %v", id, err)
+	}
+	if got := e.scalar(t, `SELECT count(*) FROM api.suppliers`); got != want {
+		t.Fatalf("api.suppliers depois do rollback: %s, esperado %s", got, want)
+	}
+}

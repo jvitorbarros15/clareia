@@ -193,6 +193,9 @@ func Rollback(ctx context.Context, conn *pgx.Conn, o Options) (string, error) {
 		}
 		return "", err
 	}
+	if err := ensureSuppliersTx(ctx, tx, prev, nil, o); err != nil {
+		return "", fmt.Errorf("tabela suppliers de pub_%s: %w", prev, err)
+	}
 	if err := repoint(ctx, tx, prev, o); err != nil {
 		return "", err
 	}

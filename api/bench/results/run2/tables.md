@@ -6,7 +6,7 @@
 | (a) API, full-scan cost (no extra indexes) | 100/s | 7.16 (6.79 to 7.80) | 34.31 (33.66 to 36.73) | 77.56 (75.43 to 84.37) | 100.0 (100.0 to 100.0) | 0/0/0/0/0 | 0.000/0.000/0.000/0.000/0.000% | 20.1 | 0.10 (0.09 to 0.14) | 0.06 (0.05 to 0.09) |
 | (b) API, with indexes | 100/s | 5.48 (5.22 to 12.89) | 25.60 (22.82 to 26.06) | 73.40 (73.02 to 78.05) | 100.0 (100.0 to 100.0) | 0/0/0/0/0 | 0.000/0.000/0.000/0.000/0.000% | 20.1 | 0.11 (0.11 to 0.14) | 0.06 (0.05 to 0.07) |
 
-### p95 by endpoint at the reference rate, median of 3 runs, ms
+### p95 by endpoint at the reference rate, median of the runs of each step, ms
 
 | step | profile | expenses | expenses_worst | suppliers_list | suppliers_search | supplier_detail | meta |
 |---|---|---|---|---|---|---|---|

@@ -5,7 +5,7 @@ $dir = Join-Path $PSScriptRoot "results\$Name"
 function J($p) { Get-Content $p -Raw | ConvertFrom-Json }
 function Med($v) { $s = @($v | Sort-Object); $s[[int][math]::Floor(($s.Count - 1) / 2)] }
 function F($x, $d = 1) { ([double]$x).ToString("N$d", [Globalization.CultureInfo]::InvariantCulture) }
-function NRuns($d) { @(Get-ChildItem $d -Filter 'run*.json' | ? Name -notlike '*proc*').Count }
+function NRuns($d) { $c = (J (Join-Path $d 'steps.json')).runCount; if ($c) { $c } else { @((J (Join-Path $d 'steps.json')).runs).Count } }
 function Tri($v, $d = 1) { "$(F (Med $v) $d) ($(F ($v | Measure-Object -Minimum).Minimum $d) to $(F ($v | Measure-Object -Maximum).Maximum $d))" }
 $names = @{ static = '(0) static files'; noidx = '(a) API, full-scan cost (no extra indexes)'; idx = '(b) API, with indexes' }
 $o = New-Object System.Collections.Generic.List[string]
@@ -23,7 +23,7 @@ foreach ($s in 'static', 'noidx', 'idx') {
 }
 
 $o.Add('')
-$o.Add("### p95 by endpoint at the reference rate, median of 3 runs, ms")
+$o.Add("### p95 by endpoint at the reference rate, median of the runs of each step, ms")
 $o.Add('')
 $eps = 'profile', 'expenses', 'expenses_worst', 'suppliers_list', 'suppliers_search', 'supplier_detail', 'meta'
 $o.Add('| step | ' + ($eps -join ' | ') + ' |')

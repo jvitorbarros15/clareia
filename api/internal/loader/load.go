@@ -315,6 +315,14 @@ func ensureSuppliers(ctx context.Context, conn *pgx.Conn, folderID string, state
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err := ensureSuppliersTx(ctx, tx, folderID, state, o); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// Same as ensureSuppliers inside the caller's transaction (Rollback uses it before it repoints the views to an older publication).
+func ensureSuppliersTx(ctx context.Context, tx pgx.Tx, folderID string, state *string, o Options) error {
 	schema := schemaOf(folderID)
 	if _, err := tx.Exec(ctx, `SELECT set_config('search_path', $1, true)`, schema); err != nil {
 		return err
@@ -336,7 +344,7 @@ func ensureSuppliers(ctx context.Context, conn *pgx.Conn, folderID string, state
 		return err
 	}
 	if bad != 0 {
-		return fmt.Errorf("%d fornecedores divergentes de supplier_cells", bad)
+		return fmt.Errorf("%d fornecedores divergentes de supplier_cells: se a tabela foi alterada à mão, apague pub_%s.suppliers (DROP TABLE) e rode a carga da pasta de novo para refazê-la", bad, folderID)
 	}
 	if state != nil && *state == "active" {
 		var has bool
@@ -352,5 +360,5 @@ func ensureSuppliers(ctx context.Context, conn *pgx.Conn, folderID string, state
 			}
 		}
 	}
-	return tx.Commit(ctx)
+	return nil
 }
