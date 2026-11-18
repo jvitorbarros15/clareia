@@ -207,3 +207,13 @@ test('the flagged value of a duplicate month is the one published after the sign
   assert.deepEqual(v.validation.duplicateCompetences,[{personId:1,month:1,reason:'ambiguous-identical-occurrences'}]);
   assert.equal(v.validation.totalCents,1000);assert.deepEqual(duplicateReviewItems(v).map(i=>[i.records,i.cents,i.monthCents]),[[2,1000,1000]]);
 });
+test('an API-sign month adds its count to the version and leaves the sign-fix accounting alone',async()=>{
+  const fixed=record(1,100,0),ls=[lot(0,[1,2],[{...cell(1,'complete',[fixed,sr(-500,500,null,1)]),diagnostics:{annualOnly:{},apiOnly:{},apiSignCorrected:1}},cell(2,'held-review')]),lots()[1]],v=buildExpenseVersion(ls,history,'t'),db=await openDB(true);
+  assert.deepEqual(v.validation.signFix,{count:1,deltaCents:1000});assert.deepEqual(v.validation.apiSignFix,{count:1});assert.equal(v.validation.independentTotalCents,String(v.validation.totalCents));
+  assert.deepEqual(signReviewItems(v.records,v.people).map(i=>i.recordId),['r1-1']);
+  try{
+    await publishDomain(db,'despesas',v);
+    assert.equal((await auditExpenseVersion(db,v,ls)).status,'passed');
+    assert.deepEqual((await auditExpenseVersion(db,{...v,validation:{...v.validation,apiSignFix:{count:2}}},ls)).failures,['api-sign-count']);
+  }finally{await db.close();}
+});

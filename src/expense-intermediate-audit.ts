@@ -36,13 +36,15 @@ export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csv
   }
   const category=annual?r.txtDescricao:r.tipoDespesa;if(typeof category!=='string'||!category.trim())throw Error();
   const money=(field:string)=>annual&&!r[field]?.trim()||!annual&&field==='valorGlosa'&&r[field]===null?null:amount(r[field]);
-  const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis)throw Error();
+  const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis&&!inverted(face,glosa,net,category))throw Error();
   const identity=String((annual?r.txtCNPJCPF:r.cnpjCpfFornecedor)||'').replace(/\D/g,''),verified=verifiedCnpj(identity),odd=identity.length>0&&identity.length!==11&&(!verified||identity.length===14&&identity.startsWith('000')&&cpfDigits(identity.slice(3)));
   const name=String((annual?r.txtFornecedor:r.nomeFornecedor)||'Fornecedor não informado').replace(/(?<![\d./])\d{3}[.  -]{0,2}\d{3}[.  -]{0,2}\d{3}[-–./  ]{0,3}\d{2}(?![\d/])/g,m=>/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/.test(m)||cpfDigits(m.replace(/\D/g,''))?'[CPF oculto]':m);
   let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(identity.length!==11&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
   const occurrence=hash(canonical({personId:id,raw:verified?r:{...r,[annual?'txtCNPJCPF':'cnpjCpfFornecedor']:null,[annual?'txtFornecedor':'nomeFornecedor']:null}}));
   return {id:occurrence,personId:id,year,month,category,supplier:identity.length===11?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,...(odd?{supplierIdOdd:true as const}:{}),documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
 }
+// Written again on purpose; the collector's predicate is not imported.
+const inverted=(face:number,glosa:number|null,net:number,category:string)=>face>0&&(glosa===null||glosa===0)&&net===-face&&!/AEREA|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
 // A blank document is 'Não informado' in the annual file and '' in the API.
 const blank=(s:string)=>s==='Não informado'?'':s;
 // Independent of markDuplicates: repeated rows stay published; identical ones get distinct ids by occurrence order.
@@ -163,9 +165,17 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
         if(!reasons.length){const first=new Map<string,string>();annual.forEach((r,i)=>{const raw=canonical(r.raw),seen=first.get(ar[i].id);if(seen!==undefined&&seen!==raw){reasons=['supplier-only-difference'];dup=null;}first.set(ar[i].id,raw);});}
         if(!reasons.length){
           const key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
+          // Leftover-only rule: an API row with net = -document takes the annual value when an annual leftover has exactly that value.
+          const taken=new Map<string,number>(),spare=new Map<string,number>(),tally=(m:Map<string,number>,k:string)=>m.set(k,(m.get(k)??0)+1);
+          for(const r of ar)tally(spare,key(r));for(const r of br){const k=key(r);if((spare.get(k)??0)>(taken.get(k)??0))tally(taken,k);}
+          for(const [k,n] of taken)spare.set(k,(spare.get(k)??0)-n);
+          let signFixed=0;const credit=new Map(taken);
+          br=br.map(r=>{const k=key(r);if((credit.get(k)??0)>0){credit.set(k,credit.get(k)!-1);return r;}
+            if(r.financialBasis||r.documentCents===null||!inverted(r.documentCents,r.disallowedCents,r.cents,r.category))return r;
+            const want=key({...r,cents:r.documentCents}),n=spare.get(want)??0;if(!n)return r;spare.set(want,n-1);signFixed++;return {...r,cents:r.documentCents};});
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
           for(const r of ar){const list=pool.get(key(r));if(list?.length)matches.push({a:r,b:list.shift()!});else left.push(r);}
-          const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right)};
+          const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right),...(signFixed?{apiSignCorrected:signFixed}:{})};
           if(matches.some(({a,b})=>blank(a.documentNumber)!==blank(b.documentNumber)||(a.date?.slice(0,10)||null)!==(b.date?.slice(0,10)||null)||(a.lot||'')!==(b.lot||''))||left.some(r=>!['TELEFONIA','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA'].includes(r.category))||right.some(r=>r.category!=='PASSAGEM AÉREA - SIGEPA'))reasons=['unreconciled-source-occurrences'];
           else{
             records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))];

@@ -263,3 +263,37 @@ test('an offline re-projection fails only on a failure the previous report did n
   const again=await collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true,previous:r.report});assert.equal(cell(again,1,2).status,'source-failure');
   await assert.rejects(collectExpenseBatch(scope,temporal,hash('proposal'),offline(1),offline(2),{wait:async()=>{},offline:true}),/offline/);
 });
+const invertedApi=(overrides:Record<string,unknown>={})=>(url:string)=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{valorDocumento:10.21,valorGlosa:0,valorLiquido:-10.21,...overrides})],links:[]}:undefined;
+test('an inverted API net is taken from the annual value, counted for the month and not marked on the record',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?undefined:invertedApi()(url));
+  const c=r.report.cells[0];assert.equal(c.status,'complete');assert.deepEqual(c.reasons,[]);assert.equal(c.records.length,1);assert.equal(c.records[0].cents,1021);assert.equal(c.records[0].origin,'both');assert.equal(c.records[0].sourceCents,undefined);assert.equal(c.records[0].note,undefined);assert.equal(c.diagnostics?.apiSignCorrected,1);assert.equal(r.report.totalCents,1021);
+});
+test('an inverted API row with no annual partner or a different annual value keeps the month held',async t=>{
+  const none=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedApi()(url));
+  const empty=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,'COMBUSTÍVEIS','10.21','99')]):invertedApi()(url));
+  for(const r of [none,empty]){const c=r.report.cells[0];assert.equal(c.status,'held-review');assert.deepEqual(c.reasons,['unreconciled-source-occurrences']);assert.deepEqual(c.records,[]);assert.equal(c.diagnostics?.apiSignCorrected,undefined);}
+  const other=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,'COMBUSTÍVEIS','9.50')]):invertedApi()(url));
+  assert.deepEqual(other.report.cells[0].reasons,['unreconciled-source-occurrences']);assert.deepEqual(other.report.cells[0].records,[]);
+});
+test('a second inverted row with only one annual partner leaves the month held',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?undefined:url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{valorLiquido:-10.21}),apiRow(1,{valorLiquido:-10.21})],links:[]}:undefined);
+  assert.deepEqual(r.report.cells[0].reasons,['unreconciled-source-occurrences']);
+});
+test('two inverted rows with two annual partners are both taken from the annual file',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(),annualLine()]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{valorLiquido:-10.21}),apiRow(1,{valorLiquido:-10.21})],links:[]}:undefined);
+  const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.diagnostics?.apiSignCorrected,2);assert.equal(c.totalCents,2042);
+});
+test('airfare, housing, zero values and correct positives are not touched by the API sign rule',async t=>{
+  const sigepa=await setup(t,url=>url.endsWith('.zip')?undefined:invertedApi({tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})(url));
+  assert.deepEqual(sigepa.report.cells[0].reasons,['financial-normalization-failed']);
+  const housing='COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA',line=`1;2025;1;57;${housing};-10.21;10.21;;;Empresa;11222333000181;;N1;2025-01-02T00:00:00;;0`;
+  const both=await setup(t,url=>url.endsWith('.zip')?annual([line]):invertedApi({tipoDespesa:housing,codDocumento:null,codLote:null,parcela:null,valorGlosa:null})(url));
+  assert.equal(both.report.cells[0].status,'complete');assert.equal(both.report.cells[0].totalCents,-1021);assert.equal(both.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+  const zero=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,'COMBUSTÍVEIS','0.00')]):invertedApi({valorDocumento:0,valorLiquido:-0})(url));
+  assert.equal(zero.report.cells[0].status,'complete');assert.equal(zero.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+  const ok=await setup(t);assert.equal(ok.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+});
+test('an installment with an inverted API net stays held for review',async t=>{
+  const line=annualLine().replace(/;0$/,';1'),r=await setup(t,url=>url.endsWith('.zip')?annual([line]):invertedApi({parcela:1})(url));
+  assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+});

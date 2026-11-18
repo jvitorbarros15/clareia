@@ -1,6 +1,6 @@
 import {Readable} from 'node:stream';
 import {parse} from 'csv-parse';
-import {blank,canonical,hash,cents,validCnpj,oddId,occurrenceId,officialUrl,publicSupplier} from './model.ts';
+import {blank,canonical,hash,cents,invertedApiShape,validCnpj,oddId,occurrenceId,officialUrl,publicSupplier} from './model.ts';
 import {pairOccurrences} from './reconcile.ts';
 import type {Scope,Expense,SourceRef,FinancialBasis} from './model.ts';
 
@@ -18,6 +18,20 @@ export function unionRecords(annual:Expense[],api:Expense[]) {
   const records:Expense[]=[...pairing.matched.map(m=>({...m.annual.record,origin:'both' as const})),...pairing.onlyAnnual.map(o=>({...o.record,origin:'annual' as const})),...pairing.onlyApi.map(o=>({...o.record,origin:'api' as const}))];
   const sum=(origin:Expense['origin'])=>records.filter(r=>r.origin===origin).reduce((n,r)=>n+r.cents,0);
   return {records,paired:pairing.matched.length,onlyAnnual:pairing.onlyAnnual.length,onlyApi:pairing.onlyApi.length,onlyApiCents:pairing.onlyApiCents,originCents:{both:sum('both'),annual:sum('annual'),api:sum('api')}};
+}
+// After the normal match, an API leftover with net = -document pairs with an annual leftover of the same key whose value equals the document; the API value is then taken from the annual file.
+export function pairApiSign(annual:Expense[],api:Expense[]):{api:Expense[];fixed:number}{
+  const key=(r:Expense,c=r.cents)=>canonical([r.personId,r.month,blank(r.documentId),r.category,c]),count=(rs:Expense[])=>rs.reduce((m,r)=>m.set(key(r),(m.get(key(r))??0)+1),new Map<string,number>());
+  const apiCount=count(api),spare=count(annual),taken=new Map<string,number>();
+  for(const [k,n] of apiCount){const t=Math.min(n,spare.get(k)??0);taken.set(k,t);spare.set(k,(spare.get(k)??0)-t);}
+  let fixed=0;
+  const out=api.map(r=>{
+    const k=key(r),t=taken.get(k)??0;if(t>0){taken.set(k,t-1);return r;}
+    if(r.financialBasis||!invertedApiShape(r.documentCents,r.disallowedCents,r.cents,r.category))return r;
+    const want=key(r,r.documentCents!),n=spare.get(want)??0;if(!n)return r;
+    spare.set(want,n-1);fixed++;return {...r,cents:r.documentCents!};
+  });
+  return {api:out,fixed};
 }
 export type AnnualRow=Record<string,string>;
 export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef,basis?:FinancialBasis):Expense {
