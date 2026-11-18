@@ -6,6 +6,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,11 +37,20 @@ func randHex(n int) string {
 }
 
 // newEnv gives each test its own database on the server named by CLAREIA_API_TEST_DSN, so nothing real is touched.
+// skipOrFail skips locally but fails in CI, so a missing prerequisite can never turn the job green without running.
+func skipOrFail(t *testing.T, msg string) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Fatal(msg + " (obrigatório em CI)")
+	}
+	t.Skip(msg)
+}
+
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	dsn := os.Getenv("CLAREIA_API_TEST_DSN")
 	if dsn == "" {
-		t.Skip("CLAREIA_API_TEST_DSN não definido")
+		skipOrFail(t, "CLAREIA_API_TEST_DSN não definido")
 	}
 	ctx := context.Background()
 	admin, err := pgx.Connect(ctx, dsn)
@@ -57,6 +68,9 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	e.opts = loader.Options{RoleName: e.role, RolePassword: roPassword}
+	if err := loader.Setup(ctx, e.conn, e.opts); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		e.conn.Close(ctx)
 		_, _ = admin.Exec(ctx, "DROP DATABASE IF EXISTS "+e.db+" WITH (FORCE)")
@@ -64,6 +78,13 @@ func newEnv(t *testing.T) *env {
 		admin.Close(ctx)
 	})
 	return e
+}
+
+// dsn points at this test's own database, never at the one named by CLAREIA_API_TEST_DSN.
+func (e *env) dsn() string {
+	c := e.conn.Config()
+	u := url.URL{Scheme: "postgres", User: url.UserPassword(c.User, c.Password), Host: net.JoinHostPort(c.Host, strconv.Itoa(int(c.Port))), Path: "/" + c.Database}
+	return u.String()
 }
 
 func (e *env) roConn(t *testing.T) *pgx.Conn {
@@ -224,10 +245,6 @@ func run(t *testing.T, dir string, name string, args ...string) (string, error) 
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
-
-func jsonNumber(s string) json.Number { return json.Number(s) }
-
-func itoa(n int) string { return strconv.Itoa(n) }
 
 // editFirstMatching changes the first record, across all deputy files, that pred accepts.
 func editFirstMatching(t *testing.T, dir string, pred func(r map[string]any) bool, f func(r map[string]any)) {

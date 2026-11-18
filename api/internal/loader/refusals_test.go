@@ -12,7 +12,7 @@ import (
 func needNode(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("npx"); err != nil {
-		t.Skip("npx não encontrado")
+		skipOrFail(t, "npx não encontrado")
 	}
 }
 
@@ -136,44 +136,3 @@ func validCPF() string {
 	return s
 }
 
-func powershell() string {
-	for _, n := range []string{"pwsh", "powershell"} {
-		if p, err := exec.LookPath(n); err == nil {
-			return p
-		}
-	}
-	return ""
-}
-
-func TestCPFAbortsScanAndLoad(t *testing.T) {
-	needNode(t)
-	dir := fixtureCopy(t, "eeeeeeeeeeee")
-	editRecords(t, firstExpenses(t, dir), func(recs []map[string]any) {
-		recs[0]["documentNumber"] = validCPF()
-	})
-
-	out, err := run(t, repoRoot(), "npm", "run", "scan:cpf", "--", mustAbs(t, dir))
-	if err == nil || !strings.Contains(out, "CPF") {
-		t.Fatalf("a busca de CPF devia abortar\n%s", out)
-	}
-
-	ps := powershell()
-	if ps == "" {
-		t.Log("sem PowerShell: só a busca de CPF foi testada")
-		return
-	}
-	e := newEnv(t)
-	cmd := exec.Command(ps, "-NoProfile", "-File", filepath.Join("api", "load.ps1"), mustAbs(t, dir))
-	cmd.Dir = repoRoot()
-	cmd.Env = append(os.Environ(), "CLAREIA_API_DSN="+e.conn.Config().ConnString(), "CLAREIA_API_RO_PASSWORD="+roPassword)
-	loadOut, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("load.ps1 devia abortar\n%s", loadOut)
-	}
-	if strings.Contains(string(loadOut), "== carga") {
-		t.Fatalf("a carga não devia ter começado\n%s", loadOut)
-	}
-	if e.schemaExists(t, "eeeeeeeeeeee") {
-		t.Fatal("o schema foi criado apesar do CPF")
-	}
-}

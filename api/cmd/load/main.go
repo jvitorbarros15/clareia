@@ -15,14 +15,24 @@ import (
 func main() {
 	revoke := flag.String("revoke", "", "revoga a publicação <id>: apaga o schema; recusa se estiver ativa")
 	rollback := flag.Bool("rollback", false, "volta para a publicação anterior; recusa se ela foi revogada")
+	setup := flag.Bool("setup", false, "cria o papel somente-leitura e fecha o que o PUBLIC deixa aberto (uma vez, como superusuário)")
 	flag.Parse()
-	if err := run(*revoke, *rollback, flag.Args()); err != nil {
+	if err := run(*revoke, *rollback, *setup, flag.Args()); err != nil {
 		fmt.Fprintln(os.Stderr, "erro:", err)
 		os.Exit(1)
 	}
 }
 
-func run(revoke string, rollback bool, args []string) error {
+func run(revoke string, rollback, setup bool, args []string) error {
+	loading := revoke == "" && !rollback && !setup
+	if loading {
+		if len(args) != 1 {
+			return fmt.Errorf("uso: load [--setup | --revoke <id> | --rollback | <pasta da publicação>]")
+		}
+		if err := gate(args[0]); err != nil {
+			return err
+		}
+	}
 	dsn := os.Getenv("CLAREIA_API_DSN")
 	if dsn == "" {
 		return fmt.Errorf("CLAREIA_API_DSN não definido")
@@ -36,6 +46,12 @@ func run(revoke string, rollback bool, args []string) error {
 	opts := loader.Options{RoleName: os.Getenv("CLAREIA_API_RO_ROLE"), RolePassword: os.Getenv("CLAREIA_API_RO_PASSWORD"), Out: os.Stdout}
 
 	switch {
+	case setup:
+		if err := loader.Setup(ctx, conn, opts); err != nil {
+			return err
+		}
+		fmt.Println("papel somente-leitura pronto")
+		return nil
 	case revoke != "":
 		if err := loader.Revoke(ctx, conn, revoke); err != nil {
 			return err
@@ -49,9 +65,6 @@ func run(revoke string, rollback bool, args []string) error {
 		}
 		fmt.Printf("publicação ativa agora: %s\n", id)
 		return nil
-	}
-	if len(args) != 1 {
-		return fmt.Errorf("uso: load [--revoke <id> | --rollback | <pasta da publicação>]")
 	}
 	start := time.Now()
 	rep, err := loader.Load(ctx, conn, args[0], opts)
