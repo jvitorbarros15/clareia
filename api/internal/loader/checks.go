@@ -43,6 +43,8 @@ FULL JOIN (SELECT label, supplier_key, sum(cents)::bigint AS cents, sum(records)
 WHERE s.label IS NULL OR a.label IS NULL OR s.supplier_key IS DISTINCT FROM a.supplier_key OR s.verified <> (a.supplier_key IS NOT NULL)
    OR s.total_cents <> a.cents OR s.records <> a.n OR s.deputies <> a.d`
 
+	sqlLabelNorm = `SELECT count(*) FROM suppliers WHERE label_norm IS DISTINCT FROM ` + LabelNormExpr
+
 	sqlLabelKeys = `
 SELECT count(*) FROM (
   SELECT label FROM (SELECT coalesce(record->>'supplierLabel', record->>'supplier') AS label, supplier_key, verified FROM expenses GROUP BY 1, 2, 3) g
@@ -146,6 +148,7 @@ func runChecks(ctx context.Context, tx pgx.Tx, pub *Publication) ([]Result, erro
 	c.add("células de fornecedor: contagem e rótulos", cellCount == int64(expectedCells) && labels == int64(len(pub.Suppliers.Suppliers)) && len(unique) == len(pub.Suppliers.Suppliers), "%d células, %d rótulos", cellCount, labels)
 	c.zero("células de fornecedor = despesas agrupadas", sqlSupplierCells, "células divergentes de fornecedores.json")
 	c.zero("tabela suppliers = células agrupadas", sqlSuppliersTable, "fornecedores divergentes de supplier_cells")
+	c.zero("suppliers.label_norm = normalização do rótulo", sqlLabelNorm, "fornecedores com label_norm errado")
 	var nSuppliers int64
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM suppliers`).Scan(&nSuppliers); err != nil {
 		return nil, err

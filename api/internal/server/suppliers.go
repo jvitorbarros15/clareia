@@ -82,7 +82,7 @@ func (s *Server) suppliers(ctx context.Context, tx pgx.Tx, r *http.Request, pub 
 	}
 	rows, err := tx.Query(ctx, `
 		SELECT label, supplier_key, total_cents, records, deputies FROM api.suppliers
-		WHERE (NOT $1::boolean OR strpos(label_norm, `+nf("$2::text")+`) > 0)
+		WHERE (NOT $1::boolean OR strpos(label_norm, `+nf(`$2::text COLLATE "C"`)+`) > 0)
 		  AND (NOT $3::boolean OR label COLLATE "C" > $4::text COLLATE "C")
 		ORDER BY label COLLATE "C" LIMIT $5`, hasQ, term, hasAfter, after, limit+1)
 	if err != nil {

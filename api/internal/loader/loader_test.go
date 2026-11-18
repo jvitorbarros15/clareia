@@ -375,6 +375,41 @@ func TestExistingPublicationGetsLabelNorm(t *testing.T) {
 	}
 }
 
+// A previous publication whose suppliers table exists but predates label_norm can still be rolled back to.
+func TestRollbackToPublicationWithoutLabelNorm(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.load(t, fixtureCopy(t, "aaaaaaaaaaaa"))
+	e.load(t, publicationB(t, "bbbbbbbbbbbb"))
+	want := e.scalar(t, `SELECT count(*) FROM pub_aaaaaaaaaaaa.suppliers`)
+	if _, err := e.conn.Exec(ctx, `ALTER TABLE pub_aaaaaaaaaaaa.suppliers DROP COLUMN label_norm`); err != nil {
+		t.Fatal(err)
+	}
+	if id, err := loader.Rollback(ctx, e.conn, e.opts); err != nil || id != "aaaaaaaaaaaa" {
+		t.Fatalf("rollback: %q %v", id, err)
+	}
+	if got := e.scalar(t, `SELECT count(*) FROM api.suppliers WHERE label_norm IS NOT NULL`); got != want {
+		t.Fatalf("api.suppliers depois do rollback: %s com label_norm, esperado %s", got, want)
+	}
+	if got := e.roConn(t).QueryRow(ctx, `SELECT 1 FROM api.suppliers LIMIT 1`).Scan(new(int)); got != nil {
+		t.Fatalf("o papel devia ler api.suppliers: %v", got)
+	}
+}
+
+// A tampered label_norm is refused on the no-op path.
+func TestTamperedLabelNormIsRefused(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	dir := fixtureCopy(t, "aaaaaaaaaaaa")
+	e.load(t, dir)
+	if _, err := e.conn.Exec(ctx, `DROP VIEW api.suppliers; ALTER TABLE pub_aaaaaaaaaaaa.suppliers DROP COLUMN label_norm; ALTER TABLE pub_aaaaaaaaaaaa.suppliers ADD COLUMN label_norm text; UPDATE pub_aaaaaaaaaaaa.suppliers SET label_norm = 'x'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loader.Load(ctx, e.conn, dir, e.opts); err == nil || !strings.Contains(err.Error(), "label_norm") {
+		t.Fatalf("label_norm adulterado devia ser recusado: %v", err)
+	}
+}
+
 // A previous publication loaded before the suppliers table existed can still be rolled back to.
 func TestRollbackToPublicationWithoutSuppliersTable(t *testing.T) {
 	e := newEnv(t)

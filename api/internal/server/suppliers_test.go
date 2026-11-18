@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jvitorbarros15/clareia/api/internal/loader"
+	"github.com/jvitorbarros15/clareia/api/internal/server"
 )
 
 type supplierRow struct {
@@ -249,9 +252,9 @@ func TestSupplierSearchMatchesOnTheFlyNormalization(t *testing.T) {
 	f := readFornecedores(t, fixtureDir(t))
 	const onTheFly = `SELECT label FROM api.suppliers
 		WHERE strpos(translate(lower(label), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'),
-		                    translate(lower($1::text), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) > 0
+		                    translate(lower($1::text COLLATE "C"), 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) > 0
 		ORDER BY label COLLATE "C"`
-	terms := []string{"pessoa", "FISICA", "Física", "ltda", "ção", "CAO", "são", "SAO", "eira", "ñ", "ÇÃO"}
+	terms := []string{"pessoa", "FISICA", "Física", "ltda", "ção", "CAO", "são", "SAO", "eira", "ñ", "ÇÃO", "ÅBC", "åbc", "ÉBC"}
 	for i, l := range f.Suppliers {
 		if r := []rune(l); len(r) >= 5 && i%7 == 0 {
 			terms = append(terms, string(r[1:5]), strings.ToUpper(string(r[1:5])))
@@ -299,5 +302,11 @@ func TestSupplierSearchMatchesOnTheFlyNormalization(t *testing.T) {
 	}
 	if nonEmpty < 5 {
 		t.Fatalf("poucos termos com resultado: %d", nonEmpty)
+	}
+}
+
+func TestNormMatchesLoaderLabelNormExpr(t *testing.T) {
+	if got := strings.Replace(server.Norm, "%s", "label", 1); got != loader.LabelNormExpr {
+		t.Fatalf("a normalização do servidor difere da do carregador:\n%s\n%s", got, loader.LabelNormExpr)
 	}
 }

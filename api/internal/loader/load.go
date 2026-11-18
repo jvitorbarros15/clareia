@@ -335,6 +335,15 @@ func ensureSuppliersTx(ctx context.Context, tx pgx.Tx, folderID string, state *s
 	if _, err := tx.Exec(ctx, ddlSuppliers); err != nil {
 		return err
 	}
+	var hasCol bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('suppliers') AND attname = 'label_norm' AND NOT attisdropped)`).Scan(&hasCol); err != nil {
+		return err
+	}
+	if !hasCol {
+		if _, err := tx.Exec(ctx, sqlAddLabelNorm); err != nil {
+			return err
+		}
+	}
 	var n int64
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM suppliers`).Scan(&n); err != nil {
 		return err
@@ -345,6 +354,12 @@ func ensureSuppliersTx(ctx context.Context, tx pgx.Tx, folderID string, state *s
 		}
 	}
 	var bad int64
+	if err := tx.QueryRow(ctx, sqlLabelNorm).Scan(&bad); err != nil {
+		return err
+	}
+	if bad != 0 {
+		return fmt.Errorf("%d fornecedores com label_norm diferente da normalização: apague pub_%s.suppliers (DROP TABLE) e rode a carga da pasta de novo", bad, folderID)
+	}
 	if err := tx.QueryRow(ctx, sqlSuppliersTable).Scan(&bad); err != nil {
 		return err
 	}
