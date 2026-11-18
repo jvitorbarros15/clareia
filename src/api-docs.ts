@@ -57,12 +57,14 @@ function limits(s:Schema):string{
 const note=(description:string|undefined,s:Schema)=>[description?inline(description):'',limits(s)].filter(Boolean).join('<br>');
 const table=(head:string[],rows:string[][])=>`<table class="doc-table"><thead><tr>${head.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 
+// The spec shares one long Error description across every error status; each row says what its own code means.
+const STATUS:Record<string,string>={'200':'ok','400':'pedido inválido','404':'não encontrado','409':'cursor de outra publicação','500':'erro interno','503':'indisponível'};
 function operation(spec:Spec,method:string,route:string,op:Operation):string{
   const params=op.parameters??[];
   const responses=Object.entries(op.responses).map(([status,r])=>{
     const resolved=r.$ref?spec.components.responses[refName(r.$ref)]:r;
     const schema=resolved&&'content' in resolved?(resolved as {content?:Record<string,{schema:Schema}>}).content?.['application/json']?.schema:undefined;
-    return [code(status),inline(resolved?.description??''),schema?typeOf(schema):''];
+    return [code(status),STATUS[status]??inline(resolved?.description??''),schema?typeOf(schema):''];
   });
   return `<h4 class="api-h" id="${esc(method+route)}"><code>${esc(method.toUpperCase())} ${esc(route)}</code></h4><p>${inline(op.summary??'')}</p>${op.description?blocks(op.description):''}`
     +(params.length?table(['Parâmetro','Onde','Tipo','Descrição'],params.map(p=>[code(p.name)+(p.required?' (obrigatório)':''),p.in==='path'?'caminho':'consulta',typeOf(p.schema),note(p.description,p.schema)])):'<p>Sem parâmetros.</p>')
