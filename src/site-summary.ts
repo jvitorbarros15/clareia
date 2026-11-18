@@ -9,8 +9,8 @@ export type MonthSummary={month:number;cents:number;records:number;exercise:stri
 export type Cell=[number,number,number,number];
 // [month, category index, supplier index, cents, records]
 export type SupplierCell=[number,number,number,number,number];
-export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];categories:{category:string;cents:number;records:number}[];cells:Cell[];bills:Omit<BillPerson,'id'>|null;votes:Record<string,number>|null;votesHeld:number};
-export type SiteSummary={schema:'clareia.site-summary.v1';publicationId:string;coverageId:string|null;billsId:string|null;billsYears:number[];votesId:string|null;votesYears:number[];ceiling:SiteCeiling|null;scope:Scope;totalCents:number;records:number;categories:string[];people:PersonSummary[]};
+export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];categories:{category:string;cents:number;records:number}[];cells:Cell[];bills:Omit<BillPerson,'id'>|null;votes:Record<string,number>|null;votesHeld:number;exercisedMonths:number;noExercise:boolean;heldMonths:number[];comparable:boolean};
+export type SiteSummary={schema:'clareia.site-summary.v2';publicationId:string;coverageId:string|null;billsId:string|null;billsYears:number[];votesId:string|null;votesYears:number[];ceiling:SiteCeiling|null;scope:Scope;minMonths:number;totalCents:number;records:number;categories:string[];people:PersonSummary[]};
 export type SupplierSummary={schema:'clareia.supplier-summary.v1';publicationId:string;categories:string[];suppliers:string[];people:Record<string,SupplierCell[]>};
 export type SupplierNames=Record<string,{name:string}>;
 
@@ -26,6 +26,15 @@ function cellsOf(rows:Expense[],categoryIndex:Map<string,number>):Cell[]{
   return [...group(rows,r=>r.month+'\u0000'+r.category)].map<Cell>(([,list])=>[list[0].month,categoryIndex.get(list[0].category)!,sum(list),list.length]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
 }
 
+// The single ranking rule. Without an approved coverage every published month counts; with one, a month outside the mandate does not, unless it has an expense.
+// Zero is only a fact for someone in office: without confirmed exercise there is nothing to compare. Held months are 1-based.
+export function rankingFieldsOf(months:MonthSummary[],coverageId:string|null,records:number,scopeMonths:number,minMonths:number){
+  const exercisedMonths=coverageId?months.filter(m=>m.exercise!=='outside'||m.records>0).length:scopeMonths;
+  const noExercise=!coverageId||records>0?false:months.length>0&&months.every(m=>!m.exercise||['unknown','outside','conflict'].includes(m.exercise));
+  const heldMonths=months.filter(m=>m.held).map(m=>m.month);
+  return {exercisedMonths,noExercise,heldMonths,comparable:!noExercise&&!heldMonths.length&&exercisedMonths>=minMonths};
+}
+
 // Party and UF come only from an approved monthly coverage. Without one they stay
 // unavailable: the current registration must never be applied to a past expense.
 export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:Person[];records:Expense[];expectedTotalCents:number;coverageId:string|null;coverage:CoverageRow[];billsId?:string|null;billsYears?:number[];bills?:BillPerson[];votesId?:string|null;votesYears?:number[];votes?:Map<number,Record<string,number>>;votesHeld?:Map<number,number>;held?:{personId:number;month:number}[];ceiling?:SiteCeiling|null}):SiteSummary{
@@ -33,7 +42,7 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
   if(billsId!==null&&!input.billsYears?.includes(scope.year))throw new Error('Proposições aprovadas não cobrem o ano do site');
   if(coverageId===null&&coverage.length)throw new Error('Cobertura sem versão aprovada');
   if(ceiling&&ceiling.year!==scope.year)throw new Error('Limite da cota não cobre o ano do site');
-  const heldKeys=new Set((input.held??[]).map(h=>h.personId+':'+h.month)),attribution=new Map(coverage.map(row=>[row.personId+':'+row.year+':'+row.month,row])),byPerson=new Map<number,Expense[]>();
+  const minMonths=Math.min(6,scope.months.length),heldKeys=new Set((input.held??[]).map(h=>h.personId+':'+h.month)),attribution=new Map(coverage.map(row=>[row.personId+':'+row.year+':'+row.month,row])),byPerson=new Map<number,Expense[]>();
   for(const r of records){if(!scope.ids.includes(r.personId)||r.year!==scope.year||!scope.months.includes(r.month))throw new Error('Registro fora do recorte do resumo');const list=byPerson.get(r.personId);if(list)list.push(r);else byPerson.set(r.personId,[r]);}
   const categoryList=sorted(records.map(r=>r.category)),categoryIndex=new Map(categoryList.map((c,i)=>[c,i]));
   const summaries=scope.ids.map<PersonSummary>(id=>{
@@ -48,12 +57,12 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
     const counted=billsOf.get(id);
     const cells=cellsOf(own,categoryIndex);
     if(safe(cells.reduce((n,c)=>n+BigInt(c[2]),0n))!==sum(own)||cells.reduce((n,c)=>n+c[3],0)!==own.length)throw new Error('Células mensais divergem dos registros de uma pessoa');
-    return {id,name:person.name,photo:person.photo,cents:sum(own),records:own.length,months,categories,cells,bills:billsId===null?null:{proposed:counted?.proposed??0,joint:counted?.joint??0,coauthored:counted?.coauthored??0,norms:counted?.norms??0},votes:input.votesId?input.votes?.get(id)??{}:null,votesHeld:input.votesHeld?.get(id)??0};
+    return {id,name:person.name,photo:person.photo,cents:sum(own),records:own.length,months,categories,cells,bills:billsId===null?null:{proposed:counted?.proposed??0,joint:counted?.joint??0,coauthored:counted?.coauthored??0,norms:counted?.norms??0},votes:input.votesId?input.votes?.get(id)??{}:null,votesHeld:input.votesHeld?.get(id)??0,...rankingFieldsOf(months,coverageId,own.length,scope.months.length,minMonths)};
   });
   const totalCents=sum(records);
   if(totalCents!==expectedTotalCents)throw new Error('Resumo diverge do total aprovado');
   if(safe(summaries.reduce((n,p)=>n+BigInt(p.cents),0n))!==totalCents)throw new Error('Soma das pessoas diverge do total do resumo');
-  return {schema:'clareia.site-summary.v1',publicationId,coverageId,billsId,billsYears:input.billsYears??[],votesId:input.votesId??null,votesYears:input.votesYears??[],ceiling,scope,totalCents,records:records.length,categories:categoryList,people:summaries};
+  return {schema:'clareia.site-summary.v2',publicationId,coverageId,billsId,billsYears:input.billsYears??[],votesId:input.votesId??null,votesYears:input.votesYears??[],ceiling,scope,minMonths,totalCents,records:records.length,categories:categoryList,people:summaries};
 }
 
 // A validated CNPJ is one supplier whatever its spelling; the rest are grouped by typed name. Display name: reviewed override, else the spelling with the most records (then largest absolute value, latest date, alphabetical), so a stray typed name cannot easily become the label.

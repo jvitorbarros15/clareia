@@ -13,9 +13,9 @@ import {loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inStat
 import type {Deputy,Period} from '../src/prerender.ts';
 
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
-const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11]};
+const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11],minMonths:6};
 const SITE='https://example.test';
-const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,heldMonths:[],cents:123456789,hasCells:true,projects:7};
+const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,comparable:true,heldMonths:[],cents:123456789,hasCells:true,projects:7};
 const meta=(html:string,key:string)=>new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)">`).exec(html)?.[1];
 
 test('slugs follow the rule of real/app.js',()=>{

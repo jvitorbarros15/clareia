@@ -17,14 +17,11 @@
     };
     const lastConfirmedParty = id => [...(summaryOf.get(id)?.months ?? [])].filter(m => m.partyStatus === 'single' && m.party).sort((a, b) => b.month - a.month)[0]?.party ?? null;
     const monthNames =['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    // Zero is only a fact for someone in office: without confirmed exercise there is nothing to compare.
-    const withoutConfirmedExercise = (id, records) => { if (!summary.coverageId || records) return false; const months = summaryOf.get(id)?.months ?? []; return months.length > 0 && months.every(m => !m.exercise || ['unknown', 'outside', 'conflict'].includes(m.exercise)); };
     // Without an approved coverage every published month counts; with one, months outside the mandate do not.
     // Only a month reported outside the mandate drops out, and never one with an expense: a spent month always enters the divisor.
     const exercised = m => m.exercise !== 'outside' || m.records > 0;
     const summaryOf = new Map(summary.people.map(p => [p.id, p]));
     const monthsOf = id => summary.coverageId ? summaryOf.get(id)?.months ?? [] : null;
-    const exercisedMonths = id => { const months = monthsOf(id); return months ? months.filter(exercised).length : index.scope.months.length; };
     const servedMonths = id => { const months = monthsOf(id); return Math.max(1, months ? months.filter(m => exercised(m) && !m.held).length : index.scope.months.length - (index.validation.heldMonths?.[id] ?? 0)); };
     if (index.validation.testNotice) { const notice = document.createElement('div'); notice.className = 'test-notice'; notice.setAttribute('role', 'note'); notice.textContent = index.validation.testNotice; document.body.prepend(notice); }
     // Until fornecedores.json arrives, each person has one cell per category (the published totals). Month and supplier cells replace them in place.
@@ -32,7 +29,7 @@
     const people = index.scope.ids.map(id => {
       const info = index.people.find(p => p.id === id) || { name: 'ID ' + id }, own = summaryOf.get(id);
       const cells = (own?.categories ?? []).map(c => ({ month: null, category: c.category, supplier: null, amount: c.cents, count: c.records }));
-      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, ufNote: info.ufNote ?? null, party: partyOfPeriod(id, info.party ?? null), partyInReview: partyOfPeriod(id, info.party ?? null) === 'Partido em revisão',lastConfirmedParty: lastConfirmedParty(id),profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), exercisedMonths: exercisedMonths(id), noExercise: withoutConfirmedExercise(id, own?.records ?? 0), heldMonths: (own?.months ?? []).filter(m => m.held).map(m => m.month - 1), use: ClareiaView.ceilingUse(own?.months ?? [], summary.ceiling, Boolean(summary.coverageId)), projects: own?.bills?.proposed ?? null, approved: own?.bills?.norms ?? null, votes: null, cells, total: own?.cents ?? 0 };
+      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${base}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, uf: info.uf ?? null, ufNote: info.ufNote ?? null, party: partyOfPeriod(id, info.party ?? null), partyInReview: partyOfPeriod(id, info.party ?? null) === 'Partido em revisão',lastConfirmedParty: lastConfirmedParty(id),profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), exercisedMonths: own.exercisedMonths, noExercise: own.noExercise, heldMonths: own.heldMonths.map(m => m - 1), comparable: own.comparable, use: ClareiaView.ceilingUse(own?.months ?? [], summary.ceiling, Boolean(summary.coverageId)), projects: own?.bills?.proposed ?? null, approved: own?.bills?.norms ?? null, votes: null, cells, total: own?.cents ?? 0 };
     });
     // Same names as the published list; the order is the one of the monthly cells, which only the supplier file carries.
     const categories = [...summary.categories];
@@ -56,7 +53,7 @@
       gate.innerHTML = `<p class="loading-note" role="alert">Gastos por fornecedor indisponíveis. ${error.message === VERSION_ERROR ? 'Nenhum valor foi estimado.' : 'Tente novamente mais tarde.'}</p>`;
       throw error;
     });
-    window.ClareiaData = { ceiling: summary.ceiling ?? null, coverageApproved: Boolean(summary.coverageId), billsApproved: Boolean(summary.billsId), votesApproved: Boolean(summary.votesId), billsYears: summary.billsYears || [], votesYears: summary.votesYears || [], activitySummary: id => summary.people.find(p => String(p.id) === String(id)), activityUrl: id => `${base}/atividade/${id}.json`, recordsUrl: id => `${base}/deputados/${id}/despesas.json`, label, dataset: () => people, categories, monthNames, index, base, year: String(index.scope.year), coverage: index.scope.months.map(m => m - 1), suppliersLoaded: () => suppliersDone, loadSuppliers };
+    window.ClareiaData = { minMonths: summary.minMonths, ceiling: summary.ceiling ?? null, coverageApproved: Boolean(summary.coverageId), billsApproved: Boolean(summary.billsId), votesApproved: Boolean(summary.votesId), billsYears: summary.billsYears || [], votesYears: summary.votesYears || [], activitySummary: id => summary.people.find(p => String(p.id) === String(id)), activityUrl: id => `${base}/atividade/${id}.json`, recordsUrl: id => `${base}/deputados/${id}/despesas.json`, label, dataset: () => people, categories, monthNames, index, base, year: String(index.scope.year), coverage: index.scope.months.map(m => m - 1), suppliersLoaded: () => suppliersDone, loadSuppliers };
     await load('/app.js');
     document.getElementById('main').append(gate);
     // The supplier file is needed by the sections below the ranking: it starts when they come near the viewport, or at once for a deep link.
