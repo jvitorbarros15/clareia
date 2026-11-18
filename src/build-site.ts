@@ -123,7 +123,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const indexJson=JSON.stringify({...meta,snapshotId,withoutData,...siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)});
   await fs.writeFile(path.join(data,'index.json'),indexJson);
   await writeOpenData(data,active.scope.ids.flatMap(id=>recordsOf.get(id)??[]),{summary:summaryJson,suppliers,index:indexJson},summary.people.flatMap(p=>p.months.filter(m=>m.held).map(()=>({personId:p.id}))),{year:active.scope.year,publishedAt:active.publishedAt,collectedAt:active.collectedAt});
-  for(const file of ['index.html','404.html','data.js','pages.js','analytics.js','app.js','portal.js','styles.css','_headers','icon.svg','apple-touch-icon.png','favicon-32.png','site.webmanifest','icon-192.png','icon-512.png','icon-maskable-512.png'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
+  for(const file of ['index.html','404.html','data.js','pages.js','analytics.js','app.js','portal.js','styles.css','_headers','icon.svg','apple-touch-icon.png','favicon-32.png','site.webmanifest','icon-192.png','icon-512.png','icon-maskable-512.png','clareia-api.pdf'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
   await fs.mkdir(path.join(outDir,'fonts'));
   for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});

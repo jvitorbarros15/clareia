@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -250,3 +251,8 @@ test('a build writes the /api page without scripts, with every path of api/opena
   assert.ok(Object.keys(spec.paths).length>0);
   for(const route of Object.keys(spec.paths))assert.ok(html.includes(`<code>GET ${route}</code>`),route);
 }));
+test('real/clareia-api.pdf was generated from the current api/openapi.yaml',async()=>{
+  const root=path.join(import.meta.dirname,'..'),sha=createHash('sha256').update(await fs.readFile(path.join(root,'api','openapi.yaml'))).digest('hex').slice(0,16);
+  const pdf=(await fs.readFile(path.join(root,'real','clareia-api.pdf'))).toString('latin1');
+  assert.ok(pdf.includes(`sha256:${sha}`),'api/openapi.yaml changed since real/clareia-api.pdf was generated: run npm run api:pdf');
+});

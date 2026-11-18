@@ -80,7 +80,7 @@ function model(name:string,s:Schema):string{
 export const API_PATHS=(spec:Spec)=>Object.keys(spec.paths);
 
 export function apiDocsInner(spec:Spec):string{
-  const notice=`<div class="doc-callout"><h3>A API ainda não é pública</h3><p>Esta página documenta o contrato: endpoints, parâmetros e respostas. Os mesmos dados já estão disponíveis hoje como arquivos na página <a href="/dados-abertos">Dados abertos</a>.</p></div>`;
+  const notice=`<div class="doc-callout"><h3>A API ainda não é pública</h3><p>Esta página documenta o contrato: endpoints, parâmetros e respostas. Os mesmos dados já estão disponíveis hoje como arquivos na página <a href="/dados-abertos">Dados abertos</a>.</p><p><a href="/clareia-api.pdf" download>Baixar PDF</a></p></div>`;
   const overview=`<h3>Visão geral</h3><p>Versão ${esc(spec.info.version)} do contrato. Os textos abaixo vêm do arquivo <code>api/openapi.yaml</code>.</p>${blocks(spec.info.description)}`;
   const endpoints=`<h3>Endpoints</h3>${Object.entries(spec.paths).flatMap(([route,ops])=>Object.entries(ops).map(([method,op])=>operation(spec,method,route,op))).join('')}`;
   const models=`<h3>Modelos de resposta</h3>${Object.entries(spec.components.schemas).map(([name,s])=>model(name,s)).join('')}`;
