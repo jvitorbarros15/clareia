@@ -17,7 +17,7 @@ const record=(cents:number,personId:number,index:number,month:number,extra:Parti
 const version=(records:Expense[]):Snapshot=>{
   const total=records.reduce((n,r)=>n+r.cents,0);
   const body={metric:'test.metric',scope:{year:2025,months:[1,2,3],ids:[1,2],legislature:57},people:[1,2].map(id=>({id,name:'Pessoa '+id,photo:null,sourceUrl:'https://x',profileFetchedAt:'2025-03-01T00:00:00Z'})),records,validation:{totalCents:total,independentTotalCents:String(total),recordCount:records.length,stablePasses:2,sourceKind:'annual-api-union',heldCompetences:[],duplicateCompetences:[],duplicatePolicy:'x',limitations:[]},collectedAt:'2025-03-01T00:00:00Z',publishedAt:'2025-03-02T00:00:00Z'};
-  return {...body,id:snapshotId(body)} as Snapshot;
+  return {...body,id:snapshotId(body)} as unknown as Snapshot;
 };
 
 test('monthly CSVs split the records by competence with the per-deputy header and every row once',()=>{
@@ -43,7 +43,7 @@ test('the built open data files match the manifest, the per-deputy files and the
   await fs.mkdir(portraits);
   try{
     const all=[record(100,1,0,1),record(200,1,1,2),record(300,2,2,1)],v=version(all);
-    await publishDomain(db,'despesas',v);await recordDomainAudit(db,v.id,'passed',{checkedAt:'2025-03-02T00:00:00Z',status:'passed'});
+    await publishDomain(db,'despesas',v);await recordDomainAudit(db,v.id,'passed',{checkedAt:'2025-03-02T00:00:00Z'});
     const dist=path.join(dir,'dist'),{publicationId}=await buildSite(db,dist,portraits),base=path.join(dist,'data',publicationId);
     const manifest=JSON.parse(await fs.readFile(path.join(base,'dados-abertos.json'),'utf8')) as OpenData;
     const months=manifest.files.filter(f=>f.kind==='month');
