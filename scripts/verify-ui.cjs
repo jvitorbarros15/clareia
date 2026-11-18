@@ -641,7 +641,7 @@ for (const width of [1440, 768, 390]) {
     await page.locator('.bar-row').first().click();
     await page.waitForSelector('#detail[open]');
     await page.locator('#detail [data-action=records]').click();
-    await page.waitForTimeout(300);
+    await recordsShown(page);
     const list = await measureTargets(page, [['dialog close', '#detail .close-button'], ['record Conferir', '#detail .record-go button'], ['dialog buttons', '#detail .action-row button']]);
     await page.locator('#detail .record-row').first().click();
     await page.waitForTimeout(300);
