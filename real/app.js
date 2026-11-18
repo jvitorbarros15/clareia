@@ -79,7 +79,7 @@
   // The share of the ceiling is over the whole period and counts every category, so the pill hides when a category is filtered.
   const usable = p => p.use.status === 'ok';
   const pctText = p => (p.use.tenths / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
-  const ceilingPill = (p, projects) => projects || !D.ceiling || state.category !== 'Todas' ? '' : usable(p) ? `<button class="ceiling-pill" data-action="evidence" data-id="${p.id}" data-kind="teto" aria-label="${escape(p.name)}: ${pctText(p)} do teto da cota usado. Ver o cálculo">${pctText(p)} do teto</button>` : `<span class="ceiling-pill is-muted" title="${p.use.missing?.length ? 'O limite de algum mês não foi confirmado (UF do mês em revisão)' : 'Nenhum mês completo de exercício entrou na conta'}">% não confirmado</span>`;
+  const ceilingPill = (p, projects) => projects || !D.ceiling || state.category !== 'Todas' ? '' : usable(p) ? `<button class="ceiling-pill" data-action="evidence" data-id="${p.id}" data-kind="teto" aria-label="${escape(p.name)}: ${pctText(p)} do teto da cota usado. Ver o cálculo">${pctText(p)} do teto</button>` : `<span class="ceiling-pill is-muted" title="${p.use.missing?.length ? 'O exercício ou a UF de algum mês não foi confirmado' : 'Nenhum mês completo de exercício entrou na conta'}">% não confirmado</span>`;
   const inScope = () => all().filter(p => comparable(p) && inUF(p));
   function ranking(kind = state.tab) {
     return sortedBy(inScope(), p => state.tab === 'menos' ? -value(p, kind) : value(p, kind));
@@ -197,6 +197,11 @@
     }).join('')}</span>`).join('');
     return `<p class="editorial-handwritten"><span class="sr-only">Todo número tem uma fonte.</span><span aria-hidden="true">${letters}</span></p>`;
   }
+  function ceilingStep(everyone, step) {
+    const out = everyone.filter(p => !usable(p)), idle = out.filter(p => p.noExercise).length, open = out.filter(p => !p.noExercise && p.use.missing?.length).length, none = out.length - idle - open;
+    const parts = [idle && `${idle} sem exercício no ano`, open && `${open} com algum mês de exercício ou UF sem confirmação`, none && `${none} sem mês que entre na conta (retidos, parciais ou fora do mandato)`].filter(Boolean);
+    return step(everyone.length - out.length, 'com % do teto da cota confirmada', parts.length ? `${out.length} sem: ${parts.join(', ')}.` : '');
+  }
   function universe() {
     const everyone = all(), withData = everyone.filter(p => !p.noExercise), compared = everyone.filter(comparable);
     const step = (n, text, note) => `<li class="universe-step"><strong>${n}</strong><span>${text}</span>${note ? `<small>${note}</small>` : ''}</li>`;
@@ -205,7 +210,8 @@
     return `<section class="universe" id="universo" aria-labelledby="universe-title"><h2 id="universe-title" class="universe-title">Quem entra nas comparações</h2><ol class="universe-steps">${
       step(everyone.length, `${noun(everyone.length)} com mandato no recorte`, '')}${
       step(withData.length, 'com exercício confirmado ou despesas publicadas', lostData ? `${lostData} sem exercício confirmado nem despesa publicada.` : '')}${
-      step(compared.length, `comparáveis: ao menos ${MIN_MONTHS} meses de exercício, sem mês em revisão`, lostCompared ? `${lostCompared} com menos meses de exercício ou algum mês em revisão.` : '')
+      step(compared.length, `comparáveis: ao menos ${MIN_MONTHS} meses de exercício, sem mês em revisão`, lostCompared ? `${lostCompared} com menos meses de exercício ou algum mês em revisão.` : '')}${
+      D.ceiling ? ceilingStep(everyone, step) : ''
     }</ol><button type="button" class="text-button" data-action="methodology">Como chegamos nisso? →</button></section>`;
   }
   function layout() {

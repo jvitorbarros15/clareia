@@ -945,7 +945,7 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .compare-controls .p-metric{flex:none}
 .universe{padding:28px 0 8px;border-bottom:1px solid var(--line)}
 .universe-title{margin:0 0 16px;font:600 14px/1.4 var(--sans);color:var(--accent)}
-.universe-steps{list-style:none;margin:0 0 6px;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:0 32px;counter-reset:step}
+.universe-steps{list-style:none;margin:0 0 6px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0 32px;counter-reset:step}
 .universe-step{display:flex;flex-direction:column;gap:6px;padding:0 0 18px;min-width:0}
 .universe-step strong{font:500 44px/1 var(--serif);letter-spacing:-.03em;color:var(--ink)}
 .universe-step span{font:400 16px/1.35 var(--serif);color:var(--ink)}
