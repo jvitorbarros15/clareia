@@ -1,5 +1,5 @@
 param([Parameter(Mandatory = $true)][string]$Name)
-# Turns the stored k6 summaries of one run into the markdown tables of RESULTS.md. Prints to stdout and writes results/<Name>/tables.md.
+# Turns the stored k6 summaries of one run into the markdown tables. Prints to stdout and writes results/<Name>/tables.md.
 $ErrorActionPreference = 'Stop'
 $dir = Join-Path $PSScriptRoot "results\$Name"
 function J($p) { Get-Content $p -Raw | ConvertFrom-Json }
