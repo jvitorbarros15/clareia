@@ -297,3 +297,24 @@ test('an installment with an inverted API net stays held for review',async t=>{
   const line=annualLine().replace(/;0$/,';1'),r=await setup(t,url=>url.endsWith('.zip')?annual([line]):invertedApi({parcela:1})(url));
   assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.cells[0].diagnostics?.apiSignCorrected,undefined);
 });
+test('the API sign rule never applies to airfare, mission or housing categories',async t=>{
+  for(const category of ['LOCAÇÃO OU FRETAMENTO DE AERONAVES','PASSAGEM AÉREA - RPA','PASSAGEM AÉREA - REEMBOLSO','PASSAGEM AÉREA - MISSÃO OFICIAL','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA','PASSAGEM AÉREA - SIGEPA']){
+    const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,category)]):invertedApi({tipoDespesa:category})(url));
+    assert.deepEqual(r.report.cells[0].reasons,['financial-normalization-failed'],category);assert.equal(r.report.cells[0].status,'held-review');
+  }
+});
+test('an inverted row with glosa null is not taken from the annual value',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?undefined:invertedApi({valorGlosa:null})(url));
+  assert.deepEqual(r.report.cells[0].reasons,['unreconciled-source-occurrences']);
+});
+test('a held month carries no API sign counter',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(),annualLine(1,1,'UNREVIEWED')]):invertedApi()(url));
+  assert.equal(r.report.cells[0].status,'held-review');assert.equal(r.report.cells[0].diagnostics?.apiSignCorrected,undefined);
+});
+test('an inverted row and a legitimate refund of the same value complete in either API order',async t=>{
+  const refund=annualLine(1,1,'COMBUSTÍVEIS','-10.21'),inverted=apiRow(1,{valorLiquido:-10.21}),legit=apiRow(1,{valorDocumento:-10.21,valorLiquido:-10.21});
+  for(const dados of [[inverted,legit],[legit,inverted]]){
+    const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(),refund]):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados,links:[]}:undefined);
+    const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.totalCents,0);assert.equal(c.diagnostics?.apiSignCorrected,1);
+  }
+});

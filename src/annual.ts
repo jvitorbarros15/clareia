@@ -21,13 +21,14 @@ export function unionRecords(annual:Expense[],api:Expense[]) {
 }
 // After the normal match, an API leftover with net = -document pairs with an annual leftover of the same key whose value equals the document; the API value is then taken from the annual file.
 export function pairApiSign(annual:Expense[],api:Expense[]):{api:Expense[];fixed:number}{
-  const key=(r:Expense,c=r.cents)=>canonical([r.personId,r.month,blank(r.documentId),r.category,c]),count=(rs:Expense[])=>rs.reduce((m,r)=>m.set(key(r),(m.get(key(r))??0)+1),new Map<string,number>());
-  const apiCount=count(api),spare=count(annual),taken=new Map<string,number>();
-  for(const [k,n] of apiCount){const t=Math.min(n,spare.get(k)??0);taken.set(k,t);spare.set(k,(spare.get(k)??0)-t);}
+  const key=(r:Expense,c=r.cents)=>canonical([r.personId,r.month,blank(r.documentId),r.category,c]),spare=new Map<string,number>(),credited=new Set<Expense>(),taken=new Map<string,number>();
+  const inverted=(r:Expense)=>!r.financialBasis&&invertedApiShape(r.documentCents,r.disallowedCents,r.cents,r.category);
+  for(const r of annual)spare.set(key(r),(spare.get(key(r))??0)+1);
+  for(const r of [...api.filter(r=>!inverted(r)),...api.filter(inverted)]){const k=key(r);if((spare.get(k)??0)>(taken.get(k)??0)){taken.set(k,(taken.get(k)??0)+1);credited.add(r);}}
+  for(const [k,n] of taken)spare.set(k,spare.get(k)!-n);
   let fixed=0;
   const out=api.map(r=>{
-    const k=key(r),t=taken.get(k)??0;if(t>0){taken.set(k,t-1);return r;}
-    if(r.financialBasis||!invertedApiShape(r.documentCents,r.disallowedCents,r.cents,r.category))return r;
+    if(credited.has(r)||!inverted(r))return r;
     const want=key(r,r.documentCents!),n=spare.get(want)??0;if(!n)return r;
     spare.set(want,n-1);fixed++;return {...r,cents:r.documentCents!};
   });

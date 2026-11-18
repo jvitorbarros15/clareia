@@ -217,3 +217,7 @@ test('an API-sign month adds its count to the version and leaves the sign-fix ac
     assert.deepEqual((await auditExpenseVersion(db,{...v,validation:{...v.validation,apiSignFix:{count:2}}},ls)).failures,['api-sign-count']);
   }finally{await db.close();}
 });
+test('a version without API-sign months has no apiSignFix key, so its content id is unchanged',()=>{
+  const v=buildExpenseVersion(lots(),history,'2026-11-09T12:00:00Z');
+  assert.equal('apiSignFix' in v.validation,false);assert.equal(v.id,snapshotId(v));
+});

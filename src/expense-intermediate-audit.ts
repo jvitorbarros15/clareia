@@ -44,7 +44,7 @@ export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csv
   return {id:occurrence,personId:id,year,month,category,supplier:identity.length===11?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,...(odd?{supplierIdOdd:true as const}:{}),documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};
 }
 // Written again on purpose; the collector's predicate is not imported.
-const inverted=(face:number,glosa:number|null,net:number,category:string)=>face>0&&(glosa===null||glosa===0)&&net===-face&&!/AEREA|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
+const inverted=(face:number,glosa:number|null,net:number,category:string)=>face>0&&glosa===0&&net===-face&&!/AERE|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
 // A blank document is 'Não informado' in the annual file and '' in the API.
 const blank=(s:string)=>s==='Não informado'?'':s;
 // Independent of markDuplicates: repeated rows stay published; identical ones get distinct ids by occurrence order.
@@ -167,12 +167,12 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
           const key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
           // Leftover-only rule: an API row with net = -document takes the annual value when an annual leftover has exactly that value.
           const taken=new Map<string,number>(),spare=new Map<string,number>(),tally=(m:Map<string,number>,k:string)=>m.set(k,(m.get(k)??0)+1);
-          for(const r of ar)tally(spare,key(r));for(const r of br){const k=key(r);if((spare.get(k)??0)>(taken.get(k)??0))tally(taken,k);}
+          for(const r of ar)tally(spare,key(r));const plain=(r:Expense)=>r.financialBasis||r.documentCents===null||!inverted(r.documentCents,r.disallowedCents,r.cents,r.category),credited=new Set<Expense>();
+          for(const r of [...br.filter(plain),...br.filter(r=>!plain(r))]){const k=key(r);if((spare.get(k)??0)>(taken.get(k)??0)){tally(taken,k);credited.add(r);}}
           for(const [k,n] of taken)spare.set(k,(spare.get(k)??0)-n);
-          let signFixed=0;const credit=new Map(taken);
-          br=br.map(r=>{const k=key(r);if((credit.get(k)??0)>0){credit.set(k,credit.get(k)!-1);return r;}
-            if(r.financialBasis||r.documentCents===null||!inverted(r.documentCents,r.disallowedCents,r.cents,r.category))return r;
-            const want=key({...r,cents:r.documentCents}),n=spare.get(want)??0;if(!n)return r;spare.set(want,n-1);signFixed++;return {...r,cents:r.documentCents};});
+          let signFixed=0;
+          br=br.map(r=>{if(credited.has(r)||plain(r))return r;
+            const face=r.documentCents!,want=key({...r,cents:face}),n=spare.get(want)??0;if(!n)return r;spare.set(want,n-1);signFixed++;return {...r,cents:face};});
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
           for(const r of ar){const list=pool.get(key(r));if(list?.length)matches.push({a:r,b:list.shift()!});else left.push(r);}
           const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right),...(signFixed?{apiSignCorrected:signFixed}:{})};
@@ -190,6 +190,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
     }
     // Lots collected before the id rule changed hold old ids for suppliers that are not verified CNPJs; everything else, the review flag included, is still compared.
     const financial=(rows:any[])=>rows.map(({id:_id,supplierKey:_key,...rest})=>rest.supplierVerified?{id:_id,supplierKey:_key,...rest}:rest);
+    if(diagnostics&&status!=='complete')diagnostics={annualOnly:diagnostics.annualOnly,apiOnly:diagnostics.apiOnly};
     if(canonical({status,reasons,records:financial(records),totalCents:total,diagnostics,dup:reasons.length?null:dup})!==canonical({status:c.status,reasons:c.reasons,records:financial(c.records),totalCents:c.totalCents,diagnostics:c.diagnostics,dup:c.duplicateReason??null}))fail('financial-records-coverage-or-union',c);
     if(total===null)allComplete=false;else grand+=BigInt(total);
   }
