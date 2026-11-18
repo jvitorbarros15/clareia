@@ -1,0 +1,264 @@
+openapi: 3.1.0
+info:
+  title: Clareia public API
+  version: 1.0.0
+  description: |
+    Read-only API over the active Clareia publication (CEAP expenses of Brazilian federal deputies).
+    Only GET and HEAD. Every successful response carries `publication`, the id of the publication folder it was read from.
+    Money is always an integer number of cents (int64), never a formatted string.
+
+    Things worth knowing before using the data:
+
+    - Expense records are served exactly as published (`Expense`). Key order is not guaranteed (the store is jsonb).
+    - `date` is null in every record whose `origin` is `annual` (about 8,400 records). Those records still have `month`.
+    - `month` is the competence month and `year` the competence year. The month or year inside `date` can differ from them
+      (about 16,700 records differ by month, about 1,000 by year). Filter by `month`, never by the month of `date`.
+      `date` has no time zone.
+    - Records whose supplier is not verified (`supplierVerified` false) have no `supplierKey` and often no `source.sha256`.
+    - `duplicateFlag: "possible"` marks records that look like duplicates of another record of the same person. It is a
+      hint, not a verdict, and the current publication may contain none.
+    - `cents` can be negative (refunds, glosa) or zero. That is not an error.
+    - A month the build holds back is `{"held": true, "cents": null, "reasons": [...]}`. It is null, not zero, and has no records.
+    - Deputies without published data (`withoutData`) answer 200 with an empty list on `/expenses`, not 404.
+    - `nextCursor` is opaque and tied to one publication. After the active publication changes, an old cursor answers 409.
+    - Responses carry `ETag` (publication + binary version + query hash) and `Cache-Control: public, max-age=300`;
+      `If-None-Match` answers 304.
+servers:
+  - url: http://127.0.0.1:8787
+paths:
+  /healthz:
+    get:
+      summary: Liveness plus the active publication
+      operationId: healthz
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Health'}}}}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/meta:
+    get:
+      summary: Identity and totals of the active publication
+      operationId: meta
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Meta'}}}}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/deputies:
+    get:
+      summary: List deputies
+      operationId: listDeputies
+      parameters:
+        - {name: uf, in: query, required: false, schema: {type: string, pattern: '^[A-Za-z]{2}$'}}
+        - {name: party, in: query, required: false, description: Case-insensitive match on `party` (the party of the period)., schema: {type: string, maxLength: 200}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/DeputyList'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+  /v1/deputies/{id}:
+    get:
+      summary: Deputy profile with months and categories
+      operationId: getDeputy
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/DeputyProfile'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /v1/deputies/{id}/expenses:
+    get:
+      summary: Expense records of one deputy, in publication order
+      operationId: listExpenses
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, minimum: 1}}
+        - {name: month, in: query, required: false, description: Competence month (the `month` field, not the month of `date`)., schema: {type: integer, minimum: 1, maximum: 12}}
+        - {name: category, in: query, required: false, description: Exact category text., schema: {type: string, maxLength: 200}}
+        - {name: cursor, in: query, required: false, description: '`nextCursor` of the previous page.', schema: {type: string}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 500, default: 100}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/ExpenseList'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+  /v1/expenses/{public_id}:
+    get:
+      summary: One expense record by its id
+      operationId: getExpense
+      parameters:
+        - {name: public_id, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{64}$'}}
+      responses:
+        '200': {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/ExpenseOne'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+components:
+  responses:
+    Error:
+      description: Error. 400 bad_request, 404 not_found, 405 method_not_allowed, 409 stale_cursor, 503 unavailable.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      additionalProperties: false
+      properties:
+        error: {type: string}
+        message: {type: string}
+    Health:
+      type: object
+      required: [status, publication]
+      additionalProperties: false
+      properties:
+        status: {type: string}
+        publication: {type: string}
+    Meta:
+      type: object
+      required: [publication, expensesVersion, domainVersions, publishedAt, totalCents, records, minMonths, ceiling, limitations, links]
+      additionalProperties: false
+      properties:
+        publication: {type: string, description: Publication folder id (12 hex).}
+        expensesVersion: {type: string, description: Version of the expenses data (64 hex). Different from `publication`.}
+        domainVersions: {type: object, additionalProperties: true}
+        publishedAt: {type: [string, 'null'], format: date-time}
+        totalCents: {type: integer}
+        records: {type: integer}
+        minMonths: {type: integer}
+        ceiling: {description: Raw ceiling per UF and month as published. Usage is not computed., type: [object, array, 'null']}
+        limitations: {description: Limitations as published., type: [object, array, 'null']}
+        links:
+          type: object
+          required: [methodology, corrections, openData]
+          additionalProperties: false
+          properties:
+            methodology: {type: string}
+            corrections: {type: string}
+            openData: {type: string}
+    Deputy:
+      type: object
+      required: [id, name, uf, ufNote, party, partyNote, partyInReview, lastConfirmedParty, currentParty, photoUrl, sourceUrl, comparable, exercisedMonths, noExercise, heldMonths, totalCents, records, withoutData]
+      additionalProperties: false
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        uf: {type: [string, 'null']}
+        ufNote: {type: [string, 'null']}
+        party: {type: [string, 'null']}
+        partyNote: {type: [string, 'null']}
+        partyInReview: {type: boolean}
+        lastConfirmedParty: {type: [string, 'null']}
+        currentParty: {type: [string, 'null']}
+        photoUrl: {type: [string, 'null']}
+        sourceUrl: {type: [string, 'null']}
+        comparable: {type: boolean}
+        exercisedMonths: {type: integer}
+        noExercise: {type: boolean}
+        heldMonths: {type: array, items: {type: integer}}
+        totalCents: {type: integer}
+        records: {type: integer}
+        withoutData: {type: boolean}
+    DeputyList:
+      type: object
+      required: [publication, deputies]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        deputies: {type: array, items: {$ref: '#/components/schemas/Deputy'}}
+    Month:
+      type: object
+      description: When `held` is true, `cents` is null and `reasons` is present.
+      required: [month, held, cents, records, exercise, party, partyStatus, partyValues, uf, ufStatus]
+      additionalProperties: false
+      properties:
+        month: {type: integer, minimum: 1, maximum: 12}
+        held: {type: boolean}
+        cents: {type: [integer, 'null']}
+        reasons: {type: array, items: {type: string}}
+        records: {type: integer}
+        exercise: {type: [string, 'null']}
+        party: {type: [string, 'null']}
+        partyStatus: {type: string}
+        partyValues: {type: array, items: {type: string}}
+        uf: {type: [string, 'null']}
+        ufStatus: {type: string}
+    Category:
+      type: object
+      required: [category, cents, records]
+      additionalProperties: false
+      properties:
+        category: {type: string}
+        cents: {type: integer}
+        records: {type: integer}
+    DeputyProfile:
+      type: object
+      required: [publication, id, name, uf, ufNote, party, partyNote, partyInReview, lastConfirmedParty, currentParty, photoUrl, sourceUrl, comparable, exercisedMonths, noExercise, heldMonths, totalCents, records, withoutData, months, categories]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        id: {type: integer}
+        name: {type: string}
+        uf: {type: [string, 'null']}
+        ufNote: {type: [string, 'null']}
+        party: {type: [string, 'null']}
+        partyNote: {type: [string, 'null']}
+        partyInReview: {type: boolean}
+        lastConfirmedParty: {type: [string, 'null']}
+        currentParty: {type: [string, 'null']}
+        photoUrl: {type: [string, 'null']}
+        sourceUrl: {type: [string, 'null']}
+        comparable: {type: boolean}
+        exercisedMonths: {type: integer}
+        noExercise: {type: boolean}
+        heldMonths: {type: array, items: {type: integer}}
+        totalCents: {type: integer}
+        records: {type: integer}
+        withoutData: {type: boolean}
+        months: {type: array, items: {$ref: '#/components/schemas/Month'}}
+        categories: {type: array, items: {$ref: '#/components/schemas/Category'}}
+    Expense:
+      type: object
+      description: The published record, unchanged. Negative and zero `cents` are valid.
+      required: [id, lot, date, year, cents, month, origin, source, receipt, category, personId, supplier, documentId, documentCents, documentNumber, disallowedCents, supplierVerified]
+      additionalProperties: false
+      properties:
+        id: {type: string}
+        lot: {type: string}
+        date: {type: [string, 'null'], description: 'Local time, no zone. Null for origin "annual".'}
+        year: {type: integer}
+        cents: {type: integer}
+        month: {type: integer, minimum: 1, maximum: 12}
+        origin: {type: string, enum: [both, annual, api]}
+        source:
+          type: object
+          required: [row, url, fetchedAt]
+          additionalProperties: false
+          properties:
+            row: {type: integer}
+            url: {type: string}
+            sha256: {type: string, description: Absent in records with an unverified supplier.}
+            fetchedAt: {type: string}
+        receipt: {type: [string, 'null']}
+        category: {type: string}
+        personId: {type: integer}
+        supplier: {type: string}
+        supplierLabel: {type: string}
+        supplierKey: {type: string, description: Absent when `supplierVerified` is false.}
+        supplierVerified: {type: boolean}
+        supplierIdOdd: {type: boolean}
+        documentId: {type: string}
+        documentCents: {type: [integer, 'null']}
+        documentNumber: {type: string}
+        disallowedCents: {type: [integer, 'null']}
+        note: {type: string}
+        sourceCents: {type: integer}
+        financialBasis: {type: string}
+        duplicateFlag: {type: string, enum: [possible]}
+    ExpenseList:
+      type: object
+      required: [publication, deputyId, expenses, nextCursor]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        deputyId: {type: integer}
+        expenses: {type: array, items: {$ref: '#/components/schemas/Expense'}}
+        nextCursor: {type: [string, 'null'], description: Null on the last page.}
+    ExpenseOne:
+      type: object
+      required: [publication, expense]
+      additionalProperties: false
+      properties:
+        publication: {type: string}
+        expense: {$ref: '#/components/schemas/Expense'}
