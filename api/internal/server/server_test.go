@@ -1,7 +1,15 @@
 package server_test
 
 import (
+	"context"
+	"encoding/base64"
+	"fmt"
+	"io"
+	"sync"
+	"sync/atomic"
+
 	"encoding/json"
+	"github.com/jvitorbarros15/clareia/api/internal/loader"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -182,6 +190,7 @@ func TestErrors(t *testing.T) {
 		{"GET", "/v1/deputies/" + dep493 + "/expenses?limit=0", 400, "bad_request"},
 		{"GET", "/v1/deputies/" + dep493 + "/expenses?month=13", 400, "bad_request"},
 		{"GET", "/v1/deputies/" + dep493 + "/expenses?cursor=lixo", 400, "bad_request"},
+		{"GET", "/v1/deputies/" + dep493 + "/expenses?cursor=" + base64.RawURLEncoding.EncodeToString([]byte("aaaaaaaaaaaa:99999999999")), 400, "bad_request"},
 		{"GET", "/v1/expenses/curto", 400, "bad_request"},
 		{"POST", "/v1/meta", 405, "method_not_allowed"},
 		{"DELETE", "/v1/deputies/" + dep493, 405, "method_not_allowed"},
@@ -255,5 +264,70 @@ func TestStaleCursorAndPublicationSwitch(t *testing.T) {
 	}
 	if n := e.do(t, "GET", "/v1/deputies/"+dep493+"/expenses?limit=10", "If-None-Match", oldTag); n.status != 200 {
 		t.Fatalf("ETag de outra publicação não pode dar 304, veio %d", n.status)
+	}
+}
+
+func TestPublicationSwitchUnderConcurrentRequests(t *testing.T) {
+	e, a := loaded(t)
+	b := "bbbbbbbbbbbb"
+	e.load(t, fixtureCopy(t, b, "2099-01-01T00:00:00Z"))
+	paths := []string{"/v1/deputies/" + dep180, "/v1/deputies/" + dep493 + "/expenses?limit=500", "/v1/deputies", "/v1/meta"}
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	var bad atomic.Int64
+	var total atomic.Int64
+	var first atomic.Value
+	for g := 0; g < 8; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := g; ; i++ {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				req, _ := http.NewRequest(http.MethodGet, e.url+paths[i%len(paths)], nil)
+				res, err := http.DefaultClient.Do(req)
+				if err != nil {
+					bad.Add(1)
+					first.CompareAndSwap(nil, err.Error())
+					continue
+				}
+				body, _ := io.ReadAll(res.Body)
+				res.Body.Close()
+				total.Add(1)
+				var m map[string]any
+				_ = json.Unmarshal(body, &m)
+				if res.StatusCode != 200 || (m["publication"] != a && m["publication"] != b) {
+					bad.Add(1)
+					first.CompareAndSwap(nil, fmt.Sprintf("%d %s", res.StatusCode, body))
+				}
+			}
+		}(g)
+	}
+	for i := 0; i < 20; i++ {
+		if _, err := loader.Rollback(context.Background(), e.conn, e.opts); err != nil {
+			close(stop)
+			wg.Wait()
+			t.Fatalf("troca %d falhou: %v", i, err)
+		}
+	}
+	close(stop)
+	wg.Wait()
+	if bad.Load() != 0 {
+		t.Fatalf("%d de %d respostas erradas durante as trocas; primeira: %v", bad.Load(), total.Load(), first.Load())
+	}
+	t.Logf("%d requisições, 20 trocas, 0 erros", total.Load())
+}
+
+func TestIfNoneMatchStarAndHealthzCaching(t *testing.T) {
+	e, _ := loaded(t)
+	if r := e.do(t, "GET", "/v1/deputies/999999999", "If-None-Match", "*"); r.status != 404 {
+		t.Fatalf("If-None-Match * não pode dar 304 antes da validação, veio %d", r.status)
+	}
+	h := e.get(t, "/healthz")
+	if h.header.Get("ETag") != "" || h.header.Get("Cache-Control") != "no-store" {
+		t.Fatalf("healthz deve ser no-store e sem ETag: %v", h.header)
 	}
 }
