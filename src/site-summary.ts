@@ -30,7 +30,7 @@ function cellsOf(rows:Expense[],categoryIndex:Map<string,number>):Cell[]{
 // Zero is only a fact for someone in office: without confirmed exercise there is nothing to compare. Held months are 1-based.
 export function rankingFieldsOf(months:MonthSummary[],coverageId:string|null,records:number,scopeMonths:number,minMonths:number){
   const exercisedMonths=coverageId?months.filter(m=>m.exercise!=='outside'||m.records>0).length:scopeMonths;
-  const noExercise=!coverageId||records>0?false:months.length>0&&months.every(m=>!m.exercise||['unknown','outside','conflict'].includes(m.exercise));
+  const noExercise=!coverageId||records>0||months.some(m=>m.held)?false:months.length>0&&months.every(m=>!m.exercise||['unknown','outside','conflict'].includes(m.exercise));
   const heldMonths=months.filter(m=>m.held).map(m=>m.month);
   return {exercisedMonths,noExercise,heldMonths,comparable:!noExercise&&!heldMonths.length&&exercisedMonths>=minMonths};
 }
