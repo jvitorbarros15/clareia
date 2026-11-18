@@ -1,0 +1,2 @@
+﻿deputies.deputies_pkey
+publication.publication_pkey

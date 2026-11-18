@@ -18,6 +18,8 @@ func TestChecksCatchTamperedRows(t *testing.T) {
 		{"public_id diferente do record", `UPDATE expenses SET public_id = 'zzzz' WHERE ` + first, "colunas de filtro = record", true},
 		{"verificado sem supplier_key", `UPDATE expenses SET supplier_key = NULL WHERE ctid = (SELECT ctid FROM expenses WHERE verified LIMIT 1)`, "colunas de filtro = record", false},
 		{"verified diferente do record", `UPDATE expenses SET verified = NOT verified WHERE ctid = (SELECT ctid FROM expenses WHERE NOT verified LIMIT 1)`, "colunas de filtro = record", false},
+		{"total de fornecedor adulterado na tabela suppliers", `UPDATE suppliers SET total_cents = total_cents + 1 WHERE label = (SELECT min(label) FROM suppliers)`, "tabela suppliers = células agrupadas", true},
+		{"fornecedor a menos na tabela suppliers", `DELETE FROM suppliers WHERE label = (SELECT min(label) FROM suppliers)`, "tabela suppliers = células agrupadas", false},
 		{"mês retido com registros", `UPDATE deputy_months SET records = 3 WHERE held`, "total por pessoa e mês", true},
 	}
 	for _, c := range cases {

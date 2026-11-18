@@ -76,6 +76,7 @@ cd api; go run -ldflags "-X main.version=<versão>" ./cmd/server     # escuta em
 - Só GET e HEAD; outros métodos dão 405. Erros são `{error, message}`. Todo corpo traz `publication`.
 - O servidor lê só as views `api.*`: ao ativar outra publicação (ou `--rollback`) ele passa a servir a nova sem reiniciar. Cursor de outra publicação dá 409.
 - `ETag` = publicação + versão do binário (`-X main.version`) + hash da query; `If-None-Match` dá 304. `Cache-Control: public, max-age=300`.
+- Ordem de atualização: rode o carregador (`load.ps1 <pasta da publicação ativa>`, mesmo que seja no-op) antes de subir um servidor novo. O servidor lê `api.suppliers`; sem essa view, `/v1/suppliers` responde 500. O no-op cria e confere `pub_<id>.suppliers` em publicações já carregadas e `--rollback` faz o mesmo na anterior. Se a conferência acusar divergência, apague `pub_<id>.suppliers` e rode a carga da pasta de novo.
 - Contrato e peculiaridades dos dados: `api/openapi.yaml` (conferido por `TestOpenAPIMatchesServer`).
 
 ## Fornecedores e categorias

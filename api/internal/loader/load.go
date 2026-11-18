@@ -80,6 +80,9 @@ func Load(ctx context.Context, conn *pgx.Conn, dir string, o Options) (*Report, 
 		if err := ensureIndexes(ctx, conn, pub.FolderID); err != nil {
 			return nil, fmt.Errorf("índice de pub_%s: %w", pub.FolderID, err)
 		}
+		if err := ensureSuppliers(ctx, conn, pub.FolderID, state, o); err != nil {
+			return nil, fmt.Errorf("tabela suppliers de pub_%s: %w", pub.FolderID, err)
+		}
 	}
 	// A schema exists only if its load committed with every check passed, so it is never dropped or reloaded.
 	switch {
@@ -253,9 +256,17 @@ func insertAll(ctx context.Context, tx pgx.Tx, pub *Publication, schema string) 
 	if err := copyRows("supplier_cells", []string{"deputy_id", "month", "category", "label", "supplier_key", "cents", "records"}, cells); err != nil {
 		return fmt.Errorf("supplier_cells: %w", err)
 	}
-	_, err := tx.Exec(ctx, sqlFillSupplierKeys)
+	if _, err := tx.Exec(ctx, sqlFillSupplierKeys); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, sqlFillSuppliers)
 	return err
 }
+
+const sqlFillSuppliers = `
+INSERT INTO suppliers
+SELECT label, supplier_key, supplier_key IS NOT NULL, sum(cents)::bigint, sum(records)::bigint, count(DISTINCT deputy_id)::int
+FROM supplier_cells GROUP BY label, supplier_key`
 
 // A label is one supplier: the key of its verified records. Unverified labels keep a NULL key.
 const sqlFillSupplierKeys = `
@@ -294,4 +305,60 @@ const maxLabelBytes = 137
 func ensureIndexes(ctx context.Context, conn *pgx.Conn, folderID string) error {
 	_, err := conn.Exec(ctx, `CREATE INDEX IF NOT EXISTS supplier_cells_supplier_key_idx ON `+schemaOf(folderID)+`.supplier_cells (supplier_key)`)
 	return err
+}
+
+// The suppliers table was added after the first publication was loaded. For an existing schema this creates and fills it from supplier_cells,
+// verifies it against them, and (if the publication is the active one) exposes it through api.suppliers, all in one transaction. Idempotent.
+func ensureSuppliers(ctx context.Context, conn *pgx.Conn, folderID string, state *string, o Options) error {
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := ensureSuppliersTx(ctx, tx, folderID, state, o); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// Same as ensureSuppliers inside the caller's transaction (Rollback uses it before it repoints the views to an older publication).
+func ensureSuppliersTx(ctx context.Context, tx pgx.Tx, folderID string, state *string, o Options) error {
+	schema := schemaOf(folderID)
+	if _, err := tx.Exec(ctx, `SELECT set_config('search_path', $1, true)`, schema); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, ddlSuppliers); err != nil {
+		return err
+	}
+	var n int64
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM suppliers`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		if _, err := tx.Exec(ctx, sqlFillSuppliers); err != nil {
+			return err
+		}
+	}
+	var bad int64
+	if err := tx.QueryRow(ctx, sqlSuppliersTable).Scan(&bad); err != nil {
+		return err
+	}
+	if bad != 0 {
+		return fmt.Errorf("%d fornecedores divergentes de supplier_cells: se a tabela foi alterada à mão, apague pub_%s.suppliers (DROP TABLE) e rode a carga da pasta de novo para refazê-la", bad, folderID)
+	}
+	if state != nil && *state == "active" {
+		var has bool
+		if err := tx.QueryRow(ctx, `SELECT to_regclass('api.suppliers') IS NOT NULL`).Scan(&has); err != nil {
+			return err
+		}
+		if !has {
+			if _, err := tx.Exec(ctx, fmt.Sprintf(`CREATE VIEW api.suppliers AS SELECT * FROM %s.suppliers`, schema)); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, fmt.Sprintf(`GRANT SELECT ON api.suppliers TO %s`, pgx.Identifier{roleOf(o)}.Sanitize())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

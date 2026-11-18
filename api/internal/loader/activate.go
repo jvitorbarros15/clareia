@@ -129,7 +129,7 @@ func repoint(ctx context.Context, tx pgx.Tx, id string, o Options) error {
 		}
 	}
 	var stmt string
-	err := tx.QueryRow(ctx, `SELECT format('GRANT USAGE ON SCHEMA api TO %I; GRANT SELECT ON api.expenses, api.deputies, api.deputy_months, api.deputy_categories, api.supplier_cells, api.publication TO %I', $1::text, $1::text)`, roleOf(o)).Scan(&stmt)
+	err := tx.QueryRow(ctx, `SELECT format('GRANT USAGE ON SCHEMA api TO %I; GRANT SELECT ON api.expenses, api.deputies, api.deputy_months, api.deputy_categories, api.supplier_cells, api.suppliers, api.publication TO %I', $1::text, $1::text)`, roleOf(o)).Scan(&stmt)
 	if err != nil {
 		return err
 	}
@@ -192,6 +192,9 @@ func Rollback(ctx context.Context, conn *pgx.Conn, o Options) (string, error) {
 			return "", errors.New("não há publicação anterior para voltar (ausente ou revogada)")
 		}
 		return "", err
+	}
+	if err := ensureSuppliersTx(ctx, tx, prev, nil, o); err != nil {
+		return "", fmt.Errorf("tabela suppliers de pub_%s: %w", prev, err)
 	}
 	if err := repoint(ctx, tx, prev, o); err != nil {
 		return "", err
