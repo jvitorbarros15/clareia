@@ -4,19 +4,21 @@ import {spawn} from 'node:child_process';
 import {smokeSite} from '../src/site-smoke.ts';
 import {createApp} from '../src/app.ts';
 
-const WRANGLER='wrangler@4.160.0',OUT='build/site',TEST_WORKER='clareia',DEFAULT_URL='https://clareia.clareia.workers.dev';
+const WRANGLER='wrangler',OUT='build/site',TEST_WORKER='clareia',DEFAULT_URL='https://clareia.clareia.workers.dev';
 const args=process.argv.slice(2),value=(name:string)=>{const i=args.indexOf(name);return i<0?'':args[i+1]??'';};
-if(args.includes('--help')){console.log(`npm run deploy:test -- --portraits PASTA [--data-root data] [--ceiling-root data] [--config config/full-site.json] [--skip-verify-ui] [--share-images] [--known ARQUIVO] [--url URL] [--allow-missing-portraits (não vale com --yes)] [--dry-run | --yes]\nMonta o site completo em ${OUT}, procura CPF, confere os valores no navegador e só então publica com ${WRANGLER}. Qualquer etapa que falhar interrompe a cadeia. Sem --yes nada é publicado; --dry-run roda o wrangler sem publicar (não combina com --yes). Depois de publicar, o passo 5 confere o site em --url (padrão ${DEFAULT_URL}) e, se algo falhar, mostra como voltar à versão anterior. --known repassa ao scan:cpf um arquivo local de CPFs conhecidos. verify:ui roda por padrão depois de verify:browser; --skip-verify-ui pula essa suíte.`);process.exit(0);}
+if(args.includes('--help')){console.log(`npm run deploy:test -- --portraits PASTA [--data-root data] [--ceiling-root data] [--config config/full-site.json] [--skip-verify-ui] [--share-images] [--known ARQUIVO] [--url URL] [--allow-missing-portraits (não vale com --yes)] [--dry-run | --yes]\nMonta o site completo em ${OUT}, procura CPF, confere os valores no navegador e só então publica com o ${WRANGLER} da lockfile. Qualquer etapa que falhar interrompe a cadeia. Sem --yes nada é publicado; --dry-run roda o wrangler sem publicar (não combina com --yes). Depois de publicar, o passo 5 confere o site em --url (padrão ${DEFAULT_URL}) e, se algo falhar, mostra como voltar à versão anterior. --known repassa ao scan:cpf um arquivo local de CPFs conhecidos. verify:ui roda por padrão depois de verify:browser; --skip-verify-ui pula essa suíte.`);process.exit(0);}
 for(let i=0;i<args.length;i++){if(['--yes','--dry-run','--skip-verify-ui','--allow-missing-portraits','--share-images'].includes(args[i]))continue;if(['--portraits','--data-root','--ceiling-root','--config','--known','--url'].includes(args[i])&&args[i+1]){i++;continue;}throw new Error('Argumento inválido');}
 const portraits=value('--portraits');if(!portraits)throw new Error('Informe --portraits');
 if(args.includes('--yes')&&args.includes('--dry-run'))throw new Error('--yes e --dry-run não podem ser usados juntos');
 if(args.includes('--yes')&&args.includes('--allow-missing-portraits'))throw new Error('--allow-missing-portraits não pode ser usado com --yes');
 const passthrough=['--data-root','--ceiling-root','--config'].flatMap(f=>value(f)?[f,value(f)]:[]);
-// Paths may contain spaces, so only the fixed npx call goes through a shell.
-const run=(label:string,command:string,commandArgs:string[],env:Record<string,string>={},shell=false)=>new Promise<void>((resolve,reject)=>{
+const run=(label:string,command:string,commandArgs:string[],env:Record<string,string>={},childEnv:NodeJS.ProcessEnv=process.env)=>new Promise<void>((resolve,reject)=>{
   console.log(`\n== ${label}`);
-  spawn(command,commandArgs,{stdio:'inherit',shell,env:{...process.env,...env}}).on('exit',code=>code===0?resolve():reject(new Error(`${label} falhou (código ${code})`)));
+  spawn(command,commandArgs,{stdio:'inherit',env:{...childEnv,...env}}).on('exit',code=>code===0?resolve():reject(new Error(`${label} falhou (código ${code})`)));
 });
+// wrangler runs from the lockfile and only sees what it needs to find node, its config and the Cloudflare credentials.
+const WRANGLER_ENV=Object.fromEntries(Object.entries(process.env).filter(([k])=>['PATH','Path','SYSTEMROOT','SystemRoot','APPDATA','LOCALAPPDATA','USERPROFILE','HOME','TEMP','TMP','TMPDIR','HTTPS_PROXY','HTTP_PROXY','NO_PROXY'].includes(k)||k.startsWith('CLOUDFLARE_'))) as NodeJS.ProcessEnv;
+const wranglerBin=path.resolve('node_modules','wrangler','bin','wrangler.js');
 const node=process.execPath,tsx=(script:string,...rest:string[])=>['--import','tsx','--max-old-space-size=8192',script,...rest];
 await run('1/5 build do site completo',node,tsx('scripts/build-full-site.ts','--out',OUT,'--portraits',portraits,'--noindex',...value('--url')?['--site-url',value('--url')]:[],...passthrough,...args.includes('--allow-missing-portraits')?['--allow-missing-portraits']:[],...args.includes('--share-images')?['--share-images']:[]));
 const wranglerName=JSON.parse((await fs.readFile('wrangler.jsonc','utf8')).replace(/^\s*\/\/.*$/gm,'')).name;
@@ -31,7 +33,7 @@ try{
 const manifest=JSON.parse(await fs.readFile(path.join(OUT,'manifest.json'),'utf8')),wrangler=JSON.parse((await fs.readFile('wrangler.jsonc','utf8')).replace(/^\s*\/\/.*$/gm,''));
 console.log(`\nSerá publicado: Worker "${wrangler.name}" com os arquivos de ${path.resolve(OUT)}\n  dados: ${manifest.base}\n${Object.entries(manifest.domains as Record<string,{version:string}>).map(([d,v])=>`  ${d}: ${v.version.slice(0,12)}`).join('\n')}`);
 if(!args.includes('--yes')&&!args.includes('--dry-run')){console.error('\nNada foi publicado. Confirme com --yes (ou use --dry-run para só simular).');process.exit(1);}
-await run(args.includes('--yes')?'4/5 wrangler deploy':'4/5 wrangler deploy --dry-run','npx',['--yes',WRANGLER,'deploy',...args.includes('--yes')?[]:['--dry-run']],{},true);
+await run(args.includes('--yes')?'4/5 wrangler deploy':'4/5 wrangler deploy --dry-run',node,[wranglerBin,'deploy',...args.includes('--yes')?[]:['--dry-run']],{},WRANGLER_ENV);
 if(!args.includes('--yes'))process.exit(0);
 const site=value('--url')||DEFAULT_URL;
 console.log(`\n== 5/5 conferência do site publicado em ${site}`);
@@ -43,7 +45,7 @@ for(let attempt=1;attempt<=6;attempt++){
 }
 if(failures.length){
   console.error(`\nA publicação NÃO passou na conferência:\n${failures.map(f=>'  - '+f).join('\n')}`);
-  console.error(`\nPara voltar à versão anterior:\n  npx ${WRANGLER} deployments list\n  npx ${WRANGLER} versions list\n  npx ${WRANGLER} rollback [version-id]`);
+  console.error(`\nPara voltar à versão anterior:\n  npx --no-install wrangler deployments list\n  npx --no-install wrangler versions list\n  npx --no-install wrangler rollback [version-id]`);
   process.exit(1);
 }
 console.log('Site publicado e conferido.');
