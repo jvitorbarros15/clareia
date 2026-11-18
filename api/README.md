@@ -1,6 +1,6 @@
-# API pública do Clareia: carga (Fase 1)
+# API pública do Clareia: carga (Fase 1) e servidor (Fase 2)
 
-Só o carregador. Ainda não há servidor HTTP. Plano: `agents/API-PUBLICA-PLANO-2026-11-17.md`.
+Carregador e servidor HTTP somente leitura (`/healthz`, `/v1/meta`, `/v1/deputies`, `/v1/deputies/{id}`, `/v1/deputies/{id}/expenses`, `/v1/expenses/{public_id}`). Fornecedores e categorias ficam para a Fase 3. Plano: `agents/API-PUBLICA-PLANO-2026-11-17.md`.
 
 ## Postgres local
 
@@ -64,6 +64,32 @@ Se a nova publicação retira algo da anterior (nome retido, CPF, registro), rev
 ## Papel somente-leitura
 
 `clareia_api_ro`: `SELECT` só nas views `api.*`, sem `TEMPORARY`, `default_transaction_read_only = on`, `statement_timeout = 15s`. O `--setup` também tira do `PUBLIC` o `CONNECT` em `postgres` e `template1` e a execução de `lo_create`, `lo_creat` e `lo_from_bytea`.
+
+## Servidor
+
+```
+$env:CLAREIA_API_RO_DSN = "postgres://clareia_api_ro:<senha>@127.0.0.1:54433/clareia_api"
+cd api; go run -ldflags "-X main.version=<versão>" ./cmd/server     # escuta em 127.0.0.1:8787
+```
+
+- `CLAREIA_API_RO_DSN`: DSN do papel `clareia_api_ro` (a senha nunca é logada). `CLAREIA_API_PORT`: porta, padrão 8787. Escuta só em `127.0.0.1`.
+- Só GET e HEAD; outros métodos dão 405. Erros são `{error, message}`. Todo corpo traz `publication`.
+- O servidor lê só as views `api.*`: ao ativar outra publicação (ou `--rollback`) ele passa a servir a nova sem reiniciar. Cursor de outra publicação dá 409.
+- `ETag` = publicação + versão do binário (`-X main.version`) + hash da query; `If-None-Match` dá 304. `Cache-Control: public, max-age=300`.
+- Contrato e peculiaridades dos dados: `api/openapi.yaml` (conferido por `TestOpenAPIMatchesServer`).
+
+## Teste de contrato contra a publicação real (local, fora da CI)
+
+Percorre `/expenses` de todos os deputados da publicação ativa e exige registros idênticos aos `despesas.json` da pasta, na mesma ordem, perfis iguais ao `summary.json` (mês retido = `cents` null) e lista vazia para os `withoutData`.
+
+```
+$env:CLAREIA_API_CONTRACT = "1"
+$env:CLAREIA_API_RO_DSN = "postgres://clareia_api_ro:<senha>@127.0.0.1:54433/clareia_api"
+$env:CLAREIA_API_CONTRACT_DATA = "<pasta data\<id> da publicação ativa>"
+$env:CLAREIA_API_CONTRACT_DUMP = "<pasta temporária>"     # opcional: guarda todas as respostas
+cd api; go test -count=1 -v -run Contract ./internal/server
+npm run scan:cpf -- <pasta temporária>                    # na raiz do repo; depois apague a pasta
+```
 
 ## Testes
 

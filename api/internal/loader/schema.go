@@ -82,8 +82,8 @@ CREATE INDEX ON expenses (supplier_key);
 CREATE INDEX ON supplier_cells (label);
 `
 
-// Tables the api views point to.
-var apiTables = []string{"expenses", "deputies", "deputy_months", "deputy_categories", "supplier_cells", "publication"}
+// Tables the api views point to. publication goes first: requests hold a lock on api.publication, so activation waits for them before it touches any other view (the reverse order deadlocks).
+var apiTables = []string{"publication", "expenses", "deputies", "deputy_months", "deputy_categories", "supplier_cells"}
 
 const ddlAPI = `
 CREATE SCHEMA IF NOT EXISTS api;

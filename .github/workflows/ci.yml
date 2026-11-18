@@ -65,5 +65,7 @@ jobs:
       - run: npm run scan:cpf -- api/testdata
       - run: go vet ./...
         working-directory: api
+      - run: go build -o /dev/null ./cmd/server
+        working-directory: api
       - run: go test -count=1 ./...
         working-directory: api
