@@ -103,7 +103,7 @@ npm run scan:cpf -- <pasta temporária>                    # na raiz do repo; de
 
 ```
 $env:CLAREIA_API_TEST_DSN = "postgres://<dono>:<senha>@127.0.0.1:54433/clareia_api"
-cd api; go vet ./...; go test ./...
+cd api; go vet ./...; go test -p 1 ./...
 ```
 
 Sem `CLAREIA_API_TEST_DSN` ou sem `npx`, os testes são pulados localmente e **falham quando `CI` está definido** (o GitHub Actions define). Cada teste cria e apaga o próprio banco e o próprio papel, sem mexer em `clareia_api`. Os testes das recusas e do portão precisam de Node.
