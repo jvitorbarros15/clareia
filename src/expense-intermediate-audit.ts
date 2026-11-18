@@ -14,8 +14,13 @@ import type {PortalCheck} from './cota-portal.ts';
 type RawRow={raw:any;row:number;source:ExpenseSource};
 const digest=(rows:unknown[])=>hash(rows.map(canonical).sort().join('\n'));
 const amount=(value:unknown)=>{const text=String(value).trim().replace(',','.');if(!/^-?\d+(\.\d{1,2})?$/.test(text))throw Error();const [whole,part='']=text.replace('-','').split('.'),n=(BigInt(whole)*100n+BigInt(part.padEnd(2,'0')))*(text.startsWith('-')?-1n:1n);if(n>BigInt(Number.MAX_SAFE_INTEGER)||n<BigInt(Number.MIN_SAFE_INTEGER))throw Error();return Number(n);};
+const cpfDigits=(s:string)=>{
+  if(!/^\d{11}$/.test(s)||/^(\d)\1+$/.test(s))return false;
+  return [9,10].every(size=>{const rest=[...s.slice(0,size)].reduce((n,c,i)=>n+Number(c)*(size+1-i),0)*10%11;return (rest===10?0:rest)===Number(s[size]);});
+};
 const verifiedCnpj=(s:string)=>{
   if(!/^\d{14}$/.test(s)||/^(\d)\1+$/.test(s))return false;
+  if(s.startsWith('000')&&cpfDigits(s.slice(3))&&!/^000\d{5}000[1-9]\d{2}$/.test(s))return false;
   for(const [size,weights] of [[12,[5,4,3,2,9,8,7,6,5,4,3,2]],[13,[6,5,4,3,2,9,8,7,6,5,4,3,2]]] as const){const remainder=weights.reduce((sum,w,i)=>sum+Number(s[i])*w,0)%11;if(Number(s[size])!==(remainder<2?0:11-remainder))return false;}return true;
 };
 export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csvHash?:string,basis?:FinancialBasis):Expense{
@@ -32,8 +37,8 @@ export function project(row:RawRow,id:number,scope:Scope,kind:'annual'|'api',csv
   const category=annual?r.txtDescricao:r.tipoDespesa;if(typeof category!=='string'||!category.trim())throw Error();
   const money=(field:string)=>annual&&!r[field]?.trim()||!annual&&field==='valorGlosa'&&r[field]===null?null:amount(r[field]);
   const net=money(annual?'vlrLiquido':'valorLiquido'),face=money(annual?'vlrDocumento':'valorDocumento'),glosa=money(annual?'vlrGlosa':'valorGlosa');if(net===null||face!==null&&glosa!==null&&face-glosa!==net&&!basis)throw Error();
-  const identity=String((annual?r.txtCNPJCPF:r.cnpjCpfFornecedor)||'').replace(/\D/g,''),verified=verifiedCnpj(identity),odd=identity.length>0&&identity.length!==11&&!verified;
-  const name=String((annual?r.txtFornecedor:r.nomeFornecedor)||'Fornecedor não informado').replace(/(?<![\d./-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
+  const identity=String((annual?r.txtCNPJCPF:r.cnpjCpfFornecedor)||'').replace(/\D/g,''),verified=verifiedCnpj(identity),odd=identity.length>0&&identity.length!==11&&(!verified||identity.length===14&&identity.startsWith('000')&&cpfDigits(identity.slice(3)));
+  const name=String((annual?r.txtFornecedor:r.nomeFornecedor)||'Fornecedor não informado').replace(/(?<![\d./])\d{3}[.  -]{0,2}\d{3}[.  -]{0,2}\d{3}[-–./  ]{0,3}\d{2}(?![\d/])/g,m=>/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/.test(m)||cpfDigits(m.replace(/\D/g,''))?'[CPF oculto]':m);
   let receipt:string|null=null;try{const url=new URL(annual?r.urlDocumento:r.urlDocumento);if(identity.length!==11&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&(url.hostname==='camara.leg.br'||url.hostname.endsWith('.camara.leg.br'))){url.protocol='https:';receipt=url.href;}}catch{}
   const occurrence=hash(canonical({personId:id,raw:verified?r:{...r,[annual?'txtCNPJCPF':'cnpjCpfFornecedor']:null,[annual?'txtFornecedor':'nomeFornecedor']:null}}));
   return {id:occurrence,personId:id,year,month,category,supplier:identity.length===11?'Fornecedor pessoa física':name,supplierKey:verified?hash('cnpj:'+identity):occurrence,supplierVerified:verified,...(odd?{supplierIdOdd:true as const}:{}),documentId:annual?r.ideDocumento||'Não informado':r.codDocumento===null?'':String(r.codDocumento),documentNumber:annual?r.txtNumero||'Não informado':r.numDocumento,date:annual?r.datEmissao||null:r.dataDocumento,lot:annual?r.numLote||'':r.codLote===null?'':String(r.codLote),receipt,cents:net,documentCents:face,disallowedCents:glosa,source:{url:row.source.url,sha256:annual?csvHash!:row.source.sha256,row:row.row,fetchedAt:row.source.fetchedAt},...(basis?{financialBasis:basis}:{})};

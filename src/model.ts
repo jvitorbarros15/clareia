@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { validCpf } from './cpf-scan.ts';
 
 export const BASE = 'https://dadosabertos.camara.leg.br/api/v2';
 export const hash = (text: string | Uint8Array) => createHash('sha256').update(text).digest('hex');
@@ -21,10 +22,12 @@ export function snapshotId(snapshot:object):string{
   return hash(canonical({schema:SNAPSHOT_SCHEMA,body:withoutCaptureTimes(body)}));
 }
 // Some suppliers are individuals with a CPF inside the trade name; it never reaches a published record.
-export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d/])/g,'[CPF oculto]');
+const PLAIN_CPF=/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/;
+// The usual forms are masked whatever their check digits; the extra separators (spaces, NBSP, en dash, "/") only count with a valid CPF checksum, so ordinary numbers in a name survive.
+export const maskPersonalId=(name:string)=>name.replace(/(?<![\d./])\d{3}[.  -]{0,2}\d{3}[.  -]{0,2}\d{3}[-–./  ]{0,3}\d{2}(?![\d/])/g,m=>PLAIN_CPF.test(m)||validCpf(m.replace(/\D/g,''))?'[CPF oculto]':m);
 // An individual paid by the quota is not a public figure: the name stays out until a legal opinion says otherwise.
 // 11 digits is a CPF. Any other id that is not a valid CNPJ (short, padded, letters stripped) is flagged for review; the build decides whether its name stays public.
-export const oddId=(id:string)=>id.length>0&&id.length!==11&&!validCnpj(id);
+export const oddId=(id:string)=>id.length>0&&id.length!==11&&(!validCnpj(id)||id.length===14&&id.startsWith('000')&&validCpf(id.slice(3)));
 // The occurrence id is an unsalted hash, so for anyone but a verified CNPJ the supplier id and name stay out of it: a guessed name would otherwise let the ~10^9 CPFs be tried against the published id.
 export function occurrenceId(personId:number,raw:Record<string,unknown>,verified:boolean,idField:string,nameField:string):string{
   return hash(canonical({personId,raw:verified?raw:{...raw,[idField]:null,[nameField]:null}}));
@@ -90,8 +93,11 @@ export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceR
   const occurrence=occurrenceId(personId,raw as Record<string,unknown>,verified,'cnpjCpfFornecedor','nomeFornecedor');
   return {id:occurrence,personId,year:r.ano,month:r.mes,category:r.tipoDespesa,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):occurrence,supplierVerified:verified,...(oddId(supplierId)?{supplierIdOdd:true as const}:{}),documentId:r.codDocumento,documentNumber:r.numDocumento,date:r.dataDocumento,lot:r.codLote===null?'':String(r.codLote),receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }
+// A CPF zero-padded to 14 digits can pass the CNPJ check; it only counts as a company when its branch digits look like a real CNPJ branch.
+const PADDED_CPF_BRANCH=/^000\d{5}000[1-9]\d{2}$/;
 export function validCnpj(id:string):boolean {
   if(!/^\d{14}$/.test(id)||/^(\d)\1+$/.test(id))return false;
+  if(id.startsWith('000')&&validCpf(id.slice(3))&&!PADDED_CPF_BRANCH.test(id))return false;
   const check=(s:string)=>{let weight=s.length-7;const sum=[...s].reduce((n,c)=>{n+=Number(c)*weight;weight=weight===2?9:weight-1;return n;},0);const mod=sum%11;return mod<2?0:11-mod;};
   return check(id.slice(0,12))===Number(id[12])&&check(id.slice(0,13))===Number(id[13]);
 }
