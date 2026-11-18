@@ -15,7 +15,7 @@ Everything here is a measurement of Go + pgx + JSON serialization over loopback.
 | Docker / WSL2 | Docker 29.0.1 (client and server); WSL 2.6.1.0, kernel 6.6.87.2-1. Postgres runs in the WSL2 VM, so loopback to it crosses the VM boundary |
 | Power | plan "Balanced"; plugged in (battery status 2 = AC, 93% charge) |
 | Go / Postgres / k6 | go1.27.4 windows/amd64; PostgreSQL 16.16 (Debian, container `clareia-api-pg`); k6 v2.4.0 |
-| Code | commit `58456cf` (the harness commit; `api/cmd` and `api/internal` are identical to main at `920218c`), server built with `-X main.version=bench-58456cf` |
+| Code | commit `58456cf` (the harness commit; `api/cmd` and `api/internal` are identical to main at `69d1663`, the branch base), server built with `-X main.version=bench-58456cf` |
 | Publication | `b571fe73c261` (226,510 expense records, 592 deputies, 562 with data) |
 | Not recorded | Docker/WSL CPU and memory limits for the Postgres VM (unknown), Postgres settings (appear to be the image defaults: the supplier aggregation sorts through 14.5 MB of temp files, consistent with the 4 MB `work_mem` default), antivirus and other background load (unknown) |
 
