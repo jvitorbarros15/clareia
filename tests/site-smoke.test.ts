@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -6,7 +6,9 @@ import path from 'node:path';
 import {smokeSite} from '../src/site-smoke.ts';
 
 const files:Record<string,string>={'manifest.json':'{"base":"data/abc"}','data/abc/index.json':'{"i":1}','data/abc/summary.json':'{"s":1}','data/abc/deputados/7/despesas.json':'[1]'};
-const setup=async()=>{const dir=await fs.mkdtemp(path.join(os.tmpdir(),'smoke-'));for(const [f,c] of Object.entries(files)){await fs.mkdir(path.dirname(path.join(dir,f)),{recursive:true});await fs.writeFile(path.join(dir,f),c);}return dir;};
+const made:string[]=[];
+after(()=>Promise.all(made.map(dir=>fs.rm(dir,{recursive:true,force:true}))));
+const setup=async()=>{const dir=await fs.mkdtemp(path.join(os.tmpdir(),'smoke-'));made.push(dir);for(const [f,c] of Object.entries(files)){await fs.mkdir(path.dirname(path.join(dir,f)),{recursive:true});await fs.writeFile(path.join(dir,f),c);}return dir;};
 const good=async(u:string)=>{
   const p=new URL(u).pathname.slice(1);
   if(p==='')return new Response('<html>',{headers:{'content-security-policy':'x','strict-transport-security':'x','x-robots-tag':'noindex, nofollow'}});
