@@ -412,7 +412,7 @@ body[data-model=editorial] .map-canvas{padding:32px}
 body[data-model=editorial] .uf-map{display:block;width:100%;max-width:640px;height:auto;margin:8px auto 0}
 body[data-model=editorial] .uf-tile.strong text{fill:var(--on-accent)}
 body[data-model=editorial] .atlas-detail{padding:32px 0 32px 40px}
-@media (max-width:760px){
+@media (max-width:800px){
   body[data-model=editorial] .atlas-grid{grid-template-columns:1fr}
   body[data-model=editorial] .map-canvas{display:flex;flex-direction:column;padding:20px 16px;margin:0 -16px}
   body[data-model=editorial] .map-canvas>.map-select{order:-1;margin:0 0 16px}
@@ -1087,3 +1087,7 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 
 .doc-main h4.api-h{text-transform:none;letter-spacing:0;font-size:16px;margin:40px 0 10px}
 .doc-table+.doc-table{margin-top:24px}
+
+.pix-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:12px 0 0}
+.pix-key{font-size:18px;font-weight:700;overflow-wrap:anywhere;user-select:all}
+.pix-copy{min-height:44px;min-width:44px}

@@ -137,7 +137,7 @@ export function robotsTxt(o:ResolvedOptions):string{
 }
 
 export type CorrectionEntry={date:string;title:string;detail:string};
-type StaticPages={CONTACT_EMAIL:string;POLICY:string;layout:(name:string,eyebrow:string,title:string,lede:string,inner:string,toc?:string)=>string;sections:(html:string)=>{html:string;toc:string};pages:{sobre:{title:string;description:string;body:()=>string};correcoes:{title:string;description:string;body:(list:CorrectionEntry[],email:string)=>string};metodologia:{title:string;description:string;naoConcluimos:string;privacidade:string};'dados-abertos':{title:string;description:string;body:(manifest:unknown,base:string)=>string}}};
+type StaticPages={CONTACT_EMAIL:string;POLICY:string;layout:(name:string,eyebrow:string,title:string,lede:string,inner:string,toc?:string)=>string;sections:(html:string)=>{html:string;toc:string};pages:{sobre:{title:string;description:string;body:()=>string};apoie:{title:string;description:string;body:()=>string};correcoes:{title:string;description:string;body:(list:CorrectionEntry[],email:string)=>string};metodologia:{title:string;description:string;naoConcluimos:string;privacidade:string};'dados-abertos':{title:string;description:string;body:(manifest:unknown,base:string)=>string}}};
 // real/pages.js is the one copy of these texts: the browser loads it as a script, and here it is run in an empty sandbox.
 export async function loadStaticPages():Promise<StaticPages>{
   const sandbox:{window:{ClareiaPages?:StaticPages}}={window:{}};
@@ -159,7 +159,7 @@ async function writeApiPage(outDir:string,shell:string,pages:StaticPages,options
   const s=pages.sections(apiDocsInner(await loadSpec(REPO)));
   const body=`<body data-model="editorial">
   <a class="skip-link" href="#main">Ir para o conteúdo</a>
-  <div class="site"><header class="site-header"><a class="logo" href="/">Clareia</a></header><main id="main" class="text-page">${pages.layout('api','Contrato da API','API','O contrato da API somente leitura do Clareia: endpoints, parâmetros e respostas.',s.html,s.toc)}</main></div>
+  <div class="site"><header class="site-header"><a class="logo" href="/" aria-label="Clareia, início">${(await fs.readFile(path.join(REPO,'real','app.js'),'utf8')).match(/const logo = '(<svg class="logo-mark"[\s\S]*?<\/svg>)'/)![1]}</a></header><main id="main" class="text-page">${pages.layout('api','Contrato da API','API','O contrato da API somente leitura do Clareia: endpoints, parâmetros e respostas.',s.html,s.toc)}</main></div>
 </body>`;
   const html=page(shell,{title,description,url:options.siteUrl+'/api',type:'website',image:icon(options.siteUrl)})
     .replace(/<script[^>]*><\/script>\s*/g,'').replace(/<link rel="preload"[^>]*as="(?:script|font)"[^>]*>\s*/g,'').replace(/<body[\s\S]*<\/body>/,()=>body);
@@ -170,9 +170,9 @@ export async function writeStaticPages(outDir:string,options:ResolvedOptions):Pr
   const pages=await loadStaticPages(),corrections=await loadCorrections();
   await fs.copyFile(path.join(REPO,'config','corrections.json'),path.join(outDir,'corrections.json'));
   const published=await readOpenData(outDir);
-  for(const name of ['sobre','correcoes','metodologia','dados-abertos'] as const){
+  for(const name of ['sobre','correcoes','metodologia','dados-abertos','apoie'] as const){
     const entry=pages.pages[name];
-    const inner=name==='sobre'?pages.pages.sobre.body():name==='correcoes'?pages.pages.correcoes.body(corrections,pages.CONTACT_EMAIL):name==='dados-abertos'?pages.pages['dados-abertos'].body(published?.manifest??null,published?.base??''):pages.layout('metodologia','Metodologia',`Metodologia`,esc(entry.description),`<p>Ative o JavaScript para ler a metodologia completa e os números desta versão.</p>`);
+    const inner=name==='sobre'?pages.pages.sobre.body():name==='apoie'?pages.pages.apoie.body():name==='correcoes'?pages.pages.correcoes.body(corrections,pages.CONTACT_EMAIL):name==='dados-abertos'?pages.pages['dados-abertos'].body(published?.manifest??null,published?.base??''):pages.layout('metodologia','Metodologia',`Metodologia`,esc(entry.description),`<p>Ative o JavaScript para ler a metodologia completa e os números desta versão.</p>`);
     const noscript=`<noscript><main id="main">${inner}</main></noscript>`;
     // Same rule as the deputy pages: <route>.html, so the route answers without a redirect.
     await fs.writeFile(path.join(outDir,`${name}.html`),page(shell,{title:entry.title,description:entry.description,url:options.siteUrl+`/${name}`,type:'website',image:icon(options.siteUrl)},noscript));
