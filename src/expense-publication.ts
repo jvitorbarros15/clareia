@@ -68,12 +68,8 @@ export function buildExpenseVersion(lots:ExpenseLotRun[],history:HistoryReport,n
   for(const l of ordered)for(const c of l.report.cells){
     if(c.status==='complete'||c.status==='no-expenses-confirmed'){
       if(c.status==='no-expenses-confirmed'&&c.records.length)throw Error('Célula sem despesas com registros');
-<<<<<<< HEAD
       if(c.totalCents===null||!Number.isSafeInteger(c.totalCents)||c.records.reduce((n,r)=>n+BigInt(r.cents),0n)!==BigInt(c.totalCents))throw Error('Soma diverge das células auditadas');
-      const fixed=c.records.map(fixSign);records.push(...fixed);cellTotal+=BigInt(c.totalCents??0);for(const r of fixed)if(r.sourceCents!==undefined){fixCount++;fixDelta+=BigInt(r.cents-r.sourceCents);}
-=======
       const fixed=c.records.map(fixSign);records.push(...fixed);cellTotal+=BigInt(c.totalCents??0);apiSignCount+=c.diagnostics?.apiSignCorrected??0;for(const r of fixed)if(r.sourceCents!==undefined){fixCount++;fixDelta+=BigInt(r.cents-r.sourceCents);}
->>>>>>> 42ece74 (Pair inverted API sign rows with the annual value in the collector, audit and publication count)
       if(c.duplicateReason)duplicateCompetences.push({personId:c.personId,month:c.month,reason:c.duplicateReason});
     }else if(c.status==='held-review'||c.status==='source-failure'){if(c.records.length)throw Error('Célula retida com registros');heldMonths[c.personId]=(heldMonths[c.personId]??0)+1;heldCompetences.push({personId:c.personId,month:c.month,reasons:[...c.reasons].sort()});}
     else throw Error('Situação de célula desconhecida');
