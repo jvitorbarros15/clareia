@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash,createHmac,randomBytes} from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -12,7 +12,10 @@ import {seal} from '../src/vault.ts';
 
 const key=randomBytes(32),prefix='backups/t/';
 const write=async(root:string,file:string,body:string|Uint8Array)=>{const target=path.join(root,file);await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,body);};
-const temp=()=>fs.mkdtemp(path.join(os.tmpdir(),'clareia-backup-'));
+// Some cases write multi-GB files; every folder is removed at the end so repeated runs don't fill the disk.
+const made:string[]=[];
+const temp=async()=>{const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-backup-'));made.push(dir);return dir;};
+after(()=>Promise.all(made.map(dir=>fs.rm(dir,{recursive:true,force:true}))));
 const out=async()=>path.join(await temp(),'out');
 const objectKey=(body:string|Uint8Array)=>`${prefix}objects/${createHmac('sha256',key).update(createHash('sha256').update(body).digest('hex')).digest('hex')}`;
 const manifests=(store:ObjectStore)=>store.list(`${prefix}manifests/`);
