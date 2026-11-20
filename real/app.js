@@ -7,7 +7,6 @@
   const model = 'editorial';
   const BAR_STEP = 10;
   const initial = new URLSearchParams(location.search);
-  const defaultMetric = D.partial ? 'mensal' : 'total';
   const otherYears = () => D.years.map(y => String(y.year)).filter(y => y !== D.year);
   const yearQuery = () => D.year === D.defaultYear ? '' : `?ano=${D.year}`;
   const withYear = path => path + yearQuery();
@@ -33,7 +32,7 @@
   const state = {
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
-    metric: fromURL.metric ?? defaultMetric,
+    metric: fromURL.metric ?? 'total',
     tab: fromURL.tab ?? 'gastos', barLimit: BAR_STEP,
     query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && comparable(D.dataset().find(p => p.id === initial.get('destaque'))) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
@@ -116,7 +115,7 @@
     if (D.year !== D.defaultYear) url.searchParams.set('ano', D.year);
     // On load an absent parameter means "let the question decide", so a link with a question spells out every choice, defaults included.
     const explicit = Boolean(state.query);
-    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || D.partial || state.metric !== defaultMetric ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
+    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || state.metric !== 'total' ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
     try { history.replaceState(null, '', url); } catch { /* file previews may restrict history */ }
   }
   const examples = () => { const [a, b] = byTotal(); return [`${first(a)} gastou mais que ${first(b)}?`, 'Quem mais gastou por mês?', 'Quem mais gastou com passagens?', 'Quem gastou menos?']; };
@@ -174,7 +173,7 @@
     const label = D.partial ? `<span class="year-partial">${escape(D.partialLabel)}</span>` : '';
     if (D.years.length < 2) return label;
     const options = D.years.map(y => `<option value="${y.year}"${String(y.year) === D.year ? ' selected' : ''}>${y.year}${y.partial ? ' (parcial)' : ''}</option>`).join('');
-    return `<label class="year-select"><select data-year-select aria-label="Ano">${options}</select></label>${label}`;
+    return `<label class="year-select"><select data-year-select aria-label="Ano"${D.partial ? ` title="${escape(D.partialLabel)}"` : ''}>${options}</select></label>`;
   }
   async function switchYear(year) {
     syncURL();
@@ -339,9 +338,9 @@
       }
     }
     if (message) {
-      const cleared = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric !== defaultMetric || state.tab !== 'gastos' || Boolean(window.Clareia.portalActive?.());
+      const cleared = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric !== 'total' || state.tab !== 'gastos' || Boolean(window.Clareia.portalActive?.());
       document.dispatchEvent(new CustomEvent('clareia:reset'));
-      state.uf = 'Brasil'; state.category = 'Todas'; state.metric = defaultMetric; state.tab = 'gastos';
+      state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos';
       state.answer = { type: 'message', title: message[0], message: cleared ? `${message[1]} Os filtros ativos foram limpos.` : message[1], switchYear: message[2] };
     }
     $('#query').value = state.query;
@@ -692,7 +691,7 @@
     else if (action === 'copy-link') copyProfileLink(id, target);
     else if (action === 'copy-pix') copyPixKey(target);
     else if (action === 'share-image') downloadShareImage(id);
-    else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = defaultMetric; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast(`Filtros limpos: Brasil, todas as categorias, ${defaultMetric === 'mensal' ? 'valor por mês' : 'valor total'}.`); }
+    else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast(`Filtros limpos: Brasil, todas as categorias, valor total.`); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });
   const carryYear = event => {

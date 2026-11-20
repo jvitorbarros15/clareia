@@ -2431,10 +2431,11 @@ check('year switch', async () => {
   page = await at(1440, { search: `?ano=${otherYear}`, init: copyInit });
   assert.equal(await page.locator('select[data-year-select]').first().inputValue(), otherYear, 'the URL year is selected');
   if (other.partial) {
-    assert.match(await text(page.locator('.year-partial').first()), /^parcial · .+ \d{4}/, 'partial label');
-    assert.equal(await page.locator('.metric-toggle [aria-pressed=true]').first().innerText(), 'Por mês', 'a partial year opens on Por mês');
+    assert.match(await page.locator('select[data-year-select] option:checked').first().innerText(), /\(parcial\)$/, 'the selector names the partial year');
+    assert.equal(await page.locator('.metric-toggle [aria-pressed=true]').first().innerText(), 'Total', 'a partial year opens on Total, like every year');
   }
   assert.equal(await page.locator('.ceiling-pill:not(.is-muted)').count(), 0, 'no ceiling percentage in the other year');
+  assert.equal(await page.locator('#scope-chip').isVisible(), false, 'the default metric of a partial year is not shown as a filter to clear');
   await page.locator('.metric-toggle button[aria-pressed=false]').first().click();
   assert.equal(new URL(page.url()).searchParams.get('ano'), otherYear, 'a filter change keeps ano');
   await page.close();
