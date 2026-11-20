@@ -53,7 +53,7 @@ test('buildSite writes the ceiling into summary.json',async()=>{
     const body={metric:'test.metric',scope:{year:2025,months:[1],ids:[1],legislature:57},people:[person],records,collectedAt:'2025-03-01T00:00:00Z',publishedAt:'2025-03-01T00:00:00Z',pages:[],validation:{stablePasses:2,recordCount:1,totalCents:100,independentTotalCents:'100',duplicatePolicy:'x',limitations:[]}};
     const v={...body,id:snapshotId(body as never)} as never;
     await publishDomain(db,'despesas',v);await recordDomainAudit(db,(v as {id:string}).id,'passed',{checkedAt:'2025-03-02T00:00:00Z',status:'passed'} as never);
-    const {report,audit}=made(),ceiling=buildSiteCeiling(report,audit,2025),{publicationId}=await buildSite(db,path.join(dir,'dist'),path.join(dir,'portraits'),{},ceiling);
+    const {report,audit}=made(),ceiling=buildSiteCeiling(report,audit,2025),{publicationId}=await buildSite(db,path.join(dir,'dist'),path.join(dir,'portraits'),{},{defaultYear:2025,years:[{year:2025,publicationId:(v as {id:string}).id,ceiling}]});
     const summary=JSON.parse(await fs.readFile(path.join(dir,'dist','data',publicationId,'summary.json'),'utf8'));
     assert.deepEqual(summary.ceiling,ceiling);
   }finally{await db.close();await fs.rm(dir,{recursive:true,force:true});}

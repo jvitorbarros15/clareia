@@ -317,7 +317,7 @@ async function published(change:Partial<Expense>){
     const a=version([{...record(100,1,0),id:'old',...change}]);
     await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
     const built=await buildSite(db,dist,portraits),base=path.join(dist,'data',built.publicationId);
-    out={rows:await json(base,'deputados','1','despesas.json') as Expense[],review:built.review,csv:await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')};
+    out={rows:await json(base,'deputados','1','despesas.json') as Expense[],review:built.years[0].review,csv:await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')};
   });
   return out;
 }
@@ -358,9 +358,9 @@ test('an unverified typed name is withheld at build unless it looks like a compa
     assert.deepEqual([0,1,2,3,5].map(i=>by(i).receipt),[null,url,null,url,url]);
     const text=await fs.readFile(path.join(base,'fornecedores.json'),'utf8')+await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')+JSON.stringify(rows);
     assert.ok(!text.includes('MARIA TESTE')&&!text.includes('JOSE TESTE')&&text.includes('OUTRA PESSOA'));
-    assert.deepEqual(built.names.withheld,[{name:'MARIA TESTE',count:2,cents:200},{name:'JOSE TESTE',count:1,cents:100}]);
-    assert.deepEqual(built.names.kept,[{name:'EMPRESA TESTE LTDA',count:1,cents:100}]);
-    const {reviewMarkdown}=await import('../src/review-list.ts'),md=reviewMarkdown(built.publicationId,built.review,built.names);
+    assert.deepEqual(built.years[0].names.withheld,[{name:'MARIA TESTE',count:2,cents:200},{name:'JOSE TESTE',count:1,cents:100}]);
+    assert.deepEqual(built.years[0].names.kept,[{name:'EMPRESA TESTE LTDA',count:1,cents:100}]);
+    const {reviewMarkdown}=await import('../src/review-list.ts'),md=reviewMarkdown(built.publicationId,built.years[0].review,built.years[0].names);
     assert.match(md,/## Nomes de fornecedor ocultados\s+- MARIA TESTE \| 2 registros \| R\$ 2\.00\s+- JOSE TESTE \| 1 registros \| R\$ 1\.00/);
     assert.match(md,/## Nomes mantidos pela regra de empresa\s+- EMPRESA TESTE LTDA \| 1 registros/);
   }
@@ -371,4 +371,70 @@ test('identical flagged rows keep distinct public ids, the flag and the CSV colu
   const built=await buildSite(db,dist,portraits,{approvedNames:[]}),base=path.join(dist,'data',built.publicationId),rows=await json(base,'deputados','1','despesas.json') as Expense[];
   assert.equal(new Set(rows.map(r=>r.id)).size,3);assert.ok(rows.every(r=>r.duplicateFlag==='possible'&&r.supplier==='Nome não exibido pelo Clareia'));
   const lines=(await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')).split('\r\n');assert.match(lines[0],/;"sinal_corrigido";"possivel_duplicidade"$/);assert.match(lines[1],/;"";"sim"$/);
+}));
+
+const yearVersion=(year:number,months:number[],records:Expense[],ids=[1,2]):Snapshot=>{
+  const total=records.reduce((n,r)=>n+r.cents,0),body={metric:'test.metric',scope:{year,months,ids,legislature:57},people:ids.map(id=>({id,name:'Pessoa '+id,photo:null,sourceUrl:'https://x',profileFetchedAt:'2025-03-01T00:00:00Z'})),records,collectedAt:'2025-03-01T00:00:00Z',publishedAt:'2025-03-01T00:00:00Z',pages:[],validation:{stablePasses:2,recordCount:records.length,totalCents:total,independentTotalCents:String(total),duplicatePolicy:'x',limitations:[]}};
+  return {...body,id:snapshotId(body)};
+};
+const approve=async(db:DB,v:Snapshot)=>{await publishDomain(db,'despesas',v);await recordDomainAudit(db,v.id,'passed',report);};
+
+// The id and the file hashes were taken from the build on origin/main before the per-year layout, with this same fixture; a change here means the one-year site changed.
+test('a one-year build keeps the folder id, the layout and every file of the single-year site',()=>setup(async(db,dist,portraits)=>{
+  const records=[record(100,1,0),record(250,1,1),record(50,2,2),record(70,2,3)].map((r,i)=>i===1?{...r,month:2}:i===3?{...r,month:2,supplier:'EMPRESA TESTE LTDA'}:r);
+  const a=yearVersion(2025,[1,2],records,[1,2,3]);await approve(db,a);
+  const built=await buildSite(db,dist,portraits,{approvedNames:[]});
+  assert.equal(built.publicationId,'4c5a1b5a76ab');
+  const manifest=await json(dist,'manifest.json');
+  assert.deepEqual(Object.keys(manifest),['base','domains','defaultYear','years']);
+  assert.equal(manifest.base,'data/4c5a1b5a76ab');assert.equal(manifest.defaultYear,2025);
+  assert.deepEqual(manifest.years,[{year:2025,months:[1,2],partial:true,expenses:a.id,totalCents:470,records:4}]);
+  assert.deepEqual(manifest.domains.despesas.version,a.id);
+  const base=path.join(dist,'data',built.publicationId);
+  assert.deepEqual((await fs.readdir(base)).sort(),['abertos','dados-abertos.json','deputados','fornecedores.json','index.json','portraits','summary.json']);
+  assert.equal(built.years.length,1);
+}));
+test('two years write the extra year under its own folder with its own totals',()=>setup(async(db,dist,portraits)=>{
+  const a=yearVersion(2025,[1],[record(100,1,0),record(50,2,1)]),b=yearVersion(2026,[1,2,3],[{...record(700,1,0),year:2026},{...record(300,3,1),year:2026,month:2},{...record(11,3,2),year:2026,month:3}],[1,3]);
+  await fs.writeFile(path.join(portraits,'3.jpg'),'jpg3');
+  await approve(db,b);await approve(db,a);
+  const {storeBillsVersion}=await import('../src/bills-publication.ts');
+  const bill={id:9,type:'PL',number:9,year:2026,summary:'Ementa',situation:'x',situationAt:null,norm:null,authors:[{deputyId:3,proponent:true}],otherProponents:0,issues:[]},bodyBills={schema:'clareia.bills-version.v1' as const,metric:'camara.bills.authorship.v1' as const,scope:{years:[2025,2026],types:['PL']},bills:[bill],people:[1,2,3].map(id=>({id,proposed:id===3?1:0,joint:0,coauthored:0,norms:0}))};
+  const bills={...bodyBills,id:hash(canonical(bodyBills)),sources:[],collectedAt:'2026-11-09T00:00:00Z',publishedAt:'2026-11-09T00:00:00Z'};
+  await storeBillsVersion(db,bills as never);await recordDomainAudit(db,bills.id,'passed',report);
+  const plan={defaultYear:2025,years:[{year:2026,publicationId:b.id,ceiling:null},{year:2025,publicationId:a.id,ceiling:null}]};
+  const built=await buildSite(db,dist,portraits,{shareImages:false,approvedNames:[]},plan),base=path.join(dist,'data',built.publicationId);
+  assert.equal((await json(base,'summary.json')).publicationId,a.id);
+  assert.equal((await json(base,'index.json')).validation.totalCents,150);
+  assert.equal((await json(base,'2026','summary.json')).publicationId,b.id);
+  assert.equal((await json(base,'2026','index.json')).validation.totalCents,1011);
+  assert.equal((await json(base,'2026','deputados','3','despesas.json') as Expense[]).length,2);
+  assert.equal((await json(base,'2026','dados-abertos.json')).year,2026);
+  await assert.rejects(fs.access(path.join(base,'deputados','3')));
+  await assert.rejects(fs.access(path.join(base,'2025')));
+  const manifest=await json(dist,'manifest.json');
+  assert.equal(manifest.defaultYear,2025);assert.equal(manifest.domains.despesas.version,a.id);
+  assert.deepEqual(manifest.years,[{year:2025,months:[1],partial:true,expenses:a.id,totalCents:150,records:2},{year:2026,months:[1,2,3],partial:true,expenses:b.id,totalCents:1011,records:3}]);
+  assert.deepEqual(built.years.map(y=>y.year),[2025,2026]);
+  // portraits and activity are shared across years and keyed by the union of people
+  assert.deepEqual((await fs.readdir(path.join(base,'portraits'))).sort(),['1.jpg','3.jpg']);
+  assert.deepEqual((await fs.readdir(path.join(base,'atividade'))).sort(),['1.json','2.json','3.json']);
+  assert.equal((await json(base,'atividade','3.json')).bills[0].id,9);
+  const folderWith=await dataFolderId(path.join(dist,'data',built.publicationId));assert.equal(folderWith,built.publicationId);
+}));
+test('the default year must be the active version and every named year must be approved and of its year',()=>setup(async(db,dist,portraits)=>{
+  const a=yearVersion(2025,[1],[record(100,1,0)]),b=yearVersion(2026,[1],[{...record(100,1,0),year:2026}]);
+  await approve(db,a);await approve(db,b);
+  const years=(x:Snapshot,y:Snapshot)=>[{year:2025,publicationId:x.id,ceiling:null},{year:2026,publicationId:y.id,ceiling:null}];
+  await assert.rejects(buildSite(db,dist,portraits,{approvedNames:[]},{defaultYear:2025,years:years(a,b)}),/não é a do ano padrão/);
+  await assert.rejects(buildSite(db,dist,portraits,{approvedNames:[]},{defaultYear:2027,years:years(a,b)}),/Ano padrão 2027/);
+  await assert.rejects(buildSite(db,dist,portraits,{approvedNames:[]},{defaultYear:2025,years:years(b,a)}),/é de 2026, não de 2025/);
+  const c=yearVersion(2025,[1,2],[record(100,1,0)]);await publishDomain(db,'despesas',c);
+  await assert.rejects(buildSite(db,dist,portraits,{approvedNames:[]},{defaultYear:2026,years:[{year:2025,publicationId:c.id,ceiling:null},{year:2026,publicationId:b.id,ceiling:null}]}),/sem auditoria aprovada/);
+}));
+test('an extra year whose version is withheld is refused even with a passed audit',()=>setup(async(db,dist,portraits)=>{
+  const a=yearVersion(2025,[1],[record(100,1,0)]),b=yearVersion(2026,[1],[{...record(100,1,0),year:2026}]);
+  await approve(db,b);await approve(db,a);
+  await db.query('INSERT INTO withheld_publications VALUES($1,$2)',[b.id,'test']);
+  await assert.rejects(buildSite(db,dist,portraits,{approvedNames:[]},{defaultYear:2025,years:[{year:2025,publicationId:a.id,ceiling:null},{year:2026,publicationId:b.id,ceiling:null}]}),/não encontrada/);
 }));
