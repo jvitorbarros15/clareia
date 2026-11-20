@@ -8,7 +8,7 @@ const hashes={temporalSha256:'t',crosscheckSha256:'x'};
 
 test('the checked-in config parses in the new shape',async()=>{
   const config=parseFullSiteConfig(JSON.parse(await fs.readFile('config/full-site.json','utf8')));
-  assert.equal(config.defaultYear,2025);assert.deepEqual(Object.keys(config.expenseYears),['2025']);
+  assert.equal(config.defaultYear,2025);assert.deepEqual(Object.keys(config.expenseYears),['2025','2026']);
 });
 test('config accepts several years and a year without a ceiling',()=>{
   const config=parseFullSiteConfig({...base(),expenseYears:{'2025':['a'],'2026':['c26']}});

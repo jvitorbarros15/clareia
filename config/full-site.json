@@ -1,20 +1,34 @@
 {
-  "historyRun": "history-20261107",
-  "legacyRun": "legacy-20261108",
+  "historyRun": "history-20261118",
+  "legacyRun": "legacy-20261118",
   "expenseYears": {
     "2025": [
-      "expenses-2025-lot00-20261109",
-      "expenses-2025-lot01-20261109",
-      "expenses-2025-lot02-20261109-r2",
-      "expenses-2025-lot03-20261109",
-      "expenses-2025-lot04-20261109",
-      "expenses-2025-lot05-20261109",
-      "expenses-2025-lot06-20261109",
-      "expenses-2025-lot07-20261109",
-      "expenses-2025-lot08-20261109",
-      "expenses-2025-lot09-20261109",
-      "expenses-2025-lot10-20261109",
-      "expenses-2025-lot11-20261109"
+      "expenses-2025-lot00-20261118",
+      "expenses-2025-lot01-20261118",
+      "expenses-2025-lot02-20261118",
+      "expenses-2025-lot03-20261118",
+      "expenses-2025-lot04-20261118",
+      "expenses-2025-lot05-20261118",
+      "expenses-2025-lot06-20261118",
+      "expenses-2025-lot07-20261118",
+      "expenses-2025-lot08-20261118",
+      "expenses-2025-lot09-20261118",
+      "expenses-2025-lot10-20261118",
+      "expenses-2025-lot11-20261118"
+    ],
+    "2026": [
+      "expenses-2026-lot00-20261118",
+      "expenses-2026-lot01-20261118",
+      "expenses-2026-lot02-20261118",
+      "expenses-2026-lot03-20261118",
+      "expenses-2026-lot04-20261118",
+      "expenses-2026-lot05-20261118",
+      "expenses-2026-lot06-20261118",
+      "expenses-2026-lot07-20261118",
+      "expenses-2026-lot08-20261118",
+      "expenses-2026-lot09-20261118",
+      "expenses-2026-lot10-20261118",
+      "expenses-2026-lot11-20261118"
     ]
   },
   "ceilingRuns": {
