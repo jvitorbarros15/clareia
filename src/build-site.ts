@@ -168,8 +168,9 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const publicationId=await dataFolderId(data);
   await fs.rename(data,path.join(outDir,'data',publicationId));
   await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base:`data/${publicationId}`,domains,defaultYear:sitePlan.defaultYear,years:manifestYears}));
-  await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names);
+  // Static pages first: both read the bare index.html, and the prerender overwrites it with the home page.
   await writeStaticPages(outDir,siteOptions);
+  await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names);
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
   // The all-months zip is the one file allowed past 10 MiB; zipOf already keeps it under the 25 MiB Workers asset limit.
   checkLimits(files.length,Math.max(...sizes.filter((_,i)=>!files[i].endsWith('.zip'))));

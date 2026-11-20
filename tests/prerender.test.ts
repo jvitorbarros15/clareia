@@ -11,7 +11,7 @@ import {createApp} from '../src/app.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {partyFieldsOf} from '../src/site-summary.ts';
-import {deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
+import {FIXED_PAGES,deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
 import {loadSpec} from '../src/api-docs.ts';
 
@@ -103,6 +103,46 @@ test('the home page gets canonical and og tags and keeps its own title',()=>{
   assert.equal(meta(html,'og:image'),`${SITE}/icon-512.png`);
   assert.equal(meta(html,'og:description'),meta(html,'description'));
 });
+const jsonLd=(html:string)=>{const m=/<script type="application\/ld\+json">([^<]*)<\/script>/.exec(html);return m?JSON.parse(m[1]):null;};
+test('without JavaScript the home links every state and the fixed pages, under one h1',()=>{
+  const html=renderHome(shell,SITE);
+  const noscript=/<noscript>[\s\S]*<\/noscript>/.exec(html)![0];
+  assert.equal(noscript.match(/<h1>/g)?.length,1);
+  for(const uf of Object.keys(UFS))assert.ok(noscript.includes(`<a href="/estado/${uf}">${UFS[uf]}</a>`),uf);
+  for(const route of ['sobre','metodologia','dados-abertos','correcoes','apoie','api'])assert.ok(noscript.includes(`href="/${route}"`),route);
+});
+test('a state page links its deputies by name and a deputy page links its state',()=>{
+  const list:Deputy[]=[{...normal,id:2,name:'Zé <b>'},normal,{...normal,id:3,uf:'BA'},{...normal,id:4,noExercise:true}];
+  const sp=renderState(shell,'SP',list,period,SITE);
+  assert.ok(sp.indexOf('href="/deputado/100-maria-da-silva">Maria da Silva</a>')<sp.indexOf('href="/deputado/2-ze-b">Zé &lt;b&gt;</a>'));
+  assert.ok(!sp.includes('/deputado/3-')&&!sp.includes('/deputado/4-'));
+  assert.ok(sp.includes('<a href="/">'));
+  const deputy=renderDeputy(shell,normal,period,SITE,null);
+  assert.ok(deputy.includes('<a href="/estado/SP">Deputados de São Paulo</a>'));
+  assert.ok(!renderDeputy(shell,{...normal,uf:null},period,SITE,null).includes('/estado/'));
+});
+test('structured data names the site on the home and the deputy as a Person, escaped',()=>{
+  const home=jsonLd(renderHome(shell,SITE));
+  assert.deepEqual(home['@graph'].map((n:{'@type':string})=>n['@type']),['WebSite','Organization']);
+  assert.equal(home['@graph'][0].url,`${SITE}/`);
+  const html=renderDeputy(shell,{...normal,name:'A</script><b>'},period,SITE,{url:`${SITE}/data/p/portraits/100.jpg`,width:300,height:400});
+  assert.ok(!html.includes('</script><b>'));
+  const person=jsonLd(html);
+  assert.equal(person['@type'],'Person');
+  assert.equal(person.name,'A</script><b>');
+  assert.equal(person.jobTitle,'Deputado(a) federal');
+  assert.equal(person.url,`${SITE}/deputado/100-a-script-b`);
+  assert.equal(person.image,`${SITE}/data/p/portraits/100.jpg`);
+  assert.deepEqual(person.sameAs,['https://www.camara.leg.br/deputados/100']);
+  const bare=jsonLd(renderDeputy(shell,{...normal,sourceUrl:'javascript:x'},period,SITE,null));
+  assert.equal(bare.image,undefined);
+  assert.equal(bare.sameAs,undefined);
+});
+test('a shell that already carries page tags is refused',()=>{
+  const home=renderHome(shell,SITE);
+  assert.throws(()=>renderHome(home,SITE),/já tem canonical/);
+  assert.throws(()=>renderDeputy(home,normal,period,SITE,null),/já tem canonical/);
+});
 test('a replacement name with dollar signs is not interpreted',()=>{
   const html=renderDeputy(shell,{...normal,name:'A $& $1 B'},period,SITE,null);
   assert.ok(html.includes('<title>A $&amp; $1 B — Clareia</title>'));
@@ -116,7 +156,8 @@ test('sitemap and noindex are exclusive and drive robots.txt',()=>{
   assert.throws(()=>resolveOptions({siteUrl:'ftp://x.test'}),/origem/);
   assert.throws(()=>resolveOptions({siteUrl:'nada'}),/inválido/);
   const xml=sitemapXml(SITE,[normal,{...normal,id:7,name:'Zé & Cia'}]);
-  assert.equal(xml.match(/<loc>/g)?.length,1+27+2);
+  assert.equal(xml.match(/<loc>/g)?.length,1+6+27+2);
+  assert.ok(xml.includes(`<loc>${SITE}/metodologia</loc>`));
   assert.ok(xml.includes(`<loc>${SITE}/deputado/7-ze-cia</loc>`));
   assert.ok(xml.indexOf('/deputado/7-')<xml.indexOf('/deputado/100-'));
 });
@@ -164,6 +205,7 @@ test('a build writes deputy, state and home pages and rebuilds byte for byte',()
   assert.ok((await fs.readFile(path.join(dist,'estado','SP.html'),'utf8')).includes('São Paulo: 1 deputado neste recorte.'));
   assert.ok((await fs.readFile(path.join(dist,'sitemap.xml'),'utf8')).includes(`${SITE}/deputado/2-ze-avila`));
   assert.ok((await fs.readFile(path.join(dist,'robots.txt'),'utf8')).includes(`Sitemap: ${SITE}/sitemap.xml`));
+  for(const file of ['index.html','sobre.html','metodologia.html','api.html','estado/SP.html','deputado/1-ana-souza.html'])assert.equal((await fs.readFile(path.join(dist,file),'utf8')).match(/rel="canonical"/g)?.length,1,file);
   const first=await tree(dist);
   await built({siteUrl:SITE,sitemap:true},async(again)=>{assert.deepEqual(await tree(again),first);});
 }));
@@ -208,6 +250,10 @@ test('static pages are prerendered at their own route, with the same meta tags a
     assert.ok(apoie.includes('data-action="copy-pix"'));
     assert.equal(await fs.readFile(path.join(dir,'corrections.json'),'utf8'),await fs.readFile(path.join(import.meta.dirname,'..','config','corrections.json'),'utf8'));
   }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('the fixed pages are the same as the menu in real/pages.js',async()=>{
+  const nav=(await loadStaticPages()).layout('','','','','');
+  assert.deepEqual([...nav.matchAll(/<a href="\/([^"]+)"/g)].map(m=>m[1]).sort(),FIXED_PAGES.map(([route])=>route).sort());
 });
 test('the corrections page shows the placeholder while no contact address is set, and escapes contact and entries',async()=>{
   const pages=await loadStaticPages();
