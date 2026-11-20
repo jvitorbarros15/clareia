@@ -7,6 +7,10 @@
   const model = 'editorial';
   const BAR_STEP = 10;
   const initial = new URLSearchParams(location.search);
+  const defaultMetric = D.partial ? 'mensal' : 'total';
+  const otherYears = () => D.years.map(y => String(y.year)).filter(y => y !== D.year);
+  const yearQuery = () => D.year === D.defaultYear ? '' : `?ano=${D.year}`;
+  const withYear = path => path + yearQuery();
   const ids = D.dataset().map(p => p.id);
   const totalOf = p => p.cells.reduce((n, r) => n + r.amount, 0);
   // A month held for review is missing, not zero: a partial total never enters a ranking or a comparison.
@@ -29,7 +33,7 @@
   const state = {
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
-    metric: fromURL.metric ?? 'total',
+    metric: fromURL.metric ?? defaultMetric,
     tab: fromURL.tab ?? 'gastos', barLimit: BAR_STEP,
     query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && comparable(D.dataset().find(p => p.id === initial.get('destaque'))) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
@@ -79,7 +83,7 @@
   // The share of the ceiling is over the whole period and counts every category, so the pill hides when a category is filtered.
   const usable = p => p.use.status === 'ok';
   const pctText = p => (p.use.tenths / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
-  const ceilingPill = (p, projects) => projects || !D.ceiling || state.category !== 'Todas' ? '' : usable(p) ? `<button class="ceiling-pill" data-action="evidence" data-id="${p.id}" data-kind="teto" aria-label="${escape(p.name)}: ${pctText(p)} do teto da cota usado. Ver o cálculo">${pctText(p)} do teto</button>` : `<span class="ceiling-pill is-muted" title="${p.use.missing?.length ? 'O exercício ou a UF de algum mês não foi confirmado' : 'Nenhum mês completo de exercício entrou na conta'}">% não confirmado</span>`;
+  const ceilingPill = (p, projects) => projects || (!D.ceiling && !D.ceilingPending) || state.category !== 'Todas' ? '' : !D.ceiling ? `<span class="ceiling-pill is-muted">limite de ${state.year} em conferência</span>` : usable(p) ? `<button class="ceiling-pill" data-action="evidence" data-id="${p.id}" data-kind="teto" aria-label="${escape(p.name)}: ${pctText(p)} do teto da cota usado. Ver o cálculo">${pctText(p)} do teto</button>` : `<span class="ceiling-pill is-muted" title="${p.use.missing?.length ? 'O exercício ou a UF de algum mês não foi confirmado' : 'Nenhum mês completo de exercício entrou na conta'}">% não confirmado</span>`;
   const inScope = () => all().filter(p => comparable(p) && inUF(p));
   function ranking(kind = state.tab) {
     return sortedBy(inScope(), p => state.tab === 'menos' ? -value(p, kind) : value(p, kind));
@@ -109,9 +113,10 @@
   function syncURL() {
     const url = new URL(location.href);
     url.search = '';
+    if (D.year !== D.defaultYear) url.searchParams.set('ano', D.year);
     // On load an absent parameter means "let the question decide", so a link with a question spells out every choice, defaults included.
     const explicit = Boolean(state.query);
-    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || state.metric !== 'total' ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
+    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || state.metric !== defaultMetric ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
     try { history.replaceState(null, '', url); } catch { /* file previews may restrict history */ }
   }
   const examples = () => { const [a, b] = byTotal(); return [`${first(a)} gastou mais que ${first(b)}?`, 'Quem mais gastou por mês?', 'Quem mais gastou com passagens?', 'Quem gastou menos?']; };
@@ -165,14 +170,29 @@
     const monthly = state.metric === 'mensal';
     return `<div class="editorial-follow-up"><span>Continue investigando</span><button type="button" data-metric="${monthly ? 'total' : 'mensal'}">${monthly ? 'E se compararmos o total do período?' : 'A ordem muda quando comparamos por mês?'} →</button></div>`;
   }
+  function yearSelector() {
+    const label = D.partial ? `<span class="year-partial">${escape(D.partialLabel)}</span>` : '';
+    if (D.years.length < 2) return label;
+    const options = D.years.map(y => `<option value="${y.year}"${String(y.year) === D.year ? ' selected' : ''}>${y.year}${y.partial ? ' (parcial)' : ''}</option>`).join('');
+    return `<label class="year-select"><select data-year-select aria-label="Ano">${options}</select></label>${label}`;
+  }
+  async function switchYear(year) {
+    syncURL();
+    const url = new URL(location.href);
+    if (String(year) === D.defaultYear) url.searchParams.delete('ano'); else url.searchParams.set('ano', year);
+    if (state.featured) {
+      try { const other = await (await fetch(`${D.yearBase(year)}/index.json`)).json(); if (!other.scope.ids.map(String).includes(String(state.featured))) url.searchParams.delete('destaque'); } catch { url.searchParams.delete('destaque'); }
+    }
+    location.assign(url);
+  }
   function rankingSection() {
-    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados de ${state.year}</h2>${tabs()}<div class="editorial-controls"><div class="selects"><span class="real-year">${state.tab === 'projetos' && D.billsApproved && D.billsYears.length ? `Projetos apresentados em ${billsPeriod()}` : span()}</span></div>${state.tab === 'projetos' ? '' : metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
+    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados de ${state.year}</h2>${tabs()}<div class="editorial-controls"><div class="selects">${yearSelector()}<span class="real-year">${state.tab === 'projetos' && D.billsApproved && D.billsYears.length ? `Projetos apresentados em ${billsPeriod()}` : span()}</span></div>${state.tab === 'projetos' ? '' : metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
   }
   function answerHTML() {
     if (!state.answer) return '';
     const answer = state.answer;
     if (answer.type === 'loading') return '<section class="answer" aria-live="polite"><p class="loading-note">Carregando…</p></section>';
-    if (answer.type === 'message') return `<section class="answer" aria-label="Resposta da investigação"><p class="eyebrow">Busca por regras locais · sem IA conectada</p><div class="answer-message"><h3>${escape(answer.title)}</h3><p>${escape(answer.message)}</p><div class="answer-next"><span>Tente:</span>${examples().slice(0, 2).map(q => `<button type="button" class="outline-button" data-question="${escape(q)}">${escape(q)}</button>`).join('')}</div></div></section>`;
+    if (answer.type === 'message') return `<section class="answer" aria-label="Resposta da investigação"><p class="eyebrow">Busca por regras locais · sem IA conectada</p><div class="answer-message"><h3>${escape(answer.title)}</h3><p>${escape(answer.message)}</p>${answer.switchYear ? `<p><button type="button" class="outline-button primary" data-year="${escape(answer.switchYear)}">Ver ${escape(answer.switchYear)}</button></p>` : ''}<div class="answer-next"><span>Tente:</span>${examples().slice(0, 2).map(q => `<button type="button" class="outline-button" data-question="${escape(q)}">${escape(q)}</button>`).join('')}</div></div></section>`;
     const ppl = answer.ids.map(person).filter(p => p && comparable(p));
     if (!ppl.length || ppl.length < answer.ids.length && answer.ids.length === 2) {
       const left = answer.ids.map(person).filter(p => p && !comparable(p));
@@ -211,7 +231,7 @@
       step(everyone.length, `${noun(everyone.length)} com mandato no recorte`, '')}${
       step(withData.length, 'com exercício confirmado ou despesas publicadas', lostData ? `${lostData} sem exercício confirmado nem despesa publicada.` : '')}${
       step(compared.length, `comparáveis: ao menos ${MIN_MONTHS} meses de exercício, sem mês em revisão`, lostCompared ? `${lostCompared} com menos meses de exercício ou algum mês em revisão.` : '')}${
-      D.ceiling ? ceilingStep(everyone, step) : ''
+      D.ceiling ? ceilingStep(everyone, step) : D.ceilingPending ? step('—', `limite de ${state.year} em conferência`, 'A porcentagem do teto da cota ainda não é mostrada para este ano.') : ''
     }</ol><button type="button" class="text-button" data-action="methodology">Como chegamos nisso? →</button></section>`;
   }
   function layout() {
@@ -300,7 +320,9 @@
     if (!D.suppliersLoaded()) { state.answer = { type: 'loading' }; refresh(); D.loadSuppliers().then(() => ask(query, scroll, fixed), () => { state.answer = null; refresh(); }); return; }
     const q = norm(state.query), years = q.match(/\b20\d{2}\b/g);
     let message;
-    if (years?.some(y => y !== state.year)) message = ['Período fora desta versão', `Esta versão contém ${span()}. Outros períodos ainda não foram publicados.`];
+    const asked = years?.find(y => y !== state.year), askedPublished = asked && otherYears().includes(asked);
+    if (askedPublished) message = ['Período de outro ano', `A pergunta cita ${asked}, mas você está vendo ${span()}.`, asked];
+    else if (asked) message = ['Período fora desta versão', `Esta versão contém ${span()}. Outros períodos ainda não foram publicados.`];
     else if (/projet|propost|votou|votaram|votac|reforma|corrup|roub|honest|melhor|pior|patrimon|emenda|salario|president|senador|partido/.test(q)) message = ['Não temos esse dado publicado', window.ClareiaData.billsApproved || window.ClareiaData.votesApproved ? 'A busca responde só sobre despesas da cota parlamentar. Projetos e votações aprovados ficam nas seções de atividade; o que não está lá ainda não foi conferido.' : 'Esta versão cobre só as despesas da cota parlamentar. Projetos, votações, patrimônio e emendas ainda não foram coletados e conferidos.'];
     if (!message) {
       const matches = all().filter(p => p.name.split(' ').some(word => word.length > 2 && new RegExp(`\\b${norm(word)}\\b`).test(q)));
@@ -317,10 +339,10 @@
       }
     }
     if (message) {
-      const cleared = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric !== 'total' || state.tab !== 'gastos' || Boolean(window.Clareia.portalActive?.());
+      const cleared = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric !== defaultMetric || state.tab !== 'gastos' || Boolean(window.Clareia.portalActive?.());
       document.dispatchEvent(new CustomEvent('clareia:reset'));
-      state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos';
-      state.answer = { type: 'message', title: message[0], message: cleared ? `${message[1]} Os filtros ativos foram limpos.` : message[1] };
+      state.uf = 'Brasil'; state.category = 'Todas'; state.metric = defaultMetric; state.tab = 'gastos';
+      state.answer = { type: 'message', title: message[0], message: cleared ? `${message[1]} Os filtros ativos foram limpos.` : message[1], switchYear: message[2] };
     }
     $('#query').value = state.query;
     closeSuggestions(); refresh();
@@ -406,7 +428,18 @@
     const target = location.pathname + location.search;
     if (initial) writeHistory('replaceState', null, '/' + location.search);
     const found = route.type === 'deputado' && route.id ? person(route.id) : null;
-    if (found) profile(found.id); else notFound(route.type, target);
+    if (found) profile(found.id); else if (route.type === 'deputado' && route.id && D.years.length > 1) absentDeputy(route, target); else notFound(route.type, target);
+  }
+  async function absentDeputy(route, target) {
+    const present = [];
+    await Promise.all(D.years.filter(y => String(y.year) !== D.year).map(async y => {
+      try { const other = await (await fetch(`${D.yearBase(y.year)}/index.json`)).json(); if (other.scope.ids.map(String).includes(route.id)) present.push(String(y.year)); } catch { /* an unreachable year just does not get offered */ }
+    }));
+    if (!present.length) { notFound('deputado', target); return; }
+    present.sort();
+    const path = `/deputado/${route.id}${route.slug ? '-' + route.slug : ''}`, link = y => `${path}${y === D.defaultYear ? '' : `?ano=${y}`}`;
+    const title = `Sem dados em ${D.year}`;
+    showDialog(title, `<p class="records-note" role="alert">Este(a) deputado(a) não tem despesas publicadas em ${escape(D.year)}.${present.length ? ` Há dados em ${present.map(escape).join(' e ')}.` : ''}</p><div class="action-row">${present.map(y => `<a class="outline-button primary" href="${escape(link(y))}">Ver em ${escape(y)}</a>`).join('')}<button type="button" class="outline-button" data-action="close">Ir para o início</button></div>`, true, { url: target, title: `${title} — Clareia` });
   }
   function closeFromHistory() { if (session) session.live = false; $('#detail').close(); }
   window.addEventListener('popstate', async () => {
@@ -531,8 +564,8 @@
   }
   function profile(id) {
     const p = person(id), peer = comparable(p) ? byTotal().find(other => other.id !== id) : null;
-    const route = { url: deputyPath(p), title: `${p.name} — Clareia` };
-    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${escape(p.officialId)}</p>${p.party ? `<p class="context">${p.partyNote ? 'Partido sem confirmação mês a mês, dos eventos da legislatura (ver nota); UF' : window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${!p.noExercise && exclusionNote(p) ? `<small class="held-note">${exclusionNote(p)}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos apresentados</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button><button class="share-button" data-action="copy-link" data-id="${id}">Compartilhar</button>${index.shareImages ? `<button class="outline-button" data-action="share-image" data-id="${id}">Baixar imagem</button>` : ''}${safeUrl(p.sourceUrl) ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`, true, route);
+    const route = { url: withYear(deputyPath(p)), title: `${p.name} — Clareia` };
+    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${escape(p.officialId)}</p>${p.party ? `<p class="context">${p.partyNote ? 'Partido sem confirmação mês a mês, dos eventos da legislatura (ver nota); UF' : window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p></div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${!p.noExercise && exclusionNote(p) ? `<small class="held-note">${exclusionNote(p)}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos apresentados</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button><button class="share-button" data-action="copy-link" data-id="${id}">Compartilhar</button>${D.shareImages ? `<button class="outline-button" data-action="share-image" data-id="${id}">Baixar imagem</button>` : ''}${safeUrl(p.sourceUrl) ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`, true, route);
   }
   function methodologyBody() {
     const v = index.validation, audit = index.audit, compare = v.apiComparison, P = window.ClareiaPages;
@@ -559,7 +592,7 @@
     else if (name === 'dados-abertos') {
       let manifest = null;
       try { const r = await fetch(`${base}/dados-abertos.json`); if (r.ok) manifest = await r.json(); } catch {}
-      main.innerHTML = P.pages['dados-abertos'].body(manifest, base);
+      main.innerHTML = P.pages['dados-abertos'].body(manifest, base, { folderId: D.sharedBase.split('/').pop(), year: D.year, partialLabel: D.partialLabel, others: D.years.filter(y => String(y.year) !== D.year).map(y => ({ year: String(y.year), partial: y.partial, isDefault: String(y.year) === D.defaultYear })) });
       P.spy();
     }
     else if (name === 'metodologia') { const s = P.sections(`${auditTiles()}${methodologyBody()}`); main.innerHTML = P.layout('metodologia', 'Metodologia', 'Metodologia', 'Como somamos as despesas, o que conferimos e o que ainda não concluímos.', s.html, s.toc); P.spy(); }
@@ -604,7 +637,7 @@
     } catch { toast('Imagem indisponível agora.'); }
   }
   async function copyProfileLink(id, button) {
-    const p = person(id), url = location.origin + deputyPath(p);
+    const p = person(id), url = location.origin + withYear(deputyPath(p));
     if (navigator.share && matchMedia('(pointer: coarse)').matches) { try { await navigator.share({ title: `${p.name} — Clareia`, text: `Despesas e atividade de ${p.name} na Câmara, com dados oficiais.`, url }); return; } catch (error) { if (error?.name === 'AbortError') return; } }
     const copied = () => { toast('Link do perfil copiado.'); const text = button.textContent; button.textContent = 'Link copiado'; setTimeout(() => { if (button.isConnected) button.textContent = text; }, 2000); };
     try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(url); copied(); return; } catch { /* falls back to a selectable field */ }
@@ -631,13 +664,14 @@
     document.querySelector(`[role="tab"][data-tab="${all[to].dataset.tab}"]`)?.focus();
   });
   document.addEventListener('click', event => {
-    const target = event.target.closest('[data-action],[data-tab],[data-metric],[data-question]');
+    const target = event.target.closest('[data-action],[data-tab],[data-metric],[data-question],[data-year]');
     if (!event.target.closest('.search-wrap')) closeSuggestions();
     if (!target) return;
     if (target.tagName === 'A' && !target.href) event.preventDefault();
     if (target.dataset.tab) { state.tab = target.dataset.tab; state.barLimit = BAR_STEP; refresh(); return; }
     if (target.dataset.metric) { state.metric = target.dataset.metric; refresh(); return; }
     if (target.dataset.question) { ask(target.dataset.question); return; }
+    if (target.dataset.year) { switchYear(target.dataset.year); return; }
     const id = target.dataset.id, action = target.dataset.action;
     if (action === 'close') closeDialog();
     else if (action === 'feature') feature(id);
@@ -658,9 +692,18 @@
     else if (action === 'copy-link') copyProfileLink(id, target);
     else if (action === 'copy-pix') copyPixKey(target);
     else if (action === 'share-image') downloadShareImage(id);
-    else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = 'total'; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
+    else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = defaultMetric; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });
+  const carryYear = event => {
+    const a = event.target.closest?.('a[href^="/"]');
+    if (!a || D.year === D.defaultYear || a.target === '_blank') return;
+    const url = new URL(a.href);
+    if (!url.searchParams.has('ano') && ['/', '/sobre', '/correcoes', '/metodologia', '/dados-abertos', '/apoie', '/api'].includes(url.pathname)) { url.searchParams.set('ano', D.year); a.href = url.pathname + url.search + url.hash; }
+  };
+  document.addEventListener('click', carryYear, true);
+  document.addEventListener('auxclick', carryYear, true);
+  document.addEventListener('change', event => { if (event.target.matches?.('[data-year-select]')) switchYear(event.target.value); });
   document.addEventListener('submit', event => { if (event.target.id === 'search-form') { event.preventDefault(); ask($('#query').value); } });
   document.addEventListener('focusin', event => { if (event.target.id === 'query') { $('#suggestions').hidden = false; $('#query').setAttribute('aria-expanded', 'true'); } });
   document.addEventListener('focusout', () => { setTimeout(() => { if (!document.activeElement.closest('.search-wrap')) closeSuggestions(); }, 0); });
@@ -674,7 +717,7 @@
     dialogTrail = []; dialogView = null;
     if (session?.live) {
       session.live = false;
-      if (session.base === 'beneath') history.go(-(session.d + 1)); else writeHistory('replaceState', null, '/');
+      if (session.base === 'beneath') history.go(-(session.d + 1)); else writeHistory('replaceState', null, '/' + yearQuery());
     }
     document.title = pageTitle.value;
     const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
@@ -682,7 +725,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { parseRoute, openRoute, deputyPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, approvedText, billsPeriod, byTotal, compareValues };
+  window.Clareia = { yearSelector, yearQuery, parseRoute, openRoute, deputyPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, approvedText, billsPeriod, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
   if (state.query) ask(state.query, false, fromURL);
 })();

@@ -59,9 +59,9 @@
     if (editorial) {
       const n=people.filter(p=>!p.noExercise).length, recs=C.count(people.flatMap(C.cells));
       const stat=(key,value,text,format='number')=>{const final=format==='money'?compact(value):number(value);return `<button class="p-stat" data-p-summary="${key}" aria-label="${final} ${text}"><strong data-counter="${value}" data-format="${format}" aria-hidden="true">${final}</strong> <span aria-hidden="true">${text}</span></button>`;};
-      return `<div class="p-overview-head"><h2 class="p-overview-title">Panorama de ${C.state.year}</h2><span>${scopeText()}</span></div><p class="p-overview-sentence">Neste recorte, ${stat('people',n,n===1?'deputado':'deputados')} ${n===1?'soma':'somam'} ${stat('expenses',total,'em despesas','money')}, distribuídos em ${stat('records',recs,'registros')}, e ${n===1?'teve':'tiveram'} ${stat('coverage',window.ClareiaData.coverage.length,'meses publicados')} (${C.span()}).${window.ClareiaData.billsApproved?'':' Projetos de lei ainda não foram coletados.'}</p>`;
+      return `<div class="p-overview-head"><h2 class="p-overview-title">Panorama de ${C.state.year}</h2><span>${scopeText()}</span>${C.yearSelector()}</div><p class="p-overview-sentence">Neste recorte, ${stat('people',n,n===1?'deputado':'deputados')} ${n===1?'soma':'somam'} ${stat('expenses',total,'em despesas','money')}, distribuídos em ${stat('records',recs,'registros')}, e ${n===1?'teve':'tiveram'} ${stat('coverage',window.ClareiaData.coverage.length,'meses publicados')} (${C.span()}).${window.ClareiaData.billsApproved?'':' Projetos de lei ainda não foram coletados.'}</p>`;
     }
-    return `<div class="p-overview-head">${editorial?`<h2 class="p-overview-title">Panorama de ${C.state.year}</h2>`:label('01',`Panorama de ${C.state.year}`)}<span>${scopeText()}</span></div><div class="p-stats">${[
+    return `<div class="p-overview-head">${editorial?`<h2 class="p-overview-title">Panorama de ${C.state.year}</h2>`:label('01',`Panorama de ${C.state.year}`)}<span>${scopeText()}</span>${C.yearSelector()}</div><div class="p-stats">${[
       ['Pessoas no recorte',people.length,'perfis para conhecer','people'],
       ['Despesas da cota',total,'registros que você pode conferir','expenses'],
       
