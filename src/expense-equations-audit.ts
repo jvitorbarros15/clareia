@@ -89,3 +89,41 @@ export function independentFlightMultiplicity(scope:Scope,inputs:EquationInput[]
   }
   return {covered,decisions};
 }
+
+// Separate implementation of the sign/cents twin rule: an API row takes the annual face and net only when exactly one annual row and exactly one API row share every field but face and net, faces are within 5 cents, absolute nets are within 5 cents (either sign), and the values are not already identical.
+export type IndependentTwin={net:number;face:number|null;tolerated:boolean};
+export function independentSignTwins(scope:Scope,inputs:EquationInput[]):Map<string,IndependentTwin>{
+  const parse=(v:unknown)=>{if(v===null||v===undefined||String(v).trim()==='')return null;const m=/^(-?)(\d+)(?:\.(\d{1,2}))?$/.exec(String(v).trim().replace(',','.'));if(!m)throw Error();const n=Number((BigInt(m[2])*100n+BigInt((m[3]||'').padEnd(2,'0')))*(m[1]?-1n:1n));if(!Number.isSafeInteger(n))throw Error();return n;};
+  const buckets=new Map<string,{input:EquationInput;net:number;face:number|null}[][]>();
+  for(const input of inputs){
+    const r=input.raw,ann=input.kind==='annual';if(!r||typeof r!=='object')continue;
+    try{
+      const net=parse(ann?r.vlrLiquido:r.valorLiquido),year=Number(ann?r.numAno:r.ano),month=Number(ann?r.numMes:r.mes);
+      if(!net||year!==scope.year||!scope.months.includes(month)||ann&&Number(r.codLegislatura)!==scope.legislature)continue;
+      const doc=String((ann?r.ideDocumento:r.codDocumento)??''),num=String((ann?r.txtNumero:r.numDocumento)??''),when=ann?r.datEmissao:r.dataDocumento,parcel=Number(ann?r.numParcela:r.parcela)||0;
+      const id=JSON.stringify([input.personId,year,month,doc==='Não informado'?'':doc,ann?r.txtDescricao:r.tipoDespesa,num==='Não informado'?'':num,when?String(when).substring(0,10):null,String((ann?r.numLote:r.codLote)??''),parse(ann?r.vlrGlosa:r.valorGlosa),parcel]);
+      const pair=buckets.get(id)??[[],[]];pair[ann?0:1].push({input,net,face:parse(ann?r.vlrDocumento:r.valorDocumento)});buckets.set(id,pair);
+    }catch{}
+  }
+  const out=new Map<string,IndependentTwin>();
+  type Item={input:EquationInput;net:number;face:number|null};
+  const near=(x:Item,y:Item)=>{
+    const identicalFace=x.face===y.face,closeFace=x.face!==null&&y.face!==null&&Math.abs(x.face-y.face)<=5;
+    if(!identicalFace&&!closeFace)return;
+    if(Math.abs(x.net)-Math.abs(y.net)>5||Math.abs(y.net)-Math.abs(x.net)>5)return;
+    if(identicalFace&&x.net===y.net)return;
+    const i=y.input;
+    out.set(hash(JSON.stringify(['api',i.personId,i.source.url,i.source.sha256,i.source.row])),{net:x.net,face:x.face,tolerated:!(identicalFace&&x.net+y.net===0)});
+  };
+  for(const [annualRows,apiRows] of buckets.values()){
+    const restA:Item[]=[],restB:Item[]=[];
+    for(const face of new Set([...annualRows,...apiRows].map(e=>e.face))){
+      const sa=annualRows.filter(e=>e.face===face),sb=apiRows.filter(e=>e.face===face);
+      if(sa.length===1&&sb.length===1&&sa[0].net+sb[0].net===0||sa.length===1&&sb.length===1&&sa[0].net===sb[0].net){
+        if(sa[0].net!==sb[0].net){const i=sb[0].input;out.set(hash(JSON.stringify(['api',i.personId,i.source.url,i.source.sha256,i.source.row])),{net:sa[0].net,face,tolerated:false});}
+      }else{restA.push(...sa);restB.push(...sb);}
+    }
+    if(restA.length===1&&restB.length===1)near(restA[0],restB[0]);
+  }
+  return out;
+}

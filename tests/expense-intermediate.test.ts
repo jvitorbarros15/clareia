@@ -293,13 +293,13 @@ test('airfare, housing, zero values and correct positives are not touched by the
   assert.equal(zero.report.cells[0].status,'complete');assert.equal(zero.report.cells[0].diagnostics?.apiSignCorrected,undefined);
   const ok=await setup(t);assert.equal(ok.report.cells[0].diagnostics?.apiSignCorrected,undefined);
 });
-test('an installment with an inverted API net stays held for review',async t=>{
-  const line=annualLine().replace(/;0$/,';1'),r=await setup(t,url=>url.endsWith('.zip')?annual([line]):invertedApi({parcela:1})(url));
+test('an installment with an inverted API net and no exact annual twin stays held for review',async t=>{
+  const line=annualLine(1,1,'COMBUSTÍVEIS','9.50').replace(/;0$/,';1'),r=await setup(t,url=>url.endsWith('.zip')?annual([line]):invertedApi({parcela:1})(url));
   assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.cells[0].diagnostics?.apiSignCorrected,undefined);
 });
-test('the API sign rule never applies to airfare, mission or housing categories',async t=>{
+test('the leftover sign rule never applies to airfare, mission or housing categories',async t=>{
   for(const category of ['LOCAÇÃO OU FRETAMENTO DE AERONAVES','PASSAGEM AÉREA - RPA','PASSAGEM AÉREA - REEMBOLSO','PASSAGEM AÉREA - MISSÃO OFICIAL','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA','PASSAGEM AÉREA - SIGEPA']){
-    const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(1,1,category)]):invertedApi({tipoDespesa:category})(url));
+    const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedApi({tipoDespesa:category})(url));
     assert.deepEqual(r.report.cells[0].reasons,['financial-normalization-failed'],category);assert.equal(r.report.cells[0].status,'held-review');
   }
 });
@@ -330,7 +330,7 @@ test('an inverted API row with glosa stays held unless the annual net, document 
   await held(url=>url.endsWith('.zip')?annual([withGlosa('7.21','9.21','2')]):invertedGlosa()(url));
   await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','0')].map(l=>l.replace(';8.21;10.21;0;',';10.21;10.21;0;'))):invertedGlosa()(url));
   await held(url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedGlosa()(url));
-  await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','2').replace('COMBUSTÍVEIS','PASSAGEM AÉREA - SIGEPA')]):invertedGlosa({tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})(url),'financial-normalization-failed');
+  await held(url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedGlosa({tipoDespesa:'PASSAGEM AÉREA - SIGEPA'})(url),'financial-normalization-failed');
   await held(url=>url.endsWith('.zip')?annual([annualLine(2)]):invertedGlosa({valorDocumento:5,valorGlosa:8,valorLiquido:3})(url),'financial-normalization-failed');
   await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','10.21','')]):invertedGlosa()(url));
   await held(url=>url.endsWith('.zip')?annual([withGlosa('8.21','','2')]):invertedGlosa()(url));
@@ -346,4 +346,76 @@ test('an inverted row finds its annual partner whichever order the annual rows c
     const r=await setup(t,url=>url.endsWith('.zip')?annual(lines):url.includes('/1/despesas')&&url.includes('mes=1&')?{dados,links:[]}:undefined);
     const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.totalCents,1642);assert.equal(c.diagnostics?.apiSignCorrected,1);
   }
+});
+const housingCat='COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA';
+const housingAnnual=(net:string)=>`1;2025;1;57;${housingCat};${net};${net.replace('-','')};;;Empresa;11222333000181;;N1;2025-01-02T00:00:00;;0`;
+const housingApi=(net:number)=>(url:string)=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:[apiRow(1,{tipoDespesa:housingCat,codDocumento:null,codLote:null,parcela:null,valorDocumento:Math.abs(net),valorGlosa:null,valorLiquido:net})],links:[]}:undefined;
+test('a housing API row with the opposite sign pairs with the annual row and keeps the annual value',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([housingAnnual('-12.47')]):housingApi(12.47)(url));
+  const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(c.records.length,1);assert.equal(c.records[0].cents,-1247);assert.equal(c.records[0].origin,'both');assert.equal(r.report.totalCents,-1247);
+});
+test('a housing API row that is not the exact opposite of the annual row keeps the month held',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([housingAnnual('-12.00')]):housingApi(12.47)(url));
+  assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].reasons,['unreconciled-source-occurrences']);
+});
+test('a housing API row with no annual row keeps the month held',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([annualLine(2)]):housingApi(12.47)(url));
+  assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].reasons,['unreconciled-source-occurrences']);
+});
+const full=(category:string,net:string,face:string,glosa:string,doc:string,parcel:string,month=1)=>`1;2025;${month};57;${category};${net};${face};${glosa};${doc};Empresa;11222333000181;;N1;2025-01-02T00:00:00;1;${parcel}`;
+const twinApi=(rows:Record<string,unknown>[])=>(url:string)=>url.includes('/1/despesas')&&url.includes('mes=1&')?{dados:rows.map(o=>apiRow(1,o)),links:[]}:undefined;
+test('an API row with the exact opposite net of its annual twin takes the annual value, for moradia, aircraft rental and installments',async t=>{
+  const moradia=await setup(t,url=>url.endsWith('.zip')?annual([housingAnnual('-12.47')]):housingApi(12.47)(url));
+  const rental=await setup(t,url=>url.endsWith('.zip')?annual([full('LOCAÇÃO OU FRETAMENTO DE AERONAVES','150.00','150.00','0','10','0')]):twinApi([{tipoDespesa:'LOCAÇÃO OU FRETAMENTO DE AERONAVES',valorDocumento:150,valorGlosa:0,valorLiquido:-150}])(url));
+  assert.equal(rental.report.cells[0].status,'complete');assert.equal(rental.report.totalCents,15000);assert.equal(rental.report.cells[0].records[0].origin,'both');assert.equal(rental.report.cells[0].diagnostics?.apiSignCorrected,1);
+  assert.equal(moradia.report.cells[0].diagnostics?.apiSignCorrected,1);
+  const inst=await setup(t,url=>url.endsWith('.zip')?annual([full('COMBUSTÍVEIS','46.32','50.00','0','10','1')]):twinApi([{valorDocumento:50,valorGlosa:0,valorLiquido:-46.32,parcela:1}])(url));
+  assert.equal(inst.report.cells[0].status,'complete');assert.equal(inst.report.totalCents,4632);assert.equal(inst.report.cells[0].records[0].financialBasis,'reported-installment');
+  const month=(url:string)=>Number(new URL(url).searchParams.get('mes'));
+  const split=await setup(t,url=>url.endsWith('.zip')?annual([full('COMBUSTÍVEIS','3.96','7.06','0','10','0',1),full('COMBUSTÍVEIS','3.10','7.06','0','10','0',2)]):url.includes('/1/despesas')?{dados:month(url)<=2?[apiRow(month(url),{valorDocumento:7.06,valorLiquido:month(url)===1?-3.96:-3.10})]:[],links:[]}:undefined,true);
+  assert.equal(split.report.cells[0].status,'complete');assert.equal(split.report.totalCents,706);assert.equal(split.report.cells[0].records[0].financialBasis,'balanced-document-split');
+});
+test('an API row without an exact annual twin stays held even next to a twin or one cent away',async t=>{
+  const extra=await setup(t,url=>url.endsWith('.zip')?annual([full('COMBUSTÍVEIS','46.32','50.00','0','10','1')]):twinApi([{valorDocumento:50,valorGlosa:0,valorLiquido:-46.32,parcela:1},{valorDocumento:50,valorGlosa:0,valorLiquido:5.28,parcela:1}])(url));
+  const cent=await setup(t,url=>url.endsWith('.zip')?annual([full('COMBUSTÍVEIS','50.00','50.00','0','10','0')]):twinApi([{valorDocumento:49.94,valorGlosa:0,valorLiquido:-49.94}])(url));
+  for(const r of [extra,cent]){assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.totalCents,null);}
+});
+test('the audit rejects a twin batch whose published value follows the API sign',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([housingAnnual('-12.47')]):housingApi(12.47)(url));
+  assert.equal(r.report.cells[0].records[0].cents,-1247);
+  r.report.cells[0].records[0].cents=1247;r.report.cells[0].totalCents=1247;r.report.totalCents=1247;r.report.contentSha256=expenseBatchContentId(r.report);
+  assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='financial-records-coverage-or-union'));
+});
+const near=(face:number,net:number)=>({valorDocumento:face,valorGlosa:0,valorLiquido:net});
+const nearAnnual=()=>annual([full('COMBUSTÍVEIS','100.00','100.00','0','10','0')]);
+test('a difference of up to 5 cents between the API and the annual row of the same document keeps the annual value, with either sign',async t=>{
+  for(const api of [near(99.95,-99.95),near(99.95,99.95),near(100.05,-100.05)]){
+    const r=await setup(t,url=>url.endsWith('.zip')?nearAnnual():twinApi([api])(url));
+    const c=r.report.cells[0];assert.equal(c.status,'complete');assert.equal(r.report.totalCents,10000);assert.equal(c.records[0].documentCents,10000);assert.equal(c.records[0].origin,'both');assert.equal(c.diagnostics?.apiCentsTolerated,1);assert.equal(c.diagnostics?.apiSignCorrected,undefined);
+  }
+});
+test('a difference above 5 cents, or a tolerance with two API rows on the key, stays held',async t=>{
+  const six=await setup(t,url=>url.endsWith('.zip')?nearAnnual():twinApi([near(99.94,-99.94)])(url));
+  const two=await setup(t,url=>url.endsWith('.zip')?nearAnnual():twinApi([near(99.95,-99.95),near(99.97,-99.97)])(url));
+  const other=await setup(t,url=>url.endsWith('.zip')?nearAnnual():twinApi([{...near(99.95,-99.95),numDocumento:'N2'}])(url));
+  for(const r of [six,two,other]){assert.equal(r.report.cells[0].status,'held-review');assert.deepEqual(r.report.cells[0].records,[]);assert.equal(r.report.cells[0].diagnostics?.apiCentsTolerated,undefined);}
+});
+test('the audit rejects a tolerance batch whose published value follows the API',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?nearAnnual():twinApi([near(99.95,-99.95)])(url));
+  r.report.cells[0].records[0].cents=9995;r.report.cells[0].totalCents=9995;r.report.totalCents=9995;r.report.contentSha256=expenseBatchContentId(r.report);
+  assert.ok((await auditExpenseBatch(r.report,temporal,scope,hash('proposal'),r.read)).failures.some(f=>f.code==='financial-records-coverage-or-union'));
+  const r2=await setup(t,url=>url.endsWith('.zip')?nearAnnual():twinApi([near(99.95,-99.95)])(url));
+  delete r2.report.cells[0].diagnostics!.apiCentsTolerated;r2.report.contentSha256=expenseBatchContentId(r2.report);
+  assert.ok((await auditExpenseBatch(r2.report,temporal,scope,hash('proposal'),r2.read)).failures.some(f=>f.code==='financial-records-coverage-or-union'));
+});
+test('several rows of one document with different faces pair by exact face first, with the right counters',async t=>{
+  const hl=(net:string)=>housingAnnual(net),h2=housingAnnual('-30.00');
+  const mk=(c:string,net:number,face?:number)=>({tipoDespesa:c,codDocumento:null,codLote:null,parcela:null,valorDocumento:face??Math.abs(net),valorGlosa:null,valorLiquido:net});
+  const two=await setup(t,url=>url.endsWith('.zip')?annual([hl('-12.47'),h2]):twinApi([mk(housingCat,12.47),mk(housingCat,30)])(url));
+  assert.equal(two.report.cells[0].status,'complete');assert.equal(two.report.totalCents,-4247);assert.equal(two.report.cells[0].diagnostics?.apiSignCorrected,2);assert.equal(two.report.cells[0].diagnostics?.apiCentsTolerated,undefined);
+  const mixed=await setup(t,url=>url.endsWith('.zip')?annual([hl('-12.47'),h2]):twinApi([mk(housingCat,12.47),mk(housingCat,-30)])(url));
+  assert.equal(mixed.report.cells[0].status,'complete');assert.equal(mixed.report.totalCents,-4247);assert.equal(mixed.report.cells[0].diagnostics?.apiSignCorrected,1);
+  const air='LOCAÇÃO OU FRETAMENTO DE AERONAVES',item=(net:string)=>full(air,net,net,'0','10','0');
+  const rental=await setup(t,url=>url.endsWith('.zip')?annual([item('150.00'),item('250.00')]):twinApi([{tipoDespesa:air,valorDocumento:150,valorGlosa:0,valorLiquido:-150},{tipoDespesa:air,valorDocumento:250,valorGlosa:0,valorLiquido:-250}])(url));
+  assert.equal(rental.report.cells[0].status,'complete');assert.equal(rental.report.totalCents,40000);assert.equal(rental.report.cells[0].diagnostics?.apiSignCorrected,2);
 });

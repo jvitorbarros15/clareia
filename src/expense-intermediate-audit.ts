@@ -6,7 +6,7 @@ import type {Expense,Scope,FinancialBasis,DuplicateReason} from './model.ts';
 import type {ExpenseBatch,ExpenseSource} from './expense-intermediate.ts';
 import type {TemporalReport} from './people-temporal.ts';
 import {findCpfs} from './cpf-scan.ts';
-import {independentEquationReview,independentFlightMultiplicity} from './expense-equations-audit.ts';
+import {independentEquationReview,independentFlightMultiplicity,independentSignTwins} from './expense-equations-audit.ts';
 import type {EquationInput} from './expense-equations.ts';
 import {independentPortalReview,isAnalyticUrl} from './cota-portal-audit.ts';
 import type {PortalCheck} from './cota-portal.ts';
@@ -122,8 +122,10 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
   if(new Set(actualKeys).size!==actualKeys.length||canonical([...expectedKeys].sort())!==canonical([...actualKeys].sort()))fail('competence-universe');
   const reads=new Map<string,[ReturnType<typeof api>,ReturnType<typeof api>]>(),equationInputs:EquationInput[]=second.rows.map(r=>({kind:'annual',personId:Number(r.raw.ideCadastro),raw:r.raw,source:{url:r.source.url,sha256:second.csvHash,row:r.row,fetchedAt:r.source.fetchedAt}}));
   for(const id of scope.ids)for(const month of scope.months){const pair:[ReturnType<typeof api>,ReturnType<typeof api>]=[api(id,month,1),api(id,month,2)];reads.set(id+':'+month,pair);if(annualStable&&pair[0].rows!==null&&pair[1].rows!==null&&digest(pair[0].rows.map(r=>r.raw))===digest(pair[1].rows.map(r=>r.raw)))for(const r of pair[1].rows)equationInputs.push({kind:'api',personId:id,raw:r.raw,source:{url:r.source.url,sha256:r.source.sha256,row:r.row,fetchedAt:r.source.fetchedAt}});}
-  const equationReview=independentEquationReview(scope,annualStable?equationInputs:[]);
-  const multiplicityReview=independentFlightMultiplicity(scope,annualStable?equationInputs:[]);
+  const twinRaw=(raw:Record<string,any>,t:{net:number;face:number|null})=>({...raw,valorLiquido:t.net/100,...(t.face===null?{}:{valorDocumento:t.face/100})}),twins=annualStable?independentSignTwins(scope,equationInputs):new Map<string,{net:number;face:number|null;tolerated:boolean}>(),twinKey=(personId:number,r:RawRow)=>hash(JSON.stringify(['api',personId,r.source.url,r.source.sha256,r.row]));
+  const twinInputs=(annualStable?equationInputs:[]).map(i=>{const n=i.kind==='api'?twins.get(hash(JSON.stringify(['api',i.personId,i.source.url,i.source.sha256,i.source.row]))):undefined;return n===undefined?i:{...i,raw:twinRaw(i.raw,n)};});
+  const equationReview=independentEquationReview(scope,twinInputs);
+  const multiplicityReview=independentFlightMultiplicity(scope,twinInputs);
   if(report.equationRule!=='camara.ceap.correlated-net.v2'||canonical(report.equationDecisions)!==canonical(equationReview.decisions))fail('equation-review-evidence');
   if(canonical(report.equationHolds)!==canonical(equationReview.holds))fail('equation-review-holds');
   if(report.multiplicityRule!=='camara.ceap.sigepa-publish-flag.v3'||canonical(report.multiplicityDecisions)!==canonical(multiplicityReview.decisions))fail('multiplicity-review-evidence');
@@ -161,7 +163,7 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
       else{
         dup=unresolved.some(r=>!portalCovered.has(rowKey(r)))||duplicates(annual)?'ambiguous-identical-occurrences':repeatedTicket||b.some(r=>(apiCounts.get(canonical(r.raw))??0)>1)?'sigepa-unit-unconfirmed':null;
         let ar:Expense[]=[],br:Expense[]=[];
-        try{ar=annual.map(r=>project(r,c.personId,scope,'annual',second.csvHash,permission('annual',c.personId,r)));br=b.map(r=>project(r,c.personId,scope,'api',undefined,permission('api',c.personId,r)));}catch{reasons=['financial-normalization-failed'];}
+        try{ar=annual.map(r=>project(r,c.personId,scope,'annual',second.csvHash,permission('annual',c.personId,r)));br=b.map(r=>{const n=twins.get(twinKey(c.personId,r));return project(n===undefined?r:{...r,raw:twinRaw(r.raw,n)},c.personId,scope,'api',undefined,permission('api',c.personId,r));});}catch{reasons=['financial-normalization-failed'];}
         if(!reasons.length){const first=new Map<string,string>();annual.forEach((r,i)=>{const raw=canonical(r.raw),seen=first.get(ar[i].id);if(seen!==undefined&&seen!==raw){reasons=['supplier-only-difference'];dup=null;}first.set(ar[i].id,raw);});}
         if(!reasons.length){
           const key=(r:Expense)=>canonical([r.personId,r.month,blank(r.documentId),r.category,r.cents]),pool=new Map<string,Expense[]>(),left:Expense[]=[],matches:{a:Expense;b:Expense}[]=[];
@@ -169,14 +171,14 @@ export async function auditExpenseBatch(report:ExpenseBatch,temporal:TemporalRep
           const rows=new Map<string,Expense[]>(),credit=new Map<string,number>(),used=new Set<Expense>(),credited=new Set<Expense>(),spare=(k:string)=>(rows.get(k)?.length??0)-(credit.get(k)??0);
           for(const r of ar)rows.set(key(r),[...(rows.get(key(r))??[]),r]);const plain=(r:Expense)=>r.financialBasis||r.documentCents===null||!inverted(r.documentCents,r.disallowedCents,r.cents,r.category);
           for(const r of [...br.filter(plain),...br.filter(r=>!plain(r))]){const k=key(r);if(spare(k)>0){credit.set(k,(credit.get(k)??0)+1);credited.add(r);}}
-          let signFixed=0;
+          const toleratedRows=b.filter(r=>twins.get(twinKey(c.personId,r))?.tolerated).length;let signFixed=b.filter(r=>twins.has(twinKey(c.personId,r))).length-toleratedRows;
           br=br.map(r=>{if(credited.has(r)||plain(r))return r;
             const face=r.documentCents!,glosa=r.disallowedCents!,net=face-glosa,k=key({...r,cents:net});if(spare(k)<=0)return r;
             const partner=(rows.get(k)??[]).find(a=>!used.has(a)&&(a.documentCents===null?glosa===0:a.documentCents===face)&&(glosa===0?(a.disallowedCents??0)===0:a.disallowedCents===glosa));if(!partner)return r;
             used.add(partner);credit.set(k,(credit.get(k)??0)+1);signFixed++;return {...r,cents:net};});
           for(const r of br)pool.set(key(r),[...(pool.get(key(r))??[]),r]);
           for(const r of ar){const list=pool.get(key(r));if(list?.length)matches.push({a:r,b:list.shift()!});else left.push(r);}
-          const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right),...(signFixed?{apiSignCorrected:signFixed}:{})};
+          const right=[...pool.values()].flat(),groups=(rs:Expense[])=>Object.fromEntries([...new Set(rs.map(r=>r.category))].map(k=>[k,rs.filter(r=>r.category===k).length]));diagnostics={annualOnly:groups(left),apiOnly:groups(right),...(signFixed?{apiSignCorrected:signFixed}:{}),...(toleratedRows?{apiCentsTolerated:toleratedRows}:{})};
           if(matches.some(({a,b})=>blank(a.documentNumber)!==blank(b.documentNumber)||(a.date?.slice(0,10)||null)!==(b.date?.slice(0,10)||null)||(a.lot||'')!==(b.lot||''))||left.some(r=>!['TELEFONIA','COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA'].includes(r.category))||right.some(r=>r.category!=='PASSAGEM AÉREA - SIGEPA'))reasons=['unreconciled-source-occurrences'];
           else{
             records=[...matches.map(({a})=>({...a,origin:'both' as const})),...left.map(r=>({...r,origin:'annual' as const})),...right.map(r=>({...r,origin:'api' as const}))];
