@@ -1,1 +1,7 @@
-[]
+[
+  {
+    "date": "2026-11-20",
+    "title": "Nova versão dos dados de 2025 e publicação de 2026",
+    "detail": "Entre 9 e 18 de novembro de 2026, a API de dados abertos da Câmara mudou. Ela passou a devolver o valor líquido com o sinal trocado em muitas linhas, a trazer telefonia e complemento de auxílio-moradia, e alguns valores diferem em até 5 centavos do arquivo anual. Quando a linha da API e a do arquivo anual são o mesmo documento, com o líquido oposto ou com diferença de até 5 centavos, publicamos o valor do arquivo anual. Os demais meses ficam retidos para revisão. Com isso, 2025 tem 588 deputados, 55 meses retidos (antes eram 179), 233.264 registros, R$ 261.729.413,74, e 521 deputados com a porcentagem do teto confirmada (antes eram 484). Quatro suplentes foram convocados em 2025, mas não tomaram posse nem tiveram despesas, e por isso saíram da contagem. O ano de 2026 está publicado de janeiro a outubro, com 160.772 registros e R$ 189.013.769,09, sem a porcentagem do teto, que aguarda a conferência do Ato da Mesa 244."
+  }
+]
