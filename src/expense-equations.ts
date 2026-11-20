@@ -73,6 +73,41 @@ export function reviewExpenseEquations(scope:Scope,inputs:EquationInput[]){
   return {permissions,decisions,holds,blockedKeys};
 }
 
+// The API returns the net with the opposite sign on many rows, and sometimes 1-5 cents off in face and net. An API row takes the annual face and net when it is the only API row and the only annual row sharing every other field (document, category, number, date, lot, installment, glosa), the faces differ by at most 5 cents and the absolute nets by at most 5 cents, with either sign. Anything else keeps the API value.
+export type SignTwin={net:number;face:number|null;tolerated:boolean};
+export function signTwinNets(scope:Scope,inputs:EquationInput[]):Map<string,SignTwin>{
+  const groups=new Map<string,{annual:{key:string;net:number;face:number|null}[];api:{key:string;net:number;face:number|null}[]}>(),out=new Map<string,SignTwin>();
+  for(const input of inputs){
+    const r=input.raw,a=input.kind==='annual';
+    try{
+      const money=(v:unknown)=>v===null||v===undefined||String(v).trim()===''?null:cents(String(v).trim().replace(',','.')),net=money(a?r.vlrLiquido:r.valorLiquido);
+      const month=Number(a?r.numMes:r.mes),year=Number(a?r.numAno:r.ano);
+      if(net===null||net===0||year!==scope.year||!scope.months.includes(month)||a&&Number(r.codLegislatura)!==scope.legislature)continue;
+      const doc=String((a?r.ideDocumento:r.codDocumento)??''),parcel=Number(a?r.numParcela:r.parcela)||0,number=String((a?r.txtNumero:r.numDocumento)??''),date=(a?r.datEmissao:r.dataDocumento)??null;
+      const k=canonical([input.personId,year,month,doc==='Não informado'?'':doc,a?r.txtDescricao:r.tipoDespesa,number==='Não informado'?'':number,date?String(date).slice(0,10):null,String((a?r.numLote:r.codLote)??''),money(a?r.vlrGlosa:r.valorGlosa),parcel]);
+      const g=groups.get(k)??{annual:[],api:[]};g[a?'annual':'api'].push({key:equationKey(input),net,face:money(a?r.vlrDocumento:r.valorDocumento)});groups.set(k,g);
+    }catch{}
+  }
+  type Entry={key:string;net:number;face:number|null};
+  const tolerate=(x:Entry,y:Entry)=>{
+    const sameFace=x.face===y.face,faceClose=x.face!==null&&y.face!==null&&Math.abs(x.face-y.face)<=5;
+    if(!(sameFace||faceClose)||Math.abs(Math.abs(x.net)-Math.abs(y.net))>5||sameFace&&x.net===y.net)return;
+    out.set(y.key,{net:x.net,face:x.face,tolerated:!(sameFace&&y.net===-x.net)});
+  };
+  for(const g of groups.values()){
+    const left={annual:[] as Entry[],api:[] as Entry[]},faces=new Set([...g.annual,...g.api].map(e=>e.face));
+    for(const face of faces){
+      const ar=g.annual.filter(e=>e.face===face),br=g.api.filter(e=>e.face===face);
+      if(ar.length===1&&br.length===1&&(br[0].net===ar[0].net||br[0].net===-ar[0].net)){if(br[0].net!==ar[0].net)out.set(br[0].key,{net:ar[0].net,face,tolerated:false});}
+      else{left.annual.push(...ar);left.api.push(...br);}
+    }
+    if(left.annual.length===1&&left.api.length===1)tolerate(left.annual[0],left.api[0]);
+  }
+  return out;
+}
+export const withTwinNets=(inputs:EquationInput[],twins:Map<string,SignTwin>)=>inputs.map(i=>{const t=i.kind==='api'?twins.get(equationKey(i)):undefined;return t===undefined?i:{...i,raw:twinRaw(i.raw,t)};});
+export const twinRaw=(raw:Record<string,any>,t:SignTwin)=>({...raw,valorLiquido:Number((t.net/100).toFixed(2)),...(t.face===null?{}:{valorDocumento:Number((t.face/100).toFixed(2))})});
+
 // Source-row corroboration only: N distinct annual routes can explain the API
 // projection. This does not authorize summing N debits or release a competence.
 export function reviewFlightMultiplicity(scope:Scope,inputs:EquationInput[]){

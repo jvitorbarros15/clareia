@@ -8,13 +8,13 @@ import {parseAnnual,normalizeAnnual,unionRecords,pairApiSign,annualUrl} from './
 import {assertArchive} from './sources.ts';
 import {findCpfs} from './cpf-scan.ts';
 import type {TemporalReport,MonthlyCoverage} from './people-temporal.ts';
-import {equationKey,reviewExpenseEquations,reviewFlightMultiplicity} from './expense-equations.ts';
+import {equationKey,reviewExpenseEquations,reviewFlightMultiplicity,signTwinNets,withTwinNets,twinRaw} from './expense-equations.ts';
 import type {EquationInput,EquationDecision,EquationHold,MultiplicityDecision} from './expense-equations.ts';
 import {checkPortal,mapPortalIdentity} from './cota-portal.ts';
 import type {PortalCheck} from './cota-portal.ts';
 
 export type ExpenseSource=Capture&{pass:1|2};
-export type ExpenseCell={personId:number;year:number;month:number;status:'complete'|'no-expenses-confirmed'|'held-review'|'source-failure';reasons:string[];api:[{count:number|null;pages:ExpenseSource[]},{count:number|null;pages:ExpenseSource[]}];annualCount:number;exercise:MonthlyCoverage['exercise'];party:MonthlyCoverage['party'];uf:MonthlyCoverage['uf'];totalCents:number|null;records:Expense[];diagnostics:{annualOnly:Record<string,number>;apiOnly:Record<string,number>;apiSignCorrected?:number}|null;duplicateReason?:DuplicateReason};
+export type ExpenseCell={personId:number;year:number;month:number;status:'complete'|'no-expenses-confirmed'|'held-review'|'source-failure';reasons:string[];api:[{count:number|null;pages:ExpenseSource[]},{count:number|null;pages:ExpenseSource[]}];annualCount:number;exercise:MonthlyCoverage['exercise'];party:MonthlyCoverage['party'];uf:MonthlyCoverage['uf'];totalCents:number|null;records:Expense[];diagnostics:{annualOnly:Record<string,number>;apiOnly:Record<string,number>;apiSignCorrected?:number;apiCentsTolerated?:number}|null;duplicateReason?:DuplicateReason};
 export type ExpenseBatch={schema:'clareia.expense-intermediate.v1';equationRule:'camara.ceap.correlated-net.v2';equationDecisions:EquationDecision[];equationHolds:EquationHold[];multiplicityRule:'camara.ceap.sigepa-publish-flag.v3';multiplicityDecisions:MultiplicityDecision[];portalRule:'camara.ceap.sigepa-portal-ledger.v1';portalRequested:boolean;portalChecks:PortalCheck[];contentSha256:string;scope:Scope;peopleVersion:string;proposalSha256:string;createdAt:string;status:'review-required';publicationEligible:false;annual:[{source:ExpenseSource;csvSha256:string;scanned:number},{source:ExpenseSource;csvSha256:string;scanned:number}];cells:ExpenseCell[];sources:ExpenseSource[];totalCents:number|null;metrics:{elapsedMs:number;maxRssKiB:number;sourceBytes:number;requests:number;retries:number;cacheHits:number;downloadedBytes:number}};
 export function expenseBatchContentId(report:ExpenseBatch):string{
   const {createdAt:_created,metrics:_metrics,contentSha256:_content,...body}=report;
@@ -95,8 +95,9 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
   const annualStable=firstAnnual.digest===secondAnnual.digest;
   const equationInputs:EquationInput[]=secondAnnual.rows.map(({raw,row})=>({kind:'annual',personId:Number(raw.ideCadastro),raw,source:{url:secondAnnual.source.url,sha256:secondAnnual.csvSha256,row,fetchedAt:secondAnnual.source.fetchedAt}}));
   if(annualStable)for(const c of cells){const passes=results.get(c.personId+':'+c.month)!;if(passes.every(p=>p!==null)&&hash(passes[0]!.map(r=>canonical(r.raw)).sort().join('\n'))===hash(passes[1]!.map(r=>canonical(r.raw)).sort().join('\n')))for(const {raw,row,source} of passes[1]!)equationInputs.push({kind:'api',personId:c.personId,raw:raw as Record<string,any>,source:{url:source.url,sha256:source.sha256,row,fetchedAt:source.fetchedAt}});}
-  const equationReview=reviewExpenseEquations(scope,annualStable?equationInputs:[]);
-  const multiplicityReview=reviewFlightMultiplicity(scope,annualStable?equationInputs:[]);
+  const twinNets=annualStable?signTwinNets(scope,equationInputs):new Map<string,import('./expense-equations.ts').SignTwin>(),twinInputs=withTwinNets(annualStable?equationInputs:[],twinNets);
+  const equationReview=reviewExpenseEquations(scope,twinInputs);
+  const multiplicityReview=reviewFlightMultiplicity(scope,twinInputs);
   const annualByCell=new Map<string,typeof secondAnnual.rows>();for(const r of secondAnnual.rows){const key=Number(r.raw.ideCadastro)+':'+Number(r.raw.numMes),list=annualByCell.get(key);if(list)list.push(r);else annualByCell.set(key,[r]);}
   const portalChecks:PortalCheck[]=[],portalCovered=new Set<string>();
   for(const c of cells){
@@ -126,11 +127,11 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
     let annual:Expense[],apiRecords:Expense[];
     try{
       annual=selected.map(({raw,row})=>{const source={url:secondAnnual.source.url,sha256:secondAnnual.csvSha256,row,fetchedAt:secondAnnual.source.fetchedAt};return normalizeAnnual(raw,scope,source,equationReview.permissions.get(equationKey({kind:'annual',personId:c.personId,source})));});
-      apiRecords=api[1]!.map(({raw,source:ref,row})=>{const source={url:ref.url,sha256:ref.sha256,row,fetchedAt:ref.fetchedAt};return normalize(raw,c.personId,scope,source,equationReview.permissions.get(equationKey({kind:'api',personId:c.personId,source})));});
+      apiRecords=api[1]!.map(({raw,source:ref,row})=>{const source={url:ref.url,sha256:ref.sha256,row,fetchedAt:ref.fetchedAt},twin=twinNets.get(equationKey({kind:'api',personId:c.personId,source:{...ref,row}}));return normalize(twin===undefined?raw:twinRaw(raw as Record<string,any>,twin),c.personId,scope,source,equationReview.permissions.get(equationKey({kind:'api',personId:c.personId,source})));});
     }catch{c.reasons.push('financial-normalization-failed');continue;}
     // Identical rows are allowed; rows that differ only in the supplier would still share an id, so they stay held.
     try{stableDigest([...new Map(selected.map(r=>[canonical(r.raw),{personId:c.personId,raw:r.raw}])).values()]);}catch{c.reasons.push('supplier-only-difference');continue;}
-    const paired=pairApiSign(annual,apiRecords);c.diagnostics={...unmatched(annual,paired.api),...(paired.fixed?{apiSignCorrected:paired.fixed}:{})};
+    const paired=pairApiSign(annual,apiRecords);const twinsHere=api[1]!.map(({row,source})=>twinNets.get(equationKey({kind:'api',personId:c.personId,source:{...source,row}}))).filter(t=>t!==undefined),tolerated=twinsHere.filter(t=>t!.tolerated).length,signFixed=paired.fixed+twinsHere.length-tolerated;c.diagnostics={...unmatched(annual,paired.api),...(signFixed?{apiSignCorrected:signFixed}:{}),...(tolerated?{apiCentsTolerated:tolerated}:{})};
     // Some receipts are numbered with the supplier's CPF: the number is hidden, the original stays sealed.
     try{const union=unionRecords(annual,paired.api).records;c.records=(dup?markDuplicates(union):union).map(r=>({...r,documentId:findCpfs(r.documentId,known)?'[CPF omitido]':r.documentId,documentNumber:findCpfs(r.documentNumber,known)?'[CPF omitido]':r.documentNumber}));}catch{c.reasons.push('unreconciled-source-occurrences');continue;}
     if(c.records.length&&c.exercise==='outside'){c.records=[];c.reasons.push('expense-outside-exercise');continue;}
@@ -138,7 +139,7 @@ export async function collectExpenseBatch(scope:Scope,temporal:TemporalReport,pr
     const sum=c.records.reduce((n,r)=>n+BigInt(r.cents),0n);if(sum>BigInt(Number.MAX_SAFE_INTEGER)||sum<BigInt(Number.MIN_SAFE_INTEGER))throw Error('Total financeiro fora do limite');
     c.totalCents=Number(sum);c.status=c.records.length?'complete':'no-expenses-confirmed';
   }
-  for(const c of cells)if(c.diagnostics&&c.status!=='complete')delete c.diagnostics.apiSignCorrected;
+  for(const c of cells)if(c.diagnostics&&c.status!=='complete'){delete c.diagnostics.apiSignCorrected;delete c.diagnostics.apiCentsTolerated;}
   const sources:ExpenseSource[]=[...one.captures.map(s=>({...s,pass:1 as const})),...two.captures.map(s=>({...s,pass:2 as const}))];
   const complete=cells.every(c=>c.status==='complete'||c.status==='no-expenses-confirmed'),sum=cells.reduce((n,c)=>n+BigInt(c.totalCents??0),0n);if(sum>BigInt(Number.MAX_SAFE_INTEGER)||sum<BigInt(Number.MIN_SAFE_INTEGER))throw Error('Total financeiro fora do limite');
   const stats=[one.stats,two.stats],report:ExpenseBatch={schema:'clareia.expense-intermediate.v1',equationRule:'camara.ceap.correlated-net.v2',equationDecisions:equationReview.decisions,equationHolds:equationReview.holds,multiplicityRule:'camara.ceap.sigepa-publish-flag.v3',multiplicityDecisions:multiplicityReview.decisions,portalRule:'camara.ceap.sigepa-portal-ledger.v1',portalRequested:options.portal===true,portalChecks,contentSha256:'',scope,peopleVersion:hash(canonical(temporal)),proposalSha256,createdAt:sources.map(s=>s.fetchedAt).sort().at(-1)!,status:'review-required',publicationEligible:false,annual:[firstAnnual,secondAnnual].map(a=>({source:a.source,csvSha256:a.csvSha256,scanned:a.scanned})) as ExpenseBatch['annual'],cells,sources,totalCents:complete?Number(sum):null,metrics:{elapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,sourceBytes:sources.reduce((n,s)=>n+s.bytes,0),requests:stats.reduce((n,s)=>n+s.requests,0),retries:stats.reduce((n,s)=>n+s.retries,0),cacheHits:stats.reduce((n,s)=>n+s.cacheHits,0),downloadedBytes:stats.reduce((n,s)=>n+s.downloadedBytes,0)}};
