@@ -2419,6 +2419,46 @@ check('the record detail shows the possible-duplicate line only for a flagged re
   assert.ok(!(await open(false)).includes('Possível duplicidade'), 'an unflagged record does not');
 });
 
+check('year switch', async () => {
+  const manifest = await (await fetch(`${base}/manifest.json`)).json();
+  needCase((manifest.years || []).length > 1, 'only one published year');
+  const def = String(manifest.defaultYear), other = manifest.years.find(y => String(y.year) !== def), otherYear = String(other.year);
+  const copyInit = () => { navigator.share = undefined; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.__copied = text; } }, configurable: true }); };
+  let page = await at(1440);
+  assert.equal(await page.locator('select[data-year-select]').first().inputValue(), def, 'selector starts on the default year');
+  assert.ok(await page.locator('select[data-year-select] option').count() >= manifest.years.length, 'selector lists every year');
+  await page.close();
+  page = await at(1440, { search: `?ano=${otherYear}`, init: copyInit });
+  assert.equal(await page.locator('select[data-year-select]').first().inputValue(), otherYear, 'the URL year is selected');
+  if (other.partial) {
+    assert.match(await page.locator('select[data-year-select] option:checked').first().innerText(), /\(parcial\)$/, 'the selector names the partial year');
+    assert.equal(await page.locator('.metric-toggle [aria-pressed=true]').first().innerText(), 'Total', 'a partial year opens on Total, like every year');
+  }
+  assert.equal(await page.locator('.ceiling-pill:not(.is-muted)').count(), 0, 'no ceiling percentage in the other year');
+  assert.equal(await page.locator('#scope-chip').isVisible(), false, 'the default metric of a partial year is not shown as a filter to clear');
+  await page.locator('.metric-toggle button[aria-pressed=false]').first().click();
+  assert.equal(new URL(page.url()).searchParams.get('ano'), otherYear, 'a filter change keeps ano');
+  await page.close();
+  const otherIndex = await (await fetch(`${base}/${manifest.base}/${otherYear}/index.json`)).json(), absent = new Set(otherIndex.withoutData || []);
+  const person = otherIndex.people.find(p => otherIndex.scope.ids.includes(p.id) && !absent.has(p.id)), slug = person.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  page = await at(1440, { search: `deputado/${person.id}-${slug}?ano=${otherYear}`, init: copyInit });
+  await page.waitForSelector('#detail[open] [data-action="copy-link"]');
+  assert.equal(await page.locator('#detail [data-action="share-image"]').count(), 0, 'no share image outside the default year');
+  await page.locator('#detail [data-action="copy-link"]').click();
+  await page.waitForFunction(() => window.__copied);
+  assert.equal(new URL(await page.evaluate(() => window.__copied)).searchParams.get('ano'), otherYear, 'copied profile link keeps ano');
+  assert.equal(new URL(page.url()).searchParams.get('ano'), otherYear, 'the profile URL keeps ano');
+  await page.close();
+  page = await at(1440, { search: '?ano=1999' });
+  assert.equal(await page.locator('select[data-year-select]').first().inputValue(), def, 'an unknown year falls back to the default');
+  await page.close();
+  page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(`${base}/dados-abertos?ano=${otherYear}`);
+  await page.waitForSelector('.doc-year-links a');
+  assert.equal(new URL(await page.locator('.doc-year-links a').first().getAttribute('href'), 'http://x').searchParams.get('ano'), def, 'the open-data link to the default year names it');
+  await page.close();
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
   let failed = 0, ran = 0, skipped = 0;

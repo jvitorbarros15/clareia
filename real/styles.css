@@ -1092,3 +1092,4 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .pix-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:12px 0 0}
 .pix-key{font-size:18px;font-weight:700;overflow-wrap:anywhere;user-select:all}
 .pix-copy{min-height:44px;min-width:44px}
+.year-select{display:inline-flex;align-items:center}.year-select select{font:inherit;font-size:14px;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:2px;background:var(--surface);color:var(--ink)}.year-partial{font-size:13px;color:var(--muted);align-self:center}.doc-year-links{margin:0 0 18px}

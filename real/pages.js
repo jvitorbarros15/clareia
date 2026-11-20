@@ -131,15 +131,17 @@
 
   const dictionary = `<h3>Dicionário de dados</h3><p>Valores em dinheiro são inteiros em centavos de real. Campos marcados como opcionais só existem em alguns registros.</p><h4>despesas.json, um registro por despesa</h4><p>Há uma lista por deputado, em <code>deputados/&lt;id&gt;/despesas.json</code>. Os CSV mensais trazem as colunas abaixo.</p>${fieldTable(RECORD_FIELDS)}<h4>Colunas dos CSV</h4>${fieldTable(CSV_FIELDS)}<h4>summary.json</h4>${fieldTable(SUMMARY_FIELDS)}<h4>index.json</h4>${fieldTable(INDEX_FIELDS)}<h4>fornecedores.json</h4>${fieldTable(SUPPLIER_FIELDS)}`;
 
-  const citation = (m, base) => {
-    const id = String(base).split('/').pop(), pub = m.publishedAt ? dateBR(String(m.publishedAt).slice(0, 10)) : '';
+  const citation = (m, base, extra) => {
+    const id = extra?.folderId ?? String(base).split('/').pop(), pub = m.publishedAt ? dateBR(String(m.publishedAt).slice(0, 10)) : '';
     return `<h3>Fonte e como citar</h3><p>Os dados vêm dos dados abertos da Câmara dos Deputados: a cota parlamentar (CEAP) do arquivo <a href="https://www.camara.leg.br/cotas/Ano-${esc(m.year)}.csv.zip">Ano-${esc(m.year)}.csv.zip</a>, reunida com a API de dados abertos da Câmara. O Clareia os reorganiza e retira identificadores pessoais. Veja a <a href="/metodologia">metodologia</a> para saber como somamos e conferimos.</p><p>Para citar: <em>Clareia, publicação ${esc(id)}${pub ? `, de ${pub}` : ''}. Dados: Câmara dos Deputados, dados abertos.</em></p>`;
   };
 
-  const openDataBody = (m, base) => {
+  const otherYears = extra => extra?.others?.length ? `<p class="doc-year-links">Esta é a publicação de ${esc(extra.year)}${extra.partialLabel ? ` (${esc(extra.partialLabel)})` : ''}. ${extra.others.map(o => `<a href="/dados-abertos?ano=${esc(o.year)}">Dados de ${esc(o.year)}${o.partial ? ' (parcial)' : ''}</a>`).join(' · ')}</p>` : '';
+
+  const openDataBody = (m, base, extra) => {
     const lede = 'Baixe as despesas da cota parlamentar em CSV, confira cada arquivo pelo SHA-256 e veja o que cada campo significa.';
     if (!m) return layout('dados-abertos', 'Dados abertos', 'Dados abertos', lede, '<p>Os arquivos desta publicação não estão disponíveis agora. Nenhum valor foi alterado.</p>');
-    const s = sections(`${downloads(m, base)}${cuidados(m.quirks)}${dictionary}${citation(m, base)}`);
+    const s = sections(`${otherYears(extra)}${downloads(m, base)}${cuidados(m.quirks)}${dictionary}${citation(m, base, extra)}`);
     return layout('dados-abertos', 'Dados abertos', 'Dados abertos', lede, s.html, s.toc);
   };
 
