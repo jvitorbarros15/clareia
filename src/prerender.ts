@@ -88,28 +88,45 @@ function swap(shell:string,pattern:RegExp,text:string):string{
   if(!pattern.test(shell))throw new Error(`Esqueleto sem ${pattern.source}`);
   return shell.replace(pattern,()=>text);
 }
-function page(shell:string,m:Meta,noscript?:string):string{
-  let html=swap(shell,TITLE,`<title>${esc(m.title)}</title>`);
-  html=swap(html,DESCRIPTION,`<meta name="description" content="${esc(m.description)}">\n  ${metaTags(m)}`);
+// Inside a script block only "<" can end it early; \u003c keeps the JSON equal once parsed.
+const ldJson=(data:object)=>`<script type="application/ld+json">${JSON.stringify({'@context':'https://schema.org',...data}).replace(/</g,'\\u003c')}</script>`;
+function headTags(shell:string,m:Meta,ld?:object):string{
+  // Each page is cut from the bare index.html; a shell already rendered would leave two canonicals.
+  if(shell.includes('rel="canonical"'))throw new Error('Esqueleto já tem canonical: use o index.html antes da pré-renderização');
+  return swap(shell,DESCRIPTION,`<meta name="description" content="${esc(m.description)}">\n  ${metaTags(m)}${ld?`\n  ${ldJson(ld)}`:''}`);
+}
+function page(shell:string,m:Meta,noscript?:string,ld?:object):string{
+  const html=headTags(swap(shell,TITLE,`<title>${esc(m.title)}</title>`),m,ld);
   return noscript?swap(html,NOSCRIPT,noscript):html;
 }
 const icon=(siteUrl:string):Image=>({url:siteUrl+ICON,width:512,height:512,alt:'Clareia'});
+const FIXED_PAGES:[string,string][]=[['sobre','Sobre'],['metodologia','Metodologia'],['dados-abertos','Dados abertos'],['correcoes','Correções'],['apoie','Apoie'],['api','API']];
+const homeLink='<p><a href="/">Clareia: início</a></p>';
 
 export function renderHome(shell:string,siteUrl:string):string{
   const title=/<title>([^<]*)<\/title>/.exec(shell)?.[1],description=/<meta name="description" content="([^"]*)">/.exec(shell)?.[1];
   if(!title||!description)throw new Error('Esqueleto sem título ou descrição');
-  return swap(shell,DESCRIPTION,`<meta name="description" content="${description}">\n  ${metaTags({title,description,url:siteUrl+'/',type:'website',image:icon(siteUrl)})}`);
+  const states=Object.keys(UFS).sort().map(uf=>`<li><a href="${statePath(uf)}">${esc(UFS[uf])}</a></li>`).join('');
+  const fixed=FIXED_PAGES.map(([route,name])=>`<li><a href="/${route}">${name}</a></li>`).join('');
+  const noscript=`<noscript><main id="main"><h1>O poder, em números</h1><p>${description}</p><p>Ative o JavaScript para explorar os dados.</p><nav aria-label="Deputados por estado"><h2>Deputados por estado</h2><ul>${states}</ul></nav><nav aria-label="Sobre o Clareia"><ul>${fixed}</ul></nav></main></noscript>`;
+  const ld={'@graph':[{'@type':'WebSite',name:'Clareia',url:siteUrl+'/',inLanguage:'pt-BR',description},{'@type':'Organization',name:'Projeto Clareia',url:siteUrl+'/',logo:siteUrl+ICON}]};
+  return swap(headTags(shell,{title,description,url:siteUrl+'/',type:'website',image:icon(siteUrl)},ld),NOSCRIPT,noscript);
 }
 export function renderDeputy(shell:string,p:Deputy,period:Period,siteUrl:string,portrait:{url:string;width?:number;height?:number}|null,share:{url:string;alt:string}|null=null):string{
-  const description=deputyDescription(p,period),title=`${p.name} — Clareia`;
+  const description=deputyDescription(p,period),title=`${p.name} — Clareia`,url=siteUrl+deputyPath(p.id,p.name);
   const image:Image=share?{url:share.url,width:SHARE_WIDTH,height:SHARE_HEIGHT,alt:share.alt,large:true}:portrait?{...portrait,alt:`Retrato oficial de ${p.name}, da Câmara dos Deputados`}:icon(siteUrl);
-  const source=/^https:\/\//.test(p.sourceUrl)?` <a href="${esc(p.sourceUrl)}" rel="noopener noreferrer">Cadastro na Câmara</a>`:'';
-  const noscript=`<noscript><main id="main"><h1>${esc(p.name)}</h1><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.${source}</p></main></noscript>`;
-  return page(shell,{title,description,url:siteUrl+deputyPath(p.id,p.name),type:'profile',image},noscript);
+  const official=/^https:\/\//.test(p.sourceUrl);
+  const source=official?` <a href="${esc(p.sourceUrl)}" rel="noopener noreferrer">Cadastro na Câmara</a>`:'';
+  const state=p.uf&&UFS[p.uf]?`<p><a href="${statePath(p.uf)}">Deputados de ${esc(UFS[p.uf])}</a></p>`:'';
+  const noscript=`<noscript><main id="main"><h1>${esc(p.name)}</h1><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.${source}</p>${state}${homeLink}</main></noscript>`;
+  const ld={'@type':'Person',name:p.name,jobTitle:'Deputado(a) federal',url,...portrait?{image:portrait.url}:{},...official?{sameAs:[p.sourceUrl]}:{}};
+  return page(shell,{title,description,url,type:'profile',image},noscript,ld);
 }
 export function renderState(shell:string,uf:string,deputies:Deputy[],period:Period,siteUrl:string):string{
   const description=stateDescription(uf,deputies,period),title=`${UFS[uf]} — Clareia`;
-  const noscript=`<noscript><main id="main"><h1>${esc(UFS[uf])}</h1><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.</p></main></noscript>`;
+  const people=[...inState(deputies,uf)].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  const list=people.length?`<ul>${people.map(p=>`<li><a href="${deputyPath(p.id,p.name)}">${esc(p.name)}</a></li>`).join('')}</ul>`:'';
+  const noscript=`<noscript><main id="main"><h1>${esc(UFS[uf])}</h1><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.</p>${list}${homeLink}</main></noscript>`;
   return page(shell,{title,description,url:siteUrl+statePath(uf),type:'website',image:icon(siteUrl)},noscript);
 }
 
@@ -128,7 +145,7 @@ export function jpegSize(b:Buffer):{width:number;height:number}|null{
 }
 
 export function sitemapXml(siteUrl:string,deputies:Deputy[]):string{
-  const urls=[siteUrl+'/',...Object.keys(UFS).sort().map(uf=>siteUrl+statePath(uf)),...[...deputies].sort((a,b)=>a.id-b.id).map(p=>siteUrl+deputyPath(p.id,p.name))];
+  const urls=[siteUrl+'/',...FIXED_PAGES.map(([route])=>`${siteUrl}/${route}`),...Object.keys(UFS).sort().map(uf=>siteUrl+statePath(uf)),...[...deputies].sort((a,b)=>a.id-b.id).map(p=>siteUrl+deputyPath(p.id,p.name))];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(u=>`  <url><loc>${esc(u)}</loc></url>`).join('\n')}\n</urlset>\n`;
 }
 export function robotsTxt(o:ResolvedOptions):string{
