@@ -100,7 +100,9 @@ function page(shell:string,m:Meta,noscript?:string,ld?:object):string{
   return noscript?swap(html,NOSCRIPT,noscript):html;
 }
 const icon=(siteUrl:string):Image=>({url:siteUrl+ICON,width:512,height:512,alt:'Clareia'});
-const FIXED_PAGES:[string,string][]=[['sobre','Sobre'],['metodologia','Metodologia'],['dados-abertos','Dados abertos'],['correcoes','Correções'],['apoie','Apoie'],['api','API']];
+// Same pages as NAV in real/pages.js; a test keeps the two in step.
+export const FIXED_PAGES=[['sobre','Sobre'],['metodologia','Metodologia'],['dados-abertos','Dados abertos'],['correcoes','Correções'],['apoie','Apoie'],['api','API']] as const;
+type FixedRoute=typeof FIXED_PAGES[number][0];
 const homeLink='<p><a href="/">Clareia: início</a></p>';
 
 export function renderHome(shell:string,siteUrl:string):string{
@@ -187,7 +189,7 @@ export async function writeStaticPages(outDir:string,options:ResolvedOptions):Pr
   const pages=await loadStaticPages(),corrections=await loadCorrections();
   await fs.copyFile(path.join(REPO,'config','corrections.json'),path.join(outDir,'corrections.json'));
   const published=await readOpenData(outDir);
-  for(const name of ['sobre','correcoes','metodologia','dados-abertos','apoie'] as const){
+  for(const name of FIXED_PAGES.map(([route])=>route).filter((route):route is Exclude<FixedRoute,'api'>=>route!=='api')){
     const entry=pages.pages[name];
     const inner=name==='sobre'?pages.pages.sobre.body():name==='apoie'?pages.pages.apoie.body():name==='correcoes'?pages.pages.correcoes.body(corrections,pages.CONTACT_EMAIL):name==='dados-abertos'?pages.pages['dados-abertos'].body(published?.manifest??null,published?.base??''):pages.layout('metodologia','Metodologia',`Metodologia`,esc(entry.description),`<p>Ative o JavaScript para ler a metodologia completa e os números desta versão.</p>`);
     const noscript=`<noscript><main id="main">${inner}</main></noscript>`;

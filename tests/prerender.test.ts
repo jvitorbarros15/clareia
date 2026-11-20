@@ -11,7 +11,7 @@ import {createApp} from '../src/app.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {partyFieldsOf} from '../src/site-summary.ts';
-import {deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
+import {FIXED_PAGES,deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
 import {loadSpec} from '../src/api-docs.ts';
 
@@ -250,6 +250,10 @@ test('static pages are prerendered at their own route, with the same meta tags a
     assert.ok(apoie.includes('data-action="copy-pix"'));
     assert.equal(await fs.readFile(path.join(dir,'corrections.json'),'utf8'),await fs.readFile(path.join(import.meta.dirname,'..','config','corrections.json'),'utf8'));
   }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('the fixed pages are the same as the menu in real/pages.js',async()=>{
+  const nav=(await loadStaticPages()).layout('','','','','');
+  assert.deepEqual([...nav.matchAll(/<a href="\/([^"]+)"/g)].map(m=>m[1]).sort(),FIXED_PAGES.map(([route])=>route).sort());
 });
 test('the corrections page shows the placeholder while no contact address is set, and escapes contact and entries',async()=>{
   const pages=await loadStaticPages();
