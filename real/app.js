@@ -116,7 +116,7 @@
     if (D.year !== D.defaultYear) url.searchParams.set('ano', D.year);
     // On load an absent parameter means "let the question decide", so a link with a question spells out every choice, defaults included.
     const explicit = Boolean(state.query);
-    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || state.metric !== defaultMetric ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
+    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || D.partial || state.metric !== defaultMetric ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
     try { history.replaceState(null, '', url); } catch { /* file previews may restrict history */ }
   }
   const examples = () => { const [a, b] = byTotal(); return [`${first(a)} gastou mais que ${first(b)}?`, 'Quem mais gastou por mês?', 'Quem mais gastou com passagens?', 'Quem gastou menos?']; };
@@ -439,7 +439,7 @@
     present.sort();
     const path = `/deputado/${route.id}${route.slug ? '-' + route.slug : ''}`, link = y => `${path}${y === D.defaultYear ? '' : `?ano=${y}`}`;
     const title = `Sem dados em ${D.year}`;
-    showDialog(title, `<p class="records-note" role="alert">Este(a) deputado(a) não tem despesas publicadas em ${escape(D.year)}.${present.length ? ` Há dados em ${present.map(escape).join(' e ')}.` : ''}</p><div class="action-row">${present.map(y => `<a class="outline-button primary" href="${escape(link(y))}">Ver em ${escape(y)}</a>`).join('')}<button type="button" class="outline-button" data-action="close">Ir para o início</button></div>`, true, { url: target, title: `${title} — Clareia` });
+    showDialog(title, `<p class="records-note" role="alert">Este(a) deputado(a) não tem despesas publicadas em ${escape(D.year)}. Há dados em ${present.map(escape).join(' e ')}.</p><div class="action-row">${present.map(y => `<a class="outline-button primary" href="${escape(link(y))}">Ver em ${escape(y)}</a>`).join('')}<button type="button" class="outline-button" data-action="close">Ir para o início</button></div>`, true, { url: target, title: `${title} — Clareia` });
   }
   function closeFromHistory() { if (session) session.live = false; $('#detail').close(); }
   window.addEventListener('popstate', async () => {
@@ -592,7 +592,7 @@
     else if (name === 'dados-abertos') {
       let manifest = null;
       try { const r = await fetch(`${base}/dados-abertos.json`); if (r.ok) manifest = await r.json(); } catch {}
-      main.innerHTML = P.pages['dados-abertos'].body(manifest, base, { folderId: D.sharedBase.split('/').pop(), year: D.year, partialLabel: D.partialLabel, others: D.years.filter(y => String(y.year) !== D.year).map(y => ({ year: String(y.year), partial: y.partial, isDefault: String(y.year) === D.defaultYear })) });
+      main.innerHTML = P.pages['dados-abertos'].body(manifest, base, { folderId: D.sharedBase.split('/').pop(), year: D.year, partialLabel: D.partialLabel, others: D.years.filter(y => String(y.year) !== D.year).map(y => ({ year: String(y.year), partial: y.partial})) });
       P.spy();
     }
     else if (name === 'metodologia') { const s = P.sections(`${auditTiles()}${methodologyBody()}`); main.innerHTML = P.layout('metodologia', 'Metodologia', 'Metodologia', 'Como somamos as despesas, o que conferimos e o que ainda não concluímos.', s.html, s.toc); P.spy(); }
@@ -692,7 +692,7 @@
     else if (action === 'copy-link') copyProfileLink(id, target);
     else if (action === 'copy-pix') copyPixKey(target);
     else if (action === 'share-image') downloadShareImage(id);
-    else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = defaultMetric; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast('Filtros limpos: Brasil, todas as categorias, valor total.'); }
+    else if (action === 'reset') { document.dispatchEvent(new CustomEvent('clareia:reset')); state.uf = 'Brasil'; state.category = 'Todas'; state.metric = defaultMetric; state.tab = 'gastos'; state.query = ''; state.answer = null; $('#query').value = ''; $('#answer-slot').innerHTML = ''; refresh(); $('#query').focus({ preventScroll: true }); closeSuggestions(); toast(`Filtros limpos: Brasil, todas as categorias, ${defaultMetric === 'mensal' ? 'valor por mês' : 'valor total'}.`); }
     else if (action === 'download') exportCSV(id, target.hasAttribute('data-month') ? Number(target.dataset.month) : undefined);
   });
   const carryYear = event => {

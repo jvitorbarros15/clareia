@@ -10,6 +10,7 @@ test('the default year lives at the base and other years in a subfolder',()=>{
   assert.deepEqual(yearFolder(manifest,'2026'),{year:2026,folder:'data/abc/2026',isDefault:false});
   assert.equal(yearFolderOf(manifest,2026),'data/abc/2026');
   assert.equal(yearFolderOf(manifest,2025),'data/abc');
+  assert.equal(yearFolderOf(manifest,'2025'),'data/abc');assert.equal(yearFolderOf(manifest,'2026'),'data/abc/2026');
 });
 
 test('an unknown or malformed year falls back to the default',()=>{

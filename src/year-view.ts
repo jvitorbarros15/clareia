@@ -10,7 +10,7 @@ export function yearFolder(manifest:YearManifest,requested:string|null):{year:nu
   return {year,folder:isDefault||year===null?manifest.base:`${manifest.base}/${year}`,isDefault};
 }
 
-export function yearFolderOf(manifest:YearManifest,year:number):string{return year===manifest.defaultYear?manifest.base:`${manifest.base}/${year}`;}
+export function yearFolderOf(manifest:YearManifest,year:number|string):string{return Number(year)===manifest.defaultYear?manifest.base:`${manifest.base}/${year}`;}
 
 export function partialLabel(months:number[],year:number):string{
   const sorted=[...months].sort((a,b)=>a-b),first=sorted[0],last=sorted.at(-1);

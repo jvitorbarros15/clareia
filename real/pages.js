@@ -136,7 +136,7 @@
     return `<h3>Fonte e como citar</h3><p>Os dados vêm dos dados abertos da Câmara dos Deputados: a cota parlamentar (CEAP) do arquivo <a href="https://www.camara.leg.br/cotas/Ano-${esc(m.year)}.csv.zip">Ano-${esc(m.year)}.csv.zip</a>, reunida com a API de dados abertos da Câmara. O Clareia os reorganiza e retira identificadores pessoais. Veja a <a href="/metodologia">metodologia</a> para saber como somamos e conferimos.</p><p>Para citar: <em>Clareia, publicação ${esc(id)}${pub ? `, de ${pub}` : ''}. Dados: Câmara dos Deputados, dados abertos.</em></p>`;
   };
 
-  const otherYears = extra => extra?.others?.length ? `<p class="doc-year-links">Esta é a publicação de ${esc(extra.year)}${extra.partialLabel ? ` (${esc(extra.partialLabel)})` : ''}. ${extra.others.map(o => `<a href="/dados-abertos${o.isDefault ? '' : `?ano=${esc(o.year)}`}">Dados de ${esc(o.year)}${o.partial ? ' (parcial)' : ''}</a>`).join(' · ')}</p>` : '';
+  const otherYears = extra => extra?.others?.length ? `<p class="doc-year-links">Esta é a publicação de ${esc(extra.year)}${extra.partialLabel ? ` (${esc(extra.partialLabel)})` : ''}. ${extra.others.map(o => `<a href="/dados-abertos?ano=${esc(o.year)}">Dados de ${esc(o.year)}${o.partial ? ' (parcial)' : ''}</a>`).join(' · ')}</p>` : '';
 
   const openDataBody = (m, base, extra) => {
     const lede = 'Baixe as despesas da cota parlamentar em CSV, confira cada arquivo pelo SHA-256 e veja o que cada campo significa.';

@@ -2451,6 +2451,9 @@ check('year switch', async () => {
   page = await at(1440, { search: '?ano=1999' });
   assert.equal(await page.locator('select[data-year-select]').first().inputValue(), def, 'an unknown year falls back to the default');
   await page.close();
+  page = await at(1440, { search: `dados-abertos?ano=${otherYear}` });
+  assert.equal(new URL(await page.locator('.doc-year-links a').first().getAttribute('href'), 'http://x').searchParams.get('ano'), def, 'the open-data link to the default year names it');
+  await page.close();
 });
 
 (async () => {
