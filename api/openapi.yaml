@@ -4,19 +4,20 @@ info:
   version: 1.0.0
   description: |
     API somente leitura sobre a publicação ativa da Clareia (despesas CEAP dos deputados federais brasileiros).
+    A API serve apenas o ano padrão, 2025. O ano de 2026, publicado de janeiro a outubro no site, não está na API.
     Apenas GET e HEAD. Toda resposta de sucesso traz `publication`, o id da pasta de publicação de onde foi lida.
     Valores monetários são sempre um número inteiro de centavos (int64), nunca uma string formatada.
 
     Pontos importantes antes de usar os dados:
 
     - Os registros de despesa são entregues exatamente como publicados (`Expense`). A ordem das chaves não é garantida (o armazenamento é jsonb).
-    - `date` é nulo em todo registro cuja `origin` é `annual` (cerca de 8.400 registros). Esses registros ainda têm `month`.
+    - `date` é nulo em cerca de 8.600 registros. Desde novembro de 2026, quase todos são de telefonia e de complemento de auxílio-moradia, e têm `origin` igual a `both`. Esses registros ainda têm `month`.
     - `month` é o mês de competência e `year` o ano de competência. O mês ou o ano dentro de `date` podem diferir deles
-      (cerca de 16.700 registros diferem pelo mês, cerca de 1.000 pelo ano). Filtre por `month`, nunca pelo mês de `date`.
+      (cerca de 17.000 registros diferem pelo mês, cerca de 1.000 pelo ano). Filtre por `month`, nunca pelo mês de `date`.
       `date` não tem fuso horário.
     - Registros cujo fornecedor não é verificado (`supplierVerified` false) não têm `supplierKey` e muitas vezes não têm `source.sha256`.
     - `duplicateFlag: "possible"` marca registros que parecem duplicatas de outro registro da mesma pessoa. É uma
-      pista, não um veredito, e a publicação atual pode não conter nenhuma.
+      pista, não um veredito, e a publicação atual traz cerca de 60.
     - `cents` pode ser negativo (estornos, glosas) ou zero. Isso não é um erro.
     - Um mês que a geração dos dados retém é `{"held": true, "cents": null, "reasons": [...]}`. Ele é nulo, não zero, e não tem registros.
     - Deputados sem dados publicados (`withoutData`) respondem 200 com lista vazia em `/expenses`, não 404.
