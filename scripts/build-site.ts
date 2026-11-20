@@ -5,5 +5,5 @@ import {openDB} from '../src/store.ts';
 
 await withLock(async()=>{
   const db=await openDB();
-  try{const {review,partyReview,names,...built}=await buildSite(db,'dist','real/portraits');await writeReview(built.publicationId,review,names,partyReview);console.log(JSON.stringify({...built,ufPendencias:review.length,partidoPendencias:partyReview.length,nomesOcultados:names.withheld.length}));}finally{await db.close();}
+  try{const {years,...built}=await buildSite(db,'dist','real/portraits'),{review,partyReview,names}=years[0];await writeReview(built.publicationId,review,names,partyReview);console.log(JSON.stringify({...built,ufPendencias:review.length,partidoPendencias:partyReview.length,nomesOcultados:names.withheld.length}));}finally{await db.close();}
 });
