@@ -122,10 +122,9 @@ Para conferir os dados locais coletados:
 npm run verify:expenses:intermediate -- --local --run ID
 ```
 
-Para testar a interface, instale a dependência opcional de navegador e mantenha `npm run dev` ativo em outro terminal:
+Para testar a interface, o `npm ci` já instalou o Playwright; baixe o navegador e mantenha `npm run dev` ativo em outro terminal:
 
 ```sh
-npm install --no-save --package-lock=false playwright
 npx playwright install chromium
 npm run verify:browser
 npm run verify:ui
