@@ -28,3 +28,12 @@ test('the partial label spells the month range and the first open month',()=>{
   assert.equal(partialLabel([1,2,4],2026),'parcial · jan–abr 2026');
   assert.equal(partialLabel([2,3,4,5,6,7,8,9,10,11,12],2026),'parcial · fev–dez 2026');
 });
+
+test('the methodology text states the published months from the manifest years',async()=>{
+  const {loadStaticPages}=await import('../src/prerender.ts');
+  const anos=((await loadStaticPages()).pages.metodologia as unknown as {anos:(years:unknown[],defaultYear:string)=>string}).anos;
+  const years=[{year:2025,months:manifest.years[0].months,partial:false},{year:2026,months:[1,2,3,4,5,6,7,8,9,10,11],partial:true}];
+  const text=anos(years,'2025');
+  assert.match(text,/O ano de 2025 está completo e é o que o site abre primeiro\./);
+  assert.match(text,/O ano de 2026 está publicado de janeiro a novembro, porque dezembro ainda não fechou\./);
+});
