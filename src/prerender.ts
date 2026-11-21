@@ -199,15 +199,15 @@ export async function writeStaticPages(outDir:string,options:ResolvedOptions):Pr
   await writeApiPage(outDir,shell,pages,options);
 }
 
-export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions,shares:Map<number,{name:string;alt:string}>=new Map()):Promise<void>{
+export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions,shares:Map<number,{name:string;alt:string}>=new Map(),extras:{deputies:Deputy[];period:Period}[]=[]):Promise<void>{
   const shell=await fs.readFile(path.join(outDir,'index.html'),'utf8');
-  for(const p of deputies){
+  for(const {p,period:own} of [{deputies,period},...extras].flatMap(x=>x.deputies.map(p=>({p,period:x.period})))){
     const file=path.join(outDir,'data',publicationId,'portraits',`${p.id}.jpg`),bytes=await fs.readFile(file).catch(()=>null);
     const portrait=bytes?{url:`${options.siteUrl}/data/${publicationId}/portraits/${p.id}.jpg`,...jpegSize(bytes)??{}}:null;
     // A file named <route>.html is served at <route> with no redirect; a folder index would answer 307 to a trailing slash.
     const page=path.join(outDir,`${deputyPath(p.id,p.name).slice(1)}.html`);
     await fs.mkdir(path.dirname(page),{recursive:true});
-    await fs.writeFile(page,renderDeputy(shell,p,period,options.siteUrl,portrait,shares.has(p.id)?{url:`${options.siteUrl}/data/${publicationId}/share/${shares.get(p.id)!.name}.jpg`,alt:shares.get(p.id)!.alt}:null));
+    await fs.writeFile(page,renderDeputy(shell,p,own,options.siteUrl,portrait,shares.has(p.id)?{url:`${options.siteUrl}/data/${publicationId}/share/${shares.get(p.id)!.name}.jpg`,alt:shares.get(p.id)!.alt}:null));
   }
   for(const uf of Object.keys(UFS)){
     await fs.mkdir(path.join(outDir,'estado'),{recursive:true});
@@ -215,5 +215,5 @@ export async function writePrerendered(outDir:string,publicationId:string,deputi
   }
   await fs.writeFile(path.join(outDir,'index.html'),renderHome(shell,options.siteUrl));
   await fs.writeFile(path.join(outDir,'robots.txt'),robotsTxt(options));
-  if(options.sitemap)await fs.writeFile(path.join(outDir,'sitemap.xml'),sitemapXml(options.siteUrl,deputies));
+  if(options.sitemap)await fs.writeFile(path.join(outDir,'sitemap.xml'),sitemapXml(options.siteUrl,[...deputies,...extras.flatMap(x=>x.deputies)]));
 }

@@ -15,6 +15,7 @@ import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
 import type {ReviewItem,ReviewNames} from './review-list.ts';
 import {partyReviewItems,ufReviewItems} from './review-list.ts';
 import {deputiesOf,resolveOptions,writePrerendered,writeStaticPages} from './prerender.ts';
+import type {Deputy,Period} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
 import {generateShareImages} from './share-images.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
@@ -103,7 +104,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const supplierNames=await readSupplierNames();
   const results:YearResult[]=[],manifestYears:{year:number;months:number[];partial:boolean;expenses:string;totalCents:number;records:number}[]=[];
-  let defaultBuilt:{summary:ReturnType<typeof buildSiteSummary>;suppliers:ReturnType<typeof buildSupplierSummary>}|null=null;
+  const built=new Map<number,{summary:ReturnType<typeof buildSiteSummary>;suppliers:ReturnType<typeof buildSupplierSummary>}>();
   for(const e of entries){
     const active=pubs.get(e.year)!,isDefault=e.year===sitePlan.defaultYear,ydir=isDefault?data:path.join(data,String(e.year));
     // Every published id is rebuilt from the redacted record, so nothing the source typed (CPF in a document number, supplier) sits in a hash. Only a verified CNPJ publishes its supplier key and page hash.
@@ -144,9 +145,9 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     await writeOpenData(ydir,active.scope.ids.flatMap(id=>recordsOf.get(id)??[]),{summary:summaryJson,suppliers,index:indexJson},summary.people.flatMap(p=>p.months.filter(m=>m.held).map(()=>({personId:p.id}))),{year:active.scope.year,publishedAt:active.publishedAt,collectedAt:active.collectedAt});
     results.push({year:e.year,partyReview:partyReviewItems(active.people),names:{withheld:rows(withheldNames),kept:rows(keptNames)},review:[...ufReviewItems(active.people),...[...oddIds].map(([id,n])=>({id,name:active.people.find(p=>p.id===id)?.name??'',used:n+' registros',from:'identificador do fornecedor fora do formato'}))]});
     manifestYears.push({year:e.year,months:active.scope.months,partial:active.scope.months.length<12,expenses:active.id,totalCents:active.validation.totalCents,records:allRecords.length});
-    if(isDefault)defaultBuilt={summary,suppliers:supplierSummary};
+    built.set(e.year,{summary,suppliers:supplierSummary});
   }
-  const active=pubs.get(sitePlan.defaultYear)!,{summary,suppliers:supplierSummary}=defaultBuilt!;
+  const active=pubs.get(sitePlan.defaultYear)!,{summary,suppliers:supplierSummary}=built.get(sitePlan.defaultYear)!;
   for(const id of allIds){
     await fs.copyFile(path.join(portraitsDir,`${id}.jpg`),path.join(data,'portraits',`${id}.jpg`)).catch(()=>{});
     // Loaded by the page only when someone opens the section, and never joined to expenses.
@@ -162,6 +163,12 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});
   await versionAssets(outDir);
   const deputies=deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary}),period={year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1),minMonths:summary.minMonths};
+  const seen=new Set(active.scope.ids),extras:{deputies:Deputy[];period:Period}[]=[];
+  for(const e of entries.filter(e=>e.year!==sitePlan.defaultYear)){
+    const year=pubs.get(e.year)!,{summary:ys,suppliers:yp}=built.get(e.year)!,ids=year.scope.ids.filter(id=>!seen.has(id));
+    ids.forEach(id=>seen.add(id));
+    if(ids.length)extras.push({deputies:deputiesOf({ids,people:year.people,summary:ys,suppliers:yp}),period:{year:String(year.scope.year),coverage:year.scope.months.map(m=>m-1),minMonths:ys.minMonths}});
+  }
   // The cache sits beside the output so an unchanged image is copied, not rendered again; the output folder itself is rebuilt every time.
   const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId:STAGING,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache'}):null;
   if(share)console.error(`Imagens de compartilhamento: ${share.rendered} geradas, ${share.reused} reaproveitadas, ${(share.ms/1000).toFixed(1)} s`);
@@ -170,7 +177,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base:`data/${publicationId}`,domains,defaultYear:sitePlan.defaultYear,years:manifestYears}));
   // Static pages first: both read the bare index.html, and the prerender overwrites it with the home page.
   await writeStaticPages(outDir,siteOptions);
-  await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names);
+  await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names,extras);
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
   // The all-months zip is the one file allowed past 10 MiB; zipOf already keeps it under the 25 MiB Workers asset limit.
   checkLimits(files.length,Math.max(...sizes.filter((_,i)=>!files[i].endsWith('.zip'))));
