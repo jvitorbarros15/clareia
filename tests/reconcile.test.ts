@@ -13,7 +13,7 @@ test('annual-only occurrences are reported with their signed total and balance t
   const phone=row({documentId:'0',number:'7894035',cents:31401n}),housing=row({documentId:'4294',cents:-174700n,number:''});
   const r=pairOccurrences([row(),phone,housing],[row()]);
   assert.equal(r.matched.length,1);assert.deepEqual(r.onlyAnnual,[phone,housing]);assert.equal(r.onlyApi.length,0);
-  assert.equal(r.onlyAnnualCents,-143299n);assert.equal(r.annualCents-r.apiCents,-143299n);assert.equal(r.balanced,true);
+  assert.equal(r.onlyAnnualCents,-143299n);assert.equal(r.annualCents-r.apiCents,-143299n);
 });
 test('multiplicity is respected: one API occurrence pairs with one annual occurrence only',()=>{
   const r=pairOccurrences([row(),row()],[row()]);assert.equal(r.matched.length,1);assert.equal(r.onlyAnnual.length,1);

@@ -8,6 +8,9 @@
 
 <p align="center">
   <a href="https://github.com/jvitorbarros15/clareia/actions/workflows/ci.yml"><img src="https://github.com/jvitorbarros15/clareia/actions/workflows/ci.yml/badge.svg?branch=main" alt="Status do CI na main"></a>
+  <a href="https://clareia.clareia.workers.dev"><img src="https://img.shields.io/website?url=https%3A%2F%2Fclareia.clareia.workers.dev&label=site&up_message=no%20ar&down_message=fora%20do%20ar" alt="Site no ar"></a>
+  <a href="https://clareia.clareia.workers.dev/dados-abertos"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fclareia.clareia.workers.dev%2Fmanifest.json&query=%24.years%5B*%5D.year&label=anos%20publicados&color=blue" alt="Anos publicados no site"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjvitorbarros15%2Fclareia%2Fmain%2Fpackage.json&query=%24.engines.node&label=node&color=339933&logo=nodedotjs&logoColor=white" alt="Versão do Node exigida"></a>
 </p>
 
 <p align="center">

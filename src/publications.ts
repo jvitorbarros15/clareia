@@ -39,10 +39,6 @@ export async function publishDomain(db:DB,domain:Domain,snapshot:Snapshot,option
     }
     const check=await db.query<{count:string;total:string}>('SELECT count(*)::text AS count, coalesce(sum(amount_cents),0)::text AS total FROM expenses_v2 WHERE publication_id=$1',[snapshot.id]);
     if(Number(check.rows[0].count)!==records.length||check.rows[0].total!==snapshot.validation.independentTotalCents)throw new Error('Reconciliação SQL independente falhou');
-    if(snapshot.validation.apiComparison?.missingInApi){
-      await db.query(`INSERT INTO withheld_publications SELECT id,$1 FROM publications WHERE body->>'metric'='camara.ceap.valor-liquido-api.v1' ON CONFLICT DO NOTHING`,['Recorte incompleto da API, identificado pela conciliação com o arquivo anual']);
-      await refreshActive(db,domain);
-    }
     await db.query('COMMIT');
   }catch(e){await db.query('ROLLBACK');throw e;}
 }
