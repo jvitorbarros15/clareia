@@ -247,6 +247,20 @@ check('share images: og:image is a 1200x630 JPEG and "Baixar imagem" downloads t
     assert.deepEqual(jpegBox(await require('node:fs/promises').readFile(await download.path())), { width: 1080, height: 1080 });
   } finally { await page.close(); }
 });
+check('the profile panel links each social network the deputy informed, and shows nothing for one without', async () => {
+  const { index } = await published(), p = index.people.find(q => q.social?.length), none = index.people.find(q => !q.social);
+  needCase(p && none, 'the published data has deputies with and without social links');
+  for (const [q, links] of [[p, p.social], [none, []]]) {
+    const slug = q.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''), page = await at(390, { search: `deputado/${q.id}-${slug}` });
+    try {
+      await page.waitForSelector('#detail[open] .profile-head');
+      const shown = await page.locator('#detail .social-links a').evaluateAll(as => as.map(a => [a.getAttribute('href'), a.getAttribute('aria-label'), a.target, a.rel]));
+      assert.deepEqual(shown, links.map(l => [l.url, `${l.network} de ${q.name}`, '_blank', 'noopener noreferrer']), `social links of ${q.name}`);
+      assert.equal(await page.locator('#detail .social-links').count(), links.length ? 1 : 0, 'no empty social block');
+      assert.deepEqual(page.errors, []);
+    } finally { await page.close(); }
+  }
+});
 check('record amount visible', async () => {
   for (const width of [1440, 390]) {
     const page = await at(width);

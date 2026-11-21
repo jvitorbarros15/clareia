@@ -75,25 +75,7 @@ export class PeopleCapture {
       this.stats.cacheHits++;
     }catch(error){
       if((error as NodeJS.ErrnoException).code!=='ENOENT')throw new Error('Captura preservada inválida; não sobrescrever o original');
-      let result:Uint8Array|undefined;
-      for(let attempt=0;attempt<=RETRY_WAITS.length;attempt++){
-        let retry:number|undefined;
-        try{
-          this.stats.requests++;if(attempt)this.stats.retries++;
-          const response=await this.fetcher(url,{headers:{Accept:url.endsWith('.zip')?'application/zip':url.endsWith('.csv')?'text/csv':new URL(url).pathname.endsWith('/ObterDetalhesDeputado')?'application/xml, text/xml':new URL(url).pathname==='/cota-parlamentar/analitico'?'text/html':'application/json','User-Agent':'clareia-people-discovery'},redirect:'error',signal:AbortSignal.timeout(url.endsWith('.csv')?300_000:60_000)});
-          if(response.ok){result=await readLimited(response,url.endsWith('.zip')?100_000_000:url.endsWith('.csv')?200_000_000:12_000_000);this.stats.downloadedBytes+=result.length;break;}
-          if(response.status!==429&&response.status<500)throw new HttpFailure(response.status);
-          const raw=response.headers.get('retry-after');
-          const ms=raw===null?NaN:/^\d+$/.test(raw)?Number(raw)*1000:Date.parse(raw)-Date.now();
-          if(Number.isFinite(ms))retry=Math.max(0,Math.min(120_000,ms));
-        }catch(error){
-          if(error instanceof HttpFailure)throw new Error(`${url}: HTTP ${error.status}`);
-          // Do not log response bodies or exception text that could include source data.
-        }
-        if(attempt===RETRY_WAITS.length)throw new Error(`${url}: falha após tentativas limitadas`);
-        await this.wait(retry??retryWait(attempt));
-      }
-      bytes=result!;
+      bytes=await download(url,this.fetcher,this.wait,this.stats);
       source={url,sha256:hash(bytes),file,fetchedAt:new Date().toISOString(),bytes:bytes.length};
       // Encrypt before any original is written, including profiles and annual CSV archives.
       const target=path.join(this.directory,file);
@@ -113,6 +95,26 @@ export class PeopleCapture {
   }
 }
 class HttpFailure extends Error{constructor(readonly status:number){super('HTTP '+status);}}
+export async function download(url:string,fetcher:Fetcher=fetch,wait:(ms:number)=>Promise<void>=ms=>new Promise(r=>setTimeout(r,ms)),stats={requests:0,retries:0,downloadedBytes:0}):Promise<Uint8Array>{
+  if(!sourceAllowed(url))throw new Error('Origem de descoberta não permitida');
+  for(let attempt=0;;attempt++){
+    let retry:number|undefined;
+    try{
+      stats.requests++;if(attempt)stats.retries++;
+      const response=await fetcher(url,{headers:{Accept:url.endsWith('.zip')?'application/zip':url.endsWith('.csv')?'text/csv':new URL(url).pathname.endsWith('/ObterDetalhesDeputado')?'application/xml, text/xml':new URL(url).pathname==='/cota-parlamentar/analitico'?'text/html':'application/json','User-Agent':'clareia-people-discovery'},redirect:'error',signal:AbortSignal.timeout(url.endsWith('.csv')?300_000:60_000)});
+      if(response.ok){const result=await readLimited(response,url.endsWith('.zip')?100_000_000:url.endsWith('.csv')?200_000_000:12_000_000);stats.downloadedBytes+=result.length;return result;}
+      if(response.status!==429&&response.status<500)throw new HttpFailure(response.status);
+      const raw=response.headers.get('retry-after');
+      const ms=raw===null?NaN:/^\d+$/.test(raw)?Number(raw)*1000:Date.parse(raw)-Date.now();
+      if(Number.isFinite(ms))retry=Math.max(0,Math.min(120_000,ms));
+    }catch(error){
+      if(error instanceof HttpFailure)throw new Error(`${url}: HTTP ${error.status}`);
+      // Do not log response bodies or exception text that could include source data.
+    }
+    if(attempt===RETRY_WAITS.length)throw new Error(`${url}: falha após tentativas limitadas`);
+    await wait(retry??retryWait(attempt));
+  }
+}
 
 export function inspectPeopleContract(doc:JsonObject){
   const routes=['/deputados','/deputados/{id}','/deputados/{id}/historico'];

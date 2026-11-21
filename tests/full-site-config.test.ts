@@ -22,6 +22,7 @@ test('config refuses the old keys, a bad year key and a default year that is not
   assert.throws(()=>parseFullSiteConfig({...base(),defaultYear:'2025'}),/defaultYear/);
   assert.throws(()=>parseFullSiteConfig({...base(),ceilingRuns:{'2026':'c'}}),/ceilingRuns\.2026/);
   assert.throws(()=>parseFullSiteConfig({...base(),expenseYears:{'2025':['a'],'2026':['a']}}),/repete/);
+  assert.throws(()=>parseFullSiteConfig({...base(),socialRun:'../x'}),/socialRun/);
 });
 test('the version of a year must be of that year',()=>{
   assertYearVersion(2025,{scope:{year:2025}},hashes,hashes);

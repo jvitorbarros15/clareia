@@ -106,6 +106,7 @@
     ['collectedAt, publishedAt', 'texto', 'Quando os dados foram coletados e quando a versão foi publicada.'],
     ['scope', 'objeto', 'Recorte: <code>year</code>, <code>months</code>, <code>ids</code> (deputados) e <code>legislature</code>.'],
     ['people[]', 'lista', 'Cada deputado: <code>id</code>, <code>name</code>, <code>party</code>, <code>uf</code>, <code>photo</code>, <code>sourceUrl</code> e <code>profileFetchedAt</code>.'],
+    ['people[].social[]', 'lista, opcional', 'Redes sociais que o deputado informou à Câmara, na ordem da fonte: <code>network</code> (Instagram, Facebook, X, YouTube, TikTok, Threads, LinkedIn ou Flickr) e <code>url</code>. Só aparece quando há ao menos uma; links de outros sites ficam de fora.'],
     ['withoutData', 'lista de números', 'Deputados do recorte sem despesas publicadas.'],
     ['validation.totalCents, recordCount', 'inteiro, número', 'Soma líquida e número de registros que a validação aprovou.'],
     ['validation.independentTotalCents', 'texto', 'Segunda soma, feita por outro caminho, que precisa ser igual a <code>totalCents</code>.'],

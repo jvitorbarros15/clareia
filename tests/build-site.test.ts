@@ -134,6 +134,16 @@ test('portraits are versioned with the data and a missing one is simply absent',
   await fs.access(path.join(dist,'data',publicationId,'portraits','1.jpg'));
   await assert.rejects(fs.access(path.join(dist,'data',publicationId,'portraits','2.jpg')));
 }));
+test('social links from the run reach people[] checked again, and without the run nothing changes',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0),record(100,2,1)]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const plan=(social?:Record<string,unknown>)=>({defaultYear:2025,years:[{year:2025,publicationId:a.id,ceiling:null}],...social?{social}:{}});
+  const without=await json(dist,'data',(await buildSite(db,dist,portraits,{},plan())).publicationId,'index.json');
+  assert.ok(without.people.every((p:{social?:unknown})=>!('social' in p)));
+  const index=await json(dist,'data',(await buildSite(db,dist,portraits,{},plan({'1':['https://www.instagram.com/p1','https://evil.test/x'],'2':['javascript:alert(1)']}))).publicationId,'index.json');
+  assert.deepEqual(index.people.map((p:{social?:unknown})=>p.social),[[{network:'Instagram',url:'https://www.instagram.com/p1'}],undefined]);
+  assert.equal(index.snapshotId,a.id);
+}));
 test('_headers marks data as immutable and manifest as revalidated',()=>setup(async(db,dist,portraits)=>{
   const a=version([record(100,1,0)]);
   await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);

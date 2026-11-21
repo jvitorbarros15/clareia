@@ -402,6 +402,12 @@
   const syncEstado=()=>C.setPath(state.mapUF?`/estado/${state.mapUF}`:'/',state.mapUF?`${UF[state.mapUF][0]} — Clareia`:homeTitle);
   document.addEventListener('clareia:reset',()=>{state.month=COVER;state.highlightCategory=null;state.othersOpen=false;state.catsOpen=false;state.mapUF=null;syncEstado();state.mapMetric='total';state.from=1;state.to=COVERAGE.length;});
   document.addEventListener('clareia:change',updateAll);
+  // Empty space in a directory card opens the profile; buttons, links and text selection keep their own behavior.
+  document.addEventListener('click',e=>{
+    const card=e.target.closest('.directory-card');
+    if(!card||e.target.closest('button,a,input,label')||String(getSelection()))return;
+    card.querySelector('[data-action=profile]')?.click();
+  });
   document.addEventListener('click',e=>{
     const b=e.target.closest('[data-p-highlight],[data-p],[data-p-follow],[data-p-uf],[data-p-category],[data-p-supplier],[data-p-evidence-person],[data-p-drill],[data-p-month],[data-p-metric],[data-p-topic],[data-p-dossier],[data-p-event],[data-p-summary],[data-p-ask],[data-p-add-compare]');if(!b)return;
     if(b.dataset.pHighlight===OTHERS){state.othersOpen=!state.othersOpen;state.highlightCategory=null;updateSpending();focusMatch(`[data-donut-slice][data-p-highlight="${OTHERS}"]`);previewDonut(null);return;}
