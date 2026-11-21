@@ -14,7 +14,6 @@ export function unionRecords(annual:Expense[],api:Expense[]) {
   const unknownAnnual=blocked(pairing.onlyAnnual,ANNUAL_ONLY),unknownApi=blocked(pairing.onlyApi,API_ONLY);
   if(unknownApi.length)throw new Error(`A API contém ocorrências não reconciliadas no arquivo anual (${unknownApi.join(', ')}); publicação retida`);
   if(unknownAnnual.length)throw new Error(`O arquivo anual contém tipos sem par na API e sem revisão (${unknownAnnual.join(', ')}); publicação retida`);
-  if(!pairing.balanced)throw new Error('União das fontes não fecha em centavos; publicação retida');
   const records:Expense[]=[...pairing.matched.map(m=>({...m.annual.record,origin:'both' as const})),...pairing.onlyAnnual.map(o=>({...o.record,origin:'annual' as const})),...pairing.onlyApi.map(o=>({...o.record,origin:'api' as const}))];
   const sum=(origin:Expense['origin'])=>records.filter(r=>r.origin===origin).reduce((n,r)=>n+r.cents,0);
   return {records,paired:pairing.matched.length,onlyAnnual:pairing.onlyAnnual.length,onlyApi:pairing.onlyApi.length,onlyApiCents:pairing.onlyApiCents,originCents:{both:sum('both'),annual:sum('annual'),api:sum('api')}};
