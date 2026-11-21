@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {cents,normalize,stableDigest,BASE,officialUrl} from '../src/model.ts';
+import {cents,normalize,stableDigest,BASE,officialUrl,socialLinks} from '../src/model.ts';
 import {lock,withLock,LOCK_FILE} from '../src/lock.ts';
 import type {Scope} from '../src/model.ts';
 import {normalizeAnnual,parseAnnual} from '../src/annual.ts';
@@ -70,6 +70,11 @@ test('missing IDs and CPF do not merge suppliers by name; source URLs stay offic
   assert.equal(normalize(expense(),1,scope,source).supplierVerified,true);
   assert.equal(officialUrl('https://camara.leg.br.evil.test/file','receipt'),null);
   assert.equal(officialUrl('javascript:alert(1)','receipt'),null);
+});
+test('social links keep known networks in source order, once, over https, and drop everything else',()=>{
+  assert.deepEqual(socialLinks(['https://twitter.com/a','http://www.instagram.com/a','https://twitter.com/a','javascript:alert(1)','https://instagram.com.evil.test/a','https://user:pw@facebook.com/a','https://example.com/a','instagram.com/a',42,'https://m.facebook.com/a']),[
+    {network:'X',url:'https://twitter.com/a'},{network:'Instagram',url:'https://www.instagram.com/a'},{network:'Facebook',url:'https://m.facebook.com/a'}]);
+  assert.deepEqual(socialLinks(null),[]);
 });
 test('lock path is absolute under the project root and is released even when the task or close fails',async()=>temp(async dir=>{
   assert.ok(path.isAbsolute(LOCK_FILE));assert.equal(LOCK_FILE,path.resolve(import.meta.dirname,'..','data','pilot.lock'));

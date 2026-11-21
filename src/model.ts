@@ -82,6 +82,19 @@ export function officialUrl(input:string, kind:'api'|'receipt'|'photo'):string|n
     u.protocol='https:';return u.href;
   }catch{return null;}
 }
+const SOCIAL:Record<string,string>={'instagram.com':'Instagram','facebook.com':'Facebook','twitter.com':'X','x.com':'X','youtube.com':'YouTube','tiktok.com':'TikTok','threads.net':'Threads','linkedin.com':'LinkedIn','flickr.com':'Flickr'};
+// Only links to these networks are kept, never a generic link: a typed site could be anyone's.
+export function socialLinks(urls:unknown):{network:string;url:string}[]{
+  const links:{network:string;url:string}[]=[];
+  for(const raw of Array.isArray(urls)?urls:[]){
+    let u:URL;try{u=new URL(String(raw).trim());}catch{continue;}
+    const network=SOCIAL[u.hostname.replace(/^(www|m)\./,'')];
+    if(!network||u.protocol!=='https:'&&u.protocol!=='http:'||u.username||u.password||u.port)continue;
+    u.protocol='https:';
+    if(!links.some(l=>l.url===u.href))links.push({network,url:u.href});
+  }
+  return links;
+}
 // The API sometimes reports a positive document with net = -(document - glosa); the annual file carries the real value. Airfare, mission and housing keep their own sign handling.
 export const invertedApiShape=(face:number|null,glosa:number|null,net:number,category:string)=>face!==null&&glosa!==null&&glosa>=0&&face>0&&face-glosa>0&&net===-(face-glosa)&&!/AERE|AERONAV|SIGEPA|MISSAO OFICIAL|AUXILIO-MORADIA/.test(category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
 export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceRef,basis?:FinancialBasis):Expense {
