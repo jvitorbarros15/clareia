@@ -653,6 +653,13 @@ body[data-model=editorial] .feature-value:is(:hover,:focus-visible){text-decorat
 .detail-dialog input{width:100%;padding:12px;border:1px solid var(--line);border-radius:6px}
 .detail-dialog dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px}
 .detail-dialog dd{margin:0;overflow-wrap:anywhere}
+.social-links{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
+.social-links a{display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--ink);transition:color 160ms ease,border-color 160ms ease,background-color 160ms ease,transform 160ms var(--ease-out,ease)}
+.social-links a:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.social-links a:active{transform:scale(.94)}
+.social-links a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.social-links .icon{width:18px;height:18px}
+.social-links small{flex:1 1 18ch;line-height:1.4;text-wrap:balance}
 .toast[hidden]{display:none}
 @media (max-width:560px){
   .formula{grid-template-columns:1fr;gap:14px}
