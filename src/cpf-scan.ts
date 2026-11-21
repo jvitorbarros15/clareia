@@ -1,9 +1,10 @@
 import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {strFromU8,unzipSync} from 'fflate';
 
 const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
-const SKIP=new Set(['.jpg','.jpeg','.png','.zip','.woff2']);
+const SKIP=new Set(['.jpg','.jpeg','.png','.woff2']);
 
 export function validCpf(digits:string):boolean{
   if(!/^\d{11}$/.test(digits)||/^(\d)\1+$/.test(digits))return false;
@@ -56,7 +57,15 @@ async function walk(target:string):Promise<string[]>{
 export async function scanFiles(targets:string[],known:Set<string>,allow:Set<string>=new Set()):Promise<{file:string;count:number}[]>{
   const found=[];
   for(const file of (await Promise.all(targets.map(walk))).flat()){
-    if(SKIP.has(path.extname(file).toLowerCase()))continue;
+    const ext=path.extname(file).toLowerCase();
+    if(SKIP.has(ext))continue;
+    if(ext==='.zip'){
+      for(const [entry,bytes] of Object.entries(unzipSync(new Uint8Array(await fs.readFile(file))))){
+        const count=scanCpfs(strFromU8(bytes),known,allow);
+        if(count)found.push({file:`${file}:${entry}`,count});
+      }
+      continue;
+    }
     const count=scanCpfs(await fs.readFile(file,'utf8'),known,allow);
     if(count)found.push({file,count});
   }

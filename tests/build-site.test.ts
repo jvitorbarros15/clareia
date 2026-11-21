@@ -416,6 +416,11 @@ test('two years write the extra year under its own folder with its own totals',(
   assert.equal(manifest.defaultYear,2025);assert.equal(manifest.domains.despesas.version,a.id);
   assert.deepEqual(manifest.years,[{year:2025,months:[1],partial:true,expenses:a.id,totalCents:150,records:2},{year:2026,months:[1,2,3],partial:true,expenses:b.id,totalCents:1011,records:3}]);
   assert.deepEqual(built.years.map(y=>y.year),[2025,2026]);
+  const prerendered=await fs.readdir(path.join(dist,'deputado'));
+  assert.deepEqual(prerendered.filter(f=>/^[13]-/.test(f)).map(f=>f[0]).sort(),['1','3']);
+  const extraPage=await fs.readFile(path.join(dist,'deputado',prerendered.find(f=>f.startsWith('3-'))!),'utf8');
+  assert.match(extraPage,/Jan–Mar 2026/);
+  assert.doesNotMatch(extraPage,/share\//);
   // portraits and activity are shared across years and keyed by the union of people
   assert.deepEqual((await fs.readdir(path.join(base,'portraits'))).sort(),['1.jpg','3.jpg']);
   assert.deepEqual((await fs.readdir(path.join(base,'atividade'))).sort(),['1.json','2.json','3.json']);

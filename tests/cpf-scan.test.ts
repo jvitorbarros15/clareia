@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {findCpfs,loadAllowlist,redactCpf,redactExpense,scanCpfs,scanFiles,validCpf} from '../src/cpf-scan.ts';
+import {strToU8,zipSync} from 'fflate';
 import {publicSupplier} from '../src/model.ts';
 
 const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
@@ -57,6 +58,11 @@ function syntheticCpf(seed:number):string{
   const first=digit(9,base);return base+first+digit(10,base+first);
 }
 const CPF=syntheticCpf(3),OTHER=syntheticCpf(11),CNPJ='11222333000181';
+test('scanFiles opens a zip and reports the entry that holds a CPF',async t=>{
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-cpf-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));
+  await fs.writeFile(path.join(directory,'abertos.zip'),zipSync({'clean.csv':strToU8('a;b'),'leak.csv':strToU8(`ANA MEI-${CPF}`)}));
+  assert.deepEqual(await scanFiles([directory],new Set()),[{file:`${path.join(directory,'abertos.zip')}:leak.csv`,count:1}]);
+});
 test('the synthetic CPFs are valid',()=>{assert.equal(validCpf(CPF),true);assert.equal(validCpf(OTHER),true);assert.notEqual(CPF,OTHER);});
 test('a name ending in MEI-<cpf> is redacted',()=>{
   assert.equal(redactCpf('FULANO DE TAL - MEI-'+CPF),'FULANO DE TAL - MEI-[CPF omitido]');

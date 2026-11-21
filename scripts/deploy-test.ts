@@ -12,12 +12,16 @@ const portraits=value('--portraits');if(!portraits)throw new Error('Informe --po
 if(args.includes('--yes')&&args.includes('--dry-run'))throw new Error('--yes e --dry-run não podem ser usados juntos');
 if(args.includes('--yes')&&args.includes('--allow-missing-portraits'))throw new Error('--allow-missing-portraits não pode ser usado com --yes');
 const passthrough=['--data-root','--ceiling-root','--config'].flatMap(f=>value(f)?[f,value(f)]:[]);
-const run=(label:string,command:string,commandArgs:string[],env:Record<string,string>={},childEnv:NodeJS.ProcessEnv=process.env)=>new Promise<void>((resolve,reject)=>{
+// Every step sees only what node, tsx and the browser need to run; no Cloudflare, R2 or database variable. Names are compared in upper case because Windows spells them Path, SystemRoot.
+const pick=(names:string[])=>Object.fromEntries(Object.entries(process.env).filter(([k])=>names.includes(k.toUpperCase()))) as NodeJS.ProcessEnv;
+const BASE_ENV=['PATH','PATHEXT','SYSTEMROOT','SYSTEMDRIVE','WINDIR','COMSPEC','TEMP','TMP','TMPDIR','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','PROGRAMDATA','PROGRAMFILES','PROGRAMFILES(X86)','COMMONPROGRAMFILES','ALLUSERSPROFILE','USERNAME','USERDOMAIN','OS','NUMBER_OF_PROCESSORS','PROCESSOR_ARCHITECTURE','NODE_OPTIONS','NODE_EXTRA_CA_CERTS','PLAYWRIGHT_BROWSERS_PATH','HTTPS_PROXY','HTTP_PROXY','NO_PROXY'];
+const STEP_ENV=pick(BASE_ENV);
+const run=(label:string,command:string,commandArgs:string[],env:Record<string,string>={},childEnv:NodeJS.ProcessEnv=STEP_ENV)=>new Promise<void>((resolve,reject)=>{
   console.log(`\n== ${label}`);
   spawn(command,commandArgs,{stdio:'inherit',env:{...childEnv,...env}}).on('exit',code=>code===0?resolve():reject(new Error(`${label} falhou (código ${code})`)));
 });
-// wrangler runs from the lockfile and only sees what it needs to find node, its config and the Cloudflare credentials.
-const WRANGLER_ENV=Object.fromEntries(Object.entries(process.env).filter(([k])=>['PATH','Path','SYSTEMROOT','SystemRoot','APPDATA','LOCALAPPDATA','USERPROFILE','HOME','TEMP','TMP','TMPDIR','XDG_CONFIG_HOME','HTTPS_PROXY','HTTP_PROXY','NO_PROXY'].includes(k)||k==='CLOUDFLARE_API_TOKEN'||k==='CLOUDFLARE_ACCOUNT_ID')) as NodeJS.ProcessEnv;
+// wrangler also needs its config folder and the Cloudflare credentials.
+const WRANGLER_ENV=pick([...BASE_ENV,'XDG_CONFIG_HOME','CLOUDFLARE_API_TOKEN','CLOUDFLARE_ACCOUNT_ID']);
 const wranglerBin=path.resolve('node_modules','wrangler','bin','wrangler.js');
 const node=process.execPath,tsx=(script:string,...rest:string[])=>['--import','tsx','--max-old-space-size=8192',script,...rest];
 await run('1/5 build do site completo',node,tsx('scripts/build-full-site.ts','--out',OUT,'--portraits',portraits,'--noindex',...value('--url')?['--site-url',value('--url')]:[],...passthrough,...args.includes('--allow-missing-portraits')?['--allow-missing-portraits']:[],...args.includes('--share-images')?['--share-images']:[]));
