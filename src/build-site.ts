@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {build} from 'esbuild';
-import {canonical,hash,snapshotId,COMPANY_NAME} from './model.ts';
+import {canonical,hash,snapshotId,socialLinks,COMPANY_NAME} from './model.ts';
 import type {Expense,Snapshot} from './model.ts';
 import {activePublication,publicationAudit,readRecords} from './publications.ts';
 import type {Domain,Publication} from './publications.ts';
@@ -62,7 +62,7 @@ async function versionAssets(outDir:string):Promise<void>{
   await tagged('data.js',['app.js','portal.js']);
   for(const page of ['index.html','404.html'])await tagged(page,['view.js','pages.js','data.js','analytics.js','app.js','portal.js','styles.css']);
 }
-export type SitePlan={defaultYear:number;years:{year:number;publicationId:string;ceiling:SiteCeiling|null}[]};
+export type SitePlan={defaultYear:number;years:{year:number;publicationId:string;ceiling:SiteCeiling|null}[];social?:Record<string,unknown>};
 export type YearResult={year:number;review:ReviewItem[];names:ReviewNames;partyReview:ReviewItem[]};
 // A year is built only from the exact version the caller names, and only if its own audit passed; the active pointer is never consulted for it.
 async function approvedPublication(db:DB,id:string,year:number):Promise<Publication>{
@@ -139,8 +139,10 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     const supplierSummary=buildSupplierSummary(summary,allRecords,supplierNames),suppliers=JSON.stringify(supplierSummary);if(scanCpfs(suppliers,new Set()))throw new Error('Identificador privado nos fornecedores');
     await fs.writeFile(path.join(ydir,'fornecedores.json'),suppliers);
     const {id:snapshotId,domain:_domain,pages:_pages,...meta}=active;
+    // Social links are added here, outside the approved version, so they never move its id or totals; the run is checked again link by link.
+    const people=meta.people.map(p=>{const social=socialLinks(sitePlan.social?.[p.id]);return social.length?{...p,social}:p;});
     // Share images exist only for the default year, so only its index says so.
-    const indexJson=JSON.stringify({...meta,snapshotId,withoutData,...isDefault&&siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)});
+    const indexJson=JSON.stringify({...meta,people,snapshotId,withoutData,...isDefault&&siteOptions.shareImages?{shareImages:true}:{},audit:await publicationAudit(db,active.id)});
     await fs.writeFile(path.join(ydir,'index.json'),indexJson);
     await writeOpenData(ydir,active.scope.ids.flatMap(id=>recordsOf.get(id)??[]),{summary:summaryJson,suppliers,index:indexJson},summary.people.flatMap(p=>p.months.filter(m=>m.held).map(()=>({personId:p.id}))),{year:active.scope.year,publishedAt:active.publishedAt,collectedAt:active.collectedAt});
     results.push({year:e.year,partyReview:partyReviewItems(active.people),names:{withheld:rows(withheldNames),kept:rows(keptNames)},review:[...ufReviewItems(active.people),...[...oddIds].map(([id,n])=>({id,name:active.people.find(p=>p.id===id)?.name??'',used:n+' registros',from:'identificador do fornecedor fora do formato'}))]});

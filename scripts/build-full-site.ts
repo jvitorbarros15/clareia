@@ -31,6 +31,7 @@ if(crosscheckAudit.status!=='passed'||crosscheckAudit.crosscheckSha256!==hash(ca
 const years=Object.keys(config.expenseYears).map(Number).sort((a,b)=>a-b),lotsOf=new Map<number,ExpenseLotRun[]>();
 for(const year of years)lotsOf.set(year,await Promise.all(config.expenseYears[year].map(async runId=>{const d=path.join('expense-intermediate',runId);return {runId,manifest:await load(d,'run.json'),input:await load(d,'input.json'),report:await load(d,'batch.json'),audit:await load(d,'audit.json')};})));
 const bills=await Promise.all(config.billsRuns.map(async run=>({report:await load('bills',run,'bills.json'),audit:await load('bills',run,'audit.json')})));
+const social=config.socialRun?(await load('social',config.socialRun,'social.json')).people:undefined;
 const votes=await Promise.all(config.votesRuns.map(async run=>({report:await load('votes',run,'votes.json'),ballots:await load('votes',run,'ballots.json'),audit:await load('votes',run,'audit.json')})));
 const publicationAudits=[temporalAudit,crosscheckAudit,...[...lotsOf.values()].flat().map(l=>l.audit),...bills.map(b=>b.audit),...votes.map(v=>v.audit)];
 // Fixed by the inputs, so rebuilding the same runs gives the same bytes under the same data hash.
@@ -60,7 +61,7 @@ try{
   await storeBillsVersion(db,billsVersion);await approve('projetos',billsVersion.id,await auditBillsVersion(db,billsVersion.id,bills.map(b=>b.report)));
   await storeVotesVersion(db,votesVersion);await approve('votacoes',votesVersion.id,await auditVotesVersion(db,votesVersion.id));
   for(const [domain,id] of [['despesas',expenses.id],['pessoas',coverage.id],['projetos',billsVersion.id],['votacoes',votesVersion.id]] as const)if((await activePublication(db,domain))?.id!==id)throw new Error(`Versão de ${domain} não ficou ativa`);
-  const {years:yearResults,...built}=await buildSite(db,out,portraits,siteOptions,{defaultYear:config.defaultYear,years:versions.map(v=>({year:v.year,publicationId:v.expenses.id,ceiling:ceilingOf.get(v.year)!}))}),allIds=[...new Set(versions.flatMap(v=>v.expenses.scope.ids))],have=await Promise.all(allIds.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
+  const {years:yearResults,...built}=await buildSite(db,out,portraits,siteOptions,{defaultYear:config.defaultYear,years:versions.map(v=>({year:v.year,publicationId:v.expenses.id,ceiling:ceilingOf.get(v.year)!})),social}),allIds=[...new Set(versions.flatMap(v=>v.expenses.scope.ids))],have=await Promise.all(allIds.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
   const {review,partyReview,names}=yearResults.find(r=>r.year===config.defaultYear)!;
   await writeReview(built.publicationId,review,names,partyReview);await writeSignReview(built.publicationId,signReviewItems(expenses.records,expenses.people));
   // A non-default year's lists carry the year in the file name so they never overwrite the default year's.
