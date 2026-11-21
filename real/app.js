@@ -571,7 +571,7 @@
   }
   function socialLinks(p) {
     const links = p.social.filter(l => safeUrl(l.url));
-    return links.length ? `<div class="social-links">${links.map(l => `<a href="${escape(l.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escape(l.network)} de ${escape(p.name)}" title="${escape(l.network)}">${icon(l.network)}</a>`).join('')}<small class="context">Redes informadas pelo(a) deputado(a) à Câmara</small></div>` : '';
+    return links.length ? `<div class="social-links">${links.map(l => `<a href="${escape(l.url)}" data-network="${escape(l.network.toLowerCase())}" target="_blank" rel="noopener noreferrer" aria-label="${escape(l.network)} de ${escape(p.name)}" title="${escape(l.network)}">${icon(l.network)}</a>`).join('')}<small class="context">Redes informadas pelo(a) deputado(a) à Câmara</small></div>` : '';
   }
   function profile(id) {
     const p = person(id), peer = comparable(p) ? byTotal().find(other => other.id !== id) : null;
