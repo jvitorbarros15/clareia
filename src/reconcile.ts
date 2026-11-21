@@ -16,6 +16,5 @@ export function pairOccurrences<A extends Occurrence,B extends Occurrence>(annua
   const onlyApi=[...pool.values()].flat();
   const fieldMismatches=matched.filter(({annual:a,api:b})=>a.number!==b.number||(a.date||null)!==(b.date||null)||a.lot!==b.lot);
   const sum=(rows:Occurrence[])=>rows.reduce((n,r)=>n+r.cents,0n);
-  return {matched,onlyAnnual,onlyApi,fieldMismatches,annualCents:sum(annual),apiCents:sum(api),onlyAnnualCents:sum(onlyAnnual),onlyApiCents:sum(onlyApi),
-    balanced:sum(annual)-sum(api)===sum(onlyAnnual)-sum(onlyApi)};
+  return {matched,onlyAnnual,onlyApi,fieldMismatches,annualCents:sum(annual),apiCents:sum(api),onlyAnnualCents:sum(onlyAnnual),onlyApiCents:sum(onlyApi)};
 }
