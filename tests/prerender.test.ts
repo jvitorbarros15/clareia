@@ -137,6 +137,9 @@ test('structured data names the site on the home and the deputy as a Person, esc
   const bare=jsonLd(renderDeputy(shell,{...normal,sourceUrl:'javascript:x'},period,SITE,null));
   assert.equal(bare.image,undefined);
   assert.equal(bare.sameAs,undefined);
+  const social=[{network:'instagram',url:'https://www.instagram.com/a'}];
+  assert.deepEqual(jsonLd(renderDeputy(shell,{...normal,social},period,SITE,null)).sameAs,['https://www.camara.leg.br/deputados/100','https://www.instagram.com/a']);
+  assert.deepEqual(jsonLd(renderDeputy(shell,{...normal,sourceUrl:'javascript:x',social},period,SITE,null)).sameAs,['https://www.instagram.com/a']);
 });
 test('a shell that already carries page tags is refused',()=>{
   const home=renderHome(shell,SITE);
