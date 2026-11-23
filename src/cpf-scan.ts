@@ -18,6 +18,9 @@ const LABELLED=/\bC\.?P\.?F\.?[^0-9]{0,30}(?<!\d)(\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\
 // punctuation ("/") breaks the pattern. Lowercase hex tokens (hashes, ids) are blanked first so their digit stretches are not read as numbers.
 const DIGIT_CPF=/(?<!\d)(?<!\d\.)\d{3}[.  -]{0,2}\d{3}[.  -]{0,2}\d{3}[-–./  ]{0,3}\d{2}(?!\d)/g;
 const HEX_TOKEN=/(?<![0-9A-Za-z])(?=[0-9a-f]*[a-f])[0-9a-f]{12,}(?![0-9A-Za-z])/g;
+// A label ("[CPF omitido]" included) followed by a hash id is not a CPF. Only hash-length hex is blanked here: a shorter token can be a CPF glued to letters a-f.
+const HASH_TOKEN=/(?<![0-9A-Za-z])(?=[0-9a-f]*[a-f])[0-9a-f]{32,}(?![0-9A-Za-z])/g;
+const labelled=(text:string)=>[...text.replace(HASH_TOKEN,m=>'x'.repeat(m.length)).matchAll(LABELLED)].length;
 export function cpfRuns(text:string):string[]{
   return [...text.replace(HEX_TOKEN,m=>'x'.repeat(m.length)).matchAll(DIGIT_CPF)].map(m=>m[0].replace(/\D/g,'')).filter(validCpf);
 }
@@ -35,14 +38,13 @@ export function redactExpense<T extends {supplier:string;documentId:string;docum
 export function findCpfs(text:string,known:Set<string>):number{
   const formatted=[...text.matchAll(/(?<![\d.])\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)/g)].filter(m=>validCpf(m[0].replace(/\D/g,''))).length;
   const plain=[...text.matchAll(/(?<!\d)\d{11}(?!\d)/g)].filter(m=>known.has(sha256(m[0]))).length;
-  const labelled=[...text.matchAll(LABELLED)].length;
-  return formatted+plain+labelled;
+  return formatted+plain+labelled(text);
 }
 // The scanner's verdict: every valid CPF run counts unless a confirmed false positive is allowlisted by the hash of its digits.
 export function scanCpfs(text:string,known:Set<string>,allow:Set<string>=new Set()):number{
   const strict=cpfRuns(text).filter(d=>!allow.has(sha256(d))).length;
   const knownOnly=[...text.matchAll(/(?<!\d)\d{11}(?!\d)/g)].filter(m=>!validCpf(m[0])&&known.has(sha256(m[0]))).length;
-  return strict+knownOnly+[...text.matchAll(LABELLED)].length;
+  return strict+knownOnly+labelled(text);
 }
 export async function loadAllowlist(file:string):Promise<Set<string>>{
   const entries=(JSON.parse(await fs.readFile(file,'utf8')) as {entries:{sha256:string;reason:string}[]}).entries;
