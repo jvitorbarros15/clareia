@@ -18,8 +18,9 @@ const LABELLED=/\bC\.?P\.?F\.?[^0-9]{0,30}(?<!\d)(\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\
 // punctuation ("/") breaks the pattern. Lowercase hex tokens (hashes, ids) are blanked first so their digit stretches are not read as numbers.
 const DIGIT_CPF=/(?<!\d)(?<!\d\.)\d{3}[.  -]{0,2}\d{3}[.  -]{0,2}\d{3}[-–./  ]{0,3}\d{2}(?!\d)/g;
 const HEX_TOKEN=/(?<![0-9A-Za-z])(?=[0-9a-f]*[a-f])[0-9a-f]{12,}(?![0-9A-Za-z])/g;
-// A label ("[CPF omitido]" included) followed by a hash id is not a CPF, so hex tokens are blanked before the labelled match too.
-const labelled=(text:string)=>[...text.replace(HEX_TOKEN,m=>'x'.repeat(m.length)).matchAll(LABELLED)].length;
+// A label ("[CPF omitido]" included) followed by a hash id is not a CPF. Only hash-length hex is blanked here: a shorter token can be a CPF glued to letters a-f.
+const HASH_TOKEN=/(?<![0-9A-Za-z])(?=[0-9a-f]*[a-f])[0-9a-f]{32,}(?![0-9A-Za-z])/g;
+const labelled=(text:string)=>[...text.replace(HASH_TOKEN,m=>'x'.repeat(m.length)).matchAll(LABELLED)].length;
 export function cpfRuns(text:string):string[]{
   return [...text.replace(HEX_TOKEN,m=>'x'.repeat(m.length)).matchAll(DIGIT_CPF)].map(m=>m[0].replace(/\D/g,'')).filter(validCpf);
 }

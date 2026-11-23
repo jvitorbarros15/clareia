@@ -137,5 +137,8 @@ test('wider separators are redacted, masked and scanned; tab and money are not',
 test('a CPF label followed by a hash id is not a CPF',()=>{
   const json=JSON.stringify([{supplier:'EMPRESA [CPF omitido]'},{id:'11144477735'+'a1'.repeat(26)}]);
   assert.equal(scanCpfs(json,new Set()),0);assert.equal(findCpfs(json,new Set()),0);
-  assert.ok(scanCpfs('CPF 11144477735',new Set())>0);assert.ok(scanCpfs('CPF: 111.444.777-35 ok',new Set())>0);
+  for(const f of [scanCpfs,findCpfs]){
+    assert.equal(f('CPF 11144477736',new Set()),1);
+    for(const s of ['CPF 11144477735abc','CPF de11144477735','https://x.test/cpf/11144477735ab.pdf',JSON.stringify({s:'CPF\f11144477735'})])assert.ok(f(s,new Set())>0,s);
+  }
 });
