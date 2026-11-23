@@ -427,10 +427,17 @@ test('an annual row whose document minus glosa is up to 5 cents from its net pub
   }
   const exact=await setup(t);assert.equal(exact.report.cells[0].diagnostics?.annualCentsTolerated,undefined);
 });
-test('an annual row 6 cents off its own equation, or an API-only row off by any amount, stays held',async t=>{
+test('an annual row or an API row 6 cents off its own equation, or an API-only row off by any amount, stays held',async t=>{
   const six=await setup(t,url=>url.endsWith('.zip')?offAnnual('99.94'):twinApi([near(100,99.94)])(url));
   const apiOnly=await setup(t,url=>url.endsWith('.zip')?annual():twinApi([{},{codDocumento:'12',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:3,valorLiquido:2.97}])(url));
-  for(const r of [six,apiOnly]){const c=r.report.cells[0];assert.equal(c.status,'held-review');assert.deepEqual(c.reasons,['financial-normalization-failed']);assert.deepEqual(c.records,[]);assert.equal(c.totalCents,null);assert.equal(c.diagnostics?.annualCentsTolerated,undefined);}
+  const annualAlone=await setup(t,url=>url.endsWith('.zip')?annual([full('TELEFONIA','99.94','100.00','0','0','0')]):twinApi([])(url));
+  const apiAlone=await setup(t,url=>url.endsWith('.zip')?offAnnual('100.00'):twinApi([near(100.06,100)])(url));
+  const tolerated=await setup(t,url=>url.endsWith('.zip')?offAnnual('99.97'):twinApi([near(100,99.97),{codDocumento:'12',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:3,valorLiquido:2.97}])(url));
+  for(const r of [six,apiOnly,annualAlone,apiAlone,tolerated]){const c=r.report.cells[0];assert.equal(c.status,'held-review');assert.deepEqual(c.reasons,['financial-normalization-failed']);assert.deepEqual(c.records,[]);assert.equal(c.totalCents,null);assert.equal(c.diagnostics?.annualCentsTolerated,undefined);}
+});
+test('two rows on one document key whose API documents are 4 cents above their nets publish the exact annual values, with no counter',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([full('COMBUSTÍVEIS','100.00','100.00','0','10','0'),full('COMBUSTÍVEIS','50.00','50.00','0','10','0')]):twinApi([near(100.04,100),near(50.04,50)])(url));
+  const c=r.report.cells[0];assert.equal(c.status,'complete');assert.deepEqual(c.reasons,[]);assert.deepEqual(c.records.map(x=>[x.cents,x.documentCents,x.origin]).sort(),[[10000,10000,'both'],[5000,5000,'both']]);assert.equal(r.report.totalCents,15000);assert.equal(c.diagnostics?.annualCentsTolerated,undefined);assert.equal(c.diagnostics?.apiCentsTolerated,undefined);
 });
 test('the audit mirror recomputes the annual cents tolerance and rejects a batch that drops the count or publishes the document value',async t=>{
   const r=await setup(t,url=>url.endsWith('.zip')?offAnnual('99.97'):twinApi([near(100,-99.97)])(url));
