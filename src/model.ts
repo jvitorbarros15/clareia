@@ -66,7 +66,7 @@ export const expenseSchema=z.object({
 }).passthrough();
 export type Scope={year:number;months:number[];ids:number[];legislature:number};
 // uf: temporal single-month UF, else the UF unanimous across the legislature's events, else null. party: the single confirmed month's party, else the legislature events' party at the period end (partyNote says how; with no party it says why), else null.
-export type Person={id:number;name:string;photo:string|null;sourceUrl:string;profileFetchedAt:string;uf?:string|null;ufNote?:string|null;party?:string|null;partyNote?:string|null;statusDate?:string|null};
+export type Person={id:number;name:string;photo:string|null;sourceUrl:string;profileFetchedAt:string;uf?:string|null;ufNote?:string|null;party?:string|null;partyNote?:string|null;statusDate?:string|null;social?:{network:string;url:string}[]};
 export const UFS=new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
 export type SourceRef={url:string;sha256?:string;row:number;fetchedAt:string};
 export type FinancialBasis='reported-installment'|'balanced-document-split';

@@ -36,7 +36,7 @@ export const deputyPath=(officialId:number,name:string)=>`/deputado/${officialId
 export const statePath=(uf:string)=>`/estado/${uf}`;
 export const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
 
-export type Deputy={id:number;name:string;uf:string|null;ufNote:string|null;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];comparable:boolean;cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse};
+export type Deputy={id:number;name:string;uf:string|null;ufNote:string|null;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];comparable:boolean;cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse;social?:{network:string;url:string}[]};
 export type Period={year:string;coverage:number[];minMonths:number};
 
 // Eligibility fields are read from the published summary, the same ones the app reads.
@@ -44,7 +44,7 @@ export function deputiesOf(input:{ids:number[];people:Person[];summary:SiteSumma
   const {summary,suppliers}=input,summaryOf=new Map(summary.people.map(p=>[p.id,p]));
   return input.ids.map(id=>{
     const info=input.people.find(p=>p.id===id),own=summaryOf.get(id)!;
-    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??null,ufNote:info?.ufNote??null,party:own.party,partyNote:own.partyNote,partyInReview:own.partyInReview,lastConfirmedParty:own.lastConfirmedParty,sourceUrl:info?.sourceUrl??'',exercisedMonths:own.exercisedMonths,noExercise:own.noExercise,heldMonths:own.heldMonths.map(m=>m-1),comparable:own.comparable,cents:own?.cents??0,use:ceilingUse(own?.months??[],summary.ceiling,Boolean(summary.coverageId)),hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null};
+    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??null,ufNote:info?.ufNote??null,party:own.party,partyNote:own.partyNote,partyInReview:own.partyInReview,lastConfirmedParty:own.lastConfirmedParty,sourceUrl:info?.sourceUrl??'',exercisedMonths:own.exercisedMonths,noExercise:own.noExercise,heldMonths:own.heldMonths.map(m=>m-1),comparable:own.comparable,cents:own?.cents??0,use:ceilingUse(own?.months??[],summary.ceiling,Boolean(summary.coverageId)),hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null,...info?.social?.length?{social:info.social}:{}};
   });
 }
 
@@ -121,7 +121,7 @@ export function renderDeputy(shell:string,p:Deputy,period:Period,siteUrl:string,
   const source=official?` <a href="${esc(p.sourceUrl)}" rel="noopener noreferrer">Cadastro na Câmara</a>`:'';
   const state=p.uf&&UFS[p.uf]?`<p><a href="${statePath(p.uf)}">Deputados de ${esc(UFS[p.uf])}</a></p>`:'';
   const noscript=`<noscript><main id="main"><h1>${esc(p.name)}</h1><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.${source}</p>${state}${homeLink}</main></noscript>`;
-  const ld={'@type':'Person',name:p.name,jobTitle:'Deputado(a) federal',url,...portrait?{image:portrait.url}:{},...official?{sameAs:[p.sourceUrl]}:{}};
+  const ld={'@type':'Person',name:p.name,jobTitle:'Deputado(a) federal',url,...portrait?{image:portrait.url}:{},...official||p.social?.length?{sameAs:[...official?[p.sourceUrl]:[],...(p.social??[]).map(l=>l.url)]}:{}};
   return page(shell,{title,description,url,type:'profile',image},noscript,ld);
 }
 export function renderState(shell:string,uf:string,deputies:Deputy[],period:Period,siteUrl:string):string{
