@@ -101,7 +101,7 @@ export function normalize(raw:unknown,personId:number,scope:Scope,source:SourceR
   const r=expenseSchema.parse(raw);
   if(!scope.ids.includes(personId)||r.ano!==scope.year||!scope.months.includes(r.mes))throw new Error('Registro fora do recorte contratado');
   const net=cents(r.valorLiquido),face=cents(r.valorDocumento),glosa=r.valorGlosa===null?null:cents(r.valorGlosa);
-  if(glosa!==null&&face-glosa!==net&&!invertedApiShape(face,glosa,net,r.tipoDespesa)&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
+  if(glosa!==null&&Math.abs(face-glosa-net)>5&&!invertedApiShape(face,glosa,net,r.tipoDespesa)&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Documento menos glosa diverge do valor líquido: revisão obrigatória');
   const supplierId=(r.cnpjCpfFornecedor||'').replace(/\D/g,'');
   // Only validated CNPJ businesses are grouped across records. CPF/missing IDs remain separate.
   const verified=validCnpj(supplierId),supplier=publicSupplier(r.nomeFornecedor,supplierId);
