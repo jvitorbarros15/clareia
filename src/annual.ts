@@ -43,7 +43,7 @@ export function normalizeAnnual(r:AnnualRow,scope:Scope,source:SourceRef,basis?:
   const required=['txtDescricao','vlrLiquido'];for(const field of required)if(!r[field]?.trim())throw new Error('Campo anual obrigatório ausente: '+field);
   const money=(field:string)=>r[field]?.trim()?cents(r[field].trim().replace(',','.')):null;
   const net=money('vlrLiquido')!,face=money('vlrDocumento'),glosa=money('vlrGlosa');
-  if(face!==null&&glosa!==null&&face-glosa!==net&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Equação financeira anual diverge');
+  if(face!==null&&glosa!==null&&Math.abs(face-glosa-net)>5&&basis!=='reported-installment'&&basis!=='balanced-document-split')throw new Error('Equação financeira anual diverge');
   const supplierId=(r.txtCNPJCPF||'').replace(/\D/g,''),verified=validCnpj(supplierId),id=occurrenceId(personId,r,verified,'txtCNPJCPF','txtFornecedor');const supplier=publicSupplier(r.txtFornecedor||'',supplierId);
   return {id,personId,year,month,category:r.txtDescricao,supplier:supplier.name,supplierKey:verified?hash('cnpj:'+supplierId):id,supplierVerified:verified,...(oddId(supplierId)?{supplierIdOdd:true as const}:{}),documentId:r.ideDocumento||'Não informado',documentNumber:r.txtNumero||'Não informado',date:r.datEmissao||null,lot:r.numLote||'',receipt:r.urlDocumento&&supplier.key!=='person'?officialUrl(r.urlDocumento,'receipt'):null,cents:net,documentCents:face,disallowedCents:glosa,source,...(basis?{financialBasis:basis}:{})};
 }

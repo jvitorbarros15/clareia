@@ -419,3 +419,30 @@ test('several rows of one document with different faces pair by exact face first
   const rental=await setup(t,url=>url.endsWith('.zip')?annual([item('150.00'),item('250.00')]):twinApi([{tipoDespesa:air,valorDocumento:150,valorGlosa:0,valorLiquido:-150},{tipoDespesa:air,valorDocumento:250,valorGlosa:0,valorLiquido:-250}])(url));
   assert.equal(rental.report.cells[0].status,'complete');assert.equal(rental.report.totalCents,40000);assert.equal(rental.report.cells[0].diagnostics?.apiSignCorrected,2);
 });
+const offAnnual=(net:string)=>annual([full('COMBUSTÍVEIS',net,'100.00','0','10','0')]);
+test('an annual row whose document minus glosa is up to 5 cents from its net publishes the annual net, with either API sign',async t=>{
+  for(const [net,api] of [['99.97',near(100,99.97)],['99.95',near(100,-99.95)],['100.05',near(100,100.05)]] as const){
+    const r=await setup(t,url=>url.endsWith('.zip')?offAnnual(net):twinApi([api])(url));
+    const c=r.report.cells[0],cents=Math.round(Number(net)*100);assert.equal(c.status,'complete');assert.deepEqual(c.reasons,[]);assert.equal(c.records.length,1);assert.equal(c.records[0].cents,cents);assert.equal(c.records[0].documentCents,10000);assert.equal(c.records[0].origin,'both');assert.equal(c.diagnostics?.annualCentsTolerated,1);assert.equal(c.diagnostics?.apiCentsTolerated,undefined);assert.equal(r.report.totalCents,cents);
+  }
+  const exact=await setup(t);assert.equal(exact.report.cells[0].diagnostics?.annualCentsTolerated,undefined);
+});
+test('an annual row or an API row 6 cents off its own equation, or an API-only row off by any amount, stays held',async t=>{
+  const six=await setup(t,url=>url.endsWith('.zip')?offAnnual('99.94'):twinApi([near(100,99.94)])(url));
+  const apiOnly=await setup(t,url=>url.endsWith('.zip')?annual():twinApi([{},{codDocumento:'12',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:3,valorLiquido:2.97}])(url));
+  const annualAlone=await setup(t,url=>url.endsWith('.zip')?annual([full('TELEFONIA','99.94','100.00','0','0','0')]):twinApi([])(url));
+  const apiAlone=await setup(t,url=>url.endsWith('.zip')?offAnnual('100.00'):twinApi([near(100.06,100)])(url));
+  const tolerated=await setup(t,url=>url.endsWith('.zip')?offAnnual('99.97'):twinApi([near(100,99.97),{codDocumento:'12',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:3,valorLiquido:2.97}])(url));
+  for(const r of [six,apiOnly,annualAlone,apiAlone,tolerated]){const c=r.report.cells[0];assert.equal(c.status,'held-review');assert.deepEqual(c.reasons,['financial-normalization-failed']);assert.deepEqual(c.records,[]);assert.equal(c.totalCents,null);assert.equal(c.diagnostics?.annualCentsTolerated,undefined);}
+});
+test('two rows on one document key whose API documents are 4 cents above their nets publish the exact annual values, with no counter',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?annual([full('COMBUSTÍVEIS','100.00','100.00','0','10','0'),full('COMBUSTÍVEIS','50.00','50.00','0','10','0')]):twinApi([near(100.04,100),near(50.04,50)])(url));
+  const c=r.report.cells[0];assert.equal(c.status,'complete');assert.deepEqual(c.reasons,[]);assert.deepEqual(c.records.map(x=>[x.cents,x.documentCents,x.origin]).sort(),[[10000,10000,'both'],[5000,5000,'both']]);assert.equal(r.report.totalCents,15000);assert.equal(c.diagnostics?.annualCentsTolerated,undefined);assert.equal(c.diagnostics?.apiCentsTolerated,undefined);
+});
+test('the audit mirror recomputes the annual cents tolerance and rejects a batch that drops the count or publishes the document value',async t=>{
+  const r=await setup(t,url=>url.endsWith('.zip')?offAnnual('99.97'):twinApi([near(100,-99.97)])(url));
+  assert.equal(r.report.cells[0].diagnostics?.annualCentsTolerated,1);assert.equal(r.report.cells[0].diagnostics?.apiSignCorrected,1);
+  const audit=async(edit:(c:typeof r.report.cells[0])=>void)=>{const report=structuredClone(r.report);edit(report.cells[0]);report.totalCents=report.cells.reduce((n,c)=>n+(c.totalCents??0),0);report.contentSha256=expenseBatchContentId(report);return (await auditExpenseBatch(report,temporal,scope,hash('proposal'),r.read)).failures.map(f=>f.code);};
+  assert.ok((await audit(c=>{delete c.diagnostics!.annualCentsTolerated;})).includes('financial-records-coverage-or-union'));
+  assert.ok((await audit(c=>{c.records[0].cents=10000;c.totalCents=10000;})).includes('financial-records-coverage-or-union'));
+});
