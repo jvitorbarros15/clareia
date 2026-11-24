@@ -1328,12 +1328,15 @@ const stub = ({ months, records } = {}) => async page => {
   if (!months && !records) return;
   const shaped = (async () => {
     const out = {};
-    for (const id of index.scope.ids) {
-      const res = await page.request.get(`${base}/${manifest.base}/deputados/${id}/despesas.json`);
-      let rows = res.ok() ? await res.json() : [];
-      if (months) rows = months.flatMap((m, k) => rows.filter(r => r.month === (k % 2) + 1).map(r => ({ ...r, month: m })));
-      if (records) rows = records(rows, index.people.find(p => p.id === id));
-      out[id] = rows;
+    const ids = index.scope.ids;
+    for (let i = 0; i < ids.length; i += 32) {
+      await Promise.all(ids.slice(i, i + 32).map(async id => {
+        const res = await page.request.get(`${base}/${manifest.base}/deputados/${id}/despesas.json`);
+        let rows = res.ok() ? await res.json() : [];
+        if (months) rows = months.flatMap((m, k) => rows.filter(r => r.month === (k % 2) + 1).map(r => ({ ...r, month: m })));
+        if (records) rows = records(rows, index.people.find(p => p.id === id));
+        out[id] = rows;
+      }));
     }
     return out;
   })();
