@@ -6,6 +6,9 @@ export function parseUpload(output:string):Version{
   if(!id)throw new Error('A saída do wrangler versions upload não tem "Worker Version ID"');
   const previewUrl=text.match(/Version Preview URL:\s*(https:\/\/\S+)/i)?.[1];
   if(!previewUrl)throw new Error(`A versão ${id} foi enviada sem "Version Preview URL" e não foi promovida; nada mudou no ar`);
+  let host='';
+  try{host=new URL(previewUrl).hostname;}catch{}
+  if(!host.endsWith('.workers.dev'))throw new Error(`A versão ${id} foi enviada com URL de prévia fora de workers.dev e não foi promovida; nada mudou no ar`);
   return {id,previewUrl};
 }
 
