@@ -212,11 +212,9 @@ O build produz `dist/` para hospedagem estática. A versão de teste é publicad
 
 A expansão segue a validação das fontes e das regras de cada domínio:
 
-1. Concluir a revisão da cobertura de pessoas e dos meses retidos aguardando esclarecimento da Câmara.
-2. Ampliar as despesas para todos os deputados de 2025 e implementar a atualização de 2026, com ciclos próprios para API e arquivo anual. O site já abre só com totais e baixa os lançamentos sob demanda, o que permite esse volume.
-3. Exibir as emendas depois da revisão da identificação dos autores, distinguindo ano da emenda, execução e pagamento.
-4. Integrar eleições e patrimônio a partir do TSE.
-5. Automatizar o deploy do site gerado.
+1. Ampliar a cobertura de despesas para 2023 e 2024.
+2. Exibir as emendas depois da revisão da identificação dos autores, distinguindo ano da emenda, execução e pagamento.
+3. Incluir os senadores, com as regras e as fontes próprias do Senado.
 
 A busca com IA e RAG é uma direção futura: respostas numéricas deverão vir de consultas verificáveis, com contexto e fontes explícitas.
 
