@@ -100,7 +100,8 @@ async function sampleIds(page, n) {
   for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
   return [order[0], ...pool.slice(0, n - 2), order.at(-1)];
 }
-const exercisedMonths = q => q.months.filter(m => m.exercise !== 'outside' || m.records > 0).length;
+const reviewOutside = m => m.exerciseReview && m.exercise === 'outside' && m.records === 0;
+const exercisedMonths = q => q.months.filter(m => m.exercise !== 'outside' || m.records > 0 || m.exerciseReview).length;
 // Somebody the Câmara confirmed in office in the period, or with published expenses, as the summary declares.
 const inOffice = q => q.records > 0 || q.months.some(m => !['unknown', 'outside', 'conflict'].includes(m.exercise));
 // A name word that no other deputy shares, so a question names exactly one person.
@@ -1374,7 +1375,7 @@ const sumOf = (person, category) => person.records.filter(r => !category || r.ca
 const comparableIds = data => {
   const min = Math.min(6, data.months.length), ids = new Set();
   for (const q of data.summary.people) {
-    if (inOffice(q) && !q.months.some(m => m.held) && exercisedMonths(q) >= min) ids.add(q.id);
+    if (inOffice(q) && !q.months.some(m => m.held) && !q.months.some(reviewOutside) && exercisedMonths(q) >= min) ids.add(q.id);
   }
   return ids;
 };
@@ -2132,7 +2133,7 @@ check('views opened inside the dialog can go back step by step to the profile', 
 
 check('rankings need the minimum months of exercise and the average divides by months of exercise only', async () => {
   const data = await published();
-  const min = Math.min(6, data.months.length), short = data.summary.people.find(q => !data.withoutData.includes(q.id) && exercisedMonths(q) < min && !q.months.some(m => m.held));
+  const min = Math.min(6, data.months.length), short = data.summary.people.find(q => !data.withoutData.includes(q.id) && exercisedMonths(q) < min && !q.months.some(m => m.held) && !q.months.some(reviewOutside));
   assert.ok(short, 'the published data has a deputy with fewer months of exercise than the minimum');
   const page = await at(1440);
   const info = await page.evaluate(id => { const C = window.Clareia, p = C.person(String(id)); return { min: C.MIN_MONTHS, exercised: p.exercisedMonths, months: p.months, ranked: C.ranking('gastos').some(x => x.officialId === id), few: C.fewMonths(p), coverage: window.ClareiaData.coverage.length }; }, short.id);
@@ -2211,8 +2212,8 @@ async function expectedShares(page) {
   const raw = await page.evaluate(async () => { const m = await (await fetch('/manifest.json')).json(), s = await (await fetch(`/${m.base}/summary.json`)).json(), i = await (await fetch(`/${m.base}/index.json`)).json(); return { s, names: Object.fromEntries(i.people.map(p => [p.id, p.name])) }; });
   const rows = [];
   for (const p of raw.s.people) {
-    const held = p.months.some(m => m.held), exercised = p.months.filter(m => m.exercise !== 'outside' || m.records > 0).length, none = p.records === 0 && p.months.every(m => !m.exercise || ['unknown', 'outside', 'conflict'].includes(m.exercise));
-    if (none || held || exercised < Math.min(6, p.months.length)) continue;
+    const held = p.months.some(m => m.held), exercised = p.months.filter(m => m.exercise !== 'outside' || m.records > 0 || m.exerciseReview).length, none = p.records === 0 && p.months.every(m => !m.exercise || ['unknown', 'outside', 'conflict'].includes(m.exercise));
+    if (none || held || p.months.some(reviewOutside) || exercised < Math.min(6, p.months.length)) continue;
     const counted = p.months.filter(m => (m.exercise !== 'outside' || m.records > 0) && !m.held && m.exercise !== 'partial');
     if (!counted.length || counted.some(m => m.exercise !== 'full' || m.ufStatus !== 'single' || !raw.s.ceiling.byUf[m.uf])) continue;
     const num = counted.reduce((n, m) => n + BigInt(m.cents), 0n), den = counted.reduce((n, m) => n + BigInt(raw.s.ceiling.byUf[m.uf][m.month - 1]), 0n);
@@ -2243,7 +2244,7 @@ check('the comparisons block counts the deputies with a confirmed % of the ceili
   const page = await at(1440);
   const s = await page.evaluate(async () => { const m = await (await fetch('/manifest.json')).json(); return (await fetch(`/${m.base}/summary.json`)).json(); });
   if (!s.ceiling) { await page.close(); return; }
-  const ok = s.people.filter(p => { const c = p.months.filter(m => !m.held && (m.exercise !== 'outside' || m.records > 0) && m.exercise !== 'partial'); return c.length && c.every(m => m.exercise === 'full' && m.ufStatus === 'single' && s.ceiling.byUf[m.uf]?.[m.month - 1]); }).length;
+  const ok = s.people.filter(p => { if (p.months.some(reviewOutside)) return false; const c = p.months.filter(m => !m.held && (m.exercise !== 'outside' || m.records > 0) && m.exercise !== 'partial'); return c.length && c.every(m => m.exercise === 'full' && m.ufStatus === 'single' && s.ceiling.byUf[m.uf]?.[m.month - 1]); }).length;
   const step = page.locator('.universe-step').filter({ hasText: 'com % do teto da cota confirmada' });
   assert.equal(await step.count(), 1);
   assert.equal(await text(step.locator('strong')), String(ok));

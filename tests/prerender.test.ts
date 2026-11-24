@@ -18,7 +18,7 @@ import {loadSpec} from '../src/api-docs.ts';
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
 const period:Period={year:'2025',coverage:[0,1,2,3,4,5,6,7,8,9,10,11],minMonths:6};
 const SITE='https://example.test';
-const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyNote:null,partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,comparable:true,heldMonths:[],cents:123456789,hasCells:true,projects:7};
+const normal:Deputy={id:100,name:'Maria da Silva',uf:'SP',ufNote:null,party:'PL (atual)',partyNote:null,partyInReview:false,lastConfirmedParty:null,sourceUrl:'https://www.camara.leg.br/deputados/100',exercisedMonths:12,noExercise:false,comparable:true,heldMonths:[],exerciseReviewMonths:[],cents:123456789,hasCells:true,projects:7};
 const meta=(html:string,key:string)=>new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)">`).exec(html)?.[1];
 
 test('slugs follow the rule of real/app.js',()=>{
@@ -59,6 +59,14 @@ test('partial, short exercise and no exercise use the app wording',()=>{
   const none=deputyDescription({...normal,noExercise:true,cents:0,projects:null},period);
   assert.ok(none.includes('Sem exercício confirmado em 2025.'));
   assert.ok(!none.includes('R$')&&!none.includes('Projetos'));
+});
+test('an exercise review month names the dispute and never says Exerceu o mandato',()=>{
+  const one=deputyDescription({...normal,exercisedMonths:4,exerciseReviewMonths:[2],comparable:false},period);
+  assert.ok(one.includes('Exercício em revisão: março de 2025, as fontes oficiais divergem sobre o mandato. Não entra em rankings nem comparações.'));
+  assert.ok(!one.includes('Exerceu o mandato'));
+  const many=deputyDescription({...normal,exerciseReviewMonths:[2,3],comparable:false},period);
+  assert.ok(many.includes('Exercício em revisão: 2 meses do recorte, as fontes oficiais divergem sobre o mandato.'));
+  assert.ok(deputyDescription({...normal,heldMonths:[1],exerciseReviewMonths:[2],comparable:false},period).includes('Total parcial: fevereiro de 2025'));
 });
 test('a party under review gives the last confirmed party or none',()=>{
   const review={...normal,party:'Partido em revisão',partyInReview:true};
@@ -288,7 +296,7 @@ test('a party taken from the events is shown with its note',()=>{
 
 const shown=(status:string|null,party='PP',note='partido registrado em fev/2023, nos eventos da legislatura')=>{
   const month=status?[{month:1,partyStatus:status,party:status==='single'?'PL':null,partyValues:[],exercise:'unknown',records:0,cents:0,held:false}]:[];
-  const d=deputiesOf({ids:[1],people:[{id:1,name:'A',photo:null,sourceUrl:'',profileFetchedAt:'',uf:'SP',party,partyNote:note}],summary:{coverageId:status===null?null:'c',people:[{id:1,months:month,...partyFieldsOf(month as any,status===null?null:'c',party,note),exercisedMonths:0,noExercise:false,heldMonths:[],comparable:false}],ceiling:null} as any,suppliers:{people:{}} as any})[0];
+  const d=deputiesOf({ids:[1],people:[{id:1,name:'A',photo:null,sourceUrl:'',profileFetchedAt:'',uf:'SP',party,partyNote:note}],summary:{coverageId:status===null?null:'c',people:[{id:1,months:month,...partyFieldsOf(month as any,status===null?null:'c',party,note),exercisedMonths:0,noExercise:false,heldMonths:[],exerciseReviewMonths:[],comparable:false}],ceiling:null} as any,suppliers:{people:{}} as any})[0];
   return [d.party,d.partyNote];
 };
 test('the events party shows only when the coverage has nothing better: confirmed and in-review win over the note',()=>{

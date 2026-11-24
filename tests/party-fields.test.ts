@@ -17,7 +17,7 @@ function oldRule(months:MonthSummary[],coverageId:string|null,current:string|nul
   const last=[...months].filter(m=>m.partyStatus==='single'&&m.party).sort((a,b)=>b.month-a.month)[0]?.party??null;
   return {party,partyNote:current&&party===current&&!months.some(m=>m.partyStatus==='single')?note??null:null,partyInReview:party==='Partido em revisão',lastConfirmedParty:last};
 }
-const m=(month:number,partyStatus:string,party:string|null=null,partyValues:string[]=[]):MonthSummary=>({month,cents:0,records:0,exercise:null,partyStatus,party,partyValues,ufStatus:'single',uf:'SP',held:false});
+const m=(month:number,partyStatus:string,party:string|null=null,partyValues:string[]=[]):MonthSummary=>({month,cents:0,records:0,exercise:null,exerciseReview:false,partyStatus,party,partyValues,ufStatus:'single',uf:'SP',held:false});
 const check=(months:MonthSummary[],coverageId:string|null,current:string|null,note:string|null|undefined)=>{
   const got=partyFieldsOf(months,coverageId,current,note);
   assert.deepEqual(got,oldRule(months,coverageId,current,note));

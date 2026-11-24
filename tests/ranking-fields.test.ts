@@ -11,10 +11,12 @@ function browserRule(months:MonthSummary[],coverageId:string|null,records:number
   const heldMonths=months.filter(m=>m.held).map(m=>m.month-1),min=Math.min(6,scopeMonths);
   return {exercisedMonths,noExercise,heldMonths,comparable:!noExercise&&!heldMonths.length&&!(exercisedMonths<min)};
 }
-const month=(n:number,exercise:string|null,records=0,held=false):MonthSummary=>({month:n,cents:0,records,exercise,partyStatus:'single',party:'X',partyValues:[],ufStatus:'single',uf:'SP',held});
+const month=(n:number,exercise:string|null,records=0,held=false):MonthSummary=>({month:n,cents:0,records,exercise,exerciseReview:false,partyStatus:'single',party:'X',partyValues:[],ufStatus:'single',uf:'SP',held});
 const run=(months:MonthSummary[],coverageId:string|null,scopeMonths:number)=>{
   const records=months.reduce((n,m)=>n+m.records,0),got=rankingFieldsOf(months,coverageId,records,scopeMonths,Math.min(6,scopeMonths)),old=browserRule(months,coverageId,records,scopeMonths);
-  assert.deepEqual({...got,heldMonths:got.heldMonths.map(m=>m-1)},old);
+  const {exerciseReviewMonths,...rest}=got;
+  assert.deepEqual(exerciseReviewMonths,[]);
+  assert.deepEqual({...rest,heldMonths:rest.heldMonths.map(m=>m-1)},old);
   return got;
 };
 const all=(n:number,exercise:string|null,records=0)=>Array.from({length:n},(_,i)=>month(i+1,exercise,records));
@@ -48,4 +50,18 @@ test('a held month is never reported as no exercise, even with no records', ()=>
   const held=[...all(11,'unknown'),month(12,'outside',0,true)];
   assert.equal(run(held,'c',12).noExercise,false);
   assert.deepEqual(run(held,'c',12).heldMonths,[12]);
+});
+
+test('a review-outside month counts as exercised, records exerciseReviewMonths and leaves the deputy non-comparable',()=>{
+  const months=[...all(11,'full',1),{...month(12,'outside',0),exerciseReview:true}];
+  const got=rankingFieldsOf(months,'c',11,12,6);
+  assert.equal(got.exercisedMonths,12);
+  assert.deepEqual(got.exerciseReviewMonths,[12]);
+  assert.equal(got.comparable,false);
+  assert.equal(got.noExercise,false);
+  const allDisputed=all(12,'outside',0).map(m=>({...m,exerciseReview:true}));
+  assert.equal(rankingFieldsOf(allDisputed,'c',0,12,6).noExercise,true);
+  const uncrossed=all(12,'full',1).map(m=>({...m,exerciseReview:true}));
+  assert.deepEqual(rankingFieldsOf(uncrossed,'c',12,12,6).exerciseReviewMonths,[]);
+  assert.equal(rankingFieldsOf(uncrossed,'c',12,12,6).comparable,true);
 });

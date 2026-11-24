@@ -107,3 +107,19 @@ test('the audit passes on UF kept for a month with no second source and fails if
     const tampered=await auditPeopleCoverage(db,coverage.id,t,c);assert.equal(tampered.status,'failed');assert.ok(tampered.failures.includes('attribution-1:2025:1')||tampered.failures.some(f=>f.startsWith('attribution-')));
   }finally{await db.close();}
 });
+
+test('a potential-conflict month writes exerciseReview:true and the audit fails if exerciseReview is flipped',async()=>{
+  const db=await openDB(true);
+  try{
+    const t=temporal();t.people[0].months[1].exercise='outside';
+    const c=crosscheck(t);c.people[0].months[1].comparison='potential-conflict';
+    const coverage=buildPeopleCoverage(t,c,passed(t),published);
+    assert.deepEqual(coverage.rows.map(r=>r.exerciseReview),[false,true]);
+    await storePeopleCoverage(db,coverage);
+    assert.equal((await auditPeopleCoverage(db,coverage.id,t,c)).status,'passed');
+    await db.query(`UPDATE people_coverage_v1 SET record=jsonb_set(record,'{exerciseReview}','false') WHERE publication_id=$1 AND month=2`,[coverage.id]);
+    const tampered=await auditPeopleCoverage(db,coverage.id,t,c);
+    assert.equal(tampered.status,'failed');
+    assert.ok(tampered.failures.includes('state-1:2025:2'));
+  }finally{await db.close();}
+});

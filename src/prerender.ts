@@ -36,7 +36,7 @@ export const deputyPath=(officialId:number,name:string)=>`/deputado/${officialId
 export const statePath=(uf:string)=>`/estado/${uf}`;
 export const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
 
-export type Deputy={id:number;name:string;uf:string|null;ufNote:string|null;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];comparable:boolean;cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse;social?:{network:string;url:string}[]};
+export type Deputy={id:number;name:string;uf:string|null;ufNote:string|null;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];exerciseReviewMonths:number[];comparable:boolean;cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse;social?:{network:string;url:string}[]};
 export type Period={year:string;coverage:number[];minMonths:number};
 
 // Eligibility fields are read from the published summary, the same ones the app reads.
@@ -44,7 +44,7 @@ export function deputiesOf(input:{ids:number[];people:Person[];summary:SiteSumma
   const {summary,suppliers}=input,summaryOf=new Map(summary.people.map(p=>[p.id,p]));
   return input.ids.map(id=>{
     const info=input.people.find(p=>p.id===id),own=summaryOf.get(id)!;
-    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??null,ufNote:info?.ufNote??null,party:own.party,partyNote:own.partyNote,partyInReview:own.partyInReview,lastConfirmedParty:own.lastConfirmedParty,sourceUrl:info?.sourceUrl??'',exercisedMonths:own.exercisedMonths,noExercise:own.noExercise,heldMonths:own.heldMonths.map(m=>m-1),comparable:own.comparable,cents:own?.cents??0,use:ceilingUse(own?.months??[],summary.ceiling,Boolean(summary.coverageId)),hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null,...info?.social?.length?{social:info.social}:{}};
+    return {id,name:plain(info?.name??`ID ${id}`),uf:info?.uf??null,ufNote:info?.ufNote??null,party:own.party,partyNote:own.partyNote,partyInReview:own.partyInReview,lastConfirmedParty:own.lastConfirmedParty,sourceUrl:info?.sourceUrl??'',exercisedMonths:own.exercisedMonths,noExercise:own.noExercise,heldMonths:own.heldMonths.map(m=>m-1),exerciseReviewMonths:(own.exerciseReviewMonths??[]).map(m=>m-1),comparable:own.comparable,cents:own?.cents??0,use:ceilingUse(own?.months??[],summary.ceiling,Boolean(summary.coverageId)),hasCells:(suppliers.people[id]??[]).length>0,projects:own?.bills?.proposed??null,...info?.social?.length?{social:info.social}:{}};
   });
 }
 
@@ -52,6 +52,7 @@ export const spanOf=(period:Period)=>`${MONTH_ABBR[period.coverage[0]]}–${MONT
 // Same words as partialNote and exclusionNote in real/app.js.
 export function exclusionNote(p:Deputy,period:Period):string{
   if(p.heldMonths.length)return `Total parcial: ${p.heldMonths.length===1?`${MONTHS[p.heldMonths[0]].toLowerCase()} de ${period.year} está em revisão`:`${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
+  if(p.exerciseReviewMonths.length)return `Exercício em revisão: ${p.exerciseReviewMonths.length===1?`${MONTHS[p.exerciseReviewMonths[0]].toLowerCase()} de ${period.year}`:`${p.exerciseReviewMonths.length} meses do recorte`}, as fontes oficiais divergem sobre o mandato. Não entra em rankings nem comparações.`;
   if(p.exercisedMonths<period.minMonths)return `Exerceu o mandato em ${p.exercisedMonths} de ${period.coverage.length} meses do recorte. Rankings e comparações incluem quem exerceu pelo menos ${period.minMonths} meses.`;
   return '';
 }
@@ -64,7 +65,7 @@ export function partyText(p:Deputy):string|null{
 export function deputyDescription(p:Deputy,period:Period):string{
   const who=['Deputado(a) federal',p.uf,p.ufNote,partyText(p)].filter(Boolean).join(' · ');
   const spend=p.noExercise?`Sem exercício confirmado em ${period.year}.`:p.heldMonths.length&&!p.hasCells?`Despesas no recorte (${spanOf(period)}): Em revisão.`:`Despesas no recorte (${spanOf(period)}): ${money(p.cents)}.`;
-  const note=p.noExercise?'':exclusionNote(p,period);
+  const note=p.noExercise&&!p.exerciseReviewMonths.length?'':exclusionNote(p,period);
   return [`${who}.`,spend,note,p.projects===null?'':`Projetos como proponente: ${p.projects.toLocaleString('pt-BR',{maximumFractionDigits:1})}.`,'Dados oficiais da Câmara dos Deputados.'].filter(Boolean).join(' ');
 }
 export function inState(deputies:Deputy[],uf:string):Deputy[]{return deputies.filter(p=>!p.noExercise&&p.uf===uf);}

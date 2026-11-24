@@ -3,7 +3,7 @@ import type {DB} from './store.ts';
 import type {TemporalReport} from './people-temporal.ts';
 import type {CrosscheckReport} from './people-legacy.ts';
 
-export type CoverageRow={personId:number;year:number;month:number;exercise:string;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean;partialScope:boolean};
+export type CoverageRow={personId:number;year:number;month:number;exercise:string;exerciseReview?:boolean;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;review:boolean;partialScope:boolean};
 export type PeopleCoverage={schema:'clareia.people-coverage.v1';id:string;metric:'camara.people.monthly-coverage.v1';scope:TemporalReport['scope'];temporalSha256:string;crosscheckSha256:string;collectedAt:string;publishedAt:string;rows:CoverageRow[]};
 
 const REVIEW_CHANGES=new Set(['legacy-only-change','v2-only-change']);
@@ -34,7 +34,7 @@ export function buildPeopleCoverage(temporal:TemporalReport,crosscheck:Crosschec
       const uncrossed=m.exercise!=='outside'&&(stale||compared.comparison==='unavailable'||check.partyComparisonStatus==='unavailable'),exerciseReview=compared.comparison==='potential-conflict'||uncrossed,partyReview=exerciseReview||firstDispute!==null&&key>=firstDispute;
       // The cross-check never compares UF: only a contradicted month blanks it, a month with no second source keeps its own.
       const ufReview=compared.comparison==='potential-conflict';
-      return {personId:person.id,year:m.year,month:m.month,exercise:m.exercise,partyStatus:partyReview?'review':m.party.status,party:partyReview||m.party.status!=='single'?null:m.party.value,partyValues:m.party.status==='changed'&&!partyReview?m.party.values:[],ufStatus:ufReview?'review':m.uf.status,uf:ufReview||m.uf.status!=='single'?null:m.uf.value,review:partyReview,partialScope:m.partialScope};
+      return {personId:person.id,year:m.year,month:m.month,exercise:m.exercise,exerciseReview,partyStatus:partyReview?'review':m.party.status,party:partyReview||m.party.status!=='single'?null:m.party.value,partyValues:m.party.status==='changed'&&!partyReview?m.party.values:[],ufStatus:ufReview?'review':m.uf.status,uf:ufReview||m.uf.status!=='single'?null:m.uf.value,review:partyReview,partialScope:m.partialScope};
     });
   });
   const body={schema:'clareia.people-coverage.v1' as const,metric:'camara.people.monthly-coverage.v1' as const,scope:temporal.scope,temporalSha256,crosscheckSha256:hash(canonical(crosscheck)),collectedAt:temporal.createdAt,rows};
@@ -95,7 +95,7 @@ export async function auditPeopleCoverage(db:DB,id:string,temporal:TemporalRepor
     if(seen.has(key)||!source){failures.push('unknown-or-repeated-'+key);continue;}seen.add(key);
     const conflict=crosscheck.people.find(p=>p.id===row.personId)?.months.find(m=>m.year===row.year&&m.month===row.month)?.comparison==='potential-conflict';
     const exerciseHold=conflict||source.exercise!=='outside'&&(exerciseFlag.has(key)||crossUnavailable.has(row.personId)),partyHold=exerciseHold||(partyFrom.has(row.personId)&&stamp(row.year,row.month)>=partyFrom.get(row.personId)!);
-    if(row.review!==partyHold||row.exercise!==source.exercise||row.partialScope!==source.partialScope)failures.push('state-'+key);
+    if(row.review!==partyHold||row.exerciseReview!==exerciseHold||row.exercise!==source.exercise||row.partialScope!==source.partialScope)failures.push('state-'+key);
     const expectedParty=partyHold?{s:'review',v:null}:{s:source.party.status,v:source.party.status==='single'?source.party.value:null},expectedUf=conflict?{s:'review',v:null}:{s:source.uf.status,v:source.uf.status==='single'?source.uf.value:null};
     const expectedValues=!partyHold&&source.party.status==='changed'?source.party.values:[];
     if(row.partyStatus!==expectedParty.s||row.party!==expectedParty.v||row.ufStatus!==expectedUf.s||row.uf!==expectedUf.v||canonical(row.partyValues)!==canonical(expectedValues))failures.push('attribution-'+key);

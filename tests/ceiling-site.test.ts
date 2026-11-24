@@ -75,6 +75,11 @@ test('a held month outside the mandate stays held, never outside',()=>{
   assert.deepEqual(u.excluded,[{month:5,reason:'held'}]);
   assert.deepEqual(u.outside,[]);
 });
+test('a held review-outside month is missing, never excluded, and leaves the figure unconfirmed',()=>{
+  const u=ceilingUse([month(1,100000),month(5,0,{exercise:'outside',held:true,exerciseReview:true})],table,true);
+  assert.equal(u.status,'unconfirmed');if(u.status!=='unconfirmed')return;
+  assert.deepEqual(u.missing,[5]);assert.deepEqual(u.excluded,[]);assert.deepEqual(u.outside,[]);
+});
 test('a counted month without a confirmed UF ceiling is not confirmed, never zero',()=>{
   assert.equal(ceilingUse([month(1,5),month(2,5,{uf:null,ufStatus:'review'})],table,true).status,'unconfirmed');
   assert.equal(ceilingUse([month(1,5)],null,true).status,'unconfirmed');
@@ -126,4 +131,12 @@ test('a month with its own conflicting UF is not counted, whatever the other mon
 test('a partial month stays excluded from the ceiling even with a confirmed UF',()=>{
   const use=ceilingOfCoverage([full(),{...full(),exercise:'partial'},full()],'RR');
   assert.equal(use.status,'ok');assert.deepEqual(use.excluded,[{month:2,reason:'partial'}]);assert.deepEqual(use.counted.map(c=>c.month),[1,3]);
+});
+test('a review-outside month goes to missing, never outside or excluded, while a full review month with single UF still counts',()=>{
+  const direct=ceilingUse([month(1,100000),month(2,0,{exercise:'outside',exerciseReview:true})],table,true);
+  assert.equal(direct.status,'unconfirmed');if(direct.status!=='unconfirmed')return;
+  assert.deepEqual(direct.missing,[2]);assert.deepEqual(direct.outside,[]);assert.deepEqual(direct.excluded,[]);
+  const uncrossed=ceilingUse([month(1,100000,{exercise:'full',ufStatus:'single',exerciseReview:true})],table,true);
+  assert.equal(uncrossed.status,'ok');if(uncrossed.status!=='ok')return;
+  assert.deepEqual(uncrossed.counted.map(c=>c.month),[1]);
 });

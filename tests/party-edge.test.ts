@@ -12,7 +12,7 @@ const direct = (events: ReturnType<typeof pev>[], end = '2025-12-31') => {
   return [value, note] as const;
 };
 const m = (month: number, partyStatus: string, party: string | null = null, partyValues: string[] = []): MonthSummary => ({
-  month, partyStatus, party, partyValues, cents: 0, records: 0, exercise: null, ufStatus: 'single', uf: 'SP', held: false,
+  month, partyStatus, party, partyValues, cents: 0, records: 0, exercise: null, exerciseReview: false, ufStatus: 'single', uf: 'SP', held: false,
 });
 
 const mergers = [
@@ -85,7 +85,7 @@ test('prerendered deputies copy all four summary party fields for every case', (
       minMonths: 1, totalCents: 0, records: 0, categories: [],
       people: [{
         id: 1, name: 'A', photo: null, cents: 0, records: 0, months, categories: [], cells: [],
-        bills: null, votes: null, votesHeld: 0, exercisedMonths: 1, noExercise: false, heldMonths: [], comparable: true,
+        bills: null, votes: null, votesHeld: 0, exercisedMonths: 1, noExercise: false, heldMonths: [], exerciseReviewMonths: [], comparable: true,
         ...fields,
       }],
     };

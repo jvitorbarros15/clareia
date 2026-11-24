@@ -453,3 +453,30 @@ test('an extra year whose version is withheld is refused even with a passed audi
   await db.query('INSERT INTO withheld_publications VALUES($1,$2)',[b.id,'test']);
   await assert.rejects(buildSite(db,dist,portraits,{approvedNames:[]},{defaultYear:2025,years:[{year:2025,publicationId:a.id,ceiling:null},{year:2026,publicationId:b.id,ceiling:null}]}),/não encontrada/);
 }));
+test('a review-outside month keeps totals unchanged, falls back on old coverage rows and updates the deputy page description',()=>setup(async(db,dist,portraits)=>{
+  const a=yearVersion(2025,[1,2],[record(100,1,0),record(50,2,1)]);
+  await approve(db,a);
+  const makeCoverage=(withReview:boolean,omitField=false):PeopleCoverage=>{
+    const rows=[1,2].flatMap(personId=>[1,2].map(month=>{
+      const disputed=personId===1&&month===2&&withReview;
+      const base={personId,year:2025,month,exercise:personId===1&&month===2?'outside':'full',partyStatus:disputed?'review':'single',party:disputed?null:'PL',partyValues:[],ufStatus:disputed?'review':personId===1&&month===2?'not-applicable':'single',uf:disputed||personId===1&&month===2?null:'SP',review:disputed,partialScope:false};
+      return omitField?base:{...base,exerciseReview:disputed};
+    }));
+    const body={schema:'clareia.people-coverage.v1' as const,metric:'camara.people.monthly-coverage.v1' as const,scope:{legislature:57,start:'2025-01-01',end:'2025-02-28',sampleIds:[1,2]},temporalSha256:hash('t'+withReview+omitField),crosscheckSha256:hash('c'),collectedAt:'2026-11-08T12:00:00Z',rows};
+    return {...body,id:hash(canonical({schema:body.schema,metric:body.metric,scope:body.scope,rows:body.rows})),publishedAt:'2026-11-08T13:00:00Z'};
+  };
+  const plain=buildSiteSummary({publicationId:a.id,scope:a.scope,people:a.people,records:a.records,expectedTotalCents:a.validation.totalCents,coverageId:'p',coverage:makeCoverage(false).rows});
+  const flagged=buildSiteSummary({publicationId:a.id,scope:a.scope,people:a.people,records:a.records,expectedTotalCents:a.validation.totalCents,coverageId:'f',coverage:makeCoverage(true).rows});
+  const legacy=buildSiteSummary({publicationId:a.id,scope:a.scope,people:a.people,records:a.records,expectedTotalCents:a.validation.totalCents,coverageId:'l',coverage:makeCoverage(true,true).rows});
+  assert.equal(flagged.totalCents,plain.totalCents);
+  assert.deepEqual(flagged.people.map(p=>p.cents),plain.people.map(p=>p.cents));
+  assert.deepEqual(flagged.people[0].exerciseReviewMonths,[2]);
+  assert.equal(flagged.people[0].comparable,false);
+  assert.deepEqual(legacy.people[0].exerciseReviewMonths,[2]);
+  assert.equal(legacy.people[0].months[1].exerciseReview,true);
+  const cov=makeCoverage(true);await storePeopleCoverage(db,cov);await recordDomainAudit(db,cov.id,'passed',report);
+  await buildSite(db,dist,portraits);
+  const html=await fs.readFile(path.join(dist,'deputado','1-pessoa-1.html'),'utf8');
+  assert.match(html,/Exercício em revisão: fevereiro de 2025/);
+  assert.doesNotMatch(html,/Exerceu o mandato/);
+}));
