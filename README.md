@@ -44,7 +44,7 @@ A interface combina direção editorial, retratos, gráficos interativos e a per
 
 ### Cobertura atual
 
-O site publicado cobre os deputados da legislatura 57 em 2025. O banco local de desenvolvimento usa um recorte de três deputados, em janeiro e fevereiro de 2025.
+O site publicado cobre os deputados da legislatura 57 em 2025 e 2026, sendo 2026 um ano parcial, ainda em andamento. Um seletor de ano permite alternar entre os dois períodos.
 
 - A amostra é técnica: as ordenações não representam um ranking nacional.
 - Os valores medem despesas registradas na CEAP no período, não o custo total nem a qualidade de um mandato.
