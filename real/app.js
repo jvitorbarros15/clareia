@@ -67,7 +67,8 @@
   const inUF = p => state.uf === 'Brasil' || p.uf === state.uf;
   // A deputy whose bills were not collected has approved === null and never enters this ranking, so it can never read as zero.
   const projectRanking = () => sortedBy(all().filter(p => p.approved !== null && inUF(p)), p => p.approved);
-  const exclusionNote = p => p.heldMonths?.length ? partialNote(p) : fewMonths(p) ? `Exerceu o mandato em ${p.exercisedMonths} de ${D.coverage.length} meses do recorte. Rankings e comparações incluem quem exerceu pelo menos ${MIN_MONTHS} meses.` : '';
+  const exclusionNote = p => p.heldMonths?.length ? partialNote(p) : p.exerciseReviewMonths?.length ? reviewNote(p) : fewMonths(p) ? `Exerceu o mandato em ${p.exercisedMonths} de ${D.coverage.length} meses do recorte. Rankings e comparações incluem quem exerceu pelo menos ${MIN_MONTHS} meses.` : '';
+  const reviewNote = p => `Exercício em revisão: ${p.exerciseReviewMonths.length === 1 ? `${months[p.exerciseReviewMonths[0]].toLowerCase()} de ${state.year}` : `${p.exerciseReviewMonths.length} meses do recorte`}, as fontes oficiais divergem sobre o mandato. Não entra em rankings nem comparações.`;
   const partialNote = p => `Total parcial: ${p.heldMonths.length === 1 ? `${months[p.heldMonths[0]].toLowerCase()} de ${state.year} está em revisão` : `${p.heldMonths.length} meses em revisão`} e fora da soma. Não entra em rankings nem comparações.`;
   // Party comes from the approved monthly coverage; partyNote marks one taken from the legislature's events.
   const context = p => [p.uf, p.ufNote, p.party && p.partyNote ? `${p.party} (${p.partyNote})` : p.party].filter(Boolean).join(' · ') || 'Deputado(a) federal';

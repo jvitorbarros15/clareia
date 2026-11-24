@@ -127,3 +127,11 @@ test('a partial month stays excluded from the ceiling even with a confirmed UF',
   const use=ceilingOfCoverage([full(),{...full(),exercise:'partial'},full()],'RR');
   assert.equal(use.status,'ok');assert.deepEqual(use.excluded,[{month:2,reason:'partial'}]);assert.deepEqual(use.counted.map(c=>c.month),[1,3]);
 });
+test('a review-outside month goes to missing, never outside or excluded, while a full review month with single UF still counts',()=>{
+  const direct=ceilingUse([month(1,100000),month(2,0,{exercise:'outside',exerciseReview:true})],table,true);
+  assert.equal(direct.status,'unconfirmed');if(direct.status!=='unconfirmed')return;
+  assert.deepEqual(direct.missing,[2]);assert.deepEqual(direct.outside,[]);assert.deepEqual(direct.excluded,[]);
+  const uncrossed=ceilingUse([month(1,100000,{exercise:'full',ufStatus:'single',exerciseReview:true})],table,true);
+  assert.equal(uncrossed.status,'ok');if(uncrossed.status!=='ok')return;
+  assert.deepEqual(uncrossed.counted.map(c=>c.month),[1]);
+});

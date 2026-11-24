@@ -9,7 +9,7 @@
     const monthNames =['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     // Without an approved coverage every published month counts; with one, months outside the mandate do not.
     // Only a month reported outside the mandate drops out, and never one with an expense: a spent month always enters the divisor.
-    const exercised = m => m.exercise !== 'outside' || m.records > 0;
+    const exercised = m => m.exercise !== 'outside' || m.records > 0 || m.exerciseReview;
     const summaryOf = new Map(summary.people.map(p => [p.id, p]));
     const monthsOf = id => summary.coverageId ? summaryOf.get(id)?.months ?? [] : null;
     const servedMonths = id => { const months = monthsOf(id); return Math.max(1, months ? months.filter(m => exercised(m) && !m.held).length : index.scope.months.length - (index.validation.heldMonths?.[id] ?? 0)); };
@@ -19,7 +19,7 @@
     const people = index.scope.ids.map(id => {
       const info = index.people.find(p => p.id === id) || { name: 'ID ' + id }, own = summaryOf.get(id);
       const cells = (own?.categories ?? []).map(c => ({ month: null, category: c.category, supplier: null, amount: c.cents, count: c.records }));
-      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${shared}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, social: info.social ?? [], uf: info.uf ?? null, ufNote: info.ufNote ?? null, party: own.party, partyNote: own.partyNote, partyInReview: own.partyInReview, lastConfirmedParty: own.lastConfirmedParty, profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), exercisedMonths: own.exercisedMonths, noExercise: own.noExercise, heldMonths: own.heldMonths.map(m => m - 1), comparable: own.comparable, use: ClareiaView.ceilingUse(own?.months ?? [], summary.ceiling, Boolean(summary.coverageId)), projects: own?.bills?.proposed ?? null, approved: own?.bills?.norms ?? null, votes: null, cells, total: own?.cents ?? 0 };
+      return { id: String(id), officialId: id, name: info.name, photo: info.photo ? `${shared}/portraits/${id}.jpg` : null, sourceUrl: info.sourceUrl, social: info.social ?? [], uf: info.uf ?? null, ufNote: info.ufNote ?? null, party: own.party, partyNote: own.partyNote, partyInReview: own.partyInReview, lastConfirmedParty: own.lastConfirmedParty, profileFetchedAt: info.profileFetchedAt, months: servedMonths(id), exercisedMonths: own.exercisedMonths, noExercise: own.noExercise, heldMonths: own.heldMonths.map(m => m - 1), exerciseReviewMonths: (own.exerciseReviewMonths ?? []).map(m => m - 1), comparable: own.comparable, use: ClareiaView.ceilingUse(own?.months ?? [], summary.ceiling, Boolean(summary.coverageId)), projects: own?.bills?.proposed ?? null, approved: own?.bills?.norms ?? null, votes: null, cells, total: own?.cents ?? 0 };
     });
     // Same names as the published list; the order is the one of the monthly cells, which only the supplier file carries.
     const categories = [...summary.categories];

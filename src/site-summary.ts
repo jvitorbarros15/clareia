@@ -4,12 +4,12 @@ import type {CoverageRow} from './people-publication.ts';
 import type {BillPerson} from './bills.ts';
 import type {SiteCeiling} from './ceiling-site.ts';
 
-export type MonthSummary={month:number;cents:number;records:number;exercise:string|null;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;held:boolean};
+export type MonthSummary={month:number;cents:number;records:number;exercise:string|null;exerciseReview:boolean;partyStatus:string;party:string|null;partyValues:string[];ufStatus:string;uf:string|null;held:boolean};
 // [month, category index, cents, records]
 export type Cell=[number,number,number,number];
 // [month, category index, supplier index, cents, records]
 export type SupplierCell=[number,number,number,number,number];
-export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];categories:{category:string;cents:number;records:number}[];cells:Cell[];bills:Omit<BillPerson,'id'>|null;votes:Record<string,number>|null;votesHeld:number;exercisedMonths:number;noExercise:boolean;heldMonths:number[];comparable:boolean;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null};
+export type PersonSummary={id:number;name:string;photo:string|null;cents:number;records:number;months:MonthSummary[];categories:{category:string;cents:number;records:number}[];cells:Cell[];bills:Omit<BillPerson,'id'>|null;votes:Record<string,number>|null;votesHeld:number;exercisedMonths:number;noExercise:boolean;heldMonths:number[];exerciseReviewMonths:number[];comparable:boolean;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null};
 export type SiteSummary={schema:'clareia.site-summary.v3';publicationId:string;coverageId:string|null;billsId:string|null;billsYears:number[];votesId:string|null;votesYears:number[];ceiling:SiteCeiling|null;scope:Scope;minMonths:number;totalCents:number;records:number;categories:string[];people:PersonSummary[]};
 export type SupplierSummary={schema:'clareia.supplier-summary.v1';publicationId:string;categories:string[];suppliers:string[];people:Record<string,SupplierCell[]>};
 export type SupplierNames=Record<string,{name:string}>;
@@ -29,10 +29,10 @@ function cellsOf(rows:Expense[],categoryIndex:Map<string,number>):Cell[]{
 // The single ranking rule. Without an approved coverage every published month counts; with one, a month outside the mandate does not, unless it has an expense.
 // Zero is only a fact for someone in office: without confirmed exercise there is nothing to compare. Held months are 1-based.
 export function rankingFieldsOf(months:MonthSummary[],coverageId:string|null,records:number,scopeMonths:number,minMonths:number){
-  const exercisedMonths=coverageId?months.filter(m=>m.exercise!=='outside'||m.records>0).length:scopeMonths;
+  const exercisedMonths=coverageId?months.filter(m=>m.exercise!=='outside'||m.records>0||m.exerciseReview).length:scopeMonths;
   const noExercise=!coverageId||records>0||months.some(m=>m.held)?false:months.length>0&&months.every(m=>!m.exercise||['unknown','outside','conflict'].includes(m.exercise));
-  const heldMonths=months.filter(m=>m.held).map(m=>m.month);
-  return {exercisedMonths,noExercise,heldMonths,comparable:!noExercise&&!heldMonths.length&&exercisedMonths>=minMonths};
+  const heldMonths=months.filter(m=>m.held).map(m=>m.month),exerciseReviewMonths=months.filter(m=>m.exerciseReview&&m.exercise==='outside'&&m.records===0).map(m=>m.month);
+  return {exercisedMonths,noExercise,heldMonths,exerciseReviewMonths,comparable:!noExercise&&!heldMonths.length&&!exerciseReviewMonths.length&&exercisedMonths>=minMonths};
 }
 
 // The party the site shows. Without an approved coverage the registration's party is labelled current; with one it comes from the months, and the registration's own party (partyNote says how it was found) is used only when the months give no answer and raise no doubt.
@@ -58,7 +58,7 @@ export function buildSiteSummary(input:{publicationId:string;scope:Scope;people:
     const months=[...scope.months].sort((a,b)=>a-b).map<MonthSummary>(month=>{
       const rows=own.filter(r=>r.month===month),row=attribution.get(id+':'+scope.year+':'+month);
       if(heldKeys.has(id+':'+month)&&rows.length)throw new Error('Competência retida com registros');
-      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,held:heldKeys.has(id+':'+month)};
+      return {month,cents:sum(rows),records:rows.length,exercise:row?.exercise??null,exerciseReview:row?(row.exerciseReview??row.ufStatus==='review'):false,partyStatus:row?.partyStatus??'unavailable',party:row?.party??null,partyValues:row?.partyValues??[],ufStatus:row?.ufStatus??'unavailable',uf:row?.uf??null,held:heldKeys.has(id+':'+month)};
     });
     // With an approved version, a deputy absent from it has zero counted bills; without one the count is unknown.
     const counted=billsOf.get(id);

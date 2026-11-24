@@ -1,4 +1,4 @@
-export type UseMonth={month:number;cents:number;records:number;exercise:string|null;held:boolean;ufStatus:string;uf:string|null};
+export type UseMonth={month:number;cents:number;records:number;exercise:string|null;exerciseReview?:boolean;held:boolean;ufStatus:string;uf:string|null};
 export type UseCeiling={year:number;byUf:Record<string,number[]>};
 export type CountedMonth={month:number;uf:string;expenseCents:number;ceilingCents:number;records:number};
 export type Excluded={month:number;reason:'held'|'partial'};
@@ -12,7 +12,8 @@ export function ceilingUse(months:UseMonth[],ceiling:UseCeiling|null,coverageApp
   const counted:CountedMonth[]=[],excluded:Excluded[]=[],outside:number[]=[],missing:number[]=[];
   for(const m of months){
     if(m.held){excluded.push({month:m.month,reason:'held'});continue;}
-    if(coverageApproved&&m.exercise==='outside'&&m.records===0){outside.push(m.month);continue;}
+    // A month the official sources dispute is not out of office: it falls through to missing below.
+    if(coverageApproved&&m.exercise==='outside'&&m.records===0&&!m.exerciseReview){outside.push(m.month);continue;}
     if(coverageApproved&&m.exercise==='partial'){excluded.push({month:m.month,reason:'partial'});continue;}
     // Only a month confirmed as fully in office has a known ceiling; anything else leaves the figure unconfirmed.
     if(coverageApproved&&m.exercise!=='full'){missing.push(m.month);continue;}
