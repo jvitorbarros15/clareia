@@ -14,6 +14,17 @@ test('reports missing ID or preview URL',()=>{
   assert.throws(()=>parseUpload(`Worker Version ID: ${id}`),{message:`A versão ${id} foi enviada sem "Version Preview URL" e não foi promovida; nada mudou no ar`});
 });
 
+test('rejects a preview URL that is not on workers.dev',async()=>{
+  for(const url of ['https://evil.com/preview','https://evil.com/.workers.dev','https://x.workers.dev.evil.com','https://evilworkers.dev','https://x.workers.dev@evil.com']){
+    const out=`Worker Version ID: ${id}\nVersion Preview URL: ${url}`;
+    assert.throws(()=>parseUpload(out),{message:`A versão ${id} foi enviada com URL de prévia fora de workers.dev e não foi promovida; nada mudou no ar`});
+    const check=test.mock.fn(async()=>[]),promote=test.mock.fn(async()=>{});
+    await assert.rejects(publishVersion({upload:async()=>out,check,promote}),/fora de workers\.dev/);
+    assert.equal(check.mock.callCount(),0);
+    assert.equal(promote.mock.callCount(),0);
+  }
+});
+
 test('uploads, checks the preview URL, then promotes the version',async()=>{
   const calls:string[]=[];
   const version=await publishVersion({
