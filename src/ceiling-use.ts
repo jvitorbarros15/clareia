@@ -11,9 +11,10 @@ export type CeilingUse=
 export function ceilingUse(months:UseMonth[],ceiling:UseCeiling|null,coverageApproved:boolean):CeilingUse{
   const counted:CountedMonth[]=[],excluded:Excluded[]=[],outside:number[]=[],missing:number[]=[];
   for(const m of months){
+    // A month the official sources dispute is not out of office and not a known ceiling: it leaves the figure unconfirmed, held or not.
+    if(coverageApproved&&m.exercise==='outside'&&m.records===0&&m.exerciseReview){missing.push(m.month);continue;}
     if(m.held){excluded.push({month:m.month,reason:'held'});continue;}
-    // A month the official sources dispute is not out of office: it falls through to missing below.
-    if(coverageApproved&&m.exercise==='outside'&&m.records===0&&!m.exerciseReview){outside.push(m.month);continue;}
+    if(coverageApproved&&m.exercise==='outside'&&m.records===0){outside.push(m.month);continue;}
     if(coverageApproved&&m.exercise==='partial'){excluded.push({month:m.month,reason:'partial'});continue;}
     // Only a month confirmed as fully in office has a known ceiling; anything else leaves the figure unconfirmed.
     if(coverageApproved&&m.exercise!=='full'){missing.push(m.month);continue;}

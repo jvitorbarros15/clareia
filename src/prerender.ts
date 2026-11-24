@@ -65,7 +65,7 @@ export function partyText(p:Deputy):string|null{
 export function deputyDescription(p:Deputy,period:Period):string{
   const who=['Deputado(a) federal',p.uf,p.ufNote,partyText(p)].filter(Boolean).join(' · ');
   const spend=p.noExercise?`Sem exercício confirmado em ${period.year}.`:p.heldMonths.length&&!p.hasCells?`Despesas no recorte (${spanOf(period)}): Em revisão.`:`Despesas no recorte (${spanOf(period)}): ${money(p.cents)}.`;
-  const note=p.noExercise?'':exclusionNote(p,period);
+  const note=p.noExercise&&!p.exerciseReviewMonths.length?'':exclusionNote(p,period);
   return [`${who}.`,spend,note,p.projects===null?'':`Projetos como proponente: ${p.projects.toLocaleString('pt-BR',{maximumFractionDigits:1})}.`,'Dados oficiais da Câmara dos Deputados.'].filter(Boolean).join(' ');
 }
 export function inState(deputies:Deputy[],uf:string):Deputy[]{return deputies.filter(p=>!p.noExercise&&p.uf===uf);}
