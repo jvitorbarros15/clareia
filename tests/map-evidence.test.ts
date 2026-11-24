@@ -42,7 +42,7 @@ test('map evidence shows the sum and count of only comparable profiles in averag
 
   click('map-metric', 'average');
   click('map-evidence');
-  assert.ok(html.includes('<div class="table-scroll"><table class="data-table">'));
+  assert.ok(html.includes('<div class="table-scroll"><table class="data-table map-average-table">'));
   assert.ok(html.includes('<th>UF</th><th>Soma</th><th>Comparáveis</th><th>Valor</th>'));
   assert.ok(html.includes(`<td>SP / São Paulo</td><td>${money(801)}</td><td>2</td><td>${money(400.5)}</td>`));
   assert.ok(html.includes('<td>RJ / Rio de Janeiro</td><td>Não informado</td><td>0</td><td>Não informado</td>'));

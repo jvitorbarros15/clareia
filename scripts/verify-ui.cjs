@@ -1164,7 +1164,10 @@ check('map explanation shows how to calculate the average', async () => {
       if (Number(count) === 0) assert.deepEqual([sum, value], ['Não informado', 'Não informado'], uf);
       else assert.ok(Math.abs(cents(value) - Math.round(cents(sum) / Number(count))) <= 1, `${uf}: ${value} = ${sum} ÷ ${count}`);
     }
-    assert.ok(await dialog.locator('#detail-body').evaluate(body => body.scrollWidth <= body.clientWidth), `dialog fits at ${width}px`);
+    await page.evaluate(() => document.fonts.ready);
+    for (const container of [dialog.locator('#detail-body'), dialog.locator('.table-scroll')]) {
+      assert.ok(await container.evaluate(el => el.scrollWidth <= el.clientWidth), `dialog and table fit at ${width}px`);
+    }
     await page.close();
   }
 });
