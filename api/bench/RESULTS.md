@@ -8,9 +8,10 @@ There are two sets of measurements of the same code base. The first benchmark (`
 
 ## Status of the plan's criteria
 
-- **The plan's criterion "a second full run within ±10% on p95" was NOT met**: it is met only by step (a). Static files (0) and the real API setup (b) missed it. Whether to waive it is João's decision; I did not change the criterion or rerun until it passed.
-- **The supplier list is below the 50 ms line; the supplier search is not.** A `q` search with fewer than 51 results scans all 21,677 labels (p50 73 to 88 ms in step (b)). This is a known limitation; whether to fix it (for example by storing a normalized label column) is João's decision.
+- **The plan's criterion "a second full run within ±10% on p95" was NOT met**: it is met only by step (a). Static files (0) and the real API setup (b) missed it. It was waived by João (decision recorded 2026-11-24); the criterion was not changed and no run was repeated until it passed.
+- **The supplier list is below the 50 ms line; the supplier search is not.** A `q` search with fewer than 51 results scans all 21,677 labels (p50 73 to 88 ms in step (b)). This was a known limitation in these runs; it has since been fixed by storing a normalized label column (`suppliers.label_norm`), see the notes below.
   - Note 2026-11-19: the search now uses the stored `suppliers.label_norm` column. One EXPLAIN ANALYZE of a no-match search went from 66 ms to 2.2 ms (Postgres only, not k6). A search-only A/B over HTTP (`bench/search.js`: the benchmark's 200 search terms, `limit=50`, constant 50 req/s, 10 s warm-up, then 3 runs of 60 s; old server built from main and new server from this change, against the same database on the same laptop, one after the other) gave p50 91–99 ms and p95 98–107 ms before, and p50 13.0–13.4 ms and p95 19.6–19.9 ms after. All requests returned 200, with 0 dropped. The full benchmark was not rerun, because only the search query changed.
+  - Note 2026-11-24: search now uses the stored normalized label `suppliers.label_norm`, so the fix is no longer an open decision. This rests on one EXPLAIN (ANALYZE, BUFFERS) measurement of the new query (see `explain.sql`); no new k6 run was made, and the k6 tables and headline numbers in this file are the earlier measurements and were not changed.
 
 ## Headline numbers after the `suppliers` table
 
@@ -96,7 +97,7 @@ Raw environment and per-run process CPU: `results/run*/env.json` and `results/ru
 - **Step (b) with indexes.** The real setup (`clareia_api`, role `clareia_api_ro`, pool of 10).
 - **Per step:** 20 s warm-up at the reference rate, then 5 runs of 90 s at 100 req/s (the first benchmark used 3 runs of 45 s). Then a rate ladder: 20 s per rung from 50 req/s, each rung 1.5x the last, until the first invalid run. One run per rung.
 - **304 versus 200** (`etag.js`, step b): the same URL with and without `If-None-Match` at 40 req/s for 20 s each, 3 runs. Latency only.
-- **EXPLAIN (ANALYZE, BUFFERS)** of every query the server issues (`explain.sql`), second execution. Run 1's EXPLAIN used the earlier query list (the aggregation queries only); run 2's includes the new `suppliers` queries next to the old ones, labelled (the old ones are no longer in `explain.sql`).
+- **EXPLAIN (ANALYZE, BUFFERS)** of every query the server issues (`explain.sql`), second execution. Run 1's EXPLAIN used the earlier query list (the aggregation queries only); run 2's included the new `suppliers` queries next to the old ones, labelled; the old aggregation queries were later removed from `explain.sql`.
 - Reproduce: `powershell -File api/bench/run.ps1 -Name runN -StaticData <data folder of the active publication>`, then `api/bench/tables.ps1 -Name runN`. Needs the container with an active publication that has the `suppliers` table (run `load.ps1` on its folder once), `~/.clareia/api-pg.env`, k6, Go, and ports 8787 and 8788 free (the script refuses otherwise). Credentials never leave the process. About 45 minutes per run.
 
 ## Not measured
