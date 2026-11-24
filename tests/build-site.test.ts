@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {openDB} from '../src/store.ts';
 import type {DB} from '../src/store.ts';
+import {auditRecord} from '../src/audit-record.ts';
 import {publishDomain,recordDomainAudit} from '../src/publications.ts';
 import {buildSite,checkLimits,dataFolderId} from '../src/build-site.ts';
 import {snapshotId} from '../src/model.ts';
@@ -53,6 +54,21 @@ test('the same publication produces identical bytes',()=>setup(async(db,dist,por
   await buildSite(db,dist,portraits);const first=await tree(dist);
   await buildSite(db,dist,portraits);
   assert.deepEqual(await tree(dist),first);
+}));
+test('publishing the input audit date changes only the index and its download metadata',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0)]),builtAt='2025-03-03T00:00:00.000Z';
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',{...report,checkedAt:builtAt});
+  const before=(await buildSite(db,dist,portraits)).publicationId,beforePath=path.join(dist,'data',before);
+  const beforeFiles=await tree(beforePath),beforeIndex=await json(beforePath,'index.json');
+  const checkedAt='2025-03-02T00:00:00.000Z';
+  await recordDomainAudit(db,a.id,'passed',auditRecord(report,[{checkedAt}],builtAt));
+  const {rows}=await db.query<{matches:boolean}>('SELECT checked_at=$2::timestamptz AS matches FROM publication_audits WHERE publication_id=$1',[a.id,checkedAt]);
+  assert.equal(rows[0].matches,true);
+  const after=(await buildSite(db,dist,portraits)).publicationId,afterPath=path.join(dist,'data',after);
+  assert.deepEqual(await json(afterPath,'index.json'),{...beforeIndex,audit:{...report,checkedAt,builtAt}});
+  const afterFiles=await tree(afterPath);
+  const files=new Set([...Object.keys(beforeFiles),...Object.keys(afterFiles)]);
+  assert.deepEqual([...files].filter(file=>beforeFiles[file]!==afterFiles[file]).sort(),['dados-abertos.json','index.json']);
 }));
 test('a new publication gets a new data path',()=>setup(async(db,dist,portraits)=>{
   const a=version([record(100,1,0)]),b=version([record(200,1,0)]);
