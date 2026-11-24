@@ -1148,6 +1148,27 @@ check('map explanation lists its rows and coverage text is accurate', async () =
   await page.close();
 });
 
+check('map explanation shows how to calculate the average', async () => {
+  const cents = s => /^−?R\$ [\d.]+,\d{2}$/.test(s) ? Number(s.replace(/[^\d−]/g, '').replace('−', '-')) : NaN;
+  for (const width of [390, 1440]) {
+    const page = await at(width);
+    await page.locator('[data-p=map-metric][data-value=average]').click();
+    await page.locator('[data-p=map-evidence]').click();
+    const dialog = page.locator('#detail[open]');
+    const table = dialog.locator('.table-scroll > table');
+    assert.deepEqual(await table.locator('thead th').allInnerTexts(), ['UF', 'Soma', 'Comparáveis', 'Valor']);
+    const rows = await table.locator('tbody tr').evaluateAll(trs => trs.map(tr => [...tr.cells].map(td => td.textContent.replace(/\s+/g, ' ').trim())));
+    assert.ok(rows.some(row => Number(row[2]) > 0), 'at least one average can be calculated');
+    for (const [uf, sum, count, value] of rows) {
+      assert.match(count, /^\d+$/, `${uf} comparable count`);
+      if (Number(count) === 0) assert.deepEqual([sum, value], ['Não informado', 'Não informado'], uf);
+      else assert.ok(Math.abs(cents(value) - Math.round(cents(sum) / Number(count))) <= 1, `${uf}: ${value} = ${sum} ÷ ${count}`);
+    }
+    assert.ok(await dialog.locator('#detail-body').evaluate(body => body.scrollWidth <= body.clientWidth), `dialog fits at ${width}px`);
+    await page.close();
+  }
+});
+
 check('chart hit areas do not loop the resize observer', async () => {
   const counters = () => {
     window.__ro = { made: 0, observe: 0, writes: 0 };

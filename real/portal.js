@@ -435,7 +435,16 @@
             case 'evidence-back':expenseEvidence(evidence.category,evidence.supplier,evidence.month,true);break;
       case 'clear-highlight':state.highlightCategory=null;state.othersOpen=false;updateSpending();focusMatch('.donut-legend button:not(:disabled)');break;
       case 'spend-evidence':expenseEvidence();break;
-      case 'map-evidence':C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.span()} · ${catText(C.state.category)}</p><p>UF de representação, não destino da despesa. Média por representante = soma das despesas dividida pelo número de representantes comparáveis da UF; não ajusta tempo em exercício.</p><table class="data-table"><thead><tr><th>UF</th><th>${state.mapMetric==='average'?'Comparáveis':'Perfis'}</th><th>Valor</th></tr></thead><tbody>${Object.entries(UF).filter(([uf])=>C.all().some(p=>!p.noExercise&&p.uf===uf)).map(([uf,[name]])=>`<tr><td>${uf} / ${name}</td><td>${state.mapMetric==='average'?C.all().filter(p=>!p.noExercise&&p.uf===uf).filter(C.comparable).length:C.all().filter(p=>!p.noExercise).filter(p=>p.uf===uf).length}</td><td>${mapFormat(mapValue(uf))}</td></tr>`).join('')}</tbody></table>${ufNoteLine(C.all().filter(p=>!p.noExercise))}<p class="fixture-note">UF de representação conforme o cadastro da Câmara. UFs sem deputados neste recorte aparecem como indisponíveis; indisponível não significa zero.</p>`);break;
+      case 'map-evidence':{
+        const average=state.mapMetric==='average', people=C.all().filter(p=>!p.noExercise);
+        const rows=Object.entries(UF).map(([uf,[name]])=>{
+          const profiles=people.filter(p=>p.uf===uf);
+          if(!profiles.length)return '';
+          const comparable=average?profiles.filter(C.comparable):[];
+          return `<tr><td>${uf} / ${name}</td>${average?`<td>${mapFormat(comparable.length?C.sum(comparable.flatMap(C.cells)):null)}</td><td>${comparable.length}</td>`:`<td>${profiles.length}</td>`}<td>${mapFormat(mapValue(uf))}</td></tr>`;
+        }).join('');
+        C.showDialog('Como calculamos o mapa?',`<p class="records-note">${C.span()} · ${catText(C.state.category)}</p><p>UF de representação, não destino da despesa. Média por representante = soma das despesas dividida pelo número de representantes comparáveis da UF; não ajusta tempo em exercício.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>UF</th>${average?'<th>Soma</th><th>Comparáveis</th>':'<th>Perfis</th>'}<th>Valor</th></tr></thead><tbody>${rows}</tbody></table></div>${ufNoteLine(people)}<p class="fixture-note">UF de representação conforme o cadastro da Câmara. UFs sem deputados neste recorte aparecem como indisponíveis; indisponível não significa zero.</p>`);break;
+      }
       case 'map-metric':state.mapMetric=b.dataset.value;renderPart('atlas',atlas);focusMatch('[data-p=map-metric][data-value='+state.mapMetric+']');break;
       case 'activity-more':{const kind=b.dataset.kind;listState[kind].limit+=LIST_STEP;renderList(kind);focusMatch(`[data-p=activity-more][data-kind=${kind}]`);break;}
       case 'map-reset':state.mapUF=null;syncEstado();renderPart('atlas',atlas);focusMatch('[data-p=map-reset]');break;
