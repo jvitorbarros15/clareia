@@ -370,7 +370,7 @@ test('an API row with the exact opposite net of its annual twin takes the annual
   assert.equal(rental.report.cells[0].status,'complete');assert.equal(rental.report.totalCents,15000);assert.equal(rental.report.cells[0].records[0].origin,'both');assert.equal(rental.report.cells[0].diagnostics?.apiSignCorrected,1);
   assert.equal(moradia.report.cells[0].diagnostics?.apiSignCorrected,1);
   const inst=await setup(t,url=>url.endsWith('.zip')?annual([full('COMBUSTÍVEIS','46.32','50.00','0','10','1')]):twinApi([{valorDocumento:50,valorGlosa:0,valorLiquido:-46.32,parcela:1}])(url));
-  assert.equal(inst.report.cells[0].status,'complete');assert.equal(inst.report.totalCents,4632);assert.equal(inst.report.cells[0].records[0].financialBasis,'reported-installment');
+  assert.equal(inst.report.cells[0].diagnostics?.annualCentsTolerated,undefined);assert.equal(inst.report.cells[0].status,'complete');assert.equal(inst.report.totalCents,4632);assert.equal(inst.report.cells[0].records[0].financialBasis,'reported-installment');
   const month=(url:string)=>Number(new URL(url).searchParams.get('mes'));
   const split=await setup(t,url=>url.endsWith('.zip')?annual([full('COMBUSTÍVEIS','3.96','7.06','0','10','0',1),full('COMBUSTÍVEIS','3.10','7.06','0','10','0',2)]):url.includes('/1/despesas')?{dados:month(url)<=2?[apiRow(month(url),{valorDocumento:7.06,valorLiquido:month(url)===1?-3.96:-3.10})]:[],links:[]}:undefined,true);
   assert.equal(split.report.cells[0].status,'complete');assert.equal(split.report.totalCents,706);assert.equal(split.report.cells[0].records[0].financialBasis,'balanced-document-split');
@@ -429,11 +429,12 @@ test('an annual row whose document minus glosa is up to 5 cents from its net pub
 });
 test('an annual row or an API row 6 cents off its own equation, or an API-only row off by any amount, stays held',async t=>{
   const six=await setup(t,url=>url.endsWith('.zip')?offAnnual('99.94'):twinApi([near(100,99.94)])(url));
+  const sixAbove=await setup(t,url=>url.endsWith('.zip')?offAnnual('100.06'):twinApi([])(url));
   const apiOnly=await setup(t,url=>url.endsWith('.zip')?annual():twinApi([{},{codDocumento:'12',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:3,valorLiquido:2.97}])(url));
   const annualAlone=await setup(t,url=>url.endsWith('.zip')?annual([full('TELEFONIA','99.94','100.00','0','0','0')]):twinApi([])(url));
   const apiAlone=await setup(t,url=>url.endsWith('.zip')?offAnnual('100.00'):twinApi([near(100.06,100)])(url));
   const tolerated=await setup(t,url=>url.endsWith('.zip')?offAnnual('99.97'):twinApi([near(100,99.97),{codDocumento:'12',tipoDespesa:'PASSAGEM AÉREA - SIGEPA',valorDocumento:3,valorLiquido:2.97}])(url));
-  for(const r of [six,apiOnly,annualAlone,apiAlone,tolerated]){const c=r.report.cells[0];assert.equal(c.status,'held-review');assert.deepEqual(c.reasons,['financial-normalization-failed']);assert.deepEqual(c.records,[]);assert.equal(c.totalCents,null);assert.equal(c.diagnostics?.annualCentsTolerated,undefined);}
+  for(const r of [six,sixAbove,apiOnly,annualAlone,apiAlone,tolerated]){const c=r.report.cells[0];assert.equal(c.status,'held-review');assert.deepEqual(c.reasons,['financial-normalization-failed']);assert.deepEqual(c.records,[]);assert.equal(c.totalCents,null);assert.equal(c.diagnostics?.annualCentsTolerated,undefined);}
 });
 test('two rows on one document key whose API documents are 4 cents above their nets publish the exact annual values, with no counter',async t=>{
   const r=await setup(t,url=>url.endsWith('.zip')?annual([full('COMBUSTÍVEIS','100.00','100.00','0','10','0'),full('COMBUSTÍVEIS','50.00','50.00','0','10','0')]):twinApi([near(100.04,100),near(50.04,50)])(url));

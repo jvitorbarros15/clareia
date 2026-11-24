@@ -772,6 +772,9 @@ body[data-model=editorial][data-motion=on] .editorial-handwritten{animation:none
 
 /* Records dialog: a table on desktop, stacked rows (supplier left, amount right) up to 600px. */
 .detail-dialog.records-wide{width:min(760px,100%)}
+.map-average-table :is(th,td){padding-inline:4px}
+.map-average-table td:first-child{width:25%;white-space:normal;overflow-wrap:anywhere}
+@media(max-width:520px){body[data-model=editorial] .map-average-table :is(th,td){font-size:11px}}
 .dialog-body .fixture-note{margin-top:8px}
 .dialog-body .detail-section:has(+ .fixture-note){padding-bottom:0}
 .dialog-body .evidence-step .action-row{margin-top:14px}
