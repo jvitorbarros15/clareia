@@ -14,6 +14,7 @@ import {activePublication,publishDomain,recordDomainAudit} from '../src/publicat
 import type {Domain} from '../src/publications.ts';
 import {assertHeaders,addNoindex,latestCheckedAt} from '../src/site-headers.ts';
 import {openDB} from '../src/store.ts';
+import {auditRecord} from '../src/audit-record.ts';
 import {auditVotesVersion,buildVotesVersion,storeVotesVersion} from '../src/votes-publication.ts';
 
 delete process.env.TEST_DATABASE_URL;
@@ -51,15 +52,15 @@ await fs.access(portraits).catch(()=>{throw new Error(`Pasta de retratos ausente
 const db=await openDB(true);
 try{
   // Each domain is approved only by the same audit its publish script runs; a failed one is recorded as failed and stops the build.
-  const approve=async(domain:Domain,id:string,found:{status:'passed'|'failed';failures:string[]})=>{
-    const audit={...found,checkedAt:now};
+  const approve=async(domain:Domain,id:string,found:{status:'passed'|'failed';failures:string[]},inputAudits:{checkedAt?:unknown}[])=>{
+    const audit=auditRecord(found,inputAudits,now);
     if(audit.status!=='passed'){await recordDomainAudit(db,id,'failed',audit as never);throw new Error(`Auditoria reprovada em ${domain}: ${audit.failures.slice(0,5).join(', ')}`);}
     await recordDomainAudit(db,id,'passed',audit as never);
   };
-  for(const v of ordered){await publishDomain(db,'despesas',v.expenses,{reobserve:false});await approve('despesas',v.expenses.id,await auditExpenseVersion(db,v.expenses,v.lots));}
-  await storePeopleCoverage(db,coverage);await approve('pessoas',coverage.id,await auditPeopleCoverage(db,coverage.id,temporal,crosscheck));
-  await storeBillsVersion(db,billsVersion);await approve('projetos',billsVersion.id,await auditBillsVersion(db,billsVersion.id,bills.map(b=>b.report)));
-  await storeVotesVersion(db,votesVersion);await approve('votacoes',votesVersion.id,await auditVotesVersion(db,votesVersion.id));
+  for(const v of ordered){await publishDomain(db,'despesas',v.expenses,{reobserve:false});await approve('despesas',v.expenses.id,await auditExpenseVersion(db,v.expenses,v.lots),v.lots.map(l=>l.audit));}
+  await storePeopleCoverage(db,coverage);await approve('pessoas',coverage.id,await auditPeopleCoverage(db,coverage.id,temporal,crosscheck),[temporalAudit,crosscheckAudit]);
+  await storeBillsVersion(db,billsVersion);await approve('projetos',billsVersion.id,await auditBillsVersion(db,billsVersion.id,bills.map(b=>b.report)),bills.map(b=>b.audit));
+  await storeVotesVersion(db,votesVersion);await approve('votacoes',votesVersion.id,await auditVotesVersion(db,votesVersion.id),votes.map(x=>x.audit));
   for(const [domain,id] of [['despesas',expenses.id],['pessoas',coverage.id],['projetos',billsVersion.id],['votacoes',votesVersion.id]] as const)if((await activePublication(db,domain))?.id!==id)throw new Error(`Versão de ${domain} não ficou ativa`);
   const {years:yearResults,...built}=await buildSite(db,out,portraits,siteOptions,{defaultYear:config.defaultYear,years:versions.map(v=>({year:v.year,publicationId:v.expenses.id,ceiling:ceilingOf.get(v.year)!})),social}),allIds=[...new Set(versions.flatMap(v=>v.expenses.scope.ids))],have=await Promise.all(allIds.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
   const {review,partyReview,names}=yearResults.find(r=>r.year===config.defaultYear)!;

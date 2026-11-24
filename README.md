@@ -164,7 +164,7 @@ Sem `version-id`, o `rollback` volta à implantação imediatamente anterior. De
 
 A busca de CPF do deploy roda sem `--known`. Quem tem localmente o arquivo de CPFs conhecidos pode passá-lo com `--known <arquivo>` em `deploy:test`.
 
-As datas `publishedAt` e `checkedAt` do build completo vêm das auditorias das próprias execuções de entrada (a mais recente), ou de `publishedAt` em `config/full-site.json`, para que o mesmo conjunto de entradas gere sempre os mesmos bytes em `data/<hash>/`.
+A data `publishedAt` do build completo vem das auditorias das próprias execuções de entrada (a mais recente), ou de `publishedAt` em `config/full-site.json`, para que o mesmo conjunto de entradas gere sempre os mesmos bytes em `data/<hash>/`. A auditoria publicada de cada domínio traz em `checkedAt` a data da auditoria de entrada mais recente desse domínio (em despesas, a releitura independente dos lotes anuais) e, no campo separado `builtAt`, a data do build.
 
 ## Arquitetura
 
