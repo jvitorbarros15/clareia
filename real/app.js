@@ -641,10 +641,12 @@
     P.reveal();
   }
   function toast(text) { const el = $('#toast'); el.textContent = text; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2800); }
+  const publicationId = () => D.sharedBase.split('/').pop();
   async function shareLink() {
     syncURL();
-    try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(location.href); toast('Link com a investigação e os filtros copiado.'); }
-    catch { showDialog('Compartilhar investigação', `<div class="manual-share"><p>Copie este link. Os filtros e a pergunta serão preservados.</p><label for="share-link">Link da consulta</label><input id="share-link" readonly value="${escape(location.href)}"></div>`); $('#share-link').select(); }
+    const shared = new URL(location.href); shared.searchParams.set('v', publicationId());
+    try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(shared.href); toast('Link com a investigação e os filtros copiado.'); }
+    catch { showDialog('Compartilhar investigação', `<div class="manual-share"><p>Copie este link. Os filtros e a pergunta serão preservados.</p><label for="share-link">Link da consulta</label><input id="share-link" readonly value="${escape(shared.href)}"></div>`); $('#share-link').select(); }
   }
   function closeSuggestions() { const list = $('#suggestions'); if (!list) return; list.hidden = true; $('#query').setAttribute('aria-expanded', 'false'); }
   function exportCSV(id, month) {
@@ -673,7 +675,7 @@
     } catch { toast('Imagem indisponível agora.'); }
   }
   async function copyProfileLink(id, button) {
-    const p = person(id), url = location.origin + withYear(deputyPath(p));
+    const p = person(id), link = new URL(location.origin + withYear(deputyPath(p))), url = (link.searchParams.set('v', publicationId()), link.href);
     if (navigator.share && matchMedia('(pointer: coarse)').matches) { try { await navigator.share({ title: `${p.name} — Clareia`, text: `Despesas e atividade de ${p.name} na Câmara, com dados oficiais.`, url }); return; } catch (error) { if (error?.name === 'AbortError') return; } }
     const copied = () => { toast('Link do perfil copiado.'); const text = button.textContent; button.textContent = 'Link copiado'; setTimeout(() => { if (button.isConnected) button.textContent = text; }, 2000); };
     try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(url); copied(); return; } catch { /* falls back to a selectable field */ }
