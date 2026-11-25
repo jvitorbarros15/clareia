@@ -13,6 +13,8 @@
     const summaryOf = new Map(summary.people.map(p => [p.id, p]));
     const monthsOf = id => summary.coverageId ? summaryOf.get(id)?.months ?? [] : null;
     const servedMonths = id => { const months = monthsOf(id); return Math.max(1, months ? months.filter(m => exercised(m) && !m.held).length : index.scope.months.length - (index.validation.heldMonths?.[id] ?? 0)); };
+    const linkedVersion = new URLSearchParams(location.search).get('v');
+    if (linkedVersion && linkedVersion !== shared.split('/').pop()) { const note = document.createElement('div'); note.className = 'test-notice'; note.setAttribute('role', 'note'); note.setAttribute('data-version-note', ''); note.innerHTML = 'Os dados foram atualizados desde este link. <a href="/correcoes">Ver o registro de correções</a>'; document.body.prepend(note); }
     if (index.validation.testNotice) { const notice = document.createElement('div'); notice.className = 'test-notice'; notice.setAttribute('role', 'note'); notice.textContent = index.validation.testNotice; document.body.prepend(notice); }
     // Until fornecedores.json arrives, each person has one cell per category (the published totals). Month and supplier cells replace them in place.
     // Individual records are fetched only when someone opens a list.

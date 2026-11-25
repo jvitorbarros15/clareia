@@ -2501,6 +2501,31 @@ check('year switch', async () => {
   await page.close();
 });
 
+check('shared link carries the publication id and a stale id shows a note', async () => {
+  const current = (await (await fetch(`${base}/manifest.json`)).json()).base.split('/').pop();
+  let page = await at(1440, { search: '?v=stale-id' });
+  const note = page.locator('[data-version-note]');
+  assert.equal(await note.count(), 1, 'a stale id shows the version note');
+  assert.ok((await note.innerText()).includes('Os dados foram atualizados desde este link'), 'the note says the data was updated');
+  assert.equal(await note.locator('a').getAttribute('href'), '/correcoes', 'the note links to the corrections');
+  await page.close();
+  page = await at(1440, { search: '?v=' + current });
+  assert.equal(await page.locator('[data-version-note]').count(), 0, 'the current id shows no note');
+  await page.close();
+  page = await at(1440);
+  assert.equal(await page.locator('[data-version-note]').count(), 0, 'no id shows no note');
+  await page.close();
+  const data = await published();
+  const person = data.people[0], slug = person.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const copyInit = () => { navigator.share = undefined; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.__copied = text; } }, configurable: true }); };
+  page = await at(1440, { search: `deputado/${person.id}-${slug}`, init: copyInit });
+  await page.waitForSelector('#detail[open] [data-action="copy-link"]');
+  await page.locator('#detail [data-action="copy-link"]').click();
+  await page.waitForFunction(() => window.__copied);
+  assert.equal(new URL(await page.evaluate(() => window.__copied)).searchParams.get('v'), current, 'the copied profile link carries the publication id');
+  await page.close();
+});
+
 // A site with four expense years, stubbed on top of the published build: the default year plus three older partial ones.
 // Older folders are served from the default year's files, so no real 2023/2024 data is needed.
 check('year selector with four years', async () => {
