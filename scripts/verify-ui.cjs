@@ -2501,6 +2501,136 @@ check('year switch', async () => {
   await page.close();
 });
 
+// A site with four expense years, stubbed on top of the published build: the default year plus three older partial ones.
+// Older folders are served from the default year's files, so no real 2023/2024 data is needed.
+check('year selector with four years', async () => {
+  const real = await (await fetch(`${base}/manifest.json`)).json();
+  const def = real.defaultYear;
+  const years = [def, def - 1, def - 2, def - 3];
+  const defEntry = (real.years || []).find(y => y.year === def) || { year: def, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] };
+  const stubManifest = {
+    ...real,
+    years: years.map(year => year === def ? defEntry : { year, months: [1, 2, 3], partial: true }),
+  };
+
+  const data = await published();
+  const gapPerson = data.people[0];
+  needCase(gapPerson, 'the published data has at least one deputy with data');
+  const gapId = gapPerson.id;
+  const gapYear = def - 2;
+  const copyPerson = data.people.find(p => p.id !== gapId) || gapPerson;
+  const slugOf = name => name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const gapSlug = slugOf(gapPerson.name);
+  const copySlug = slugOf(copyPerson.name);
+
+  const copyInit = () => {
+    navigator.share = undefined;
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.__copied = text; } }, configurable: true });
+  };
+  const folderRe = new RegExp(`/${real.base}/(\\d{4})/(.*)$`);
+  const before = async page => {
+    await page.route('**/manifest.json', route => route.fulfill({ json: stubManifest }));
+    await page.route(folderRe, async route => {
+      const [, yearStr, rest] = new URL(route.request().url()).pathname.match(folderRe);
+      const res = await page.request.get(`${base}/${real.base}/${rest}`);
+      if (rest === 'index.json') {
+        const json = await res.json();
+        const year = Number(yearStr);
+        json.scope = { ...json.scope, year, months: [1, 2, 3] };
+        if (year === gapYear) json.scope.ids = json.scope.ids.filter(id => id !== gapId);
+        await route.fulfill({ response: res, json });
+        return;
+      }
+      await route.fulfill({ response: res, body: await res.body() });
+    });
+  };
+
+  for (const width of [1440, 390]) {
+    const page = await at(width, { before, init: copyInit });
+    const select = page.locator('select[data-year-select]').first();
+    assert.equal(await select.locator('option').count(), 4, `four year options at ${width}`);
+    assert.equal(await select.inputValue(), String(def), `default year selected at ${width}`);
+    assert.ok(await select.isVisible(), `year select visible at ${width}`);
+    const box = await select.evaluate(el => ({
+      right: el.getBoundingClientRect().right,
+      innerWidth: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    assert.ok(box.right <= box.innerWidth, `year select fits in viewport at ${width} (${box.right} <= ${box.innerWidth})`);
+    assert.ok(box.scrollWidth <= box.innerWidth, `no horizontal scroll at ${width} (${box.scrollWidth} <= ${box.innerWidth})`);
+
+    for (const year of years.filter(y => y !== def)) {
+      await Promise.all([
+        page.waitForEvent('domcontentloaded'),
+        select.selectOption(String(year)),
+      ]);
+      await page.waitForSelector('.full-portal');
+      assert.equal(new URL(page.url()).searchParams.get('ano'), String(year), `URL has ano=${year} at ${width}`);
+      assert.equal(await select.inputValue(), String(year), `select shows ${year} at ${width}`);
+      assert.equal(await select.locator('option').count(), 4, `four options remain in ${year} at ${width}`);
+    }
+
+    await Promise.all([
+      page.waitForEvent('domcontentloaded'),
+      select.selectOption(String(def)),
+    ]);
+    await page.waitForSelector('.full-portal');
+    assert.equal(new URL(page.url()).searchParams.has('ano'), false, `ano removed for default year at ${width}`);
+    assert.equal(await select.inputValue(), String(def), `select shows default year again at ${width}`);
+    assert.deepEqual(page.errors, [], `errors at ${width}`);
+    await page.close();
+  }
+
+  for (const year of years.filter(y => y !== def)) {
+    const page = await at(1440, { before, init: copyInit, search: `deputado/${copyPerson.id}-${copySlug}?ano=${year}` });
+    await page.waitForSelector('#detail[open] [data-action="copy-link"]');
+    await page.locator('#detail [data-action="copy-link"]').click();
+    await page.waitForFunction(() => window.__copied);
+    assert.equal(new URL(await page.evaluate(() => window.__copied)).searchParams.get('ano'), String(year), `copied link keeps ano=${year}`);
+    assert.equal(new URL(page.url()).searchParams.get('ano'), String(year), `profile URL keeps ano=${year}`);
+    assert.deepEqual(page.errors, [], `profile errors for ${year}`);
+    await page.close();
+  }
+
+  {
+    const page = await at(1440, { before, search: `deputado/${gapId}-${gapSlug}?ano=${gapYear}` });
+    await page.waitForSelector('#detail[open]');
+    const dialogText = clean(await page.locator('#detail').innerText());
+    assert.ok(dialogText.includes(`Sem dados em ${gapYear}`), `gap-year dialog title: ${dialogText}`);
+    assert.ok(!dialogText.includes('não encontrado'), 'gap-year dialog does not say não encontrado');
+    for (const y of years.filter(y => y !== gapYear)) {
+      const link = page.locator('#detail a', { hasText: `Ver em ${y}` });
+      assert.equal(await link.count(), 1, `link "Ver em ${y}" present`);
+      const url = new URL(await link.getAttribute('href'), base);
+      assert.equal(url.pathname, `/deputado/${gapId}-${gapSlug}`);
+      if (y === def) assert.equal(url.searchParams.has('ano'), false, 'default-year link has no ano');
+      else assert.equal(url.searchParams.get('ano'), String(y), `link for ${y} has ano=${y}`);
+    }
+    assert.deepEqual(page.errors, [], 'gap-year dialog errors');
+    await page.close();
+  }
+
+  {
+    const search = `deputado/999999999?ano=${def - 1}`;
+    const page = await at(1440, {
+      search,
+      before: async page => {
+        await before(page);
+        // The Worker serves the shell with a 404 here, which Chromium logs as an error.
+        await page.route(`${base}/${search}`, async route => {
+          const response = await route.fetch({ url: `${base}/` });
+          await route.fulfill({ response, status: 200 });
+        });
+      },
+    });
+    await page.waitForSelector('#detail[open]');
+    const dialogText = clean(await page.locator('#detail').innerText());
+    assert.ok(dialogText.includes('Deputado(a) não encontrado(a)'), `not-found dialog: ${dialogText}`);
+    assert.deepEqual(page.errors, [], 'not-found dialog errors');
+    await page.close();
+  }
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
   let failed = 0, ran = 0, skipped = 0;
