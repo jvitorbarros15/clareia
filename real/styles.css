@@ -539,12 +539,14 @@ body[data-model=editorial] .bar-section .bar-row .avatar{display:block!important
 body[data-model=editorial] .bar-section .bar-name{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
 body[data-model=editorial] .bar-section .track{display:block;height:8px}
 body[data-model=editorial] .bar-section .bar-value{font:400 22px/1 var(--serif);font-weight:400!important;text-align:right;font-variant-numeric:tabular-nums}
+.bar-use{display:block;contain:inline-size;white-space:normal;overflow-wrap:anywhere;max-width:26ch;font:400 12px/1.3 var(--sans);color:var(--muted,inherit);text-align:inherit}
 @media (max-width:600px){
   body[data-model=editorial] .bar-section .bar-row{grid-template-columns:28px 40px minmax(0,1fr);grid-template-rows:auto auto auto;column-gap:12px;row-gap:4px;padding:12px 0;text-align:left}
   body[data-model=editorial] .bar-section .bar-rank{grid-column:1;grid-row:1/4;align-self:start;width:auto}
   body[data-model=editorial] .bar-section .bar-row .avatar{grid-column:2;grid-row:1/4;align-self:start}
   body[data-model=editorial] .bar-section .bar-name{grid-column:3;grid-row:1}
   body[data-model=editorial] .bar-section .bar-value{grid-column:3;grid-row:2;text-align:left}
+  body[data-model=editorial] .bar-section .bar-use{max-width:none}
   body[data-model=editorial] .bar-section .track{grid-column:3;grid-row:3}
   body[data-model=editorial]{font-size:16px}
   html body[data-model=editorial] :is(.p-description,.p-small,.ranking-context,.records-note,.editorial-subtitle,.donut-adjustment,.context){font-size:16px}
