@@ -2561,7 +2561,7 @@ check('year selector with four years', async () => {
 
     for (const year of years.filter(y => y !== def)) {
       await Promise.all([
-        page.waitForURL(u => new URL(u).searchParams.get('ano') === String(year)),
+        page.waitForEvent('domcontentloaded'),
         select.selectOption(String(year)),
       ]);
       await page.waitForSelector('.full-portal');
@@ -2571,7 +2571,7 @@ check('year selector with four years', async () => {
     }
 
     await Promise.all([
-      page.waitForURL(u => !new URL(u).searchParams.has('ano')),
+      page.waitForEvent('domcontentloaded'),
       select.selectOption(String(def)),
     ]);
     await page.waitForSelector('.full-portal');
@@ -2611,7 +2611,18 @@ check('year selector with four years', async () => {
   }
 
   {
-    const page = await at(1440, { before, search: `deputado/999999999?ano=${def - 1}` });
+    const search = `deputado/999999999?ano=${def - 1}`;
+    const page = await at(1440, {
+      search,
+      before: async page => {
+        await before(page);
+        // The Worker serves the shell with a 404 here, which Chromium logs as an error.
+        await page.route(`${base}/${search}`, async route => {
+          const response = await route.fetch({ url: `${base}/` });
+          await route.fulfill({ response, status: 200 });
+        });
+      },
+    });
     await page.waitForSelector('#detail[open]');
     const dialogText = clean(await page.locator('#detail').innerText());
     assert.ok(dialogText.includes('Deputado(a) não encontrado(a)'), `not-found dialog: ${dialogText}`);
