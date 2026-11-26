@@ -6,4 +6,5 @@
 *.css text eol=lf
 *.html text eol=lf
 *.png binary
+tests/fixtures/senado/*.csv -text
 

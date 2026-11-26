@@ -1,0 +1,105 @@
+[
+ {
+  "MandatoParlamentar": {
+   "noNamespaceSchemaLocation": "https://legis.senado.leg.br/dadosabertos/dados/MandatoParlamentarv5.xsd",
+   "Metadados": {
+    "Versao": "26/11/2026 16:25:53",
+    "VersaoServico": "5",
+    "DataVersaoServico": "2021-09-09",
+    "DescricaoDataSet": "Retorna a relação dos Mandatos do Senador informado no parâmetro."
+   },
+   "Parlamentar": {
+    "Codigo": "5899",
+    "Nome": "Vanderlan Cardoso",
+    "Mandatos": {
+     "Mandato": [
+      {
+       "CodigoMandato": "538",
+       "UfParlamentar": "GO",
+       "PrimeiraLegislaturaDoMandato": {
+        "NumeroLegislatura": "56",
+        "DataInicio": "2019-02-01",
+        "DataFim": "2023-01-31"
+       },
+       "SegundaLegislaturaDoMandato": {
+        "NumeroLegislatura": "57",
+        "DataInicio": "2023-02-01",
+        "DataFim": "2027-01-31"
+       },
+       "DescricaoParticipacao": "Titular",
+       "Exercicios": {
+        "Exercicio": [
+         {
+          "CodigoExercicio": "3091",
+          "DataInicio": "2025-10-30"
+         },
+         {
+          "CodigoExercicio": "2938",
+          "DataInicio": "2019-02-01",
+          "DataFim": "2025-07-01",
+          "SiglaCausaAfastamento": "LCS",
+          "DescricaoCausaAfastamento": "Licença com convocação de suplente (sup 120 dias)"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "MandatoParlamentar": {
+   "noNamespaceSchemaLocation": "https://legis.senado.leg.br/dadosabertos/dados/MandatoParlamentarv5.xsd",
+   "Metadados": {
+    "Versao": "26/11/2026 16:41:44",
+    "VersaoServico": "5",
+    "DataVersaoServico": "2021-09-09",
+    "DescricaoDataSet": "Retorna a relação dos Mandatos do Senador informado no parâmetro."
+   },
+   "Parlamentar": {
+    "Codigo": "5917",
+    "Nome": "Fernando Dueire",
+    "Mandatos": {
+     "Mandato": [
+      {
+       "CodigoMandato": "526",
+       "UfParlamentar": "PE",
+       "PrimeiraLegislaturaDoMandato": {
+        "NumeroLegislatura": "56",
+        "DataInicio": "2019-02-01",
+        "DataFim": "2023-01-31"
+       },
+       "SegundaLegislaturaDoMandato": {
+        "NumeroLegislatura": "57",
+        "DataInicio": "2023-02-01",
+        "DataFim": "2027-01-31"
+       },
+       "DescricaoParticipacao": "1º Suplente",
+       "Titular": {
+        "DescricaoParticipacao": "Titular",
+        "CodigoParlamentar": "4545",
+        "NomeParlamentar": "Jarbas Vasconcelos"
+       },
+       "Exercicios": {
+        "Exercicio": [
+         {
+          "CodigoExercicio": "3058",
+          "DataInicio": "2023-09-04"
+         },
+         {
+          "CodigoExercicio": "3000",
+          "DataInicio": "2022-12-07",
+          "DataFim": "2023-09-04",
+          "SiglaCausaAfastamento": "RET",
+          "DescricaoCausaAfastamento": "Retorno do titular"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+]

@@ -8,7 +8,9 @@ export const SOURCES=[
   {name:'camara-proposicoes',url:`${CAMARA}/arquivos/proposicoes/csv/proposicoes-2025.csv`},
   {name:'camara-foto',url:'https://www.camara.leg.br/internet/deputado/bandep/160976.jpg'},
   {name:'tse-candidatos',url:'https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_2022.zip'},
-  {name:'cgu-emendas',url:'https://portaldatransparencia.gov.br/download-de-dados/emendas-parlamentares/UNICO'}
+  {name:'cgu-emendas',url:'https://portaldatransparencia.gov.br/download-de-dados/emendas-parlamentares/UNICO'},
+  {name:'senado-ceaps-api',url:'https://adm.senado.gov.br/adm-dadosabertos/api/v1/senadores/despesas_ceaps/2025'},
+  {name:'senado-mandatos',url:'https://legis.senado.leg.br/dadosabertos/senador/5899/mandatos.json'}
 ];
 export function classify(status,bytes){
   if(status>=200&&status<300&&bytes>0)return 'ok';
