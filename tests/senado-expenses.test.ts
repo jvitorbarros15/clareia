@@ -262,4 +262,65 @@ test('audit passes on clean parse and fails on tampering, CPF run or detalhament
   const multiRes = auditCeapsYear(API_BYTES, multilineDetLeak, ctx);
   assert.equal(multiRes.ok, false);
   assert.ok(multiRes.failures.includes('detalhamento-in-output'));
+
+  const fracCents = cloneParsed();
+  fracCents.records[0].cents = 999.5;
+  const fracRes = auditCeapsYear(API_BYTES, fracCents, ctx);
+  assert.equal(fracRes.ok, false);
+  assert.ok(fracRes.failures.includes(`cents-invalid:${fracCents.records[0].id}`));
+
+  const fracReview = cloneParsed();
+  const emptyItem = fracReview.review.find(r => r.kind === 'empty-type');
+  assert.ok(emptyItem && emptyItem.kind === 'empty-type');
+  emptyItem.cents = 350000.5;
+  const fracRevRes = auditCeapsYear(API_BYTES, fracReview, ctx);
+  assert.equal(fracRevRes.ok, false);
+  assert.ok(fracRevRes.failures.includes(`empty-type-review-cents-invalid:${emptyItem.codSenador}:${emptyItem.month}`));
+});
+
+test('distinguishes tipoDespesa null from empty string in duplicate key for both parser and audit', () => {
+  const base = {...BASE_ROWS[1], tipoDespesa: null};
+  const rows = [
+    {...base, id: 2248902, tipoDespesa: null},
+    {...base, id: 2248903, tipoDespesa: ''},
+  ];
+  const bytes = toBytes(rows);
+  const ctx = {year: 2025};
+  const parsed = parseCeapsYear(bytes, ctx);
+
+  assert.equal(parsed.records[0].duplicateFlag, undefined);
+  assert.equal(parsed.records[1].duplicateFlag, undefined);
+  assert.deepEqual(parsed.review.filter(r => r.kind === 'possible-duplicate'), []);
+  assert.deepEqual(auditCeapsYear(bytes, parsed, ctx), {ok: true, failures: []});
+
+  const falselyFlagged = structuredClone(parsed);
+  falselyFlagged.records[0].duplicateFlag = 'possible';
+  falselyFlagged.records[1].duplicateFlag = 'possible';
+  const audit = auditCeapsYear(bytes, falselyFlagged, ctx);
+  assert.equal(audit.ok, false);
+  assert.ok(audit.failures.includes('duplicate-flag:2248902'));
+  assert.ok(audit.failures.includes('duplicate-flag:2248903'));
+});
+
+test('audit scopes detalhamento exemptions to expected fields and keeps legitimate substrings valid', () => {
+  const ctx = {year: 2025};
+
+  const rowsWithSupplierDet = cloneRows();
+  rowsWithSupplierDet[0].detalhamento = 'VIVO TELEFONICA BRASIL S.A';
+  const supplierDetBytes = toBytes(rowsWithSupplierDet);
+  const cleanSupplierDet = parseCeapsYear(supplierDetBytes, ctx);
+  assert.deepEqual(auditCeapsYear(supplierDetBytes, cleanSupplierDet, ctx), {ok: true, failures: []});
+
+  const copiedDet = structuredClone(cleanSupplierDet);
+  copiedDet.records[3].documento = 'VIVO TELEFONICA BRASIL S.A';
+  const copiedRes = auditCeapsYear(supplierDetBytes, copiedDet, ctx);
+  assert.equal(copiedRes.ok, false);
+  assert.ok(copiedRes.failures.includes('detalhamento-in-output'));
+
+  const rowsWithMeiDet = cloneRows();
+  rowsWithMeiDet[0].detalhamento = 'MEI';
+  const meiDetBytes = toBytes(rowsWithMeiDet);
+  const cleanMeiDet = parseCeapsYear(meiDetBytes, ctx);
+  assert.equal(cleanMeiDet.records.find(r => r.id === 9000004)?.supplier, 'FULANO DE TAL MEI [CPF omitido]');
+  assert.deepEqual(auditCeapsYear(meiDetBytes, cleanMeiDet, ctx), {ok: true, failures: []});
 });

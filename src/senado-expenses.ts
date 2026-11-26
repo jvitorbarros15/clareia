@@ -242,12 +242,12 @@ export function parseCeapsYear(bytes: Uint8Array, ctx: CeapsContext): CeapsParse
       codSenador,
       ano,
       mes,
-      tipoDespesa,
-      trimmedId,
+      tipoDespesaRaw,
+      cpfCnpjRaw,
       fornecedor,
       documentoRaw,
-      date,
-      amountCents,
+      dataRaw,
+      valorReembolsado,
     ]);
     const group = dupGroups.get(dupKey);
     if (group) {
