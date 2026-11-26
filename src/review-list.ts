@@ -16,7 +16,7 @@ const partySection=(items:ReviewItem[])=>items.length?['','## Partido','',...ite
 export const reviewMarkdown=(publicationId:string,items:ReviewItem[],names:ReviewNames={withheld:[],kept:[]},partyItems:ReviewItem[]=[])=>[`# Pendências para revisão - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | usada: ${i.used} | fonte: ${i.from}`),...partySection(partyItems),...nameSection('Nomes de fornecedor ocultados',names.withheld),...nameSection('Nomes mantidos pela regra de empresa',names.kept),''].join('\n');
 
 // Never published: output/review is gitignored, outside the site folder, and anchored to the repository, not to the working directory.
-const reviewDir=()=>process.env.CLAREIA_REVIEW_DIR??path.join(import.meta.dirname,'..','output','review');
+const reviewDir=()=>path.join(import.meta.dirname,'..','output','review');
 export async function writeReview(publicationId:string,items:ReviewItem[],names:ReviewNames={withheld:[],kept:[]},partyItems:ReviewItem[]=[]):Promise<number>{
   const file=path.join(reviewDir(),`${publicationId}-pendencias-revisao.md`);
   await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,reviewMarkdown(publicationId,items,names,partyItems));
