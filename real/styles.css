@@ -1029,5 +1029,4 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .p-mini-bars .bar-provisional{position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);font:600 11px/1.2 var(--sans);color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:3px;padding:1px 4px;white-space:nowrap;pointer-events:none}
 .p-mini-bars.many .bar-provisional{writing-mode:vertical-rl;padding:4px 2px;line-height:1.1}
 @media(max-width:800px){.p-mini-bars .bar-provisional{font-size:10px;padding:1px 2px}.p-mini-bars.many .bar-provisional{padding:4px 1px}}
-@media(max-width:600px){body[data-model=editorial] .section-dock{flex-wrap:wrap;justify-content:space-between;overflow-x:visible;gap:0 6px;padding-right:0;font-size:12px}body[data-model=editorial] .section-dock a:first-child::before{left:0}body[data-model=editorial] .section-dock a:last-of-type::before{right:0}}
 .provisional-list{margin:0 0 10px;padding-left:18px;font-size:14px}

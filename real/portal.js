@@ -289,7 +289,7 @@
   let observer;
   function watchMotion() {
     observer?.disconnect();
-    document.querySelectorAll('.p-section-intro,.p-stat,.dossier-card,.project-card,.vote-card,.timeline-event').forEach(el=>el.classList.add('p-reveal'));
+    document.querySelectorAll('.p-section-intro,.p-stat,.p-panel,.dossier-card,.project-card,.vote-card,.timeline-event').forEach(el=>el.classList.add('p-reveal'));
     if (!state.motion) { document.querySelectorAll('.p-reveal').forEach(el=>el.classList.add('is-visible')); return; }
     observer=new IntersectionObserver(entries=>entries.forEach(({target,isIntersecting})=>{if(isIntersecting){target.classList.add('is-visible');if(target.matches('.p-stat'))animateCounter(target);observer.unobserve(target);}}),{threshold:.08});
     document.querySelectorAll('.p-reveal:not(.is-visible)').forEach(el=>observer.observe(el));

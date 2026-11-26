@@ -71,9 +71,10 @@ test('provisionalMonths handles February in leap and non-leap years',()=>{
 test('provisionalMonths marks months ending after collection as provisional and ignores malformed dates',()=>{
   assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-03-15T12:00:00Z'),[1,2,3]);
   assert.deepEqual(provisionalMonths([1,12],2026,'2026-05-10T00:00:00Z'),[12]);
-  for(const bad of ['','not-a-date','2026-13-01T00:00:00Z','2026-02-30T00:00:00Z','2026-02-29T00:00:00Z','2026-06-28T25:00:00Z','2026-06-28T12:60:00Z','2026-06-28T12:00:00+25:00','12345']){
+  for(const bad of ['','not-a-date','2026-13-01T00:00:00Z','2026-02-30T00:00:00Z','2026-02-29T00:00:00Z','2026-06-28T25:00:00Z','2026-06-28T12:60:00Z','2026-06-28T12:00:00+25:00','2026-06-28\n12:00:00Z','2026-06-28\t12:00:00Z','2026-06-28\r12:00:00Z','12345']){
     assert.deepEqual(provisionalMonths([1,2,3],2026,bad),[],bad);
   }
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-28 23:59:59Z'),[3]);
   assert.deepEqual(provisionalMonths([1,2,3],2026,undefined as unknown as string),[]);
 });
 

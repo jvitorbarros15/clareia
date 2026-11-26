@@ -26,7 +26,7 @@ const utcDay=(y:number,mo:number,d:number):number=>{const dt=new Date(0);dt.setU
 
 export function provisionalMonths(months:number[],year:number,collectedAt:string):number[]{
   if(typeof collectedAt!=='string'||!Number.isInteger(year))return [];
-  const m=/^(\d{4})-(\d{2})-(\d{2})(?:[Tt\s](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:([Zz])|([+-])(\d{2}):?(\d{2}))?)?$/.exec(collectedAt);
+  const m=/^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:([Zz])|([+-])(\d{2}):?(\d{2}))?)?$/.exec(collectedAt);
   if(!m)return [];
   const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);
   const hh=m[4]?Number(m[4]):0,mi=m[5]?Number(m[5]):0,ss=m[6]?Number(m[6]):0,ms=m[7]?Number(m[7].slice(0,3).padEnd(3,'0')):0;
