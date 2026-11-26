@@ -1,6 +1,6 @@
 const RUN=/^[a-zA-Z0-9-]{1,80}$/,YEAR=/^[0-9]{4}$/;
 export type CoveragePair={historyRun:string;legacyRun:string};
-export type FullSiteConfig={historyRun:string;legacyRun:string;coverageRuns:Record<number,CoveragePair>;expenseYears:Record<number,string[]>;ceilingRuns:Record<number,string>;defaultYear:number;billsRuns:string[];votesRuns:string[];socialRun?:string};
+export type FullSiteConfig={historyRun:string;legacyRun:string;coverageRuns:Record<number,CoveragePair>;expenseYears:Record<number,string[]>;ceilingRuns:Record<number,string>;defaultYear:number;billsRuns:string[];votesRuns:string[];socialRun?:string;amendmentsRun?:string};
 const runs=(list:unknown,key:string)=>{if(!Array.isArray(list)||!list.length||!list.every(r=>typeof r==='string'&&RUN.test(r))||new Set(list).size!==list.length)throw new Error(`Configuração inválida: ${key}`);return list as string[];};
 const one=(value:unknown,key:string)=>{if(typeof value!=='string'||!RUN.test(value))throw new Error(`Configuração inválida: ${key}`);return value;};
 const byYear=(value:unknown,key:string):[number,unknown][]=>{
@@ -26,7 +26,7 @@ export function parseFullSiteConfig(raw:Record<string,unknown>):FullSiteConfig{
   const pairKeys=[`${historyRun}|${legacyRun}`,...Object.values(coverageRuns).map(p=>`${p.historyRun}|${p.legacyRun}`)];
   if(new Set(pairKeys).size!==pairKeys.length)throw new Error('Configuração inválida: coverageRuns repete um par de cobertura');
   if(typeof raw.defaultYear!=='number'||!(raw.defaultYear in expenseYears))throw new Error('Configuração inválida: defaultYear deve ser um ano de expenseYears');
-  return {historyRun,legacyRun,coverageRuns,expenseYears,ceilingRuns,defaultYear:raw.defaultYear,billsRuns:runs(raw.billsRuns,'billsRuns'),votesRuns:runs(raw.votesRuns,'votesRuns'),...raw.socialRun===undefined?{}:{socialRun:one(raw.socialRun,'socialRun')}};
+  return {historyRun,legacyRun,coverageRuns,expenseYears,ceilingRuns,defaultYear:raw.defaultYear,billsRuns:runs(raw.billsRuns,'billsRuns'),votesRuns:runs(raw.votesRuns,'votesRuns'),...raw.socialRun===undefined?{}:{socialRun:one(raw.socialRun,'socialRun')},...raw.amendmentsRun===undefined?{}:{amendmentsRun:one(raw.amendmentsRun,'amendmentsRun')}};
 }
 export const coverageOf=(config:{historyRun:string;legacyRun:string;coverageRuns:Record<number,CoveragePair>},year:number):CoveragePair=>config.coverageRuns[year]??{historyRun:config.historyRun,legacyRun:config.legacyRun};
 // Each year's expenses must be of that year and cut from the same temporal version the people coverage came from.

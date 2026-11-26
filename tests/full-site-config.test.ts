@@ -31,6 +31,12 @@ test('config refuses the old keys, a bad year key and a default year that is not
   assert.throws(()=>parseFullSiteConfig({...base(),expenseYears:{'2025':['a'],'2026':['a']}}),/repete/);
   assert.throws(()=>parseFullSiteConfig({...base(),socialRun:'../x'}),/socialRun/);
 });
+test('config accepts an optional amendmentsRun and rejects a bad value',()=>{
+  const without=parseFullSiteConfig(base());
+  assert.equal(Object.hasOwn(without,'amendmentsRun'),false);
+  assert.equal(parseFullSiteConfig({...base(),amendmentsRun:'run-1'}).amendmentsRun,'run-1');
+  assert.throws(()=>parseFullSiteConfig({...base(),amendmentsRun:'../x'}),/Configuração inválida: amendmentsRun/);
+});
 test('config accepts a third year with its own coverage pair',()=>{
   const config=parseFullSiteConfig({...threeYears(),coverageRuns:{2024:pair2024}});
   assert.deepEqual(config.coverageRuns,{2024:pair2024});

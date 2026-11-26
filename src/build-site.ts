@@ -20,6 +20,8 @@ import type {Deputy,Period} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
 import {generateShareImages} from './share-images.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
+import {readAmendmentRows} from './amendments-publication.ts';
+import type {AmendmentRow,AmendmentsVersion} from './amendments-publication.ts';
 import type {SiteCeiling} from './ceiling-site.ts';
 import {fileEntry,monthlyTables,quirkCounts,zipOf} from './open-data.ts';
 import type {OpenData} from './open-data.ts';
@@ -63,7 +65,7 @@ async function versionAssets(outDir:string):Promise<void>{
   await tagged('data.js',['app.js','portal.js']);
   for(const page of ['index.html','404.html'])await tagged(page,['view.js','pages.js','data.js','analytics.js','app.js','portal.js','styles.css']);
 }
-export type SitePlan={defaultYear:number;years:{year:number;publicationId:string;ceiling:SiteCeiling|null}[];social?:Record<string,unknown>};
+export type SitePlan={defaultYear:number;years:{year:number;publicationId:string;ceiling:SiteCeiling|null}[];social?:Record<string,unknown>;amendments?:{publicationId:string}};
 export type YearResult={year:number;review:ReviewItem[];names:ReviewNames;partyReview:ReviewItem[]};
 // A year is built only from the exact version the caller names, and only if its own audit passed; the active pointer is never consulted for it.
 async function approvedPublication(db:DB,id:string,year:number):Promise<Publication>{
@@ -101,6 +103,21 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const ballotsOf=new Map<number,Awaited<ReturnType<typeof readBallots>>>(),voteTotals=new Map<number,Record<string,number>>(),votesHeld=new Map<number,number>();
   if(votesVersion)for(const id of allIds){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
   const approved=new Set(options.approvedNames??await readApprovedNames()),coverageRows=peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billRows=billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[];
+  const amendmentsByDeputy=new Map<number,AmendmentRow[]>();
+  if(sitePlan.amendments){
+    const {publicationId}=sitePlan.amendments;
+    const r=await db.query<{domain:Domain;body:Omit<AmendmentsVersion,'rows'>;status:string|null}>('SELECT p.domain,p.body,a.status FROM publications p LEFT JOIN publication_audits a ON a.publication_id=p.id WHERE p.id=$1 AND p.id NOT IN (SELECT publication_id FROM withheld_publications)',[publicationId]);
+    const row=r.rows[0];
+    if(!row||row.domain!=='emendas')throw new Error(`Versão de emendas ${publicationId} não encontrada`);
+    if(row.status!=='passed')throw new Error(`Versão de emendas ${publicationId} sem auditoria aprovada`);
+    const amendmentRows=await readAmendmentRows(db,publicationId);
+    if(hash(canonical({schema:row.body.schema,metric:row.body.metric,scope:row.body.scope,reviews:row.body.reviews,rows:amendmentRows}))!==publicationId)throw new Error('Emendas no banco diferem da versão aprovada');
+    const knownIds=new Set(allIds);
+    for(const item of amendmentRows){
+      if(!knownIds.has(item.deputyId))throw new Error(`Emenda atribuída a deputado fora da montagem: ${item.deputyId}`);
+      const list=amendmentsByDeputy.get(item.deputyId);if(list)list.push(item);else amendmentsByDeputy.set(item.deputyId,[item]);
+    }
+  }
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const supplierNames=await readSupplierNames();
@@ -161,6 +178,16 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
       const bills=billList.filter(b=>!b.issues.length&&b.authors.some(a=>a.deputyId===id)).map(b=>({id:b.id,type:b.type,number:b.number,year:b.year,summary:redactCpf(b.summary),situation:b.situation,situationAt:b.situationAt,norm:b.norm,proponent:b.authors.find(a=>a.deputyId===id)!.proponent,joint:b.authors.filter(a=>a.proponent).length+b.otherProponents>1})).sort((x,y)=>y.id-x.id);
       const votes=(ballotsOf.get(id)??[]).map(([voteId,,category])=>{const v=voteList.get(voteId)!;return {id:voteId,date:v.date,organ:v.organ,kind:v.kind,description:redactCpf(v.description),matters:v.objects.map((o:{title:string|null})=>o.title?redactCpf(o.title):null).filter(Boolean),billId:v.objects.map((o:{billId:number|null})=>o.billId).find((b:number|null)=>b!==null)??null,category};}).sort((x,y)=>y.date.localeCompare(x.date)||x.id.localeCompare(y.id));
       await fs.mkdir(path.join(data,'atividade'),{recursive:true});const activity=JSON.stringify({bills,votes});if(scanCpfs(activity,new Set()))throw new Error('Identificador privado na atividade de um deputado');await fs.writeFile(path.join(data,'atividade',id+'.json'),activity);
+    }
+  }
+  if(sitePlan.amendments&&amendmentsByDeputy.size){
+    const dir=path.join(data,'emendas'),{publicationId}=sitePlan.amendments;
+    await fs.mkdir(dir,{recursive:true});
+    for(const [deputyId,list] of amendmentsByDeputy){
+      const items=[...list].sort((a,b)=>a.year-b.year||a.destination.localeCompare(b.destination)).map(r=>({year:r.year,destination:r.destination,rows:r.totals.rows,committed:r.totals.committed,liquidated:r.totals.liquidated,paid:r.totals.paid,carriedOver:r.totals.carriedOver,carriedCancelled:r.totals.carriedCancelled,carriedPaid:r.totals.carriedPaid}));
+      const json=JSON.stringify({schema:'clareia.amendments-deputy.v1',publicationId,deputyId,rows:items});
+      if(scanCpfs(json,new Set()))throw new Error('Identificador privado nas emendas de um deputado');
+      await fs.writeFile(path.join(dir,deputyId+'.json'),json);
     }
   }
   for(const file of ['index.html','404.html','data.js','pages.js','analytics.js','app.js','portal.js','styles.css','_headers','icon.svg','apple-touch-icon.png','favicon-32.png','site.webmanifest','icon-192.png','icon-512.png','icon-maskable-512.png','clareia-api.pdf'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
