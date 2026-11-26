@@ -433,6 +433,7 @@ check('month chart covers the period', async () => {
 
 check('donut panel', async () => {
   const page = await at(1440);
+  assert.equal(await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.donut-panel')).opacity)), 1, 'donut panel is visible on load without scroll');
   await page.evaluate(() => document.querySelector('#despesas').scrollIntoView());
   const slack = await page.evaluate(() => {
     const panel = document.querySelector('.donut-panel'), box = panel.getBoundingClientRect();
@@ -558,6 +559,20 @@ check('short heading hierarchy', async () => {
 for (const width of [1440, 390]) {
   check(`dock indicator on its rule (${width})`, async () => {
     const page = await at(width);
+    if (width === 390) {
+      const dock = await page.evaluate(() => {
+        const nav = document.querySelector('.section-dock');
+        return {
+          scrollWidth: nav.scrollWidth, clientWidth: nav.clientWidth, innerWidth: window.innerWidth,
+          links: [...nav.querySelectorAll('a')].map(a => { const r = a.getBoundingClientRect(); return { text: a.textContent.trim(), left: r.left, right: r.right, height: r.height }; }),
+        };
+      });
+      assert.ok(dock.scrollWidth <= dock.clientWidth + 0.5, `dock overflows horizontally at 390 (${dock.scrollWidth} > ${dock.clientWidth})`);
+      for (const l of dock.links) {
+        assert.ok(l.left >= 0 && l.right <= dock.innerWidth + 0.5, `dock link "${l.text}" clipped at 390 (${l.left}..${l.right})`);
+        assert.ok(l.height >= 44, `dock link "${l.text}" tap target height ${l.height} < 44`);
+      }
+    }
     for (const id of ['despesas', 'atlas']) {
       await page.evaluate(target => document.getElementById(target).scrollIntoView({ behavior: 'instant' }), id);
       await page.waitForTimeout(700);
@@ -2823,21 +2838,21 @@ check('provisional months mark the chart, profile and year label without changin
     await page.close();
   }
 
-  {
-    const page = await at(1440, { before: partialBefore, search: `deputado/${profilePerson.id}-${slugOf(profilePerson.name)}?ano=${partialYear}` });
+  for (const width of [1440, 390]) {
+    const page = await at(width, { before: partialBefore, search: `deputado/${profilePerson.id}-${slugOf(profilePerson.name)}?ano=${partialYear}` });
     await page.waitForSelector('#detail[open] .provisional-section');
     const sec = clean(await page.locator('#detail .provisional-section').innerText());
-    assert.ok(sec.includes('Março: provisório'), `profile section lists Março: ${sec}`);
-    assert.ok(sec.includes(NOTE), `profile section has the note: ${sec}`);
-    assert.ok(!sec.includes('Janeiro') && !sec.includes('Fevereiro'), `only March listed: ${sec}`);
-    assert.ok(!sec.includes('R$'), `no amounts in provisional section: ${sec}`);
+    assert.ok(sec.includes('Março: provisório'), `profile section lists Março at ${width}: ${sec}`);
+    assert.ok(sec.includes(NOTE), `profile section has the note at ${width}: ${sec}`);
+    assert.ok(!sec.includes('Janeiro') && !sec.includes('Fevereiro'), `only March listed at ${width}: ${sec}`);
+    assert.ok(!sec.includes('R$'), `no amounts in provisional section at ${width}: ${sec}`);
     const body = clean(await page.locator('#detail-body').innerText());
-    assert.ok(body.includes(clean(brl(personTotal))), `profile total matches stub ${brl(personTotal)}`);
-    assert.deepEqual(page.errors, [], 'partial provisional profile errors');
+    assert.ok(body.includes(clean(brl(personTotal))), `profile total matches stub ${brl(personTotal)} at ${width}`);
+    assert.deepEqual(page.errors, [], `partial provisional profile errors at ${width}`);
     await page.close();
   }
 
-  // Full 12-month year with a provisional December: title shows even when partial is false.
+  // Full 12-month year with a zero-valued provisional December: title shows even when partial is false, and the zero bar is drawn.
   {
     const fullCollectedAt = `${def + 1}-03-05T12:00:00Z`;
     const fullManifest = {
@@ -2852,16 +2867,71 @@ check('provisional months mark the chart, profile and year label without changin
         json.collectedAt = fullCollectedAt;
         await route.fulfill({ response: res, json });
       });
+      await page.route('**/fornecedores.json', async route => {
+        const res = await route.fetch(), json = await res.json();
+        for (const id of Object.keys(json.people)) json.people[id] = json.people[id].filter(row => row[0] !== 12);
+        await route.fulfill({ response: res, json });
+      });
     };
     const page = await at(1440, { before: fullBefore });
     assert.equal(await page.locator('.year-partial').count(), 0, 'four years keeps .year-partial hidden');
     const select = page.locator('select[data-year-select]').first();
     assert.equal(await select.getAttribute('title'), `provisório: ${NOTE}`, 'full year select title carries provisional note');
     assert.equal(clean(await select.locator('option:checked').innerText()), String(def), 'full year option has no (parcial)');
-    const marks = await page.locator('.p-mini-bars button').evaluateAll(bs => bs.filter(b => b.querySelector('.bar-provisional')).map(b => Number(b.dataset.pMonth)));
-    assert.deepEqual(marks, [12], 'only December is marked provisional');
+    const bars = await page.locator('.p-mini-bars button').evaluateAll(bs => bs.map(b => ({
+      month: Number(b.dataset.pMonth),
+      aria: b.getAttribute('aria-label'),
+      title: b.getAttribute('title'),
+      value: b.querySelector('.bar-value')?.textContent.replace(/\s+/g, ' ').trim() || '',
+      barHeight: b.querySelector(':scope > span')?.getBoundingClientRect().height || 0,
+      mark: b.querySelector('.bar-provisional')?.textContent.trim() || null,
+    })));
+    assert.equal(bars.length, 12, 'all 12 bars drawn');
+    assert.deepEqual(bars.filter(b => b.mark).map(b => b.month), [12], 'only December is marked provisional');
+    const dec = bars[11];
+    assert.ok(dec.barHeight >= 2, `zero-valued provisional bar is drawn (height ${dec.barHeight})`);
+    assert.equal(dec.value, shortValue(0), `zero-valued provisional bar displays 0: ${dec.value}`);
+    assert.ok(dec.aria.includes(brl(0)) && dec.aria.includes('provisório'), `December aria-label has R$ 0,00 and provisório: ${dec.aria}`);
+    assert.equal(dec.title, NOTE, 'December title has the note');
     assert.deepEqual(page.errors, [], 'full provisional year errors');
     await page.close();
+  }
+
+  // Adjacent provisional marks on a 12-month chart stay separate and inside the viewport on desktop and mobile.
+  {
+    const adjCollectedAt = `${def + 1}-01-15T12:00:00Z`;
+    const adjManifest = {
+      ...real,
+      years: years.map(year => year === def ? { ...defEntry, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], partial: false, collectedAt: adjCollectedAt } : { year, months: [1, 2, 3], partial: true }),
+    };
+    const adjBefore = async page => {
+      await page.route('**/manifest.json', route => route.fulfill({ json: adjManifest }));
+      await page.route('**/index.json', async route => {
+        const res = await route.fetch(), json = await res.json();
+        json.scope = { ...json.scope, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] };
+        json.collectedAt = adjCollectedAt;
+        await route.fulfill({ response: res, json });
+      });
+    };
+    for (const width of [1440, 390]) {
+      const page = await at(width, { before: adjBefore });
+      const info = await page.evaluate(() => ({
+        innerWidth: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        marks: [...document.querySelectorAll('.p-mini-bars .bar-provisional')].map(el => {
+          const r = el.getBoundingClientRect();
+          return { month: Number(el.closest('button').dataset.pMonth), left: r.left, right: r.right, width: r.width, height: r.height };
+        }),
+      }));
+      assert.deepEqual(info.marks.map(m => m.month), [10, 11, 12], `Oct-Dec provisional at ${width}`);
+      assert.ok(info.scrollWidth <= info.innerWidth, `no horizontal scroll with adjacent provisional marks at ${width}`);
+      info.marks.forEach((m, i) => {
+        assert.ok(m.left >= 0 && m.right <= info.innerWidth + 0.5, `provisional mark ${m.month} inside viewport at ${width}`);
+        if (i > 0) assert.ok(m.left >= info.marks[i - 1].right - 0.5, `provisional marks ${info.marks[i - 1].month} and ${m.month} do not overlap at ${width}`);
+      });
+      assert.deepEqual(page.errors, [], `adjacent provisional marks errors at ${width}`);
+      await page.close();
+    }
   }
 });
 

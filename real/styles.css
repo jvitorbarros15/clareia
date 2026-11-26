@@ -371,7 +371,6 @@ body[data-model=editorial] .linked-totals strong{font:400 32px/1.1 var(--serif);
 body[data-model=editorial] .saved-panel{border:0;background:color-mix(in srgb,var(--ink) 4%,var(--bg))}
 body[data-model=editorial] .saved-empty h3{font-family:var(--serif);font-weight:400;line-height:1.15}
 @media (max-width:760px){
-  body[data-model=editorial] .section-dock{-webkit-mask-image:linear-gradient(90deg,#000 82%,transparent);mask-image:linear-gradient(90deg,#000 82%,transparent);padding-right:40px}
   body[data-model=editorial] .linked-chart-body{position:relative}
   body[data-model=editorial] .linked-chart-body::before{content:"Deslize para ver o ano todo →";display:block;position:sticky;left:0;font-size:13px;color:var(--muted);margin-bottom:8px}
 }
@@ -1026,7 +1025,9 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .pix-copy{min-height:44px;min-width:44px}
 .year-select{display:inline-flex;align-items:center}.year-select select{font:inherit;font-size:14px;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:2px;background:var(--surface);color:var(--ink)}.year-partial{font-size:13px;color:var(--muted);align-self:center}.doc-year-links{margin:0 0 18px}
 .p-mini-bars.has-provisional{margin-bottom:44px}
-.p-mini-bars .bar-provisional{position:absolute;top:calc(100% + 2px);left:50%;transform:translateX(-50%);font:600 11px/1.2 var(--sans);color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:3px;padding:1px 4px;white-space:nowrap;pointer-events:none}
-.p-mini-bars.many button:last-child .bar-provisional{left:auto;right:0;transform:none}
-.p-mini-bars.many button:first-child .bar-provisional{left:0;transform:none}
+.p-mini-bars.many.has-provisional{margin-bottom:88px}
+.p-mini-bars .bar-provisional{position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);font:600 11px/1.2 var(--sans);color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:3px;padding:1px 4px;white-space:nowrap;pointer-events:none}
+.p-mini-bars.many .bar-provisional{writing-mode:vertical-rl;padding:4px 2px;line-height:1.1}
+@media(max-width:800px){.p-mini-bars .bar-provisional{font-size:10px;padding:1px 2px}.p-mini-bars.many .bar-provisional{padding:4px 1px}}
+@media(max-width:600px){body[data-model=editorial] .section-dock{flex-wrap:wrap;justify-content:space-between;overflow-x:visible;gap:0 6px;padding-right:0;font-size:12px}body[data-model=editorial] .section-dock a:first-child::before{left:0}body[data-model=editorial] .section-dock a:last-of-type::before{right:0}}
 .provisional-list{margin:0 0 10px;padding-left:18px;font-size:14px}

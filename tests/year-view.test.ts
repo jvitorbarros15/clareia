@@ -71,8 +71,29 @@ test('provisionalMonths handles February in leap and non-leap years',()=>{
 test('provisionalMonths marks months ending after collection as provisional and ignores malformed dates',()=>{
   assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-03-15T12:00:00Z'),[1,2,3]);
   assert.deepEqual(provisionalMonths([1,12],2026,'2026-05-10T00:00:00Z'),[12]);
-  for(const bad of ['','not-a-date','2026-13-01T00:00:00Z','2026-02-30T00:00:00Z','2026-02-29T00:00:00Z','12345']){
+  for(const bad of ['','not-a-date','2026-13-01T00:00:00Z','2026-02-30T00:00:00Z','2026-02-29T00:00:00Z','2026-06-28T25:00:00Z','2026-06-28T12:60:00Z','2026-06-28T12:00:00+25:00','12345']){
     assert.deepEqual(provisionalMonths([1,2,3],2026,bad),[],bad);
   }
   assert.deepEqual(provisionalMonths([1,2,3],2026,undefined as unknown as string),[]);
+});
+
+test('provisionalMonths interprets offsetless timestamps as UTC and honors offsets crossing UTC midnight',()=>{
+  // Offsetless timestamps stay on their UTC calendar day regardless of host timezone.
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-28T23:59:59'),[3]);
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-29T00:00:00'),[]);
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-28'),[3]);
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-29'),[]);
+  // 2026-06-28T23:30:00-03:00 is 2026-06-29T02:30:00Z (90 days after Mar 31 -> not provisional).
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-28T23:30:00-03:00'),[]);
+  // 2026-06-29T01:30:00+03:00 is 2026-06-28T22:30:00Z (89 days after Mar 31 -> provisional).
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-29T01:30:00+03:00'),[3]);
+});
+
+test('provisionalMonths handles years 0000-0099 without 1900 remapping',()=>{
+  assert.deepEqual(provisionalMonths([1,2,3],50,'0050-06-28T23:59:59Z'),[3]);
+  assert.deepEqual(provisionalMonths([1,2,3],50,'0050-06-29T00:00:00Z'),[]);
+  assert.deepEqual(provisionalMonths([1,2,3],50,'0050-02-29T00:00:00Z'),[]);
+  // Year 0000 is a leap year (Feb 29): +89 = May 28, +90 = May 29.
+  assert.deepEqual(provisionalMonths([1,2],0,'0000-05-28T00:00:00Z'),[2]);
+  assert.deepEqual(provisionalMonths([1,2],0,'0000-05-29T00:00:00Z'),[]);
 });
