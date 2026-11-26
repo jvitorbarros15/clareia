@@ -1267,35 +1267,123 @@ check('Visão inicial keeps focus', async () => {
 });
 
 check('external text is escaped once', async () => {
-  const page = await at(1440);
-  const probe = await page.evaluate(() => {
+  const page = await at(1440, { reducedMotion: 'reduce' });
+  const fragment = 'Aaaverifyui';
+  const name = `${fragment}<b>probe-deputy</b>&'" <u data-xss=deputy>name</u>`;
+  const supplier = `Supplier & '" <b>probe-supplier</b> <u data-xss=supplier>label</u>`;
+  const category = `CATEGORY & '" <b>probe-category</b> <u data-xss=category>label</u>`;
+  const { id, uf, indexUrl, recordsUrl, sourceCategory, sourceSupplier } = await page.evaluate(() => {
     const C = window.Clareia, D = window.ClareiaData;
-    const [p] = C.all(), category = D.categories[1];
-    const name = `D'Ávila & <u data-xss=name>Filho</u>`, catName = `Foo & 'bar' <u data-xss=cat>x</u>`;
-    p.name = name; p.party = `PX<u data-xss=party>`;
-    D.categories[1] = catName;
-    for (const person of C.all()) for (const r of person.cells) if (r.category === category) r.category = catName;
-    C.refresh();
-    return { name, shown: D.label(catName) };
+    const [p] = C.byTotal();
+    const cell = [...p.cells].sort((a, b) => b.amount - a.amount).find(r => r.supplier);
+    return { id: p.id, uf: p.uf, indexUrl: `${D.base}/index.json`, recordsUrl: D.recordsUrl(p.officialId), sourceCategory: cell.category, sourceSupplier: cell.supplier };
   });
-  const inspect = async step => {
+  // The hero's example questions are rendered only during the initial layout.
+  await page.route(base + indexUrl, async route => {
+    const response = await route.fetch(), json = await response.json();
+    json.people.find(p => String(p.id) === id).name = name;
+    await route.fulfill({ response, json });
+  });
+  await page.route(base + recordsUrl, async route => {
+    const response = await route.fetch(), json = await response.json();
+    for (const r of json) {
+      if (r.category !== sourceCategory) continue;
+      r.category = category;
+      if ((r.supplierLabel ?? r.supplier) === sourceSupplier) r.supplierLabel = supplier;
+    }
+    await route.fulfill({ response, json });
+  });
+  await page.reload();
+  await page.waitForSelector('.full-portal');
+  const shown = await page.evaluate(({ id, category, supplier, sourceCategory, sourceSupplier }) => {
+    const C = window.Clareia, D = window.ClareiaData;
+    C.person(id).party = 'PX<u data-xss=party>';
+    D.categories[D.categories.indexOf(sourceCategory)] = category;
+    for (const person of C.all()) for (const r of person.cells) {
+      if (r.category !== sourceCategory) continue;
+      r.category = category;
+      if (r.supplier === sourceSupplier) r.supplier = supplier;
+    }
+    C.refresh();
+    return D.label(category);
+  }, { id, category, supplier, sourceCategory, sourceSupplier });
+  const inspect = async (step, ...fields) => {
     assert.equal(await page.locator('u[data-xss]').count(), 0, `markup injected at ${step}`);
+    assert.equal(await page.locator('b').filter({ hasText: /^probe-(deputy|supplier|category)$/ }).count(), 0, `bold markup injected at ${step}`);
     const body = await page.evaluate(() => document.body.innerText + [...document.querySelectorAll('dialog')].map(d => d.innerText).join('\n'));
-    assert.ok(!/&amp;|&#39;|&lt;/.test(body), `double escaping at ${step}`);
+    assert.doesNotMatch(body, /&amp;|&#39;|&lt;|&gt;|&quot;/, `double escaping at ${step}`);
+    for (const [field, literal, occurrences = 1] of fields) {
+      assert.equal((await text(field)).split(literal).length - 1, occurrences, `${literal} renders literally ${occurrences} time(s) at ${step}`);
+    }
   };
-  await inspect('page');
-  const body = await page.evaluate(() => document.body.innerText);
-  assert.ok(body.includes(probe.name), 'the name renders literally, once');
-  assert.ok(body.includes(probe.shown), 'the category renders literally, once');
-  const aria = await page.evaluate(() => [...document.querySelectorAll('[data-p-follow]')].map(b => b.getAttribute('aria-label')));
-  assert.ok(aria.some(l => l.endsWith(probe.name)), 'attribute keeps the exact name');
-  await page.locator('.bar-row').first().click(); await page.waitForSelector('#detail[open]'); await inspect('evidence');
-  await page.keyboard.press('Escape');
-  await page.locator('.portrait-button').first().click(); await page.waitForSelector('#detail[open]'); await inspect('profile');
-  await page.keyboard.press('Escape');
-  await page.locator('#despesas .donut-legend [data-p-highlight]').nth(1).click();
-  await page.locator('#despesas [data-p-drill]').click(); await page.waitForSelector('#detail[open]'); await inspect('supplier dialog');
-  await page.keyboard.press('Escape');
+  const dialog = page.locator('#detail[open]');
+  const close = () => page.evaluate(() => window.Clareia.closeDialog());
+  const bar = page.locator('.bar-row').first();
+  await inspect('ranking bars', [bar.locator('.bar-name'), name]);
+  assert.equal(await bar.getAttribute('data-id'), id);
+  assert.ok((await bar.getAttribute('aria-label')).startsWith(name + ', '), 'ranking aria-label preserves the name');
+  const chartTitle = page.locator(`.linked-lines [data-id="${id}"] title`).first();
+  assert.ok((await chartTitle.textContent()).startsWith(name + ' · '), 'chart title preserves the name');
+
+  await page.locator('#query').focus();
+  const example = page.locator('#suggestions:not([hidden]) button').first();
+  const firstName = name.split(' ')[0];
+  await inspect('example questions', [example, firstName]);
+  assert.equal(await example.getAttribute('data-question'), await text(example));
+  const filters = await page.locator('.person-filter').all();
+  assert.ok(filters.length >= 3, 'comparison and timeline typeaheads are present');
+  for (const filter of filters) {
+    await filter.fill(fragment);
+    const options = page.locator(`.person-options[id="${await filter.getAttribute('aria-controls')}"]:not([hidden])`);
+    const option = options.locator('[role=option]');
+    await inspect(await filter.getAttribute('id'), [option, name]);
+    assert.equal(await option.getAttribute('data-value'), id);
+  }
+  await page.locator('#roster-query').fill(fragment);
+  const card = page.locator('#directory-grid .directory-card');
+  await inspect('directory search', [card.locator('h3'), name]);
+  assert.equal(await card.locator('[data-p-follow]').getAttribute('aria-label'), `Acompanhar ${name}`);
+
+  await bar.click();
+  await inspect('ranking evidence', [dialog.locator('.evidence-step').first(), name]);
+  await close();
+  await page.locator(`.portrait-button[data-id="${id}"]`).click();
+  const profileCategory = dialog.locator('.category-row').filter({ hasText: 'probe-category' });
+  await inspect('profile', [dialog.locator('.profile-head h3'), name], [profileCategory.locator('.category-head'), shown], [profileCategory.locator('.source-name'), category]);
+  await dialog.locator('[data-action=records]').click();
+  const row = dialog.locator('.record-row').filter({ hasText: 'probe-supplier' }).first();
+  await row.waitFor();
+  await inspect('records list', [dialog.locator('caption'), name], [row.locator('.record-supplier'), supplier], [row.locator('.record-meta'), shown]);
+  const recordButton = row.locator('button');
+  assert.equal(await recordButton.getAttribute('aria-label'), `Conferir registro de ${supplier}: ${await text(row.locator('.record-when small'))}`);
+  await recordButton.click();
+  await inspect('record detail', [dialog.locator('h3'), supplier], [dialog.locator('.records-note'), name], [dialog.locator('.context').filter({ hasText: 'probe-category' }), category]);
+  await close();
+
+  await page.evaluate(category => {
+    const C = window.Clareia;
+    C.state.category = category;
+    C.refresh();
+  }, category);
+  await page.locator(`[data-p-uf="${uf}"]`).click();
+  const mapPerson = page.locator(`#atlas-detail [data-action=profile][data-id="${id}"]`);
+  await inspect('map panel', [mapPerson.locator('b'), name], [page.locator('.map-metrics p'), shown]);
+  assert.equal(await page.locator(`#atlas-detail [data-p-follow="${id}"]`).getAttribute('aria-label'), `Acompanhar ${name}`);
+  await page.locator('[data-p=map-evidence]').click();
+  await inspect('map evidence', [dialog.locator('.records-note'), shown]);
+  await close();
+
+  const legend = page.locator('.donut-legend button:not(:disabled)');
+  assert.equal(await legend.getAttribute('data-p-highlight'), category);
+  assert.equal(await legend.getAttribute('data-label'), shown);
+  await legend.click();
+  const drill = page.locator('#despesas [data-p-drill]');
+  assert.equal(await drill.getAttribute('data-p-drill'), category);
+  await drill.click();
+  const supplierRow = dialog.locator('[data-p-supplier]').filter({ hasText: 'probe-supplier' });
+  await inspect('supplier dialog', [supplierRow, supplier], [dialog.locator('.records-note').first(), shown, 2], [dialog.locator('.records-note').nth(1), category]);
+  assert.equal(await supplierRow.getAttribute('data-p-supplier'), supplier);
+  assert.equal(await supplierRow.getAttribute('data-category'), category);
   await page.close();
 });
 
