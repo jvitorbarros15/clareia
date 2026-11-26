@@ -41,13 +41,16 @@ const bills=await Promise.all(config.billsRuns.map(async run=>({report:await loa
 const social=config.socialRun?(await load('social',config.socialRun,'social.json')).people:undefined;
 const votes=await Promise.all(config.votesRuns.map(async run=>({report:await load('votes',run,'votes.json'),ballots:await load('votes',run,'ballots.json'),audit:await load('votes',run,'audit.json')})));
 const amendmentsInput=config.amendmentsRun?{report:await load('amendments',config.amendmentsRun,'amendments.json'),audit:await load('amendments',config.amendmentsRun,'audit.json')}:null;
-const publicationAudits=[...[...sources.values()].flatMap(s=>[s.temporalAudit,s.crosscheckAudit]),...[...lotsOf.values()].flat().map(l=>l.audit),...bills.map(b=>b.audit),...votes.map(v=>v.audit),...amendmentsInput?[amendmentsInput.audit]:[]];
+const baseAudits=[...[...sources.values()].flatMap(s=>[s.temporalAudit,s.crosscheckAudit]),...[...lotsOf.values()].flat().map(l=>l.audit),...bills.map(b=>b.audit),...votes.map(v=>v.audit)];
+const publicationAudits=[...baseAudits,...amendmentsInput?[amendmentsInput.audit]:[]];
+const explicitPublishedAt=typeof raw.publishedAt==='string'&&!Number.isNaN(Date.parse(raw.publishedAt))?new Date(raw.publishedAt).toISOString():null;
 // Fixed by the inputs, so rebuilding the same runs gives the same bytes under the same data hash.
-const now=typeof raw.publishedAt==='string'&&!Number.isNaN(Date.parse(raw.publishedAt))?new Date(raw.publishedAt).toISOString():latestCheckedAt(publicationAudits);
+const now=explicitPublishedAt??latestCheckedAt(baseAudits);
+const amendmentsNow=explicitPublishedAt??latestCheckedAt(publicationAudits);
 // The builders refuse any input whose own audit is missing, not passed or for another content.
 for(const s of sources.values())s.coverage=buildPeopleCoverage(s.temporal,s.crosscheck,s.temporalAudit,now);
 const billsVersion=buildBillsVersion(bills,now),votesVersion=buildVotesVersion(votes,now);
-const amendmentsVersion=amendmentsInput?buildAmendmentsVersion(amendmentsInput.report,amendmentsInput.audit,await loadReviewedLinks(path.resolve(AMENDMENT_LINKS_FILE)),new Set<number>([...sources.values()].flatMap(s=>s.history.people.map((p:{id:number})=>p.id))),now):null;
+const amendmentsVersion=amendmentsInput?buildAmendmentsVersion(amendmentsInput.report,amendmentsInput.audit,await loadReviewedLinks(path.resolve(AMENDMENT_LINKS_FILE)),new Set<number>([...sources.values()].flatMap(s=>s.history.people.map((p:{id:number})=>p.id))),amendmentsNow):null;
 if(amendmentsVersion)assertApprovable(amendmentsVersion);
 const versions=years.map(year=>{
   const {historyRun,legacyRun}=coverageOf(config,year),source=sources.get(`${historyRun}|${legacyRun}`)!;
@@ -68,8 +71,8 @@ await fs.access(portraits).catch(()=>{throw new Error(`Pasta de retratos ausente
 const db=await openDB(true);
 try{
   // Each domain is approved only by the same audit its publish script runs; a failed one is recorded as failed and stops the build.
-  const approve=async(domain:Domain,id:string,found:{status:'passed'|'failed';failures:string[]},inputAudits:{checkedAt?:unknown}[])=>{
-    const audit=auditRecord(found,inputAudits,now);
+  const approve=async(domain:Domain,id:string,found:{status:'passed'|'failed';failures:string[]},inputAudits:{checkedAt?:unknown}[],builtAt=now)=>{
+    const audit=auditRecord(found,inputAudits,builtAt);
     if(audit.status!=='passed'){await recordDomainAudit(db,id,'failed',audit as never);throw new Error(`Auditoria reprovada em ${domain}: ${audit.failures.slice(0,5).join(', ')}`);}
     await recordDomainAudit(db,id,'passed',audit as never);
   };
@@ -88,7 +91,7 @@ try{
   if(amendmentsVersion&&amendmentsInput){
     await storeAmendmentsVersion(db,amendmentsVersion);
     await reobserveAmendmentsVersion(db,amendmentsVersion.id);
-    await approve('emendas',amendmentsVersion.id,await auditAmendmentsVersion(db,amendmentsVersion.id,amendmentsInput.report),[amendmentsInput.audit]);
+    await approve('emendas',amendmentsVersion.id,await auditAmendmentsVersion(db,amendmentsVersion.id,amendmentsInput.report),[amendmentsInput.audit],amendmentsNow);
   }
   const expected:[Domain,string][]=[['despesas',expenses.id],['pessoas',defaultCoverage.id],['projetos',billsVersion.id],['votacoes',votesVersion.id]];
   if(amendmentsVersion)expected.push(['emendas',amendmentsVersion.id]);

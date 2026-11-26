@@ -3,16 +3,22 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 import {openDB} from '../src/store.ts';
 import type {DB} from '../src/store.ts';
 import {publishDomain,recordDomainAudit} from '../src/publications.ts';
 import {buildSite} from '../src/build-site.ts';
-import {snapshotId} from '../src/model.ts';
+import {canonical,hash,snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {amendmentsReport} from '../src/amendments.ts';
 import type {AmendmentAuthor,AmendmentLink,AuthorYear,Totals} from '../src/amendments.ts';
 import {auditAmendmentsVersion,buildAmendmentsVersion,storeAmendmentsVersion} from '../src/amendments-publication.ts';
 import type {ReviewedLink} from '../src/amendments-publication.ts';
+import {billsReport} from '../src/bills.ts';
+import {votesReport} from '../src/votes.ts';
+
+const execFileAsync=promisify(execFile);
 
 function record(cents:number,personId:number,index:number):Expense{
   return {id:`r${personId}-${index}`,personId,year:2025,month:1,category:'TEST',supplier:'Fornecedor',supplierKey:'k',supplierVerified:false,documentId:'1',documentNumber:'1',date:null,receipt:null,cents,documentCents:cents,disallowedCents:0,source:{url:'https://dadosabertos.camara.leg.br/api/v2/x',sha256:'s',row:index,fetchedAt:'2025-03-01T00:00:00Z'}};
@@ -145,3 +151,85 @@ test('a CPF-shaped destination stops the build and leaves the existing output un
   await assert.rejects(buildSite(db,dist,portraits,{approvedNames:[]},{...basePlan,amendments:{publicationId:am.id}}),/Identificador privado nas emendas de um deputado/);
   assert.deepEqual(await tree(dist),before);
 }));
+
+test('full-site build with a newer amendments audit and no publishedAt keeps non-amendment bytes and timestamps unchanged',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-full-amendments-'));
+  const repo=path.resolve(import.meta.dirname,'..'),script=path.join(repo,'scripts','build-full-site.ts'),tsx=import.meta.resolve('tsx');
+  const writeJson=async(file:string,data:unknown)=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,JSON.stringify(data));};
+  const reviewFiles:string[]=[];
+  try{
+    const baseChecked='2025-03-02T00:00:00.000Z',amendChecked='2025-04-10T00:00:00.000Z';
+    const priv=path.join(dir,'data','private'),portraits=path.join(dir,'portraits');
+    await fs.mkdir(portraits,{recursive:true});await fs.writeFile(path.join(portraits,'1.jpg'),'jpg');
+    const history={scope:{legislature:57,start:'2025-01-01',end:'2025-01-31',sampleIds:[1,2]},legislature:{id:57,start:'2023-02-01',end:'2027-01-31'},people:[1,2].map(id=>({id,profile:{name:'Pessoa '+id,photo:null,source:{fetchedAt:'2025-03-01T00:00:00Z'}}}))};
+    const dim=(value:string)=>({status:'single' as const,value,values:[value],rows:[0]});
+    const temporal={schema:'clareia.people-temporal.v1',ruleVersion:'camara.history-reported-change.v1',historySha256:hash(canonical(history)),scope:history.scope,createdAt:'2025-03-01T00:00:00Z',status:'review-required',publicAttributionEnabled:false,people:[1,2].map(id=>({id,collectionStatus:'stable',events:[],intervals:[],months:[{year:2025,month:1,start:'2025-01-01T00:00:00',end:'2025-02-01T00:00:00',partialScope:false,exercise:'full',party:dim('PL'),uf:dim('SP'),financialCollection:'not-collected'}],issues:[]}))};
+    const temporalSha256=hash(canonical(temporal));
+    const crosscheck={schema:'clareia.people-crosscheck.v1',legacySha256:hash('l'),temporalSha256,historySha256:temporal.historySha256,discoverySha256:hash('d'),scope:history.scope,createdAt:'2025-03-01T00:00:00Z',status:'review-required',publicAttributionEnabled:false,dateSemantics:'boundary-days-and-open-ends-unconfirmed',people:[1,2].map(id=>({id,legacyStatus:'stable',partyComparisonStatus:'compared',partyChanges:[],months:[{year:2025,month:1,v2Exercise:'full',legacy:'reported-exercise',periodRows:[0],openEnd:false,comparison:'no-automatic-resolution'}]}))};
+    const crosscheckSha256=hash(canonical(crosscheck));
+    await writeJson(path.join(priv,'people-history','hist-1','history.json'),history);
+    await writeJson(path.join(priv,'people-history','hist-1','temporal.json'),temporal);
+    await writeJson(path.join(priv,'people-history','hist-1','temporal-audit.json'),{status:'passed',temporalSha256,checkedAt:baseChecked});
+    await writeJson(path.join(priv,'people-legacy','leg-1','crosscheck.json'),crosscheck);
+    await writeJson(path.join(priv,'people-legacy','leg-1','crosscheck-audit.json'),{status:'passed',crosscheckSha256,checkedAt:baseChecked});
+
+    const proposal={schema:'clareia.expense-lot.v1',year:2025,months:[1],lot:0,lotSize:2,lots:1,universeSize:2,universeSha256:hash(canonical([1,2])),people:[{id:1},{id:2}],temporalSha256,crosscheckSha256};
+    const proposalSha256=hash(canonical(proposal)),lotInput={schema:'clareia.expense-lot-input.v1',selectionRun:'s',proposal,temporal,originAudit:{}};
+    const cells=[{personId:1,year:2025,month:1,status:'complete',records:[record(100,1,0),record(250,1,1)],reasons:[],totalCents:350},{personId:2,year:2025,month:1,status:'complete',records:[record(50,2,2)],reasons:[],totalCents:50}];
+    const batch={peopleVersion:temporalSha256,scope:{year:2025,months:[1],ids:[1,2],legislature:57},proposalSha256,createdAt:'2025-03-01T00:00:00Z',contentSha256:hash('batch-0'),cells};
+    const reportSha256=hash(canonical(batch));
+    await writeJson(path.join(priv,'expense-intermediate','lot-0','run.json'),{runId:'lot-0',status:'review-required',reportSha256,proposalSha256,inputSha256:hash(canonical(lotInput))});
+    await writeJson(path.join(priv,'expense-intermediate','lot-0','input.json'),lotInput);
+    await writeJson(path.join(priv,'expense-intermediate','lot-0','batch.json'),batch);
+    await writeJson(path.join(priv,'expense-intermediate','lot-0','audit.json'),{status:'passed',reportSha256,proposalSha256,checkedAt:baseChecked,competences:cells.length,scope:batch.scope,peopleVersion:temporalSha256});
+
+    const billsRep=billsReport(2025,{bills:[],people:[],metrics:{propositions:0,selected:0,held:0,orphanAuthorRows:0,normsResolved:0,normsUnresolved:0}},[],'2025-03-01T00:00:00Z');
+    await writeJson(path.join(priv,'bills','bills-2025','bills.json'),billsRep);
+    await writeJson(path.join(priv,'bills','bills-2025','audit.json'),{status:'passed',contentSha256:billsRep.contentSha256,checkedAt:baseChecked});
+
+    const votesRep=votesReport(2025,{votes:[],ballots:[],metrics:{votes:0,nominal:0,reconciled:0,held:0,ballots:0,orphanBallots:0,categories:{}}},[],'2025-03-01T00:00:00Z');
+    await writeJson(path.join(priv,'votes','votes-2025','votes.json'),votesRep);
+    await writeJson(path.join(priv,'votes','votes-2025','ballots.json'),[]);
+    await writeJson(path.join(priv,'votes','votes-2025','audit.json'),{status:'passed',contentSha256:votesRep.contentSha256,checkedAt:baseChecked});
+
+    const {report:amReport}=makeAmendments([{code:'100',deputyId:1,years:{'2025':{'SP':totals(2,1000,800,700,100,20,30)}}}],new Set([1,2]));
+    await writeJson(path.join(priv,'amendments','amend-1','amendments.json'),amReport);
+    await writeJson(path.join(priv,'amendments','amend-1','audit.json'),{status:'passed',contentSha256:amReport.contentSha256,checkedAt:amendChecked});
+    await writeJson(path.join(dir,'config','amendment-author-links.json'),[{code:'100',deputyId:1,reviewer:'revisor-teste',reviewedAt:amendChecked,evidence:'evidencia-teste'}]);
+
+    const baseConfig={historyRun:'hist-1',legacyRun:'leg-1',expenseYears:{'2025':['lot-0']},defaultYear:2025,billsRuns:['bills-2025'],votesRuns:['votes-2025']};
+    const cfgWithout=path.join(dir,'config-without.json'),cfgWith=path.join(dir,'config-with.json');
+    await writeJson(cfgWithout,baseConfig);
+    await writeJson(cfgWith,{...baseConfig,amendmentsRun:'amend-1'});
+
+    const runBuild=async(cfg:string,outDir:string)=>{
+      const {stdout}=await execFileAsync(process.execPath,['--import',tsx,script,'--out',outDir,'--portraits',portraits,'--config',cfg,'--data-root',path.join(dir,'data')],{cwd:dir,encoding:'utf8'});
+      const result=JSON.parse(stdout.trim()) as {publicationId:string;amendments?:string;amendmentRows?:number};
+      reviewFiles.push(path.join(repo,'output','review',`${result.publicationId}-pendencias-revisao.md`),path.join(repo,'output','review',`${result.publicationId}-sinal-corrigido.md`));
+      return result;
+    };
+    const distWithout=path.join(dir,'dist-without'),distWith=path.join(dir,'dist-with');
+    const without=await runBuild(cfgWithout,distWithout),withAm=await runBuild(cfgWith,distWith);
+    assert.equal(Object.hasOwn(without,'amendments'),false);
+    assert.equal(withAm.amendmentRows,1);
+    const baseWithout=path.join(distWithout,'data',without.publicationId),baseWith=path.join(distWith,'data',withAm.publicationId);
+    await assert.rejects(fs.access(path.join(baseWithout,'emendas')));
+    await fs.access(path.join(baseWith,'emendas','1.json'));
+    await assert.rejects(fs.access(path.join(baseWith,'emendas','2.json')));
+
+    for(const rel of [['summary.json'],['index.json'],['fornecedores.json'],['dados-abertos.json'],['abertos','despesas-2025.zip'],['abertos','despesas-2025-01.csv'],['deputados','1','despesas.json'],['deputados','2','despesas.json']]){
+      assert.deepEqual(await fs.readFile(path.join(baseWith,...rel)),await fs.readFile(path.join(baseWithout,...rel)),rel.join('/'));
+    }
+    const indexWith=await json(baseWith,'index.json');
+    assert.equal(indexWith.publishedAt,baseChecked);
+    assert.equal(indexWith.audit.builtAt,baseChecked);
+    const manifestWith=await json(distWith,'manifest.json'),manifestWithout=await json(distWithout,'manifest.json');
+    assert.equal(manifestWithout.domains.emendas,undefined);
+    assert.equal(manifestWith.domains.emendas.version,withAm.amendments);
+    assert.equal(manifestWith.domains.emendas.publishedAt,amendChecked);
+    for(const d of ['despesas','pessoas','projetos','votacoes'])assert.equal(manifestWith.domains[d].publishedAt,baseChecked);
+  }finally{
+    await fs.rm(dir,{recursive:true,force:true});
+    for(const f of reviewFiles)await fs.rm(f,{force:true});
+  }
+});
