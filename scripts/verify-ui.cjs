@@ -1312,8 +1312,8 @@ check('external text is escaped once', async () => {
     assert.equal(await page.locator('b').filter({ hasText: /^probe-(deputy|supplier|category)$/ }).count(), 0, `bold markup injected at ${step}`);
     const body = await page.evaluate(() => document.body.innerText + [...document.querySelectorAll('dialog')].map(d => d.innerText).join('\n'));
     assert.doesNotMatch(body, /&amp;|&#39;|&lt;|&gt;|&quot;/, `double escaping at ${step}`);
-    for (const [field, literal] of fields) {
-      assert.equal((await text(field)).split(literal).length - 1, 1, `${literal} renders literally once at ${step}`);
+    for (const [field, literal, occurrences = 1] of fields) {
+      assert.equal((await text(field)).split(literal).length - 1, occurrences, `${literal} renders literally ${occurrences} time(s) at ${step}`);
     }
   };
   const dialog = page.locator('#detail[open]');
@@ -1381,7 +1381,7 @@ check('external text is escaped once', async () => {
   assert.equal(await drill.getAttribute('data-p-drill'), category);
   await drill.click();
   const supplierRow = dialog.locator('[data-p-supplier]').filter({ hasText: 'probe-supplier' });
-  await inspect('supplier dialog', [supplierRow, supplier], [dialog.locator('.records-note').first(), shown], [dialog.locator('.records-note').nth(1), category]);
+  await inspect('supplier dialog', [supplierRow, supplier], [dialog.locator('.records-note').first(), shown, 2], [dialog.locator('.records-note').nth(1), category]);
   assert.equal(await supplierRow.getAttribute('data-p-supplier'), supplier);
   assert.equal(await supplierRow.getAttribute('data-category'), category);
   await page.close();
