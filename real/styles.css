@@ -371,6 +371,7 @@ body[data-model=editorial] .linked-totals strong{font:400 32px/1.1 var(--serif);
 body[data-model=editorial] .saved-panel{border:0;background:color-mix(in srgb,var(--ink) 4%,var(--bg))}
 body[data-model=editorial] .saved-empty h3{font-family:var(--serif);font-weight:400;line-height:1.15}
 @media (max-width:760px){
+  body[data-model=editorial] .section-dock{padding-right:28px;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
   body[data-model=editorial] .linked-chart-body{position:relative}
   body[data-model=editorial] .linked-chart-body::before{content:"Deslize para ver o ano todo →";display:block;position:sticky;left:0;font-size:13px;color:var(--muted);margin-bottom:8px}
 }
@@ -1030,3 +1031,4 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .p-mini-bars.many .bar-provisional{writing-mode:vertical-rl;padding:4px 2px;line-height:1.1}
 @media(max-width:800px){.p-mini-bars .bar-provisional{font-size:10px;padding:1px 2px}.p-mini-bars.many .bar-provisional{padding:4px 1px}}
 .provisional-list{margin:0 0 10px;padding-left:18px;font-size:14px}
+body[data-model=editorial] #despesas .p-reveal{animation:none;transform:none;opacity:1}

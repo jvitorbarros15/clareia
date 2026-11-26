@@ -31,7 +31,8 @@ export function provisionalMonths(months:number[],year:number,collectedAt:string
   const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);
   const hh=m[4]?Number(m[4]):0,mi=m[5]?Number(m[5]):0,ss=m[6]?Number(m[6]):0,ms=m[7]?Number(m[7].slice(0,3).padEnd(3,'0')):0;
   const oh=m[10]?Number(m[10]):0,om=m[11]?Number(m[11]):0;
-  if(hh>23||mi>59||ss>59||oh>23||om>59)return [];
+  const endOfDay=hh===24&&mi===0&&ss===0&&(!m[7]||/^0+$/.test(m[7]));
+  if((hh>23&&!endOfDay)||mi>59||ss>59||oh>23||om>59)return [];
   const dt=new Date(0);
   dt.setUTCFullYear(y,mo-1,d);
   if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==mo-1||dt.getUTCDate()!==d)return [];

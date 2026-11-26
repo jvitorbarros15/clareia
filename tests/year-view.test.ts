@@ -98,3 +98,19 @@ test('provisionalMonths handles years 0000-0099 without 1900 remapping',()=>{
   assert.deepEqual(provisionalMonths([1,2],0,'0000-05-28T00:00:00Z'),[2]);
   assert.deepEqual(provisionalMonths([1,2],0,'0000-05-29T00:00:00Z'),[]);
 });
+
+test('provisionalMonths normalizes ISO 24:00:00 end-of-day timestamps to the next day',()=>{
+  // 2026-06-27T24:00:00Z == 2026-06-28T00:00:00Z (89 days after Mar 31 -> provisional).
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-27T24:00:00Z'),[3]);
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-27T24:00:00.000Z'),[3]);
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-27T24:00Z'),[3]);
+  // 2026-06-28T24:00:00Z == 2026-06-29T00:00:00Z (90 days after Mar 31 -> not provisional).
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-28T24:00:00Z'),[]);
+  // 2026-06-28T24:00:00+01:00 == 2026-06-28T23:00:00Z (89 days -> provisional).
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-28T24:00:00+01:00'),[3]);
+  // Year rollover: 2025-12-31T24:00:00Z == 2026-01-01T00:00:00Z.
+  assert.deepEqual(provisionalMonths([9,10,11,12],2025,'2025-12-31T24:00:00Z'),[10,11,12]);
+  for(const bad of ['2026-06-27T24:00:01Z','2026-06-27T24:01:00Z','2026-06-27T24:00:00.001Z','2026-06-27T24:00:00.0001Z','2026-02-29T24:00:00Z']){
+    assert.deepEqual(provisionalMonths([1,2,3],2026,bad),[],bad);
+  }
+});
