@@ -11,6 +11,7 @@ import {redactCpf,redactExpense,scanCpfs} from './cpf-scan.ts';
 import {assertCoverageMatchesVersion} from './people-publication.ts';
 import {buildSiteSummary,buildSupplierSummary,withSupplierLabels} from './site-summary.ts';
 import type {SupplierNames} from './site-summary.ts';
+import {buildLegislatureSummary} from './legislature-summary.ts';
 import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
 import type {ReviewItem,ReviewNames} from './review-list.ts';
 import {partyReviewItems,ufReviewItems} from './review-list.ts';
@@ -149,6 +150,9 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     manifestYears.push({year:e.year,months:active.scope.months,partial:active.scope.months.length<12,expenses:active.id,totalCents:active.validation.totalCents,records:allRecords.length});
     built.set(e.year,{summary,suppliers:supplierSummary});
   }
+  const legislature=JSON.stringify(buildLegislatureSummary(entries.map(e=>({year:e.year,summary:built.get(e.year)!.summary}))));
+  if(scanCpfs(legislature,new Set()))throw new Error('Identificador privado na legislatura');
+  await fs.writeFile(path.join(data,'legislatura.json'),legislature);
   const active=pubs.get(sitePlan.defaultYear)!,{summary,suppliers:supplierSummary}=built.get(sitePlan.defaultYear)!;
   for(const id of allIds){
     await fs.copyFile(path.join(portraitsDir,`${id}.jpg`),path.join(data,'portraits',`${id}.jpg`)).catch(()=>{});

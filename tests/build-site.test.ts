@@ -401,7 +401,7 @@ test('a one-year build keeps the single-year layout and manifest',()=>setup(asyn
   assert.deepEqual(manifest.years,[{year:2025,months:[1,2],partial:true,expenses:a.id,totalCents:470,records:4}]);
   assert.deepEqual(manifest.domains.despesas.version,a.id);
   const base=path.join(dist,'data',built.publicationId);
-  assert.deepEqual((await fs.readdir(base)).sort(),['abertos','dados-abertos.json','deputados','fornecedores.json','index.json','portraits','summary.json']);
+  assert.deepEqual((await fs.readdir(base)).sort(),['abertos','dados-abertos.json','deputados','fornecedores.json','index.json','legislatura.json','portraits','summary.json']);
   assert.equal(built.years.length,1);
 }));
 test('two years write the extra year under its own folder with its own totals',()=>setup(async(db,dist,portraits)=>{
