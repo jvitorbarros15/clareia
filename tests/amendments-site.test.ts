@@ -171,10 +171,11 @@ test('tampered amendment rows after approval stop the build before staging is cl
   assert.deepEqual(await tree(dist),before);
 }));
 
-test('full-site build with a newer amendments audit and no publishedAt keeps non-amendment bytes and timestamps unchanged',async()=>{
+test('full-site build with a newer amendments audit keeps non-amendment bytes unchanged and dry-run validates amendments checkedAt',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-full-amendments-'));
   const repo=path.resolve(import.meta.dirname,'..'),script=path.join(repo,'scripts','build-full-site.ts'),tsx=import.meta.resolve('tsx');
   const writeJson=async(file:string,data:unknown)=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,JSON.stringify(data));};
+  const reviewIds:string[]=[];
   try{
     const baseChecked='2025-03-02T00:00:00.000Z',amendChecked='2025-04-10T00:00:00.000Z';
     const priv=path.join(dir,'data','private'),portraits=path.join(dir,'portraits');
@@ -213,21 +214,30 @@ test('full-site build with a newer amendments audit and no publishedAt keeps non
     const {report:amReport}=makeAmendments([{code:'100',deputyId:1,years:{'2025':{'SP':totals(2,1000,800,700,100,20,30)}}}],new Set([1,2]));
     await writeJson(path.join(priv,'amendments','amend-1','amendments.json'),amReport);
     await writeJson(path.join(priv,'amendments','amend-1','audit.json'),{status:'passed',contentSha256:amReport.contentSha256,checkedAt:amendChecked});
+    await writeJson(path.join(priv,'amendments','amend-missing-ts','amendments.json'),amReport);
+    await writeJson(path.join(priv,'amendments','amend-missing-ts','audit.json'),{status:'passed',contentSha256:amReport.contentSha256});
+    await writeJson(path.join(priv,'amendments','amend-bad-ts','amendments.json'),amReport);
+    await writeJson(path.join(priv,'amendments','amend-bad-ts','audit.json'),{status:'passed',contentSha256:amReport.contentSha256,checkedAt:'not-a-date'});
     await writeJson(path.join(dir,'config','amendment-author-links.json'),[{code:'100',deputyId:1,reviewer:'revisor-teste',reviewedAt:amendChecked,evidence:'evidencia-teste'}]);
 
     const baseConfig={historyRun:'hist-1',legacyRun:'leg-1',expenseYears:{'2025':['lot-0']},defaultYear:2025,billsRuns:['bills-2025'],votesRuns:['votes-2025']};
-    const cfgWithout=path.join(dir,'config-without.json'),cfgWith=path.join(dir,'config-with.json');
+    const cfgWithout=path.join(dir,'config-without.json'),cfgWith=path.join(dir,'config-with.json'),cfgMissingTs=path.join(dir,'config-missing-ts.json'),cfgBadTs=path.join(dir,'config-bad-ts.json');
     await writeJson(cfgWithout,baseConfig);
     await writeJson(cfgWith,{...baseConfig,amendmentsRun:'amend-1'});
+    await writeJson(cfgMissingTs,{...baseConfig,amendmentsRun:'amend-missing-ts'});
+    await writeJson(cfgBadTs,{...baseConfig,amendmentsRun:'amend-bad-ts'});
 
-    const reviewDir=path.join(dir,'review');
     const runBuild=async(cfg:string,outDir:string,extra:string[]=[])=>{
-      const {stdout}=await execFileAsync(process.execPath,['--import',tsx,script,'--out',outDir,'--portraits',portraits,'--config',cfg,'--data-root',path.join(dir,'data'),'--review-dir',reviewDir,...extra],{cwd:dir,encoding:'utf8'});
-      return JSON.parse(stdout.trim()) as {publicationId?:string;built?:boolean;amendments?:string;amendmentRows?:number};
+      const {stdout}=await execFileAsync(process.execPath,['--import',tsx,script,'--out',outDir,'--portraits',portraits,'--config',cfg,'--data-root',path.join(dir,'data'),...extra],{cwd:dir,encoding:'utf8'});
+      const parsed=JSON.parse(stdout.trim()) as {publicationId?:string;built?:boolean;amendments?:string;amendmentRows?:number};
+      if(parsed.publicationId)reviewIds.push(parsed.publicationId);
+      return parsed;
     };
     const distWithout=path.join(dir,'dist-without'),distWith=path.join(dir,'dist-with');
     const dryWithout=await runBuild(cfgWithout,distWithout,['--dry-run']);
     const dryWith=await runBuild(cfgWith,distWith,['--dry-run']);
+    await assert.rejects(runBuild(cfgMissingTs,distWith,['--dry-run']),/Nenhuma auditoria de entrada com checkedAt válido/);
+    await assert.rejects(runBuild(cfgBadTs,distWith,['--dry-run']),/Nenhuma auditoria de entrada com checkedAt válido/);
     assert.equal(dryWithout.built,false);
     assert.equal(Object.hasOwn(dryWithout,'amendments'),false);
     assert.equal(Object.hasOwn(dryWithout,'amendmentRows'),false);
@@ -240,8 +250,6 @@ test('full-site build with a newer amendments audit and no publishedAt keeps non
     assert.equal(Object.hasOwn(without,'amendmentRows'),false);
     assert.equal(withAm.amendments,dryWith.amendments);
     assert.equal(withAm.amendmentRows,1);
-    await fs.access(path.join(reviewDir,`${without.publicationId!}-pendencias-revisao.md`));
-    await fs.access(path.join(reviewDir,`${withAm.publicationId!}-sinal-corrigido.md`));
     const baseWithout=path.join(distWithout,'data',without.publicationId!),baseWith=path.join(distWith,'data',withAm.publicationId!);
     await assert.rejects(fs.access(path.join(baseWithout,'emendas')));
     await fs.access(path.join(baseWith,'emendas','1.json'));
@@ -259,6 +267,10 @@ test('full-site build with a newer amendments audit and no publishedAt keeps non
     assert.equal(manifestWith.domains.emendas.publishedAt,amendChecked);
     for(const d of ['despesas','pessoas','projetos','votacoes'])assert.equal(manifestWith.domains[d].publishedAt,baseChecked);
   }finally{
+    for(const id of reviewIds){
+      await fs.rm(path.join(repo,'output','review',`${id}-pendencias-revisao.md`),{force:true});
+      await fs.rm(path.join(repo,'output','review',`${id}-sinal-corrigido.md`),{force:true});
+    }
     await fs.rm(dir,{recursive:true,force:true});
   }
 });
