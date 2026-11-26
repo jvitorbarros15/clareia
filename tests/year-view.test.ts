@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {yearFolder,yearFolderOf,partialLabel} from '../src/year-view.ts';
+import {yearFolder,yearFolderOf,partialLabel,provisionalMonths} from '../src/year-view.ts';
 
 const manifest={base:'data/abc',defaultYear:2025,years:[{year:2025,months:[1,2,3,4,5,6,7,8,9,10,11,12]},{year:2026,months:[1,2,3,4,5,6,7,8,9,10]}]};
 
@@ -36,4 +36,43 @@ test('the methodology text states the published months from the manifest years',
   const text=anos(years,'2025');
   assert.match(text,/O ano de 2025 está completo e é o que o site abre primeiro\./);
   assert.match(text,/O ano de 2026 está publicado de janeiro a novembro, porque dezembro ainda não fechou\./);
+});
+
+test('provisionalMonths uses the 90-day UTC boundary from each month end',()=>{
+  // March 2026 ends 2026-03-31: +89 days = 2026-06-28, +90 = 2026-06-29, +91 = 2026-06-30.
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-28T23:59:59Z'),[3]);
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-29T00:00:00Z'),[]);
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-06-30T12:00:00Z'),[]);
+});
+
+test('provisionalMonths handles December crossing into the next year',()=>{
+  // December 2025 ends 2025-12-31; 2026 is non-leap, so +89 = 2026-03-30, +90 = 2026-03-31, +91 = 2026-04-01.
+  assert.deepEqual(provisionalMonths([10,11,12],2025,'2026-03-30T12:00:00Z'),[12]);
+  assert.deepEqual(provisionalMonths([10,11,12],2025,'2026-03-31T00:00:00Z'),[]);
+  assert.deepEqual(provisionalMonths([10,11,12],2025,'2026-04-01T00:00:00Z'),[]);
+  // Crossing into leap year 2024: +89 = 2024-03-29, +90 = 2024-03-30.
+  assert.deepEqual(provisionalMonths([12],2023,'2024-03-29T00:00:00Z'),[12]);
+  assert.deepEqual(provisionalMonths([12],2023,'2024-03-30T00:00:00Z'),[]);
+});
+
+test('provisionalMonths handles February in leap and non-leap years',()=>{
+  // Leap year 2024 (Feb 29): +89 = 2024-05-28, +90 = 2024-05-29; Jan 31 +90 = 2024-04-30.
+  assert.deepEqual(provisionalMonths([1,2],2024,'2024-04-29T00:00:00Z'),[1,2]);
+  assert.deepEqual(provisionalMonths([1,2],2024,'2024-04-30T00:00:00Z'),[2]);
+  assert.deepEqual(provisionalMonths([2],2024,'2024-05-28T00:00:00Z'),[2]);
+  assert.deepEqual(provisionalMonths([2],2024,'2024-05-29T00:00:00Z'),[]);
+  // Non-leap year 2025 (Feb 28): +89 = 2025-05-28, +90 = 2025-05-29; Jan 31 +89 = 2025-04-30, +90 = 2025-05-01.
+  assert.deepEqual(provisionalMonths([1,2],2025,'2025-04-30T00:00:00Z'),[1,2]);
+  assert.deepEqual(provisionalMonths([1,2],2025,'2025-05-01T00:00:00Z'),[2]);
+  assert.deepEqual(provisionalMonths([2],2025,'2025-05-28T00:00:00Z'),[2]);
+  assert.deepEqual(provisionalMonths([2],2025,'2025-05-29T00:00:00Z'),[]);
+});
+
+test('provisionalMonths marks months ending after collection as provisional and ignores malformed dates',()=>{
+  assert.deepEqual(provisionalMonths([1,2,3],2026,'2026-03-15T12:00:00Z'),[1,2,3]);
+  assert.deepEqual(provisionalMonths([1,12],2026,'2026-05-10T00:00:00Z'),[12]);
+  for(const bad of ['','not-a-date','2026-13-01T00:00:00Z','2026-02-30T00:00:00Z','2026-02-29T00:00:00Z','12345']){
+    assert.deepEqual(provisionalMonths([1,2,3],2026,bad),[],bad);
+  }
+  assert.deepEqual(provisionalMonths([1,2,3],2026,undefined as unknown as string),[]);
 });
