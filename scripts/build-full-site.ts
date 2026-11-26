@@ -15,11 +15,12 @@ import type {Domain} from '../src/publications.ts';
 import {assertHeaders,addNoindex,latestCheckedAt} from '../src/site-headers.ts';
 import {openDB} from '../src/store.ts';
 import {auditRecord} from '../src/audit-record.ts';
+import {AMENDMENT_LINKS_FILE,assertApprovable,auditAmendmentsVersion,buildAmendmentsVersion,loadReviewedLinks,reobserveAmendmentsVersion,storeAmendmentsVersion} from '../src/amendments-publication.ts';
 import {auditVotesVersion,buildVotesVersion,storeVotesVersion} from '../src/votes-publication.ts';
 
 delete process.env.TEST_DATABASE_URL;
 const args=process.argv.slice(2),value=(name:string)=>{const i=args.indexOf(name);return i<0?'':args[i+1]??'';};
-if(args.includes('--help')){console.log('npm run build:full -- --out PASTA --portraits PASTA [--config config/full-site.json] [--data-root data] [--ceiling-root data] [--noindex | --sitemap] [--site-url URL] [--allow-missing-portraits] [--share-images] [--dry-run]\nMonta o site completo a partir das execuções auditadas listadas na configuração, num banco em memória. Cada domínio só é aprovado com a auditoria real da própria execução; qualquer auditoria ausente ou reprovada interrompe a montagem. --sitemap gera o sitemap.xml e o robots.txt apontando para ele (para o domínio de produção; não combina com --noindex). --site-url é a origem usada nos endereços canônicos e nas imagens de compartilhamento. --share-images gera as imagens de compartilhamento (JPEG 1200x630 e 1080x1080) com Playwright e as usa nas imagens de prévia (og:image); exige npx playwright install chromium. --dry-run só confere as entradas. --ceiling-root aponta para a pasta de dados onde está a execução do limite da cota (padrão: a mesma de --data-root); a execução de cada ano vem de ceilingRuns na configuração e só entra com auditoria aprovada. Sem --allow-missing-portraits, faltar o retrato de quem tem foto oficial interrompe a montagem.');process.exit(0);}
+if(args.includes('--help')){console.log('npm run build:full -- --out PASTA --portraits PASTA [--config config/full-site.json] [--data-root data] [--ceiling-root data] [--noindex | --sitemap] [--site-url URL] [--allow-missing-portraits] [--share-images] [--dry-run]\nMonta o site completo a partir das execuções auditadas listadas na configuração, num banco em memória. Cada domínio só é aprovado com a auditoria real da própria execução; qualquer auditoria ausente ou reprovada interrompe a montagem. --sitemap gera o sitemap.xml e o robots.txt apontando para ele (para o domínio de produção; não combina com --noindex). --site-url é a origem usada nos endereços canônicos e nas imagens de compartilhamento. --share-images gera as imagens de compartilhamento (JPEG 1200x630 e 1080x1080) com Playwright e as usa nas imagens de prévia (og:image); exige npx playwright install chromium. --dry-run só confere as entradas. --ceiling-root aponta para a pasta de dados onde está a execução do limite da cota (padrão: a mesma de --data-root); a execução de cada ano vem de ceilingRuns na configuração e só entra com auditoria aprovada. Se amendmentsRun estiver na configuração, a execução auditada de emendas entra em arquivos próprios por deputado, sem somar à cota. Sem --allow-missing-portraits, faltar o retrato de quem tem foto oficial interrompe a montagem.');process.exit(0);}
 for(let i=0;i<args.length;i++){if(['--noindex','--sitemap','--dry-run','--allow-missing-portraits','--share-images'].includes(args[i]))continue;if(['--out','--portraits','--config','--data-root','--ceiling-root','--site-url'].includes(args[i])&&args[i+1]){i++;continue;}throw new Error('Argumento inválido');}
 const out=value('--out'),portraits=value('--portraits'),dryRun=args.includes('--dry-run'),root=path.resolve(value('--data-root')||'data','private'),ceilingRoot=value('--ceiling-root')?path.resolve(value('--ceiling-root'),'private'):root;
 if(!out||!portraits)throw new Error('Informe --out e --portraits');
@@ -39,12 +40,18 @@ for(const year of years)lotsOf.set(year,await Promise.all(config.expenseYears[ye
 const bills=await Promise.all(config.billsRuns.map(async run=>({report:await load('bills',run,'bills.json'),audit:await load('bills',run,'audit.json')})));
 const social=config.socialRun?(await load('social',config.socialRun,'social.json')).people:undefined;
 const votes=await Promise.all(config.votesRuns.map(async run=>({report:await load('votes',run,'votes.json'),ballots:await load('votes',run,'ballots.json'),audit:await load('votes',run,'audit.json')})));
-const publicationAudits=[...[...sources.values()].flatMap(s=>[s.temporalAudit,s.crosscheckAudit]),...[...lotsOf.values()].flat().map(l=>l.audit),...bills.map(b=>b.audit),...votes.map(v=>v.audit)];
+const amendmentsInput=config.amendmentsRun?{report:await load('amendments',config.amendmentsRun,'amendments.json'),audit:await load('amendments',config.amendmentsRun,'audit.json')}:null;
+const baseAudits=[...[...sources.values()].flatMap(s=>[s.temporalAudit,s.crosscheckAudit]),...[...lotsOf.values()].flat().map(l=>l.audit),...bills.map(b=>b.audit),...votes.map(v=>v.audit)];
+const publicationAudits=[...baseAudits,...amendmentsInput?[amendmentsInput.audit]:[]];
+const explicitPublishedAt=typeof raw.publishedAt==='string'&&!Number.isNaN(Date.parse(raw.publishedAt))?new Date(raw.publishedAt).toISOString():null;
 // Fixed by the inputs, so rebuilding the same runs gives the same bytes under the same data hash.
-const now=typeof raw.publishedAt==='string'&&!Number.isNaN(Date.parse(raw.publishedAt))?new Date(raw.publishedAt).toISOString():latestCheckedAt(publicationAudits);
+const now=explicitPublishedAt??latestCheckedAt(baseAudits);
+const amendmentsNow=explicitPublishedAt??latestCheckedAt(publicationAudits);
 // The builders refuse any input whose own audit is missing, not passed or for another content.
 for(const s of sources.values())s.coverage=buildPeopleCoverage(s.temporal,s.crosscheck,s.temporalAudit,now);
 const billsVersion=buildBillsVersion(bills,now),votesVersion=buildVotesVersion(votes,now);
+const amendmentsVersion=amendmentsInput?buildAmendmentsVersion(amendmentsInput.report,amendmentsInput.audit,await loadReviewedLinks(path.resolve(AMENDMENT_LINKS_FILE)),new Set<number>([...sources.values()].flatMap(s=>s.history.people.map((p:{id:number})=>p.id))),amendmentsNow):null;
+if(amendmentsVersion&&amendmentsInput){assertApprovable(amendmentsVersion);latestCheckedAt([amendmentsInput.audit]);}
 const versions=years.map(year=>{
   const {historyRun,legacyRun}=coverageOf(config,year),source=sources.get(`${historyRun}|${legacyRun}`)!;
   const lots=lotsOf.get(year)!,expenses=buildExpenseVersion(lots,source.history,now);
@@ -58,14 +65,14 @@ const defaultPair=coverageOf(config,config.defaultYear),defaultSource=sources.ge
 const ceilingOf=new Map<number,ReturnType<typeof buildSiteCeiling>|null>();
 for(const {year} of versions){const run=config.ceilingRuns[year];ceilingOf.set(year,run?buildSiteCeiling(await load('cota-ceiling',run,`cota-ceiling-${year}.json`),await load('cota-ceiling',run,'audit.json'),year):null);}
 const ceiling=ceilingOf.get(expenses.scope.year)!;
-const summary={expenses:expenses.id,people:expenses.scope.ids.length,records:expenses.records.length,totalCents:expenses.validation.totalCents,coverage:defaultCoverage.id,bills:billsVersion.id,votes:votesVersion.id,ceiling:ceiling?ceiling.reportSha256:null,years:versions.map(v=>({year:v.year,expenses:v.expenses.id,records:v.expenses.records.length,totalCents:v.expenses.validation.totalCents}))};
+const summary={expenses:expenses.id,people:expenses.scope.ids.length,records:expenses.records.length,totalCents:expenses.validation.totalCents,coverage:defaultCoverage.id,bills:billsVersion.id,votes:votesVersion.id,...amendmentsVersion?{amendments:amendmentsVersion.id,amendmentRows:amendmentsVersion.rows.length}:{},ceiling:ceiling?ceiling.reportSha256:null,years:versions.map(v=>({year:v.year,expenses:v.expenses.id,records:v.expenses.records.length,totalCents:v.expenses.validation.totalCents}))};
 if(dryRun){console.log(JSON.stringify({...summary,built:false}));process.exit(0);}
 await fs.access(portraits).catch(()=>{throw new Error(`Pasta de retratos ausente: ${portraits}`);});
 const db=await openDB(true);
 try{
   // Each domain is approved only by the same audit its publish script runs; a failed one is recorded as failed and stops the build.
-  const approve=async(domain:Domain,id:string,found:{status:'passed'|'failed';failures:string[]},inputAudits:{checkedAt?:unknown}[])=>{
-    const audit=auditRecord(found,inputAudits,now);
+  const approve=async(domain:Domain,id:string,found:{status:'passed'|'failed';failures:string[]},inputAudits:{checkedAt?:unknown}[],builtAt=now)=>{
+    const audit=auditRecord(found,inputAudits,builtAt);
     if(audit.status!=='passed'){await recordDomainAudit(db,id,'failed',audit as never);throw new Error(`Auditoria reprovada em ${domain}: ${audit.failures.slice(0,5).join(', ')}`);}
     await recordDomainAudit(db,id,'passed',audit as never);
   };
@@ -81,8 +88,15 @@ try{
   }
   await storeBillsVersion(db,billsVersion);await approve('projetos',billsVersion.id,await auditBillsVersion(db,billsVersion.id,bills.map(b=>b.report)),bills.map(b=>b.audit));
   await storeVotesVersion(db,votesVersion);await approve('votacoes',votesVersion.id,await auditVotesVersion(db,votesVersion.id),votes.map(x=>x.audit));
-  for(const [domain,id] of [['despesas',expenses.id],['pessoas',defaultCoverage.id],['projetos',billsVersion.id],['votacoes',votesVersion.id]] as const)if((await activePublication(db,domain))?.id!==id)throw new Error(`Versão de ${domain} não ficou ativa`);
-  const {years:yearResults,...built}=await buildSite(db,out,portraits,siteOptions,{defaultYear:config.defaultYear,years:versions.map(v=>({year:v.year,publicationId:v.expenses.id,ceiling:ceilingOf.get(v.year)!})),social}),allIds=[...new Set(versions.flatMap(v=>v.expenses.scope.ids))],have=await Promise.all(allIds.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
+  if(amendmentsVersion&&amendmentsInput){
+    await storeAmendmentsVersion(db,amendmentsVersion);
+    await reobserveAmendmentsVersion(db,amendmentsVersion.id);
+    await approve('emendas',amendmentsVersion.id,await auditAmendmentsVersion(db,amendmentsVersion.id,amendmentsInput.report),[amendmentsInput.audit],amendmentsNow);
+  }
+  const expected:[Domain,string][]=[['despesas',expenses.id],['pessoas',defaultCoverage.id],['projetos',billsVersion.id],['votacoes',votesVersion.id]];
+  if(amendmentsVersion)expected.push(['emendas',amendmentsVersion.id]);
+  for(const [domain,id] of expected)if((await activePublication(db,domain))?.id!==id)throw new Error(`Versão de ${domain} não ficou ativa`);
+  const {years:yearResults,...built}=await buildSite(db,out,portraits,siteOptions,{defaultYear:config.defaultYear,years:versions.map(v=>({year:v.year,publicationId:v.expenses.id,ceiling:ceilingOf.get(v.year)!})),social,...amendmentsVersion?{amendments:{publicationId:amendmentsVersion.id}}:{}}),allIds=[...new Set(versions.flatMap(v=>v.expenses.scope.ids))],have=await Promise.all(allIds.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
   const {review,partyReview,names}=yearResults.find(r=>r.year===config.defaultYear)!;
   await writeReview(built.publicationId,review,names,partyReview);await writeSignReview(built.publicationId,signReviewItems(expenses.records,expenses.people));
   // A non-default year's lists carry the year in the file name so they never overwrite the default year's.
