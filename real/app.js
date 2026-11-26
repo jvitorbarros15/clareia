@@ -172,11 +172,30 @@
     if (projects && (!window.ClareiaData.billsApproved || !projectRanking().length)) return '';
     const standings = !projects && D.ceiling && state.category === 'Todas' ? ClareiaView.ufStandings(all()) : new Map();
     const ranked = projects ? projectRanking() : ranking(), amount = p => projects ? p.approved : Math.abs(value(p)), shown = p => projects ? approvedText(p) : money(value(p)), max = Math.max(1, ...ranked.map(amount));
-    return `<section class="bar-section" id="comparison"><h2>${projects ? `Ranking de projetos aprovados · ${billsPeriod()}` : `Comparativo de gastos · ${span()}`}</h2><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => {
+    return `<section class="bar-section" id="comparison"><h2>${projects ? `Ranking de projetos aprovados · ${billsPeriod()}` : `Comparativo de gastos · ${span()}`}</h2>${ranked.length ? '<button type="button" class="outline-button" data-action="csv-ranking">Baixar CSV</button>' : ''}<div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => {
       const s = standings.get(p.id);
       const use = s ? `${pctText(p)} do teto${s.total > 1 ? ` · ${s.rank}º maior uso do teto entre os ${s.total} de ${escape(s.uf)}` : ''}` : '';
       return `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${shown(p)}${use ? `, ${use}` : ''}: ${projects ? 'ver definição' : 'ver cálculo'}" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${amount(p) / max * 100}%"></i></span><span class="bar-value">${shown(p)}${use ? `<small class="bar-use">${use}</small>` : ''}</span></button>`;
     }).join('')}</div>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'deputados')}</section>`;
+  }
+  function downloadRankingCsv(scope, uf) {
+    const isState = scope === 'state', projects = !isState && state.tab === 'projetos';
+    const people = isState
+      ? all().filter(p => !p.noExercise && p.uf === uf).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+      : projects ? projectRanking() : ranking();
+    const metric = state.metric === 'mensal' ? 'média mensal' : 'total';
+    const view = isState ? `Estado ${uf} · gastos · ${metric} · ${state.category}` : projects ? `Ranking de projetos aprovados · ${state.uf}` : `Ranking de gastos (${state.tab}) · ${metric} · ${state.category} · ${state.uf}`;
+    const rows = people.map((p, i) => ({
+      position: isState ? null : i + 1, id: p.officialId, name: p.name, uf: p.uf ?? '', party: p.party ?? '',
+      value: projects ? p.approved : Math.round(value(p, 'gastos')), warning: ClareiaView.csvWarning(p)
+    }));
+    const text = ClareiaView.rankingCsv({ version: index.snapshotId, year: state.year, period: projects ? billsPeriod() : span(), view, unit: projects ? 'projetos' : 'reais', rows });
+    const href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })), a = document.createElement('a');
+    a.href = href;
+    a.download = `clareia-${index.snapshotId.slice(0, 12)}-${isState ? uf : 'ranking'}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+    toast(`CSV com ${rows.length} deputados preparado.`);
   }
   function editorialFollowUp() {
     if (state.tab === 'projetos') return '';
@@ -698,6 +717,8 @@
     else if (action === 'dialog-back') goBack();
     else if (action === 'answer-evidence' && state.answer?.ids?.length) evidence(state.answer.ids[0], { kind: state.answer.kind, compare: state.answer.type === 'compare' ? state.answer.ids[1] : null });
     else if (action === 'bars-more' || action === 'bars-less') { const before = state.barLimit; state.barLimit = action === 'bars-more' ? before + BAR_STEP : BAR_STEP; $('#comparison').outerHTML = barSection(); (action === 'bars-more' ? document.querySelectorAll('#bar-chart .bar-row')[before] : document.querySelector('[data-action=bars-more]'))?.focus({ preventScroll: action === 'bars-more' }); }
+    else if (action === 'csv-ranking') downloadRankingCsv('ranking');
+    else if (action === 'csv-state') downloadRankingCsv('state', target.dataset.uf);
     else if (action === 'records') openView(() => recordTable(person(id)));
     else if (action === 'back-to-list' && session?.live && session.d > 0 && dialogTrail.length) { afterRestore = () => [...document.querySelectorAll('#detail .record-row')].find(tr => tr.dataset.record === target.dataset.record)?.querySelector('button')?.focus(); history.back(); }
     else if (action === 'back-to-list') { const previous = dialogTrail.pop(); if (previous) dialogView = previous; navigating = Boolean(previous); try { backToList(id, target.dataset.record); } finally { navigating = false; } }

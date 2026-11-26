@@ -6,3 +6,4 @@ export function csv(rows:Expense[]):string {
 }
 export {ceilingUse,tenthsOf,ufStandings} from "./ceiling-use.ts";
 export {yearFolder,yearFolderOf,partialLabel} from "./year-view.ts";
+export {rankingCsv,csvWarning} from "./ranking-csv.ts";
