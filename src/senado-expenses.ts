@@ -55,8 +55,7 @@ export type CeapsErrorCode =
   | 'wrong-year'
   | 'bad-month'
   | 'bad-amount'
-  | 'bad-date'
-  | 'cpf-leak';
+  | 'bad-date';
 
 export class CeapsError extends Error {
   readonly code: CeapsErrorCode;
@@ -286,7 +285,7 @@ export function parseCeapsYear(bytes: Uint8Array, ctx: CeapsContext): CeapsParse
   };
 
   if (scanCpfs(canonical(result), new Set()) !== 0) {
-    throw new CeapsError('cpf-leak');
+    throw new CeapsError('bad-type');
   }
 
   return result;

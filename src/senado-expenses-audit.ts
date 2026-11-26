@@ -78,6 +78,7 @@ function collectOutputText(value: unknown, strings: string[], keys: Set<string>)
   } else if (value && typeof value === 'object') {
     for (const [k, v] of Object.entries(value)) {
       keys.add(k);
+      strings.push(k);
       collectOutputText(v, strings, keys);
     }
   }
@@ -328,10 +329,11 @@ export function auditCeapsYear(
     failures.push('cpf-run-in-output');
   }
 
-  // Only strings outside their field-specific expected value are scanned for detalhamento leaks.
+  // Only unexpected property names and values outside their expected fields are scanned for detalhamento leaks.
   const unexpectedStrings: string[] = [];
   for (const [k, v] of Object.entries(parsed) as [string, unknown][]) {
     if (k !== 'records' && k !== 'review' && k !== 'evidence') {
+      unexpectedStrings.push(k);
       collectOutputText(v, unexpectedStrings, outKeys);
     }
   }
@@ -351,6 +353,7 @@ export function auditCeapsYear(
         collectOutputText(v, unexpectedStrings, outKeys);
       }
     } else {
+      unexpectedStrings.push(k);
       collectOutputText(v, unexpectedStrings, outKeys);
     }
   }
@@ -390,6 +393,7 @@ export function auditCeapsYear(
             } else if (sk === 'row') {
               if (typeof sv !== 'number') collectOutputText(sv, unexpectedStrings, outKeys);
             } else {
+              unexpectedStrings.push(sk);
               collectOutputText(sv, unexpectedStrings, outKeys);
             }
           }
@@ -397,6 +401,7 @@ export function auditCeapsYear(
           collectOutputText(v, unexpectedStrings, outKeys);
         }
       } else {
+        unexpectedStrings.push(k);
         collectOutputText(v, unexpectedStrings, outKeys);
       }
     }
@@ -414,6 +419,7 @@ export function auditCeapsYear(
         if (k === 'codSenador' || k === 'month' || k === 'cents' || k === 'count') {
           if (typeof v !== 'number') collectOutputText(v, unexpectedStrings, outKeys);
         } else {
+          unexpectedStrings.push(k);
           collectOutputText(v, unexpectedStrings, outKeys);
         }
       }
@@ -431,6 +437,7 @@ export function auditCeapsYear(
             collectOutputText(v, unexpectedStrings, outKeys);
           }
         } else {
+          unexpectedStrings.push(k);
           collectOutputText(v, unexpectedStrings, outKeys);
         }
       }
@@ -450,6 +457,7 @@ export function auditCeapsYear(
           if (k === 'name') {
             if (v !== exp.reviewName) collectOutputText(v, unexpectedStrings, outKeys);
           } else {
+            unexpectedStrings.push(k);
             collectOutputText(v, unexpectedStrings, outKeys);
           }
         }

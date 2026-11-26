@@ -221,6 +221,16 @@ test('refuses malformed date with bad-date', () => {
   assertCeapsError(() => parseCeapsYear(toBytes(rows), {year: 2025}), 'bad-date', '12/01/2025');
 });
 
+test('refuses output containing a formatted CPF in etag with a listed error code', () => {
+  const cpf = syntheticCpf(11);
+  const formatted = `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`;
+  assertCeapsError(
+    () => parseCeapsYear(API_BYTES, {year: 2025, etag: `"${formatted}"`}),
+    'bad-type',
+    formatted,
+  );
+});
+
 test('audit passes on clean parse and fails on tampering, CPF run or detalhamento leak', () => {
   const ctx = {year: 2025};
   const clean = parseCeapsYear(API_BYTES, ctx);
@@ -316,6 +326,24 @@ test('audit scopes detalhamento exemptions to expected fields and keeps legitima
   const copiedRes = auditCeapsYear(supplierDetBytes, copiedDet, ctx);
   assert.equal(copiedRes.ok, false);
   assert.ok(copiedRes.failures.includes('detalhamento-in-output'));
+
+  const topKeyDet = structuredClone(cleanSupplierDet);
+  (topKeyDet as unknown as Record<string, unknown>)['VIVO TELEFONICA BRASIL S.A'] = null;
+  const topKeyRes = auditCeapsYear(supplierDetBytes, topKeyDet, ctx);
+  assert.equal(topKeyRes.ok, false);
+  assert.ok(topKeyRes.failures.includes('detalhamento-in-output'));
+
+  const recKeyDet = structuredClone(cleanSupplierDet);
+  (recKeyDet.records[0] as unknown as Record<string, unknown>)['VIVO TELEFONICA BRASIL S.A'] = null;
+  const recKeyRes = auditCeapsYear(supplierDetBytes, recKeyDet, ctx);
+  assert.equal(recKeyRes.ok, false);
+  assert.ok(recKeyRes.failures.includes('detalhamento-in-output'));
+
+  const nestedKeyDet = structuredClone(cleanSupplierDet);
+  (nestedKeyDet.evidence as unknown as Record<string, unknown>).extra = {'VIVO TELEFONICA BRASIL S.A': null};
+  const nestedKeyRes = auditCeapsYear(supplierDetBytes, nestedKeyDet, ctx);
+  assert.equal(nestedKeyRes.ok, false);
+  assert.ok(nestedKeyRes.failures.includes('detalhamento-in-output'));
 
   const rowsWithMeiDet = cloneRows();
   rowsWithMeiDet[0].detalhamento = 'MEI';
