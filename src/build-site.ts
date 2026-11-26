@@ -20,7 +20,7 @@ import type {SiteOptions} from './prerender.ts';
 import {generateShareImages} from './share-images.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
 import {readAmendmentRows} from './amendments-publication.ts';
-import type {AmendmentRow} from './amendments-publication.ts';
+import type {AmendmentRow,AmendmentsVersion} from './amendments-publication.ts';
 import type {SiteCeiling} from './ceiling-site.ts';
 import {fileEntry,monthlyTables,quirkCounts,zipOf} from './open-data.ts';
 import type {OpenData} from './open-data.ts';
@@ -105,12 +105,14 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   const amendmentsByDeputy=new Map<number,AmendmentRow[]>();
   if(sitePlan.amendments){
     const {publicationId}=sitePlan.amendments;
-    const r=await db.query<{domain:Domain;status:string|null}>('SELECT p.domain,a.status FROM publications p LEFT JOIN publication_audits a ON a.publication_id=p.id WHERE p.id=$1 AND p.id NOT IN (SELECT publication_id FROM withheld_publications)',[publicationId]);
+    const r=await db.query<{domain:Domain;body:Omit<AmendmentsVersion,'rows'>;status:string|null}>('SELECT p.domain,p.body,a.status FROM publications p LEFT JOIN publication_audits a ON a.publication_id=p.id WHERE p.id=$1 AND p.id NOT IN (SELECT publication_id FROM withheld_publications)',[publicationId]);
     const row=r.rows[0];
     if(!row||row.domain!=='emendas')throw new Error(`Versão de emendas ${publicationId} não encontrada`);
     if(row.status!=='passed')throw new Error(`Versão de emendas ${publicationId} sem auditoria aprovada`);
+    const amendmentRows=await readAmendmentRows(db,publicationId);
+    if(hash(canonical({schema:row.body.schema,metric:row.body.metric,scope:row.body.scope,reviews:row.body.reviews,rows:amendmentRows}))!==publicationId)throw new Error('Emendas no banco diferem da versão aprovada');
     const knownIds=new Set(allIds);
-    for(const item of await readAmendmentRows(db,publicationId)){
+    for(const item of amendmentRows){
       if(!knownIds.has(item.deputyId))throw new Error(`Emenda atribuída a deputado fora da montagem: ${item.deputyId}`);
       const list=amendmentsByDeputy.get(item.deputyId);if(list)list.push(item);else amendmentsByDeputy.set(item.deputyId,[item]);
     }

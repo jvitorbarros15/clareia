@@ -15,9 +15,10 @@ const nameSection=(title:string,rows:NameTally[])=>rows.length?['','## '+title,'
 const partySection=(items:ReviewItem[])=>items.length?['','## Partido','',...items.map(i=>`- ${i.id} | ${i.name} | usado: ${i.used} | fonte: ${i.from}`)]:[];
 export const reviewMarkdown=(publicationId:string,items:ReviewItem[],names:ReviewNames={withheld:[],kept:[]},partyItems:ReviewItem[]=[])=>[`# Pendências para revisão - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | usada: ${i.used} | fonte: ${i.from}`),...partySection(partyItems),...nameSection('Nomes de fornecedor ocultados',names.withheld),...nameSection('Nomes mantidos pela regra de empresa',names.kept),''].join('\n');
 
+const defaultReviewDir=path.join(import.meta.dirname,'..','output','review');
 // Never published: output/review is gitignored, outside the site folder, and anchored to the repository, not to the working directory.
-export async function writeReview(publicationId:string,items:ReviewItem[],names:ReviewNames={withheld:[],kept:[]},partyItems:ReviewItem[]=[]):Promise<number>{
-  const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-pendencias-revisao.md`);
+export async function writeReview(publicationId:string,items:ReviewItem[],names:ReviewNames={withheld:[],kept:[]},partyItems:ReviewItem[]=[],dir=defaultReviewDir):Promise<number>{
+  const file=path.join(dir,`${publicationId}-pendencias-revisao.md`);
   await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,reviewMarkdown(publicationId,items,names,partyItems));
   console.error(`Pendências para revisão: ${items.length} em ${file}; partido: ${partyItems.length}; nomes ocultados: ${names.withheld.length}`);
   return items.length;
@@ -50,8 +51,8 @@ export const signReviewMarkdown=(publicationId:string,items:SignItem[])=>{
   for(const i of items)if(i.reason===SIGN_REASON){const g=per.get(i.id)??{name:i.name,count:0,cents:0};g.count++;g.cents+=i.cents;per.set(i.id,g);}
   return [`# Sinal corrigido - ${publicationId}`,'','## Por deputado (só corrigidos)',...[...per].sort((a,b)=>a[0]-b[0]).map(([id,g])=>`- ${id} | ${g.name} | ${g.count} registros | ${brl(g.cents)}`),`- sinal a revisar: ${items.filter(i=>i.reason!==SIGN_REASON).length} registros`,'','## Por registro (outras categorias e "a revisar" primeiro)',...sorted.map(i=>`- ${i.id} | ${i.name} | mês ${i.month} | ${i.category} | fonte ${brl(i.sourceCents)} -> publicado ${brl(i.cents)} | ${i.recordId} | ${i.reason}`),''].join('\n');
 };
-export async function writeSignReview(publicationId:string,items:SignItem[]):Promise<void>{
-  const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-sinal-corrigido.md`);
+export async function writeSignReview(publicationId:string,items:SignItem[],dir=defaultReviewDir):Promise<void>{
+  const file=path.join(dir,`${publicationId}-sinal-corrigido.md`);
   await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,signReviewMarkdown(publicationId,items));
   console.error(`Sinal corrigido: ${items.length} registros em ${file}`);
 }
