@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import {canonical,hash} from './model.ts';
 import type {DB} from './store.ts';
 import {amendmentsContentId,MEASURES} from './amendments.ts';
@@ -5,26 +6,40 @@ import type {AmendmentsReport,Totals} from './amendments.ts';
 
 export type ReviewedLink={code:string;deputyId:number;reviewer:string;reviewedAt:string;evidence:string};
 export type AmendmentRow={deputyId:number;code:string;year:number;destination:string;totals:Totals};
-export type AmendmentsVersion={schema:'clareia.amendments-version.v1';id:string;metric:'cgu.amendments.individual.v1';scope:{fromYear:number;linkedAuthors:number;authors:number};reviews:ReviewedLink[];collectedAt:string;publishedAt:string;rows:AmendmentRow[]};
+export type AmendmentsVersion={schema:'clareia.amendments-version.v1';id:string;metric:'cgu.amendments.individual.v1';scope:{fromYear:number;linkedAuthors:number;authors:number;unattributedRows?:number};reviews:ReviewedLink[];collectedAt:string;publishedAt:string;rows:AmendmentRow[]};
 type Audit={status:string;contentSha256:string};
 const contentId=(v:Pick<AmendmentsVersion,'schema'|'metric'|'scope'|'reviews'|'rows'>)=>hash(canonical({schema:v.schema,metric:v.metric,scope:v.scope,reviews:v.reviews,rows:v.rows}));
+
+export const AMENDMENT_LINKS_FILE='config/amendment-author-links.json';
+const filled=(v:unknown)=>typeof v==='string'&&v.trim()!=='';
+export async function loadReviewedLinks(file=AMENDMENT_LINKS_FILE):Promise<ReviewedLink[]>{
+  const list:unknown=JSON.parse(await fs.readFile(file,'utf8'));
+  if(!Array.isArray(list)||list.some(l=>typeof l!=='object'||l===null||!filled(l.code)||!Number.isInteger(l.deputyId)||!filled(l.reviewer)||!filled(l.reviewedAt)||!filled(l.evidence)))throw new Error(AMENDMENT_LINKS_FILE+' deve ser uma lista de {code, deputyId, reviewer, reviewedAt, evidence} revisados');
+  return list as ReviewedLink[];
+}
+export function assertApprovable(version:AmendmentsVersion):void{
+  if(!version.rows.length)throw new Error('Versão de emendas sem linhas atribuídas não pode ser aprovada');
+}
 
 // Only a reviewed link attributes an amendment to a deputy; a name match never does.
 export function buildAmendmentsVersion(report:AmendmentsReport,audit:Audit,links:ReviewedLink[],knownDeputies:Set<number>,publishedAt:string):AmendmentsVersion{
   if(audit.status!=='passed'||audit.contentSha256!==report.contentSha256||amendmentsContentId(report)!==report.contentSha256)throw new Error('Emendas sem auditoria aprovada para esta versão');
   if(report.metrics.repeatedRows)throw new Error('Arquivo de emendas com linhas repetidas: revisão necessária');
   const proposals=new Map(report.links.map(l=>[l.code,l]));
+  if(proposals.size!==report.links.length)throw new Error('Ligação proposta repetida no relatório');
   if(new Set(links.map(l=>l.code)).size!==links.length||new Set(links.map(l=>l.deputyId)).size!==links.length)throw new Error('Ligação repetida');
   const authors=new Map(report.authors.map(a=>[a.code,a])),rows:AmendmentRow[]=[];
   for(const l of [...links].sort((a,b)=>a.code.localeCompare(b.code))){
     if(!l.reviewer.trim()||!l.reviewedAt.trim()||!l.evidence.trim()||!Number.isInteger(l.deputyId))throw new Error('Ligação sem revisão registrada: '+l.code);
     const author=authors.get(l.code);if(!author)throw new Error('Ligação para autor inexistente: '+l.code);
-    const candidates=proposals.get(l.code)?.candidates??[];if(candidates.length&&!candidates.includes(l.deputyId))throw new Error('Ligação diverge dos candidatos: '+l.code);
-    if(!knownDeputies.has(l.deputyId))throw new Error('Deputado desconhecido na ligação: '+l.code);
     if(author.names.length>1)throw new Error('Código de autor com mais de um nome: '+l.code);
+    const proposal=proposals.get(l.code);
+    if(proposal?.status==='ambiguous')throw new Error('Ligação ambígua: '+l.code);
+    const candidates=proposal?.candidates??[];if(candidates.length&&!candidates.includes(l.deputyId))throw new Error('Ligação diverge dos candidatos: '+l.code);
+    if(!knownDeputies.has(l.deputyId))throw new Error('Deputado desconhecido na ligação: '+l.code);
     for(const year of Object.keys(author.years).sort())for(const [destination,totals] of Object.entries(author.years[year].destinations).sort(([a],[b])=>a.localeCompare(b)))rows.push({deputyId:l.deputyId,code:l.code,year:Number(year),destination,totals});
   }
-  const body={schema:'clareia.amendments-version.v1' as const,metric:'cgu.amendments.individual.v1' as const,scope:{fromYear:report.fromYear,linkedAuthors:links.length,authors:report.authors.length},reviews:[...links].sort((a,b)=>a.code.localeCompare(b.code)),rows};
+  const body={schema:'clareia.amendments-version.v1' as const,metric:'cgu.amendments.individual.v1' as const,scope:{fromYear:report.fromYear,linkedAuthors:links.length,authors:report.authors.length,unattributedRows:Object.values(report.excluded).reduce((s,t)=>s+t.rows,0)},reviews:[...links].sort((a,b)=>a.code.localeCompare(b.code)),rows};
   return {...body,id:contentId(body),collectedAt:report.createdAt,publishedAt};
 }
 export async function readAmendmentRows(db:DB,id:string):Promise<AmendmentRow[]>{

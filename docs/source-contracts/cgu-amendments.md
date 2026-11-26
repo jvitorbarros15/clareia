@@ -11,4 +11,4 @@ Fonte: arquivo EmendasParlamentares.zip do Portal da Transparência (CGU). Usa a
 
 ## Falta
 
-Revisar as ligações (`--links`, com revisor, data e evidência) e ligar ao site. O destino é a localidade como a fonte escreve; valores nacionais ou múltiplos não são redistribuídos.
+Revisar as ligações em `config/amendment-author-links.json` (versionado, com revisor, data e evidência; ligação ambígua é recusada) e ligar ao site. O destino é a localidade como a fonte escreve; valores nacionais ou múltiplos não são redistribuídos.

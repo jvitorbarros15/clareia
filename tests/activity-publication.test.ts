@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import {openDB} from '../src/store.ts';
 import {activePublication,recordDomainAudit} from '../src/publications.ts';
 import {ballotsHash,classifyVote,votesContentId} from '../src/votes.ts';
@@ -7,7 +10,7 @@ import type {Ballot,Vote,VotesReport} from '../src/votes.ts';
 import {assertVotesMatchVersion,auditVotesVersion,buildVotesVersion,readBallots,storeVotesVersion} from '../src/votes-publication.ts';
 import {amendmentsContentId} from '../src/amendments.ts';
 import type {AmendmentsReport,Totals} from '../src/amendments.ts';
-import {auditAmendmentsVersion,buildAmendmentsVersion,readAmendmentRows,storeAmendmentsVersion} from '../src/amendments-publication.ts';
+import {assertApprovable,auditAmendmentsVersion,buildAmendmentsVersion,loadReviewedLinks,readAmendmentRows,storeAmendmentsVersion} from '../src/amendments-publication.ts';
 
 const now='2026-11-09T00:00:00Z';
 const vote=(id:string,observed:Record<string,number>):Vote=>({id,date:'2025-03-01',organ:'PLEN',approved:'1',kind:'merito',description:'Aprovado o Projeto',objects:[],declared:{yes:1,no:0,other:0},observed,ballots:Object.values(observed).reduce((a,b)=>a+b,0),issues:[]});
@@ -55,6 +58,45 @@ test('a proposed name link attributes nothing and only a reviewed link produces 
   const two=structuredClone(r);two.authors[0].names=['ANA','OUTRA'];two.links[0].candidates=[];two.links[0].status='ambiguous';two.contentSha256=amendmentsContentId(two);assert.throws(()=>buildAmendmentsVersion(two,{status:'passed',contentSha256:two.contentSha256},[reviewed],known,now),/mais de um nome/);
   const repeated=structuredClone(r);repeated.metrics.repeatedRows=1;repeated.contentSha256=amendmentsContentId(repeated);assert.throws(()=>buildAmendmentsVersion(repeated,{status:'passed',contentSha256:repeated.contentSha256},[],known,now),/repetidas/);
   assert.throws(()=>buildAmendmentsVersion(r,audit,[{...reviewed,reviewer:''}],known,now),/revisão/);assert.throws(()=>buildAmendmentsVersion(r,audit,[{...reviewed,code:'99'}],known,now),/inexistente/);
+});
+test('amendment publication requires reviewed, unambiguous links and counts excluded rows separately',async()=>{
+  const r=amendments();
+  r.excluded={'Emenda de Bancada':{...totals(400),rows:4},'Emenda individual sem autor identificado':{...totals(300),rows:3}};
+  r.metrics={...r.metrics,rows:9,selected:9,individual:5,unattributed:3};
+  r.contentSha256=amendmentsContentId(r);
+  const audit={status:'passed',contentSha256:r.contentSha256};
+  const empty=buildAmendmentsVersion(r,audit,await loadReviewedLinks(),known,now);
+  assert.equal(empty.rows.length,0);
+  assert.throws(()=>assertApprovable(empty),/sem linhas atribuídas/);
+
+  const version=buildAmendmentsVersion(r,audit,[reviewed],known,now);
+  assert.equal(version.scope.unattributedRows,7);
+  assert.deepEqual(version.rows.map(({code,deputyId})=>({code,deputyId})),[{code:'10',deputyId:1},{code:'10',deputyId:1}]);
+  assert.doesNotThrow(()=>assertApprovable(version));
+
+  const ambiguous=structuredClone(r);
+  ambiguous.links[0].status='ambiguous';
+  ambiguous.links[0].candidates=[1,2];
+  ambiguous.contentSha256=amendmentsContentId(ambiguous);
+  for(const deputyId of [1,3]){
+    assert.throws(()=>buildAmendmentsVersion(ambiguous,{status:'passed',contentSha256:ambiguous.contentSha256},[{...reviewed,deputyId}],known,now),/ambígua/);
+  }
+
+  const duplicate=structuredClone(r);
+  duplicate.links.push({...duplicate.links[0]});
+  duplicate.contentSha256=amendmentsContentId(duplicate);
+  assert.throws(()=>buildAmendmentsVersion(duplicate,{status:'passed',contentSha256:duplicate.contentSha256},[reviewed],known,now),/proposta repetida/);
+
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-amendment-links-'));
+  try{
+    const file=path.join(dir,'links.json');
+    for(const invalid of [{},[{...reviewed,reviewer:''}],[{...reviewed,deputyId:'1'}]]){
+      await fs.writeFile(file,JSON.stringify(invalid));
+      await assert.rejects(loadReviewedLinks(file),/deve ser uma lista/);
+    }
+    await fs.writeFile(file,JSON.stringify([reviewed]));
+    assert.deepEqual(await loadReviewedLinks(file),[reviewed]);
+  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
 test('stored destinations must add back up to the audited author totals',async()=>{
   const db=await openDB(true);
