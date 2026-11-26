@@ -1025,3 +1025,9 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .pix-key{font-size:18px;font-weight:700;overflow-wrap:anywhere;user-select:all}
 .pix-copy{min-height:44px;min-width:44px}
 .year-select{display:inline-flex;align-items:center}.year-select select{font:inherit;font-size:14px;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:2px;background:var(--surface);color:var(--ink)}.year-partial{font-size:13px;color:var(--muted);align-self:center}.doc-year-links{margin:0 0 18px}
+.p-mini-bars.has-provisional{margin-bottom:44px}
+.p-mini-bars.many.has-provisional{margin-bottom:88px}
+.p-mini-bars .bar-provisional{position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);font:600 11px/1.2 var(--sans);color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:3px;padding:1px 4px;white-space:nowrap;pointer-events:none}
+.p-mini-bars.many .bar-provisional{writing-mode:vertical-rl;padding:4px 2px;line-height:1.1}
+@media(max-width:800px){.p-mini-bars .bar-provisional{font-size:10px;padding:1px 2px}.p-mini-bars.many .bar-provisional{padding:4px 1px}}
+.provisional-list{margin:0 0 10px;padding-left:18px;font-size:14px}

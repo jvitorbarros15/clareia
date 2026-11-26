@@ -383,8 +383,8 @@ test('identical flagged rows keep distinct public ids, the flag and the CSV colu
   const lines=(await fs.readFile(path.join(base,'deputados','1','despesas.csv'),'utf8')).split('\r\n');assert.match(lines[0],/;"sinal_corrigido";"possivel_duplicidade"$/);assert.match(lines[1],/;"";"sim"$/);
 }));
 
-const yearVersion=(year:number,months:number[],records:Expense[],ids=[1,2]):Snapshot=>{
-  const total=records.reduce((n,r)=>n+r.cents,0),body={metric:'test.metric',scope:{year,months,ids,legislature:57},people:ids.map(id=>({id,name:'Pessoa '+id,photo:null,sourceUrl:'https://x',profileFetchedAt:'2025-03-01T00:00:00Z'})),records,collectedAt:'2025-03-01T00:00:00Z',publishedAt:'2025-03-01T00:00:00Z',pages:[],validation:{stablePasses:2,recordCount:records.length,totalCents:total,independentTotalCents:String(total),duplicatePolicy:'x',limitations:[]}};
+const yearVersion=(year:number,months:number[],records:Expense[],ids=[1,2],collectedAt='2025-03-01T00:00:00Z'):Snapshot=>{
+  const total=records.reduce((n,r)=>n+r.cents,0),body={metric:'test.metric',scope:{year,months,ids,legislature:57},people:ids.map(id=>({id,name:'Pessoa '+id,photo:null,sourceUrl:'https://x',profileFetchedAt:'2025-03-01T00:00:00Z'})),records,collectedAt,publishedAt:'2025-03-01T00:00:00Z',pages:[],validation:{stablePasses:2,recordCount:records.length,totalCents:total,independentTotalCents:String(total),duplicatePolicy:'x',limitations:[]}};
   return {...body,id:snapshotId(body)};
 };
 const approve=async(db:DB,v:Snapshot)=>{await publishDomain(db,'despesas',v);await recordDomainAudit(db,v.id,'passed',report);};
@@ -398,14 +398,14 @@ test('a one-year build keeps the single-year layout and manifest',()=>setup(asyn
   const manifest=await json(dist,'manifest.json');
   assert.deepEqual(Object.keys(manifest),['base','domains','defaultYear','years']);
   assert.equal(manifest.base,'data/'+built.publicationId);assert.equal(manifest.defaultYear,2025);
-  assert.deepEqual(manifest.years,[{year:2025,months:[1,2],partial:true,expenses:a.id,totalCents:470,records:4}]);
+  assert.deepEqual(manifest.years,[{year:2025,months:[1,2],partial:true,collectedAt:a.collectedAt,expenses:a.id,totalCents:470,records:4}]);
   assert.deepEqual(manifest.domains.despesas.version,a.id);
   const base=path.join(dist,'data',built.publicationId);
   assert.deepEqual((await fs.readdir(base)).sort(),['abertos','dados-abertos.json','deputados','fornecedores.json','index.json','legislatura.json','portraits','summary.json']);
   assert.equal(built.years.length,1);
 }));
 test('two years write the extra year under its own folder with its own totals',()=>setup(async(db,dist,portraits)=>{
-  const a=yearVersion(2025,[1],[record(100,1,0),record(50,2,1)]),b=yearVersion(2026,[1,2,3],[{...record(700,1,0),year:2026},{...record(300,3,1),year:2026,month:2},{...record(11,3,2),year:2026,month:3}],[1,3]);
+  const a=yearVersion(2025,[1],[record(100,1,0),record(50,2,1)],[1,2],'2025-06-01T00:00:00Z'),b=yearVersion(2026,[1,2,3],[{...record(700,1,0),year:2026},{...record(300,3,1),year:2026,month:2},{...record(11,3,2),year:2026,month:3}],[1,3],'2026-06-15T00:00:00Z');
   await fs.writeFile(path.join(portraits,'3.jpg'),'jpg3');
   await approve(db,b);await approve(db,a);
   const {storeBillsVersion}=await import('../src/bills-publication.ts');
@@ -424,7 +424,7 @@ test('two years write the extra year under its own folder with its own totals',(
   await assert.rejects(fs.access(path.join(base,'2025')));
   const manifest=await json(dist,'manifest.json');
   assert.equal(manifest.defaultYear,2025);assert.equal(manifest.domains.despesas.version,a.id);
-  assert.deepEqual(manifest.years,[{year:2025,months:[1],partial:true,expenses:a.id,totalCents:150,records:2},{year:2026,months:[1,2,3],partial:true,expenses:b.id,totalCents:1011,records:3}]);
+  assert.deepEqual(manifest.years,[{year:2025,months:[1],partial:true,collectedAt:a.collectedAt,expenses:a.id,totalCents:150,records:2},{year:2026,months:[1,2,3],partial:true,collectedAt:b.collectedAt,expenses:b.id,totalCents:1011,records:3}]);
   assert.deepEqual(built.years.map(y=>y.year),[2025,2026]);
   const prerendered=await fs.readdir(path.join(dist,'deputado'));
   assert.deepEqual(prerendered.filter(f=>/^[13]-/.test(f)).map(f=>f[0]).sort(),['1','3']);

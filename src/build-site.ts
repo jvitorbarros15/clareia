@@ -121,7 +121,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.rm(outDir,{recursive:true,force:true});
   await fs.mkdir(path.join(data,'portraits'),{recursive:true});
   const supplierNames=await readSupplierNames();
-  const results:YearResult[]=[],manifestYears:{year:number;months:number[];partial:boolean;expenses:string;totalCents:number;records:number}[]=[];
+  const results:YearResult[]=[],manifestYears:{year:number;months:number[];partial:boolean;collectedAt:string;expenses:string;totalCents:number;records:number}[]=[];
   const built=new Map<number,{summary:ReturnType<typeof buildSiteSummary>;suppliers:ReturnType<typeof buildSupplierSummary>}>();
   for(const e of entries){
     const active=pubs.get(e.year)!,isDefault=e.year===sitePlan.defaultYear,ydir=isDefault?data:path.join(data,String(e.year));
@@ -164,7 +164,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     await fs.writeFile(path.join(ydir,'index.json'),indexJson);
     await writeOpenData(ydir,active.scope.ids.flatMap(id=>recordsOf.get(id)??[]),{summary:summaryJson,suppliers,index:indexJson},summary.people.flatMap(p=>p.months.filter(m=>m.held).map(()=>({personId:p.id}))),{year:active.scope.year,publishedAt:active.publishedAt,collectedAt:active.collectedAt});
     results.push({year:e.year,partyReview:partyReviewItems(active.people),names:{withheld:rows(withheldNames),kept:rows(keptNames)},review:[...ufReviewItems(active.people),...[...oddIds].map(([id,n])=>({id,name:active.people.find(p=>p.id===id)?.name??'',used:n+' registros',from:'identificador do fornecedor fora do formato'}))]});
-    manifestYears.push({year:e.year,months:active.scope.months,partial:active.scope.months.length<12,expenses:active.id,totalCents:active.validation.totalCents,records:allRecords.length});
+    manifestYears.push({year:e.year,months:active.scope.months,partial:active.scope.months.length<12,collectedAt:active.collectedAt,expenses:active.id,totalCents:active.validation.totalCents,records:allRecords.length});
     built.set(e.year,{summary,suppliers:supplierSummary});
   }
   const legislature=JSON.stringify(buildLegislatureSummary(entries.map(e=>({year:e.year,summary:built.get(e.year)!.summary}))));

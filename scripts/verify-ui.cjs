@@ -2744,6 +2744,182 @@ check('year selector with four years', async () => {
   }
 });
 
+check('provisional months mark the chart, profile and year label without changing totals', async () => {
+  const NOTE = 'pode aumentar: a Câmara aceita comprovantes até 90 dias depois';
+  const real = await (await fetch(`${base}/manifest.json`)).json();
+  const def = real.defaultYear;
+  const years = [def, def - 1, def - 2, def - 3];
+  const defEntry = (real.years || []).find(y => y.year === def) || { year: def, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], partial: false };
+  const partialYear = def - 1;
+  // June 15 is > 90 days after Feb 28/29 and < 90 days after Mar 31, so only March is provisional.
+  const partialCollectedAt = `${partialYear}-06-15T12:00:00Z`;
+  const stubManifest = {
+    ...real,
+    years: years.map(year => year === def ? defEntry : { year, months: [1, 2, 3], partial: true, collectedAt: `${year}-06-15T12:00:00Z` }),
+  };
+
+  const data = await published();
+  const summaryById = new Map(data.summary.people.map(q => [q.id, q]));
+  const profilePerson = data.people.find(p => p.records.some(r => r.month <= 3)) || data.people[0];
+  needCase(profilePerson, 'the published data has a deputy with records');
+  const slugOf = name => name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const monthTotals = [1, 2, 3].map(m => data.people.filter(p => !summaryById.get(p.id)?.noExercise).reduce((n, p) => n + p.records.filter(r => r.month === m).reduce((s, r) => s + r.cents, 0), 0));
+  const total = monthTotals.reduce((a, b) => a + b, 0);
+  const personTotal = profilePerson.records.filter(r => r.month <= 3).reduce((n, r) => n + r.cents, 0);
+
+  const folderRe = new RegExp(`/${real.base}/(\\d{4})/(.*)$`);
+  const partialBefore = async page => {
+    await page.route('**/manifest.json', route => route.fulfill({ json: stubManifest }));
+    await page.route(folderRe, async route => {
+      const [, yearStr, rest] = new URL(route.request().url()).pathname.match(folderRe);
+      const res = await page.request.get(`${base}/${real.base}/${rest}`);
+      if (rest === 'index.json') {
+        const json = await res.json();
+        json.scope = { ...json.scope, year: Number(yearStr), months: [1, 2, 3] };
+        json.collectedAt = partialCollectedAt;
+        await route.fulfill({ response: res, json });
+        return;
+      }
+      if (rest === 'fornecedores.json') {
+        const json = await res.json();
+        for (const id of Object.keys(json.people)) json.people[id] = json.people[id].filter(row => row[0] <= 3);
+        await route.fulfill({ response: res, json });
+        return;
+      }
+      await route.fulfill({ response: res, body: await res.body() });
+    });
+  };
+
+  {
+    const page = await at(1440, { before: partialBefore, search: `?ano=${partialYear}` });
+    assert.equal(await page.locator('.year-partial').count(), 0, 'four years keeps .year-partial hidden');
+    const select = page.locator('select[data-year-select]').first();
+    const title = await select.getAttribute('title');
+    assert.ok(title && title.includes('parcial') && title.includes(`provisório: ${NOTE}`), `select title: ${title}`);
+    assert.match(await select.locator('option:checked').innerText(), /\(parcial\)$/, 'option text stays (parcial)');
+
+    const bars = await page.locator('.p-mini-bars button').evaluateAll(bs => bs.map(b => ({
+      month: Number(b.dataset.pMonth),
+      aria: b.getAttribute('aria-label'),
+      title: b.getAttribute('title'),
+      mark: b.querySelector('.bar-provisional')?.textContent.trim() || null,
+    })));
+    assert.deepEqual(bars.map(b => b.month), [1, 2, 3], 'three monthly bars');
+    bars.forEach((b, i) => {
+      assert.ok(b.aria.includes(brl(monthTotals[i])), `bar ${b.month} aria-label keeps stub total: ${b.aria}`);
+      if (b.month === 3) {
+        assert.ok(b.aria.includes('provisório'), `bar 3 aria-label has provisório: ${b.aria}`);
+        assert.equal(b.title, NOTE, 'bar 3 title has the note');
+        assert.equal(b.mark, 'provisório', 'bar 3 shows the provisório mark');
+      } else {
+        assert.ok(!b.aria.includes('provisório'), `bar ${b.month} is not provisional: ${b.aria}`);
+        assert.equal(b.title, null, `bar ${b.month} has no title`);
+        assert.equal(b.mark, null, `bar ${b.month} has no provisional mark`);
+      }
+    });
+    assert.ok(clean(await page.locator('[data-p-summary=expenses]').getAttribute('aria-label')).startsWith(clean(brlCompact(total))), 'panorama total matches stub');
+    assert.equal(clean(await page.locator('.donut-hole strong').innerText()), clean(brlCompact(total)), 'donut total matches stub');
+    assert.deepEqual(page.errors, [], 'partial provisional page errors');
+    await page.close();
+  }
+
+  for (const width of [1440, 390]) {
+    const page = await at(width, { before: partialBefore, search: `deputado/${profilePerson.id}-${slugOf(profilePerson.name)}?ano=${partialYear}` });
+    await page.waitForSelector('#detail[open] .provisional-section');
+    const sec = clean(await page.locator('#detail .provisional-section').innerText());
+    assert.ok(sec.includes('Março: provisório'), `profile section lists Março at ${width}: ${sec}`);
+    assert.ok(sec.includes(NOTE), `profile section has the note at ${width}: ${sec}`);
+    assert.ok(!sec.includes('Janeiro') && !sec.includes('Fevereiro'), `only March listed at ${width}: ${sec}`);
+    assert.ok(!sec.includes('R$'), `no amounts in provisional section at ${width}: ${sec}`);
+    const body = clean(await page.locator('#detail-body').innerText());
+    assert.ok(body.includes(clean(brl(personTotal))), `profile total matches stub ${brl(personTotal)} at ${width}`);
+    assert.deepEqual(page.errors, [], `partial provisional profile errors at ${width}`);
+    await page.close();
+  }
+
+  // Full 12-month year with a zero-valued provisional December: title shows even when partial is false, and the zero bar is drawn.
+  {
+    const fullCollectedAt = `${def + 1}-03-05T12:00:00Z`;
+    const fullManifest = {
+      ...real,
+      years: years.map(year => year === def ? { ...defEntry, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], partial: false, collectedAt: fullCollectedAt } : { year, months: [1, 2, 3], partial: true }),
+    };
+    const fullBefore = async page => {
+      await page.route('**/manifest.json', route => route.fulfill({ json: fullManifest }));
+      await page.route('**/index.json', async route => {
+        const res = await route.fetch(), json = await res.json();
+        json.scope = { ...json.scope, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] };
+        json.collectedAt = fullCollectedAt;
+        await route.fulfill({ response: res, json });
+      });
+      await page.route('**/fornecedores.json', async route => {
+        const res = await route.fetch(), json = await res.json();
+        for (const id of Object.keys(json.people)) json.people[id] = json.people[id].filter(row => row[0] !== 12);
+        await route.fulfill({ response: res, json });
+      });
+    };
+    const page = await at(1440, { before: fullBefore });
+    assert.equal(await page.locator('.year-partial').count(), 0, 'four years keeps .year-partial hidden');
+    const select = page.locator('select[data-year-select]').first();
+    assert.equal(await select.getAttribute('title'), `provisório: ${NOTE}`, 'full year select title carries provisional note');
+    assert.equal(clean(await select.locator('option:checked').innerText()), String(def), 'full year option has no (parcial)');
+    const bars = await page.locator('.p-mini-bars button').evaluateAll(bs => bs.map(b => ({
+      month: Number(b.dataset.pMonth),
+      aria: b.getAttribute('aria-label'),
+      title: b.getAttribute('title'),
+      value: b.querySelector('.bar-value')?.textContent.replace(/\s+/g, ' ').trim() || '',
+      barHeight: b.querySelector(':scope > span')?.getBoundingClientRect().height || 0,
+      mark: b.querySelector('.bar-provisional')?.textContent.trim() || null,
+    })));
+    assert.equal(bars.length, 12, 'all 12 bars drawn');
+    assert.deepEqual(bars.filter(b => b.mark).map(b => b.month), [12], 'only December is marked provisional');
+    const dec = bars[11];
+    assert.ok(dec.barHeight >= 2, `zero-valued provisional bar is drawn (height ${dec.barHeight})`);
+    assert.equal(dec.value, shortValue(0), `zero-valued provisional bar displays 0: ${dec.value}`);
+    assert.ok(dec.aria.includes(brl(0)) && dec.aria.includes('provisório'), `December aria-label has R$ 0,00 and provisório: ${dec.aria}`);
+    assert.equal(dec.title, NOTE, 'December title has the note');
+    assert.deepEqual(page.errors, [], 'full provisional year errors');
+    await page.close();
+  }
+
+  // Adjacent provisional marks on a 12-month chart stay separate and inside the viewport on desktop and mobile.
+  {
+    const adjCollectedAt = `${def + 1}-01-15T12:00:00Z`;
+    const adjManifest = {
+      ...real,
+      years: years.map(year => year === def ? { ...defEntry, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], partial: false, collectedAt: adjCollectedAt } : { year, months: [1, 2, 3], partial: true }),
+    };
+    const adjBefore = async page => {
+      await page.route('**/manifest.json', route => route.fulfill({ json: adjManifest }));
+      await page.route('**/index.json', async route => {
+        const res = await route.fetch(), json = await res.json();
+        json.scope = { ...json.scope, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] };
+        json.collectedAt = adjCollectedAt;
+        await route.fulfill({ response: res, json });
+      });
+    };
+    for (const width of [1440, 390]) {
+      const page = await at(width, { before: adjBefore });
+      const info = await page.evaluate(() => ({
+        innerWidth: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        marks: [...document.querySelectorAll('.p-mini-bars .bar-provisional')].map(el => {
+          const r = el.getBoundingClientRect();
+          return { month: Number(el.closest('button').dataset.pMonth), left: r.left, right: r.right, width: r.width, height: r.height };
+        }),
+      }));
+      assert.deepEqual(info.marks.map(m => m.month), [10, 11, 12], `Oct-Dec provisional at ${width}`);
+      assert.ok(info.scrollWidth <= info.innerWidth, `no horizontal scroll with adjacent provisional marks at ${width}`);
+      info.marks.forEach((m, i) => {
+        assert.ok(m.left >= 0 && m.right <= info.innerWidth + 0.5, `provisional mark ${m.month} inside viewport at ${width}`);
+        if (i > 0) assert.ok(m.left >= info.marks[i - 1].right - 0.5, `provisional marks ${info.marks[i - 1].month} and ${m.month} do not overlap at ${width}`);
+      });
+      assert.deepEqual(page.errors, [], `adjacent provisional marks errors at ${width}`);
+      await page.close();
+    }
+  }
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
   let failed = 0, ran = 0, skipped = 0;
