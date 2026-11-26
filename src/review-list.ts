@@ -16,8 +16,9 @@ const partySection=(items:ReviewItem[])=>items.length?['','## Partido','',...ite
 export const reviewMarkdown=(publicationId:string,items:ReviewItem[],names:ReviewNames={withheld:[],kept:[]},partyItems:ReviewItem[]=[])=>[`# Pendências para revisão - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | usada: ${i.used} | fonte: ${i.from}`),...partySection(partyItems),...nameSection('Nomes de fornecedor ocultados',names.withheld),...nameSection('Nomes mantidos pela regra de empresa',names.kept),''].join('\n');
 
 // Never published: output/review is gitignored, outside the site folder, and anchored to the repository, not to the working directory.
+const reviewDir=()=>process.env.CLAREIA_REVIEW_DIR??path.join(import.meta.dirname,'..','output','review');
 export async function writeReview(publicationId:string,items:ReviewItem[],names:ReviewNames={withheld:[],kept:[]},partyItems:ReviewItem[]=[]):Promise<number>{
-  const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-pendencias-revisao.md`);
+  const file=path.join(reviewDir(),`${publicationId}-pendencias-revisao.md`);
   await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,reviewMarkdown(publicationId,items,names,partyItems));
   console.error(`Pendências para revisão: ${items.length} em ${file}; partido: ${partyItems.length}; nomes ocultados: ${names.withheld.length}`);
   return items.length;
@@ -30,7 +31,7 @@ const brlPt=(cents:number)=>'R$ '+(cents/100).toLocaleString('pt-BR',{minimumFra
 export const duplicateMarkdown=(publicationId:string,items:DuplicateItem[])=>[`# Possíveis duplicidades - ${publicationId}`,'',...items.map(i=>`- ${i.id} | ${i.name} | mês ${i.month} | motivo: ${i.reason} | registros sinalizados: ${i.records} | ${brlPt(i.cents)} | total do mês publicado: ${brlPt(i.monthCents)} | portal: ${i.portal} | ${i.url}`),''].join('\n');
 
 export async function writeDuplicateReview(publicationId:string,items:DuplicateItem[]):Promise<number>{
-  const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-possiveis-duplicidades.md`);
+  const file=path.join(reviewDir(),`${publicationId}-possiveis-duplicidades.md`);
   await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,duplicateMarkdown(publicationId,items));
   console.error(`Possíveis duplicidades: ${items.length} meses em ${file}`);
   return items.length;
@@ -51,7 +52,7 @@ export const signReviewMarkdown=(publicationId:string,items:SignItem[])=>{
   return [`# Sinal corrigido - ${publicationId}`,'','## Por deputado (só corrigidos)',...[...per].sort((a,b)=>a[0]-b[0]).map(([id,g])=>`- ${id} | ${g.name} | ${g.count} registros | ${brl(g.cents)}`),`- sinal a revisar: ${items.filter(i=>i.reason!==SIGN_REASON).length} registros`,'','## Por registro (outras categorias e "a revisar" primeiro)',...sorted.map(i=>`- ${i.id} | ${i.name} | mês ${i.month} | ${i.category} | fonte ${brl(i.sourceCents)} -> publicado ${brl(i.cents)} | ${i.recordId} | ${i.reason}`),''].join('\n');
 };
 export async function writeSignReview(publicationId:string,items:SignItem[]):Promise<void>{
-  const file=path.join(import.meta.dirname,'..','output','review',`${publicationId}-sinal-corrigido.md`);
+  const file=path.join(reviewDir(),`${publicationId}-sinal-corrigido.md`);
   await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,signReviewMarkdown(publicationId,items));
   console.error(`Sinal corrigido: ${items.length} registros em ${file}`);
 }

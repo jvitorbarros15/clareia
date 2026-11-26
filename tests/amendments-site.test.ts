@@ -175,7 +175,6 @@ test('full-site build with a newer amendments audit keeps non-amendment bytes un
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-full-amendments-'));
   const repo=path.resolve(import.meta.dirname,'..'),script=path.join(repo,'scripts','build-full-site.ts'),tsx=import.meta.resolve('tsx');
   const writeJson=async(file:string,data:unknown)=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,JSON.stringify(data));};
-  const reviewIds:string[]=[];
   try{
     const baseChecked='2025-03-02T00:00:00.000Z',amendChecked='2025-04-10T00:00:00.000Z';
     const priv=path.join(dir,'data','private'),portraits=path.join(dir,'portraits');
@@ -228,9 +227,8 @@ test('full-site build with a newer amendments audit keeps non-amendment bytes un
     await writeJson(cfgBadTs,{...baseConfig,amendmentsRun:'amend-bad-ts'});
 
     const runBuild=async(cfg:string,outDir:string,extra:string[]=[])=>{
-      const {stdout}=await execFileAsync(process.execPath,['--import',tsx,script,'--out',outDir,'--portraits',portraits,'--config',cfg,'--data-root',path.join(dir,'data'),...extra],{cwd:dir,encoding:'utf8'});
+      const {stdout}=await execFileAsync(process.execPath,['--import',tsx,script,'--out',outDir,'--portraits',portraits,'--config',cfg,'--data-root',path.join(dir,'data'),...extra],{cwd:dir,encoding:'utf8',env:{...process.env,CLAREIA_REVIEW_DIR:path.join(dir,'review')}});
       const parsed=JSON.parse(stdout.trim()) as {publicationId?:string;built?:boolean;amendments?:string;amendmentRows?:number};
-      if(parsed.publicationId)reviewIds.push(parsed.publicationId);
       return parsed;
     };
     const distWithout=path.join(dir,'dist-without'),distWith=path.join(dir,'dist-with');
@@ -267,10 +265,6 @@ test('full-site build with a newer amendments audit keeps non-amendment bytes un
     assert.equal(manifestWith.domains.emendas.publishedAt,amendChecked);
     for(const d of ['despesas','pessoas','projetos','votacoes'])assert.equal(manifestWith.domains[d].publishedAt,baseChecked);
   }finally{
-    for(const id of reviewIds){
-      await fs.rm(path.join(repo,'output','review',`${id}-pendencias-revisao.md`),{force:true});
-      await fs.rm(path.join(repo,'output','review',`${id}-sinal-corrigido.md`),{force:true});
-    }
     await fs.rm(dir,{recursive:true,force:true});
   }
 });
