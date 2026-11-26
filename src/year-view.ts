@@ -1,6 +1,7 @@
 export type YearManifest={base:string;defaultYear?:number;years?:{year:number;months:number[];collectedAt?:string}[]};
 const SHORT=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const FULL=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const COLLECTION_DATE=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric'});
 const DAY_MS=86_400_000;
 
 // An unknown or malformed ?ano= falls back to the default year, silently.
@@ -19,6 +20,14 @@ export function partialLabel(months:number[],year:number):string{
   const range=first===last?`${SHORT[first-1]} ${year}`:`${SHORT[first-1]}–${SHORT[last-1]} ${year}`;
   const contiguous=sorted.every((m,i)=>m===first+i);
   return `parcial · ${range}${contiguous&&last<12?` (${FULL[last]} ainda não fechado)`:''}`;
+}
+
+export function cutoffLine(months:number[],year:number,collectedAt?:string|null):string{
+  const last=FULL[Math.max(...months)-1];
+  const timestamp=collectedAt??'';
+  // Interpret ISO date-times without an offset as UTC, like ISO dates.
+  const collected=Date.parse(/[Tt ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(timestamp)?`${timestamp}Z`:timestamp);
+  return `${last?`Dados até ${last} de ${year}`:'Dados sem mês informado'} · ${Number.isNaN(collected)?'data de coleta não informada':`coletados em ${COLLECTION_DATE.format(collected)}`}`;
 }
 
 // setUTCFullYear avoids Date.UTC remapping years 0000–0099 to 1900–1999.
