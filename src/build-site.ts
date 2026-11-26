@@ -195,12 +195,12 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   for(const font of (await fs.readdir(path.join(PAGE,'fonts'))).filter(f=>f.endsWith('.woff2')))await fs.copyFile(path.join(PAGE,'fonts',font),path.join(outDir,'fonts',font));
   await build({entryPoints:[path.join(import.meta.dirname,'view.ts')],bundle:true,format:'iife',globalName:'ClareiaView',outfile:path.join(outDir,'view.js'),logLevel:'silent'});
   await versionAssets(outDir);
-  const deputies=deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary}),period={year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1),minMonths:summary.minMonths};
+  const deputies=deputiesOf({ids:active.scope.ids,people:active.people,summary,suppliers:supplierSummary}),period={year:String(active.scope.year),coverage:active.scope.months.map(m=>m-1),minMonths:summary.minMonths,collectedAt:active.collectedAt};
   const seen=new Set(active.scope.ids),extras:{deputies:Deputy[];period:Period}[]=[];
   for(const e of entries.filter(e=>e.year!==sitePlan.defaultYear)){
     const year=pubs.get(e.year)!,{summary:ys,suppliers:yp}=built.get(e.year)!,ids=year.scope.ids.filter(id=>!seen.has(id));
     ids.forEach(id=>seen.add(id));
-    if(ids.length)extras.push({deputies:deputiesOf({ids,people:year.people,summary:ys,suppliers:yp}),period:{year:String(year.scope.year),coverage:year.scope.months.map(m=>m-1),minMonths:ys.minMonths}});
+    if(ids.length)extras.push({deputies:deputiesOf({ids,people:year.people,summary:ys,suppliers:yp}),period:{year:String(year.scope.year),coverage:year.scope.months.map(m=>m-1),minMonths:ys.minMonths,collectedAt:year.collectedAt}});
   }
   // The cache sits beside the output so an unchanged image is copied, not rendered again; the output folder itself is rebuilt every time.
   const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId:STAGING,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache'}):null;

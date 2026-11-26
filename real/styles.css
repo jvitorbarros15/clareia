@@ -563,6 +563,7 @@ body[data-model=editorial] .avatar .photo img{filter:grayscale(1)}
 body[data-model=editorial] .editorial-card.selected .person-name{text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:2px}
 body[data-model=editorial] .portrait-button[aria-pressed=true] .photo img{filter:none}
 .real-year{font-size:15px;color:var(--muted);align-self:center}
+.selects .cutoff{align-self:center}
 body[data-model=editorial] .feature-value{font-variant-numeric:tabular-nums;cursor:pointer;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:.12em;text-decoration-thickness:2px;transition:text-decoration-color 160ms var(--ease-out)}
 body[data-model=editorial] .feature-value:is(:hover,:focus-visible){text-decoration-color:currentColor}
 .empty{padding:45px 20px;background:color-mix(in srgb,var(--ink) 3%,var(--bg));border-radius:12px}

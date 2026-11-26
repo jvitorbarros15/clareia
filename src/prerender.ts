@@ -3,6 +3,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import type {Person} from './model.ts';
 import {ceilingUse} from './ceiling-use.ts';
+import {cutoffLine} from './year-view.ts';
 import type {CeilingUse} from './ceiling-use.ts';
 import type {SiteSummary,SupplierSummary} from './site-summary.ts';
 import {apiDocsInner,loadSpec} from './api-docs.ts';
@@ -37,7 +38,8 @@ export const statePath=(uf:string)=>`/estado/${uf}`;
 export const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
 
 export type Deputy={id:number;name:string;uf:string|null;ufNote:string|null;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];exerciseReviewMonths:number[];comparable:boolean;cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse;social?:{network:string;url:string}[]};
-export type Period={year:string;coverage:number[];minMonths:number};
+export type Period={year:string;coverage:number[];minMonths:number;collectedAt?:string|null};
+export const cutoffOf=(period:Period)=>cutoffLine(period.coverage.map(m=>m+1),Number(period.year),period.collectedAt);
 
 // Eligibility fields are read from the published summary, the same ones the app reads.
 export function deputiesOf(input:{ids:number[];people:Person[];summary:SiteSummary;suppliers:SupplierSummary}):Deputy[]{
@@ -121,7 +123,7 @@ export function renderDeputy(shell:string,p:Deputy,period:Period,siteUrl:string,
   const official=/^https:\/\//.test(p.sourceUrl);
   const source=official?` <a href="${esc(p.sourceUrl)}" rel="noopener noreferrer">Cadastro na Câmara</a>`:'';
   const state=p.uf&&UFS[p.uf]?`<p><a href="${statePath(p.uf)}">Deputados de ${esc(UFS[p.uf])}</a></p>`:'';
-  const noscript=`<noscript><main id="main"><h1>${esc(p.name)}</h1><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.${source}</p>${state}${homeLink}</main></noscript>`;
+  const noscript=`<noscript><main id="main"><h1>${esc(p.name)}</h1><p>${esc(description)}</p><p class="cutoff">${esc(cutoffOf(period))}</p><p>Ative o JavaScript para explorar os dados.${source}</p>${state}${homeLink}</main></noscript>`;
   const ld={'@type':'Person',name:p.name,jobTitle:'Deputado(a) federal',url,...portrait?{image:portrait.url}:{},...official||p.social?.length?{sameAs:[...official?[p.sourceUrl]:[],...(p.social??[]).map(l=>l.url)]}:{}};
   return page(shell,{title,description,url,type:'profile',image},noscript,ld);
 }
@@ -129,7 +131,7 @@ export function renderState(shell:string,uf:string,deputies:Deputy[],period:Peri
   const description=stateDescription(uf,deputies,period),title=`${UFS[uf]} — Clareia`;
   const people=[...inState(deputies,uf)].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
   const list=people.length?`<ul>${people.map(p=>`<li><a href="${deputyPath(p.id,p.name)}">${esc(p.name)}</a></li>`).join('')}</ul>`:'';
-  const noscript=`<noscript><main id="main"><h1>${esc(UFS[uf])}</h1><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.</p>${list}${homeLink}</main></noscript>`;
+  const noscript=`<noscript><main id="main"><h1>${esc(UFS[uf])}</h1><p>${esc(description)}</p><p class="cutoff">${esc(cutoffOf(period))}</p><p>Ative o JavaScript para explorar os dados.</p>${list}${homeLink}</main></noscript>`;
   return page(shell,{title,description,url:siteUrl+statePath(uf),type:'website',image:icon(siteUrl)},noscript);
 }
 
