@@ -188,6 +188,8 @@ test('buildSiteCeiling rejects mixed acts outside 2026, missing months other tha
   assert.throws(()=>buildSiteCeiling(missingMar,ok(missingMar),2026),/incompleto/);
   const missingJan2026:CeilingReport={...r2026,rows:r2026.rows.filter(r=>r.month!==1)};
   assert.throws(()=>buildSiteCeiling(missingJan2026,ok(missingJan2026),2026),/incompleto/);
+  const withFeb2026:CeilingReport={...r2026,rows:[...r2026.rows,{...r2026.rows[0],month:2}]};
+  assert.throws(()=>buildSiteCeiling(withFeb2026,ok(withFeb2026),2026),/Fevereiro de 2026/);
 });
 test('ceilingUse with mixed 2026 fixture leaves February out on both sides and still rejects other months without a ceiling',()=>{
   const c2026=mixedCeiling2026();
@@ -207,14 +209,15 @@ test('ceilingUse with mixed 2026 fixture leaves February out on both sides and s
   assert.deepEqual(unconfirmed.missing,[3]);
   assert.deepEqual(unconfirmed.excluded,[{month:2,reason:'noCeiling'}]);
 });
-test('ceilingUse excludes configured no-ceiling months even when their UF is in conflict',()=>{
+test('ceilingUse excludes configured no-ceiling months even when their UF or exercise is in conflict',()=>{
   const c2026=mixedCeiling2026();
-  const u=ceilingUse([month(1,100000),month(2,9999999,{uf:null,ufStatus:'conflict'}),month(3,200000)],c2026,true);
-  assert.equal(u.status,'ok');if(u.status!=='ok')return;
-  assert.deepEqual(u.counted.map(c=>c.month),[1,3]);
-  assert.deepEqual(u.excluded,[{month:2,reason:'noCeiling'}]);
-  assert.equal(u.expenseCents,300000);
-  assert.equal(u.ceilingCents,c2026.byUf.SP[0]+c2026.byUf.SP[2]);
-  assert.equal(u.tenths,tenthsOf(300000,c2026.byUf.SP[0]+c2026.byUf.SP[2]));
-  assert.equal(ceilingUse([month(1,100000),month(2,9999999,{exercise:'conflict',uf:null,ufStatus:'conflict'}),month(3,200000)],c2026,true).status,'unconfirmed');
+  for(const feb of [month(2,9999999,{uf:null,ufStatus:'conflict'}),month(2,9999999,{exercise:'conflict',uf:null,ufStatus:'conflict'})]){
+    const u=ceilingUse([month(1,100000),feb,month(3,200000)],c2026,true);
+    assert.equal(u.status,'ok');if(u.status!=='ok')return;
+    assert.deepEqual(u.counted.map(c=>c.month),[1,3]);
+    assert.deepEqual(u.excluded,[{month:2,reason:'noCeiling'}]);
+    assert.equal(u.expenseCents,300000);
+    assert.equal(u.ceilingCents,c2026.byUf.SP[0]+c2026.byUf.SP[2]);
+    assert.equal(u.tenths,tenthsOf(300000,c2026.byUf.SP[0]+c2026.byUf.SP[2]));
+  }
 });

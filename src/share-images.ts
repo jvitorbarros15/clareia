@@ -58,6 +58,8 @@ body{font-family:"Public Sans",sans-serif;color:#0b0e18;-webkit-font-smoothing:a
 .square .value.big{font-size:118px}.square .value.mid{font-size:92px}.square .value.small{font-size:68px}
 .ceil{margin-top:12px;text-wrap:balance;font-size:21px;line-height:1.35;color:#3a3f4e;max-width:900px}
 .square .ceil{font-size:25px}
+.ceil.long{margin-top:10px;font-size:17px;line-height:1.28}
+.square .ceil.long{font-size:21px;line-height:1.3}
 .notes{margin-top:14px;font-size:21px;line-height:1.35;color:#3a3f4e;max-width:900px}
 .square .notes{font-size:25px}
 .foot{display:flex;justify-content:space-between;gap:24px;margin-top:18px;padding-top:14px;border-top:1px solid #dbdcd9;font-size:19px;color:#656977}
@@ -76,7 +78,7 @@ export function shareBody(fact:ShareFact,format:ShareFormat,assets:Pick<ShareAss
     +`<div class="head"><img class="logo" src="${assets.logo}" alt=""><span class="brand">Clareia</span></div>`
     +`<div class="body"><div class="who"><h1 class="name ${nameSize(fact.name,format)}">${esc(fact.name)}</h1><p class="context">${esc(fact.context)}</p></div>`
     +`<div class="photo">${picture}</div>`
-    +`<div class="fact">${fact.label?`<p class="label">${esc(fact.label)}</p>`:''}<p class="value ${valueSize(fact.value)}">${esc(fact.value)}</p>${fact.ceiling?`<p class="ceil">${esc(fact.ceiling)}</p>`:''}${fact.notes.map(n=>`<p class="notes">${esc(n)}</p>`).join('')}</div></div>`
+    +`<div class="fact">${fact.label?`<p class="label">${esc(fact.label)}</p>`:''}<p class="value ${valueSize(fact.value)}">${esc(fact.value)}</p>${fact.ceiling?`<p class="ceil${fact.ceiling.length>100?' long':''}">${esc(fact.ceiling)}</p>`:''}${fact.notes.map(n=>`<p class="notes">${esc(n)}</p>`).join('')}</div></div>`
     +`<div class="foot"><span>${esc(SOURCE)}</span><b>${esc(DISCLAIMER)}</b></div></div>`;
 }
 

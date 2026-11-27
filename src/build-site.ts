@@ -215,8 +215,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   // The all-months zip is the one file allowed past 10 MiB; zipOf already keeps it under the 25 MiB Workers asset limit.
   checkLimits(files.length,Math.max(...sizes.filter((_,i)=>!files[i].endsWith('.zip'))));
   await fs.rm(finalDir,{recursive:true,force:true});
-  // Windows scanners can briefly hold a handle inside outDir right after writing files.
-  for(let i=0;;i++){try{await fs.rename(outDir,finalDir);break;}catch(e){const code=(e as NodeJS.ErrnoException)?.code;if(i>=5||(code!=='EPERM'&&code!=='EBUSY'))throw e;await new Promise(r=>setTimeout(r,50*(i+1)));}}
+  await fs.rename(outDir,finalDir);
   return {publicationId,files:files.length,years:results};
 }
 

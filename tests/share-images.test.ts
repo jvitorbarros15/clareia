@@ -156,6 +156,8 @@ test('a render with the wrong size stops the build',async()=>{
   }finally{await fs.rm(tmp,{recursive:true,force:true});}
 });
 
+const okUse=(tenths:number,uf='AC'):CeilingUse=>({status:'ok',counted:[{month:1,uf,expenseCents:1,ceilingCents:1,records:1}],excluded:[],outside:[],expenseCents:1,ceilingCents:1,tenths});
+
 test('real renderer: exact sizes, long name, no portrait, and a layout that does not fit is refused',async t=>{
   let renderer:Renderer;
   try{renderer=await openRenderer(assets,1);}catch(e){t.skip(String((e as Error).message));return;}
@@ -166,12 +168,18 @@ test('real renderer: exact sizes, long name, no portrait, and a layout that does
       const bytes=await renderer.render({fact:shareFactOf(d,period),format,portrait:null});
       assert.deepEqual(jpegSize(bytes),{width:FORMATS[format].width,height:FORMATS[format].height});
     }
+    const longCeiling={...long,id:105,heldMonths:[],use:okUse(818,'SP')};
+    const mergedCeiling={...merged,id:106,heldMonths:[],use:okUse(1048,'SP')};
+    const standing={uf:'SP',rank:12,total:70};
+    for(const d of [longCeiling,mergedCeiling])for(const format of ['wide','square'] as const){
+      const bytes=await renderer.render({fact:shareFactOf(d,{...period,year:'2026'},standing,PORTAL_2026_NOTE),format,portrait:null});
+      assert.deepEqual(jpegSize(bytes),{width:FORMATS[format].width,height:FORMATS[format].height});
+    }
     const absurd={...normal,name:'W'.repeat(400)};
     await assert.rejects(renderer.render({fact:shareFactOf(absurd,period),format:'wide',portrait:null}),/não cabe no modelo/);
   }finally{await renderer.close();}
 });
 
-const okUse=(tenths:number,uf='AC'):CeilingUse=>({status:'ok',counted:[{month:1,uf,expenseCents:1,ceilingCents:1,records:1}],excluded:[],outside:[],expenseCents:1,ceilingCents:1,tenths});
 test('the ceiling line states the share and the position among comparable deputies of the state',()=>{
   assert.equal(ceilingLine(okUse(818),{uf:'AC',rank:1,total:7}),'81,8% do teto da cota do AC · maior uso entre 7 deputados comparáveis do estado');
   assert.equal(ceilingLine(okUse(818),{uf:'AC',rank:3,total:7}),'81,8% do teto da cota do AC · 3º maior uso entre 7 deputados comparáveis do estado');
