@@ -457,6 +457,9 @@ async function writeDerivedFiles(
       staged.push({tmp, dest});
       await fs.writeFile(tmp, file.text, {mode: 0o600});
     }
+    await fs.unlink(path.join(runDir, 'summary.json')).catch((err: NodeJS.ErrnoException) => {
+      if (err.code !== 'ENOENT') throw err;
+    });
     for (const name of removeNames) {
       await fs.unlink(path.join(runDir, name)).catch((err: NodeJS.ErrnoException) => {
         if (err.code !== 'ENOENT') throw err;
@@ -573,6 +576,8 @@ export async function collectSenadoExpenses(options: CollectSenadoOptions): Prom
     }
     throw err;
   }
+  const audit1 = audit(cap1.bytes, parsed1, ctx1);
+  const pass1Audit = {ok: audit1.ok, failures: auditFailureCodes(audit1.failures)};
 
   const cap2 = (await captureOrResume(path.join(runDir, 'pass-2'), url, key, fetcher, CEAPS_MAX_BYTES, false))!;
   const ctx2 = toCeapsContext(year, cap2.meta);
@@ -586,19 +591,19 @@ export async function collectSenadoExpenses(options: CollectSenadoOptions): Prom
         year,
         previousRun,
         {pass1: toPassInfo(cap1.meta), pass2: toPassInfo(cap2.meta)},
-        {ok: false, pass1: null, pass2: null},
+        {ok: false, pass1: pass1Audit, pass2: null},
         err.code,
       );
     }
     throw err;
   }
-
-  const audit1 = audit(cap1.bytes, parsed1, ctx1);
   const audit2 = audit(cap2.bytes, parsed2, ctx2);
+  const pass2Audit = {ok: audit2.ok, failures: auditFailureCodes(audit2.failures)};
+
   const auditSummary: SenadoAuditSummary = {
     ok: audit1.ok && audit2.ok,
-    pass1: {ok: audit1.ok, failures: auditFailureCodes(audit1.failures)},
-    pass2: {ok: audit2.ok, failures: auditFailureCodes(audit2.failures)},
+    pass1: pass1Audit,
+    pass2: pass2Audit,
   };
   if (!auditSummary.ok) {
     return await failRun(

@@ -14,7 +14,9 @@ import {
   senatorMandatesUrl,
 } from '../src/senado-collect.ts';
 import type {Fetcher} from '../src/senado-collect.ts';
+import {auditCeapsYear} from '../src/senado-expenses-audit.ts';
 import {parseCeapsYear} from '../src/senado-expenses.ts';
+import type {CeapsContext} from '../src/senado-expenses.ts';
 import {open} from '../src/vault.ts';
 
 const FIXTURES = path.join(import.meta.dirname, 'fixtures', 'senado');
@@ -326,26 +328,65 @@ test('pass 2 with a removed id or a changed value holds the affected month', asy
   assert.deepEqual(detalhamentoSummary.heldMonths, [1]);
 });
 
-test('pass 2 with a duplicated id fails and writes only summary.json with code', async t => {
+test('pass 2 with a duplicated id fails after auditing pass 1 and writes only summary.json with code', async t => {
   const baseDir = await tempDir(t);
   const key = randomBytes(32);
   const dupRows = cloneRows();
   dupRows[1].id = dupRows[0].id;
+  const auditContexts: CeapsContext[] = [];
 
   const summary = await collectSenadoExpenses({
     year: 2025,
     runId: 'pass2-dup',
     key,
     baseDir,
-    fetcher: makeFakeFetcher({pass1Bytes: API_BYTES, pass2Bytes: toBytes(dupRows)}).fetcher,
+    fetcher: makeFakeFetcher({
+      pass1Bytes: API_BYTES,
+      pass2Bytes: toBytes(dupRows),
+      pass1Headers: {'last-modified': 'Thu, 26 Nov 2026 01:00:00 GMT', etag: '"pass1"'},
+      pass2Headers: {'last-modified': 'Thu, 26 Nov 2026 02:00:00 GMT', etag: '"pass2"'},
+    }).fetcher,
+    audit: (bytes, parsed, ctx) => {
+      auditContexts.push(ctx);
+      return auditCeapsYear(bytes, parsed, ctx);
+    },
   });
 
   assert.equal(summary.status, 'failed');
   assert.equal(summary.errorCode, 'duplicate-id');
+  assert.deepEqual(auditContexts, [
+    {year: 2025, lastModified: 'Thu, 26 Nov 2026 01:00:00 GMT', etag: '"pass1"'},
+  ]);
+  assert.deepEqual(summary.audit, {
+    ok: false,
+    pass1: {ok: true, failures: []},
+    pass2: null,
+  });
   const runDir = path.join(baseDir, 'pass2-dup');
   assert.equal(await exists(path.join(runDir, 'summary.json')), true);
   assert.equal(await exists(path.join(runDir, 'records.json')), false);
   assert.equal(await exists(path.join(runDir, 'review.json')), false);
+
+  let parseCalls = 0;
+  const tamperedSummary = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'pass2-dup-pass1-audit-fail',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher({pass1Bytes: API_BYTES, pass2Bytes: toBytes(dupRows)}).fetcher,
+    parse: (bytes, ctx) => {
+      parseCalls += 1;
+      const parsed = parseCeapsYear(bytes, ctx);
+      if (parseCalls === 1) parsed.records[0].cents += 1;
+      return parsed;
+    },
+  });
+  assert.equal(tamperedSummary.status, 'failed');
+  assert.equal(tamperedSummary.errorCode, 'duplicate-id');
+  assert.equal(tamperedSummary.audit.ok, false);
+  assert.equal(tamperedSummary.audit.pass1?.ok, false);
+  assert.ok(tamperedSummary.audit.pass1?.failures.includes('cents'));
+  assert.equal(tamperedSummary.audit.pass2, null);
 });
 
 test('previous run with vanished, changed, or new id in existing month holds that month', async t => {
@@ -885,6 +926,49 @@ test('resuming a completed run with a truncated previous run removes stale recor
   const onDisk = JSON.parse(await fs.readFile(path.join(runDir, 'summary.json'), 'utf8'));
   assert.equal(onDisk.status, 'failed');
   assert.equal(onDisk.errorCode, 'json-invalid');
+});
+
+test('resuming a completed run invalidates old summary.json before deleting records.json and review.json', async t => {
+  const baseDir = await tempDir(t);
+  const key = randomBytes(32);
+
+  const completed = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'completed-cleanup-fail',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher().fetcher,
+  });
+  assert.equal(completed.status, 'review-required');
+
+  await collectSenadoExpenses({
+    year: 2025,
+    runId: 'prev-truncated-cleanup',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher({pass1Bytes: API_BYTES.slice(0, 40)}).fetcher,
+  });
+
+  const runDir = path.join(baseDir, 'completed-cleanup-fail');
+  await fs.unlink(path.join(runDir, 'review.json'));
+  await fs.mkdir(path.join(runDir, 'review.json'), {recursive: true});
+  await fs.writeFile(path.join(runDir, 'review.json', 'blocker'), 'x');
+
+  await assert.rejects(
+    collectSenadoExpenses({
+      year: 2025,
+      runId: 'completed-cleanup-fail',
+      previousRunId: 'prev-truncated-cleanup',
+      key,
+      baseDir,
+      fetcher: makeFakeFetcher().fetcher,
+    }),
+  );
+
+  assert.equal(await exists(path.join(runDir, 'records.json')), false);
+  assert.equal(await exists(path.join(runDir, 'summary.json')), false);
+  const entries = await fs.readdir(runDir);
+  assert.equal(entries.some(name => name.endsWith('.tmp')), false);
 });
 
 test('resuming a held run with its own directory as previousRunId is rejected and keeps holds intact', async t => {
