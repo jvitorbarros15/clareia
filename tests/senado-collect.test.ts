@@ -439,11 +439,15 @@ test('audit failure gives failed and writes only summary.json with failure codes
   assert.equal(summary.status, 'failed');
   assert.equal(summary.audit.ok, false);
   assert.equal(summary.audit.pass1?.ok, false);
-  assert.ok(summary.audit.pass1 && summary.audit.pass1.failures.includes('cents:9000001'));
+  assert.ok(summary.audit.pass1 && summary.audit.pass1.failures.includes('cents'));
+  assert.equal(summary.audit.pass1.failures.some(f => f.includes(':')), false);
+  assert.equal(summary.audit.pass2?.failures.some(f => f.includes(':')), false);
   const runDir = path.join(baseDir, 'audit-fail');
   assert.equal(await exists(path.join(runDir, 'summary.json')), true);
   assert.equal(await exists(path.join(runDir, 'records.json')), false);
   assert.equal(await exists(path.join(runDir, 'review.json')), false);
+  const summaryText = await fs.readFile(path.join(runDir, 'summary.json'), 'utf8');
+  assert.equal(summaryText.includes('9000001'), false);
 });
 
 test('scanCpfs gate throws when a CPF is injected into a derived record and writes no derived file', async t => {
@@ -515,4 +519,215 @@ test('resume reuses sealed captures without refetching and rejects a tampered .s
       fetcher: makeFakeFetcher().fetcher,
     }),
   );
+});
+
+test('mandates 302 redirect uses redirect:manual and enters mandatesMissing without aborting', async t => {
+  const baseDir = await tempDir(t);
+  const key = randomBytes(32);
+  const base = makeFakeFetcher();
+  const redirectTarget = 'https://example.org/senador/5899/mandatos';
+
+  const fetcher: Fetcher = async (url, init) => {
+    if (url === senatorMandatesUrl(5899)) {
+      if (init?.redirect === 'error') {
+        throw new TypeError('fetch failed: unexpected redirect');
+      }
+      assert.equal(init?.redirect, 'manual');
+      base.calls.push(url);
+      return new Response('', {status: 302, headers: {location: redirectTarget}});
+    }
+    return await base.fetcher(url, init);
+  };
+
+  const summary = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'mandates-302',
+    key,
+    baseDir,
+    fetcher,
+  });
+
+  assert.equal(summary.status, 'review-required');
+  assert.equal(summary.mandatesMissing.includes(5899), true);
+  assert.equal(base.calls.includes(redirectTarget), false);
+  assert.equal(base.calls.every(isAllowedSenadoUrl), true);
+  const stem5899 = hash(senatorMandatesUrl(5899));
+  assert.equal(await exists(path.join(baseDir, 'mandates-302', 'mandates', `${stem5899}.sealed`)), false);
+});
+
+test('previous run with truncated sealed pass 1 fails via failRun with only errorCode', async t => {
+  const baseDir = await tempDir(t);
+  const key = randomBytes(32);
+
+  const prev = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'prev-truncated',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher({pass1Bytes: API_BYTES.slice(0, 40)}).fetcher,
+  });
+  assert.equal(prev.status, 'failed');
+  assert.equal(prev.errorCode, 'json-invalid');
+
+  const next = makeFakeFetcher();
+  const summary = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'curr-from-truncated',
+    previousRunId: 'prev-truncated',
+    key,
+    baseDir,
+    fetcher: next.fetcher,
+  });
+
+  assert.equal(summary.status, 'failed');
+  assert.equal(summary.previousRun, 'prev-truncated');
+  assert.equal(summary.errorCode, 'json-invalid');
+  assert.equal(next.calls.length, 0);
+  const runDir = path.join(baseDir, 'curr-from-truncated');
+  assert.equal(await exists(path.join(runDir, 'summary.json')), true);
+  assert.equal(await exists(path.join(runDir, 'records.json')), false);
+  assert.equal(await exists(path.join(runDir, 'review.json')), false);
+});
+
+test('conflicting year on an existing run ID is rejected before capture without clobbering prior files', async t => {
+  const baseDir = await tempDir(t);
+  const key = randomBytes(32);
+
+  const ok2025 = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'bound-run',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher().fetcher,
+  });
+  assert.equal(ok2025.status, 'review-required');
+
+  const runDir = path.join(baseDir, 'bound-run');
+  const summaryBefore = await fs.readFile(path.join(runDir, 'summary.json'), 'utf8');
+  const recordsBefore = await fs.readFile(path.join(runDir, 'records.json'), 'utf8');
+  const reviewBefore = await fs.readFile(path.join(runDir, 'review.json'), 'utf8');
+
+  const second = makeFakeFetcher();
+  await assert.rejects(
+    collectSenadoExpenses({
+      year: 2026,
+      runId: 'bound-run',
+      key,
+      baseDir,
+      fetcher: second.fetcher,
+    }),
+  );
+
+  assert.equal(second.calls.length, 0);
+  assert.equal(await fs.readFile(path.join(runDir, 'summary.json'), 'utf8'), summaryBefore);
+  assert.equal(await fs.readFile(path.join(runDir, 'records.json'), 'utf8'), recordsBefore);
+  assert.equal(await fs.readFile(path.join(runDir, 'review.json'), 'utf8'), reviewBefore);
+
+  // Also reject a conflicting year when only pass-1 was captured before an interruption.
+  await fs.unlink(path.join(runDir, 'summary.json'));
+  const third = makeFakeFetcher();
+  await assert.rejects(
+    collectSenadoExpenses({
+      year: 2026,
+      runId: 'bound-run',
+      key,
+      baseDir,
+      fetcher: third.fetcher,
+    }),
+  );
+  assert.equal(third.calls.length, 0);
+});
+
+test('resume recovers staged metadata after interruption between sealed and meta writes', async t => {
+  const baseDir = await tempDir(t);
+  const key = randomBytes(32);
+
+  await collectSenadoExpenses({
+    year: 2025,
+    runId: 'staged-recover',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher().fetcher,
+  });
+
+  const pass1Dir = path.join(baseDir, 'staged-recover', 'pass-1');
+  const stem = hash(ceapsYearUrl(2025));
+  const sealedFile = path.join(pass1Dir, `${stem}.sealed`);
+  const metaFile = path.join(pass1Dir, `${stem}.meta.json`);
+  const pendingSealedFile = path.join(pass1Dir, `${stem}.sealed.pending`);
+  const pendingFile = path.join(pass1Dir, `${stem}.meta.json.pending`);
+
+  await fs.link(sealedFile, pendingSealedFile);
+  await fs.rename(metaFile, pendingFile);
+
+  const resume = makeFakeFetcher();
+  const recovered = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'staged-recover',
+    key,
+    baseDir,
+    fetcher: resume.fetcher,
+  });
+  assert.equal(recovered.status, 'review-required');
+  assert.equal(resume.calls.includes(ceapsYearUrl(2025)), false);
+  assert.equal(await exists(metaFile), true);
+  assert.equal(await exists(pendingFile), false);
+  assert.equal(await exists(pendingSealedFile), false);
+
+  // Tampered sealed original with staged metadata must still be rejected without promoting metadata.
+  await fs.rename(metaFile, pendingFile);
+  await fs.writeFile(sealedFile, Buffer.from('tampered'));
+  await assert.rejects(
+    collectSenadoExpenses({
+      year: 2025,
+      runId: 'staged-recover',
+      key,
+      baseDir,
+      fetcher: makeFakeFetcher().fetcher,
+    }),
+  );
+  assert.equal(await exists(metaFile), false);
+
+  // Interrupted staging before publishing either file is cleaned up and refetched on resume.
+  const partialDir = path.join(baseDir, 'staged-partial', 'pass-1');
+  await fs.mkdir(partialDir, {recursive: true});
+  await fs.writeFile(path.join(partialDir, `${stem}.sealed.pending`), Buffer.from('partial'));
+  await fs.writeFile(path.join(partialDir, `${stem}.meta.json.pending`), '{');
+  const retry = makeFakeFetcher();
+  const retried = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'staged-partial',
+    key,
+    baseDir,
+    fetcher: retry.fetcher,
+  });
+  assert.equal(retried.status, 'review-required');
+  assert.equal(retry.calls.includes(ceapsYearUrl(2025)), true);
+  assert.equal(await exists(path.join(partialDir, `${stem}.sealed.pending`)), false);
+  assert.equal(await exists(path.join(partialDir, `${stem}.meta.json.pending`)), false);
+  assert.equal(await exists(path.join(partialDir, `${stem}.sealed`)), true);
+  assert.equal(await exists(path.join(partialDir, `${stem}.meta.json`)), true);
+});
+
+test('derived writes stage files and install summary.json last so failed records write leaves no summary', async t => {
+  const baseDir = await tempDir(t);
+  const key = randomBytes(32);
+  const runDir = path.join(baseDir, 'records-fail');
+  await fs.mkdir(path.join(runDir, 'records.json'), {recursive: true});
+  await fs.writeFile(path.join(runDir, 'records.json', 'blocker'), 'x');
+
+  await assert.rejects(
+    collectSenadoExpenses({
+      year: 2025,
+      runId: 'records-fail',
+      key,
+      baseDir,
+      fetcher: makeFakeFetcher().fetcher,
+    }),
+  );
+
+  assert.equal(await exists(path.join(runDir, 'summary.json')), false);
+  assert.equal(await exists(path.join(runDir, 'review.json')), false);
+  const entries = await fs.readdir(runDir);
+  assert.equal(entries.some(name => name.endsWith('.tmp')), false);
 });

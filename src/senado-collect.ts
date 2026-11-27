@@ -1,3 +1,4 @@
+import {randomBytes} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {redactCpf, scanCpfs} from './cpf-scan.ts';
@@ -128,16 +129,22 @@ export function senatorMandatesUrl(codSenador: number): string {
   return url;
 }
 
-async function readSealedCapture(
-  dir: string,
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    await fs.access(file);
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
+async function readVerifiedCapture(
+  sealedFile: string,
+  metaFile: string,
   url: string,
   key: Buffer,
 ): Promise<{bytes: Uint8Array; meta: CaptureMeta}> {
-  assertAllowedSenadoUrl(url);
-  if (key.length !== 32) throw new Error('Chave de cofre inválida');
-  const stem = hash(url);
-  const sealedFile = path.join(dir, `${stem}.sealed`);
-  const metaFile = path.join(dir, `${stem}.meta.json`);
   let meta: CaptureMeta;
   try {
     meta = JSON.parse(await fs.readFile(metaFile, 'utf8')) as CaptureMeta;
@@ -168,6 +175,22 @@ async function readSealedCapture(
   return {bytes: plain, meta};
 }
 
+async function readSealedCapture(
+  dir: string,
+  url: string,
+  key: Buffer,
+): Promise<{bytes: Uint8Array; meta: CaptureMeta}> {
+  assertAllowedSenadoUrl(url);
+  if (key.length !== 32) throw new Error('Chave de cofre inválida');
+  const stem = hash(url);
+  return await readVerifiedCapture(
+    path.join(dir, `${stem}.sealed`),
+    path.join(dir, `${stem}.meta.json`),
+    url,
+    key,
+  );
+}
+
 async function captureOrResume(
   dir: string,
   url: string,
@@ -182,24 +205,29 @@ async function captureOrResume(
   const stem = hash(url);
   const sealedFile = path.join(dir, `${stem}.sealed`);
   const metaFile = path.join(dir, `${stem}.meta.json`);
+  const stagedSealedFile = path.join(dir, `${stem}.sealed.pending`);
+  const stagedMetaFile = path.join(dir, `${stem}.meta.json.pending`);
 
-  let hasMeta = true;
-  try {
-    await fs.access(metaFile);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
-    hasMeta = false;
-  }
-  if (hasMeta) {
-    return await readSealedCapture(dir, url, key);
+  if (await fileExists(metaFile)) {
+    return await readVerifiedCapture(sealedFile, metaFile, url, key);
   }
 
-  // Refuse an orphan .sealed file before fetching so an original is never overwritten.
-  try {
-    await fs.access(sealedFile);
+  if (await fileExists(sealedFile)) {
+    if (await fileExists(stagedMetaFile)) {
+      const recovered = await readVerifiedCapture(sealedFile, stagedMetaFile, url, key);
+      await fs.unlink(stagedSealedFile).catch((err: NodeJS.ErrnoException) => {
+        if (err.code !== 'ENOENT') throw err;
+      });
+      await fs.rename(stagedMetaFile, metaFile);
+      return recovered;
+    }
     throw new Error('Captura incompleta encontrada; não sobrescrever');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+
+  for (const stale of [stagedSealedFile, stagedMetaFile]) {
+    await fs.unlink(stale).catch((err: NodeJS.ErrnoException) => {
+      if (err.code !== 'ENOENT') throw err;
+    });
   }
 
   assertAllowedSenadoUrl(url);
@@ -208,7 +236,7 @@ async function captureOrResume(
       Accept: 'application/json',
       'User-Agent': 'clareia-senado-collect',
     },
-    redirect: 'error',
+    redirect: 'manual',
     signal: AbortSignal.timeout(60_000),
   });
   if (response.status !== 200) {
@@ -225,8 +253,19 @@ async function captureOrResume(
     etag: response.headers.get('etag'),
   };
   const encrypted = seal(bytes, key);
-  await fs.writeFile(sealedFile, encrypted, {flag: 'wx', mode: 0o600});
-  await fs.writeFile(metaFile, JSON.stringify(meta, null, 2), {flag: 'wx', mode: 0o600});
+  // Stage both files before publishing either so an interrupted write never strands a partial original or missing metadata.
+  try {
+    await fs.writeFile(stagedSealedFile, encrypted, {flag: 'wx', mode: 0o600});
+    await fs.writeFile(stagedMetaFile, JSON.stringify(meta, null, 2), {flag: 'wx', mode: 0o600});
+    await fs.link(stagedSealedFile, sealedFile);
+  } catch (err) {
+    for (const staged of [stagedSealedFile, stagedMetaFile]) {
+      await fs.unlink(staged).catch(() => {});
+    }
+    throw err;
+  }
+  await fs.unlink(stagedSealedFile);
+  await fs.rename(stagedMetaFile, metaFile);
   return {bytes, meta};
 }
 
@@ -330,6 +369,45 @@ function isValidMandateEnvelope(
   return typeof mandato === 'object';
 }
 
+function auditFailureCodes(failures: string[]): string[] {
+  return [...new Set(failures.map(f => f.split(':', 1)[0]))];
+}
+
+async function assertRunYear(runDir: string, year: number, url: string): Promise<void> {
+  const summaryFile = path.join(runDir, 'summary.json');
+  let rawSummary: string | null = null;
+  try {
+    rawSummary = await fs.readFile(summaryFile, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+  if (rawSummary !== null) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawSummary);
+    } catch {
+      throw new Error('Resumo preservado inválido');
+    }
+    if (!parsed || typeof parsed !== 'object' || (parsed as {year?: unknown}).year !== year) {
+      throw new Error('Run ID já vinculado a outro ano');
+    }
+  }
+
+  const expectedPrefix = `${hash(url)}.`;
+  for (const sub of ['pass-1', 'pass-2']) {
+    let entries: string[];
+    try {
+      entries = await fs.readdir(path.join(runDir, sub));
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw err;
+    }
+    if (entries.some(name => !name.startsWith(expectedPrefix))) {
+      throw new Error('Run ID já vinculado a outro ano');
+    }
+  }
+}
+
 async function writeDerivedFiles(
   runDir: string,
   files: Array<{name: string; text: string}>,
@@ -339,8 +417,27 @@ async function writeDerivedFiles(
       throw new Error(`CPF detectado em arquivo derivado: ${file.name}`);
     }
   }
-  for (const file of files) {
-    await fs.writeFile(path.join(runDir, file.name), file.text, {mode: 0o600});
+  const ordered = [
+    ...files.filter(f => f.name !== 'summary.json'),
+    ...files.filter(f => f.name === 'summary.json'),
+  ];
+  const token = randomBytes(6).toString('hex');
+  const staged: Array<{tmp: string; dest: string}> = [];
+  try {
+    for (const file of ordered) {
+      const dest = path.join(runDir, file.name);
+      const tmp = path.join(runDir, `.${file.name}.${token}.tmp`);
+      staged.push({tmp, dest});
+      await fs.writeFile(tmp, file.text, {mode: 0o600});
+    }
+    for (const {tmp, dest} of staged) {
+      await fs.rename(tmp, dest);
+    }
+  } catch (err) {
+    for (const {tmp} of staged) {
+      await fs.unlink(tmp).catch(() => {});
+    }
+    throw err;
   }
 }
 
@@ -391,11 +488,28 @@ export async function collectSenadoExpenses(options: CollectSenadoOptions): Prom
   const audit = options.audit ?? auditCeapsYear;
   const previousRun = previousRunId ?? null;
 
+  await assertRunYear(runDir, year, url);
+
   let prevParsed: CeapsParsed | null = null;
   let prevRawById: Map<number, Record<string, unknown>> | null = null;
   if (previousRunId !== undefined) {
     const prevCap = await readSealedCapture(path.join(baseDir, previousRunId, 'pass-1'), url, key);
-    prevParsed = parseCeapsYear(prevCap.bytes, toCeapsContext(year, prevCap.meta));
+    try {
+      prevParsed = parseCeapsYear(prevCap.bytes, toCeapsContext(year, prevCap.meta));
+    } catch (err) {
+      if (err instanceof CeapsError) {
+        await fs.mkdir(runDir, {recursive: true});
+        return await failRun(
+          runDir,
+          year,
+          previousRun,
+          {pass1: null, pass2: null},
+          {ok: false, pass1: null, pass2: null},
+          err.code,
+        );
+      }
+      throw err;
+    }
     prevRawById = indexRawById(prevCap.bytes);
   }
 
@@ -443,8 +557,8 @@ export async function collectSenadoExpenses(options: CollectSenadoOptions): Prom
   const audit2 = audit(cap2.bytes, parsed2, ctx2);
   const auditSummary: SenadoAuditSummary = {
     ok: audit1.ok && audit2.ok,
-    pass1: audit1,
-    pass2: audit2,
+    pass1: {ok: audit1.ok, failures: auditFailureCodes(audit1.failures)},
+    pass2: {ok: audit2.ok, failures: auditFailureCodes(audit2.failures)},
   };
   if (!auditSummary.ok) {
     return await failRun(
@@ -590,9 +704,9 @@ export async function collectSenadoExpenses(options: CollectSenadoOptions): Prom
   };
 
   await writeDerivedFiles(runDir, [
-    {name: 'summary.json', text: canonical(summary)},
     {name: 'records.json', text: canonical(derivedRecords)},
     {name: 'review.json', text: canonical(sanitizedReview)},
+    {name: 'summary.json', text: canonical(summary)},
   ]);
 
   return summary;
