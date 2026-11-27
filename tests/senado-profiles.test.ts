@@ -140,6 +140,10 @@ test('parseSenatorDetail reads official fields, nulls disallowed/missing photos,
   assert.equal(parseSenatorDetail(detailEnvelope(5899, {party: 'PSD', uf: 'GO'}), 5899).photoUrl, null);
   assert.equal(
     parseSenatorDetail(detailEnvelope(5899, {photo: 'http://www.senado.leg.br/senador5899.jpg'}), 5899).photoUrl,
+    'https://www.senado.leg.br/senador5899.jpg',
+  );
+  assert.equal(
+    parseSenatorDetail(detailEnvelope(5899, {photo: 'http://www.senado.leg.br.evil.com/x.jpg'}), 5899).photoUrl,
     null,
   );
   assert.equal(

@@ -132,7 +132,7 @@ export function parseSenatorDetail(envelope: unknown, code: number): SenatorDeta
   const rawCode = ident.CodigoParlamentar ?? parl.Codigo;
   if (!matchesCode(rawCode, code)) throw new Error(`Código incompatível no detalhe do senador ${code}`);
 
-  const rawPhoto = optionalTrimmedString(ident.UrlFotoParlamentar, 'UrlFotoParlamentar');
+  const rawPhoto = optionalTrimmedString(ident.UrlFotoParlamentar, 'UrlFotoParlamentar')?.replace(/^http:\/\//i, 'https://') ?? null;
   const photoUrl = rawPhoto !== null && isAllowedSenadoPhotoUrl(rawPhoto) ? rawPhoto : null;
   const party = optionalTrimmedString(ident.SiglaPartidoParlamentar, 'SiglaPartidoParlamentar');
   const uf = optionalTrimmedString(ident.UfParlamentar, 'UfParlamentar');
