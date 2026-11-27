@@ -129,6 +129,22 @@ export function senatorMandatesUrl(codSenador: number): string {
   return url;
 }
 
+async function isSameDirectory(a: string, b: string): Promise<boolean> {
+  if (path.resolve(a) === path.resolve(b)) return true;
+  try {
+    const [realA, realB] = await Promise.all([fs.realpath(a), fs.realpath(b)]);
+    if (realA === realB) return true;
+    const [statA, statB] = await Promise.all([
+      fs.stat(realA, {bigint: true}),
+      fs.stat(realB, {bigint: true}),
+    ]);
+    return statA.ino !== 0n && statA.dev === statB.dev && statA.ino === statB.ino;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
 async function fileExists(file: string): Promise<boolean> {
   try {
     await fs.access(file);
@@ -197,7 +213,7 @@ async function captureOrResume(
   key: Buffer,
   fetcher: Fetcher,
   maxBytes: number,
-  allowNon200: boolean,
+  allowFetchFailure: boolean,
 ): Promise<{bytes: Uint8Array; meta: CaptureMeta} | null> {
   assertAllowedSenadoUrl(url);
   if (key.length !== 32) throw new Error('Chave de cofre inválida');
@@ -231,19 +247,29 @@ async function captureOrResume(
   }
 
   assertAllowedSenadoUrl(url);
-  const response = await fetcher(url, {
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': 'clareia-senado-collect',
-    },
-    redirect: 'manual',
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (response.status !== 200) {
-    if (allowNon200) return null;
-    throw new Error(`HTTP ${response.status}`);
+  let response: Response;
+  let bytes: Uint8Array;
+  try {
+    response = await fetcher(url, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'clareia-senado-collect',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (response.status !== 200) {
+      if (allowFetchFailure) {
+        await response.body?.cancel().catch(() => {});
+        return null;
+      }
+      throw new Error(`HTTP ${response.status}`);
+    }
+    bytes = await readLimited(response, maxBytes);
+  } catch (err) {
+    if (allowFetchFailure) return null;
+    throw err;
   }
-  const bytes = await readLimited(response, maxBytes);
   const meta: CaptureMeta = {
     url,
     sha256: hash(bytes),
@@ -411,6 +437,7 @@ async function assertRunYear(runDir: string, year: number, url: string): Promise
 async function writeDerivedFiles(
   runDir: string,
   files: Array<{name: string; text: string}>,
+  removeNames: string[] = [],
 ): Promise<void> {
   for (const file of files) {
     if (scanCpfs(file.text, new Set()) !== 0) {
@@ -429,6 +456,11 @@ async function writeDerivedFiles(
       const tmp = path.join(runDir, `.${file.name}.${token}.tmp`);
       staged.push({tmp, dest});
       await fs.writeFile(tmp, file.text, {mode: 0o600});
+    }
+    for (const name of removeNames) {
+      await fs.unlink(path.join(runDir, name)).catch((err: NodeJS.ErrnoException) => {
+        if (err.code !== 'ENOENT') throw err;
+      });
     }
     for (const {tmp, dest} of staged) {
       await fs.rename(tmp, dest);
@@ -468,7 +500,11 @@ async function failRun(
     coverage: emptyCoverage(),
     mandatesMissing: [],
   };
-  await writeDerivedFiles(runDir, [{name: 'summary.json', text: canonical(summary)}]);
+  await writeDerivedFiles(
+    runDir,
+    [{name: 'summary.json', text: canonical(summary)}],
+    ['records.json', 'review.json'],
+  );
   return summary;
 }
 
@@ -487,6 +523,10 @@ export async function collectSenadoExpenses(options: CollectSenadoOptions): Prom
   const parse = options.parse ?? parseCeapsYear;
   const audit = options.audit ?? auditCeapsYear;
   const previousRun = previousRunId ?? null;
+
+  if (previousRunId !== undefined && (await isSameDirectory(runDir, path.join(baseDir, previousRunId)))) {
+    throw new Error('Previous run não pode apontar para o mesmo diretório da execução atual');
+  }
 
   await assertRunYear(runDir, year, url);
 

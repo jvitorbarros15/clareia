@@ -312,6 +312,18 @@ test('pass 2 with a removed id or a changed value holds the affected month', asy
   });
   assert.equal(changedSummary.status, 'held');
   assert.deepEqual(changedSummary.heldMonths, [9]);
+
+  const detalhamentoRows = cloneRows();
+  detalhamentoRows.find(r => r.id === 2249409)!.detalhamento = 'Detalhamento alterado na segunda passagem.';
+  const detalhamentoSummary = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'pass2-detalhamento',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher({pass1Bytes: API_BYTES, pass2Bytes: toBytes(detalhamentoRows)}).fetcher,
+  });
+  assert.equal(detalhamentoSummary.status, 'held');
+  assert.deepEqual(detalhamentoSummary.heldMonths, [1]);
 });
 
 test('pass 2 with a duplicated id fails and writes only summary.json with code', async t => {
@@ -397,6 +409,19 @@ test('previous run with vanished, changed, or new id in existing month holds tha
   });
   assert.equal(freshMonthOk.status, 'review-required');
   assert.deepEqual(freshMonthOk.heldMonths, []);
+
+  const prevDetalhamentoRows = cloneRows();
+  prevDetalhamentoRows.find(r => r.id === 2268296)!.detalhamento = 'Detalhamento alterado entre coletas.';
+  const prevDetalhamentoHeld = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'curr-detalhamento',
+    previousRunId: 'prev-run',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher({pass1Bytes: toBytes(prevDetalhamentoRows)}).fetcher,
+  });
+  assert.equal(prevDetalhamentoHeld.status, 'held');
+  assert.deepEqual(prevDetalhamentoHeld.heldMonths, [9]);
 });
 
 test('truncated JSON fails and writes only summary.json', async t => {
@@ -730,4 +755,188 @@ test('derived writes stage files and install summary.json last so failed records
   assert.equal(await exists(path.join(runDir, 'review.json')), false);
   const entries = await fs.readdir(runDir);
   assert.equal(entries.some(name => name.endsWith('.tmp')), false);
+});
+
+test('mandates timeout and broken response body enter mandatesMissing, while capture integrity and disk errors stay fatal', async t => {
+  const baseDir = await tempDir(t);
+  const key = randomBytes(32);
+  const base = makeFakeFetcher();
+
+  const fetcher: Fetcher = async (url, init) => {
+    if (url === senatorMandatesUrl(5899)) {
+      base.calls.push(url);
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    }
+    if (url === senatorMandatesUrl(5917)) {
+      base.calls.push(url);
+      let sent = false;
+      const brokenStream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!sent) {
+            sent = true;
+            controller.enqueue(new TextEncoder().encode('{"MandatoParlamentar":'));
+            return;
+          }
+          controller.error(new Error('socket hang up'));
+        },
+      });
+      return new Response(brokenStream, {status: 200, headers: {'content-type': 'application/json'}});
+    }
+    return await base.fetcher(url, init);
+  };
+
+  const summary = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'mandates-broken',
+    key,
+    baseDir,
+    fetcher,
+  });
+
+  assert.equal(summary.status, 'review-required');
+  assert.equal(summary.mandatesMissing.includes(5899), true);
+  assert.equal(summary.mandatesMissing.includes(5917), true);
+  assert.equal(await exists(path.join(baseDir, 'mandates-broken', 'summary.json')), true);
+  const mandatesDir = path.join(baseDir, 'mandates-broken', 'mandates');
+  for (const code of [5899, 5917]) {
+    const stem = hash(senatorMandatesUrl(code));
+    assert.equal(await exists(path.join(mandatesDir, `${stem}.sealed`)), false);
+    assert.equal(await exists(path.join(mandatesDir, `${stem}.meta.json`)), false);
+  }
+
+  await collectSenadoExpenses({
+    year: 2025,
+    runId: 'mandates-tampered',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher().fetcher,
+  });
+  const sealed5899 = path.join(
+    baseDir,
+    'mandates-tampered',
+    'mandates',
+    `${hash(senatorMandatesUrl(5899))}.sealed`,
+  );
+  await fs.writeFile(sealed5899, Buffer.from('tampered'));
+  await assert.rejects(
+    collectSenadoExpenses({
+      year: 2025,
+      runId: 'mandates-tampered',
+      key,
+      baseDir,
+      fetcher: makeFakeFetcher().fetcher,
+    }),
+  );
+
+  const diskErrRunDir = path.join(baseDir, 'mandates-disk-err');
+  await fs.mkdir(diskErrRunDir, {recursive: true});
+  await fs.writeFile(path.join(diskErrRunDir, 'mandates'), 'not-a-dir');
+  await assert.rejects(
+    collectSenadoExpenses({
+      year: 2025,
+      runId: 'mandates-disk-err',
+      key,
+      baseDir,
+      fetcher: makeFakeFetcher().fetcher,
+    }),
+  );
+});
+
+test('resuming a completed run with a truncated previous run removes stale records.json and review.json', async t => {
+  const baseDir = await tempDir(t);
+  const key = randomBytes(32);
+
+  const completed = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'completed-run',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher().fetcher,
+  });
+  assert.equal(completed.status, 'review-required');
+  const runDir = path.join(baseDir, 'completed-run');
+  assert.equal(await exists(path.join(runDir, 'summary.json')), true);
+  assert.equal(await exists(path.join(runDir, 'records.json')), true);
+  assert.equal(await exists(path.join(runDir, 'review.json')), true);
+
+  const prev = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'prev-truncated-resume',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher({pass1Bytes: API_BYTES.slice(0, 40)}).fetcher,
+  });
+  assert.equal(prev.status, 'failed');
+
+  const resumed = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'completed-run',
+    previousRunId: 'prev-truncated-resume',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher().fetcher,
+  });
+  assert.equal(resumed.status, 'failed');
+  assert.equal(resumed.errorCode, 'json-invalid');
+  assert.equal(resumed.previousRun, 'prev-truncated-resume');
+  assert.equal(await exists(path.join(runDir, 'summary.json')), true);
+  assert.equal(await exists(path.join(runDir, 'records.json')), false);
+  assert.equal(await exists(path.join(runDir, 'review.json')), false);
+  const onDisk = JSON.parse(await fs.readFile(path.join(runDir, 'summary.json'), 'utf8'));
+  assert.equal(onDisk.status, 'failed');
+  assert.equal(onDisk.errorCode, 'json-invalid');
+});
+
+test('resuming a held run with its own directory as previousRunId is rejected and keeps holds intact', async t => {
+  const baseDir = await tempDir(t);
+  const key = randomBytes(32);
+
+  await collectSenadoExpenses({
+    year: 2025,
+    runId: 'base-prev',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher().fetcher,
+  });
+
+  const vanishedRows = cloneRows().filter(r => r.id !== 9000002);
+  const held = await collectSenadoExpenses({
+    year: 2025,
+    runId: 'held-run',
+    previousRunId: 'base-prev',
+    key,
+    baseDir,
+    fetcher: makeFakeFetcher({pass1Bytes: toBytes(vanishedRows)}).fetcher,
+  });
+  assert.equal(held.status, 'held');
+  assert.deepEqual(held.heldMonths, [2]);
+
+  const heldDir = path.join(baseDir, 'held-run');
+  const summaryBefore = await fs.readFile(path.join(heldDir, 'summary.json'), 'utf8');
+
+  await assert.rejects(
+    collectSenadoExpenses({
+      year: 2025,
+      runId: 'held-run',
+      previousRunId: 'held-run',
+      key,
+      baseDir,
+      fetcher: makeFakeFetcher({pass1Bytes: toBytes(vanishedRows)}).fetcher,
+    }),
+  );
+  assert.equal(await fs.readFile(path.join(heldDir, 'summary.json'), 'utf8'), summaryBefore);
+
+  const aliasDir = path.join(baseDir, 'held-run-alias');
+  await fs.symlink(path.resolve(heldDir), aliasDir, process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(
+    collectSenadoExpenses({
+      year: 2025,
+      runId: 'held-run',
+      previousRunId: 'held-run-alias',
+      key,
+      baseDir,
+      fetcher: makeFakeFetcher({pass1Bytes: toBytes(vanishedRows)}).fetcher,
+    }),
+  );
+  assert.equal(await fs.readFile(path.join(heldDir, 'summary.json'), 'utf8'), summaryBefore);
 });
