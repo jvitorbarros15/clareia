@@ -11,8 +11,8 @@ import {createApp} from '../src/app.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {partyFieldsOf} from '../src/site-summary.ts';
-import {FIXED_PAGES,deputiesOf,loadStaticPages,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
-import type {Deputy,Period} from '../src/prerender.ts';
+import {FIXED_PAGES,deputiesOf,loadStaticPages,writePrerendered,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
+import type {Deputy,Period,Senator} from '../src/prerender.ts';
 import {loadSpec} from '../src/api-docs.ts';
 
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
@@ -318,4 +318,45 @@ test('real/clareia-api.pdf was generated from the current api/openapi.yaml',asyn
   const root=path.join(import.meta.dirname,'..'),sha=createHash('sha256').update((await fs.readFile(path.join(root,'api','openapi.yaml'),'utf8')).replace(/\r\n/g,'\n')).digest('hex').slice(0,16);
   const pdf=(await fs.readFile(path.join(root,'real','clareia-api.pdf'))).toString('latin1');
   assert.ok(pdf.includes(`sha256:${sha}`),'api/openapi.yaml changed since real/clareia-api.pdf was generated: run npm run api:pdf');
+});
+test('renderDeputy and the deputy entries of sitemapXml are identical with and without senators carrying photos and parties',async()=>{
+  const senators:Senator[]=[{
+    senatorId:5899,year:2025,name:'Vanderlan Cardoso',totalCents:913383,records:2,
+    photo:'/senadores/portraits/5899.jpg',
+    months:[
+      {month:1,exercise:'full',uf:'GO',party:'PSD',codigoMandato:'538',participation:'Titular'},
+      {month:7,exercise:'partial',uf:'GO',party:'MDB',codigoMandato:'538',participation:'Titular'},
+    ],
+    review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
+  }];
+  const deputies:Deputy[]=[normal,{...normal,id:7,name:'Zé & Cia'}];
+  const jpeg=Buffer.from([0xff,0xd8,0xff,0xc0,0x00,0x0b,0x08,0x01,0x90,0x01,0x2c,0x01,0x01,0x11,0x00,0xff,0xd9]);
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-deputy-unchanged-'));
+  try{
+    const dirWithout=path.join(dir,'without'),dirWith=path.join(dir,'with');
+    for(const d of [dirWithout,dirWith]){
+      await fs.mkdir(path.join(d,'data','pub1','portraits'),{recursive:true});
+      await fs.writeFile(path.join(d,'index.html'),shell);
+      await fs.writeFile(path.join(d,'data','pub1','portraits','100.jpg'),jpeg);
+    }
+    await fs.mkdir(path.join(dirWith,'senadores','portraits'),{recursive:true});
+    await fs.writeFile(path.join(dirWith,'senadores','portraits','5899.jpg'),jpeg);
+    const opts=resolveOptions({siteUrl:SITE,sitemap:true});
+    await writePrerendered(dirWithout,'pub1',deputies,period,opts);
+    await writePrerendered(dirWith,'pub1',deputies,period,opts,new Map(),[],senators);
+
+    const depWithout=await fs.readFile(path.join(dirWithout,'deputado','100-maria-da-silva.html'),'utf8');
+    const depWith=await fs.readFile(path.join(dirWith,'deputado','100-maria-da-silva.html'),'utf8');
+    const expected=renderDeputy(shell,normal,period,SITE,{url:`${SITE}/data/pub1/portraits/100.jpg`,width:300,height:400});
+    assert.equal(depWithout,expected);
+    assert.equal(depWith,depWithout);
+
+    const locs=(xml:string)=>[...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m=>m[1]);
+    const without=locs(await fs.readFile(path.join(dirWithout,'sitemap.xml'),'utf8'));
+    const withSen=locs(await fs.readFile(path.join(dirWith,'sitemap.xml'),'utf8'));
+    assert.deepEqual(withSen.filter(u=>!u.includes('/senador/')),without);
+    assert.ok(withSen.includes(`${SITE}/senador/5899-vanderlan-cardoso`));
+  }finally{
+    await fs.rm(dir,{recursive:true,force:true});
+  }
 });

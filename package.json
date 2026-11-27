@@ -28,6 +28,7 @@
     "collect:expenses:intermediate": "tsx scripts/collect-expense-intermediate.ts",
     "collect:senado:expenses": "tsx scripts/collect-senado-expenses.ts",
     "export:senado:build": "tsx scripts/export-senado-build.ts",
+    "collect:senado:profiles": "tsx scripts/collect-senado-profiles.ts",
     "verify:expenses:intermediate": "tsx scripts/verify-expense-intermediate.ts",
     "verify:expenses:portal": "tsx scripts/verify-expenses-portal.ts",
     "compare:expenses:intermediate": "tsx scripts/compare-expense-intermediate.ts",

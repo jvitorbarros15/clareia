@@ -43,7 +43,8 @@ const bills=await Promise.all(config.billsRuns.map(async run=>({report:await loa
 const social=config.socialRun?(await load('social',config.socialRun,'social.json')).people:undefined;
 const votes=await Promise.all(config.votesRuns.map(async run=>({report:await load('votes',run,'votes.json'),ballots:await load('votes',run,'ballots.json'),audit:await load('votes',run,'audit.json')})));
 const amendmentsInput=config.amendmentsRun?{report:await load('amendments',config.amendmentsRun,'amendments.json'),audit:await load('amendments',config.amendmentsRun,'audit.json')}:null;
-const senatorsRuns:SenatorsYearRun[]|null=config.senators?await Promise.all(Object.keys(config.senators.years).map(Number).sort((a,b)=>a-b).map(async year=>{const run=config.senators!.years[year];return {year,parsed:await load('senado-ceaps',run,'parsed.json'),audit:await load('senado-ceaps',run,'audit.json'),coverage:await load('senado-ceaps',run,'coverage.json')};})):null;
+const senatorsProfiles=config.senators?.profilesRun?await load('senado-profiles',config.senators.profilesRun,'profiles.json'):undefined;
+const senatorsRuns:SenatorsYearRun[]|null=config.senators?await Promise.all(Object.keys(config.senators.years).map(Number).sort((a,b)=>a-b).map(async year=>{const run=config.senators!.years[year];return {year,parsed:await load('senado-ceaps',run,'parsed.json'),audit:await load('senado-ceaps',run,'audit.json'),coverage:await load('senado-ceaps',run,'coverage.json'),...senatorsProfiles!==undefined?{profiles:senatorsProfiles}:{}};})):null;
 const baseAudits=[...[...sources.values()].flatMap(s=>[s.temporalAudit,s.crosscheckAudit]),...[...lotsOf.values()].flat().map(l=>l.audit),...bills.map(b=>b.audit),...votes.map(v=>v.audit)];
 const publicationAudits=[...baseAudits,...amendmentsInput?[amendmentsInput.audit]:[]];
 const explicitPublishedAt=typeof raw.publishedAt==='string'&&!Number.isNaN(Date.parse(raw.publishedAt))?new Date(raw.publishedAt).toISOString():null;

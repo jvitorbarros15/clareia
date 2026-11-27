@@ -10,6 +10,8 @@ import {
 } from './senado-ceiling.ts';
 import type {SenatorCeilingTable, SenatorSeatCeiling} from './senado-ceiling.ts';
 import type {CeapsParsed, CeapsRecord, CeapsReviewItem} from './senado-expenses.ts';
+import {partyForMonth} from './senado-profiles.ts';
+import type {SenadoProfilesFile, SenatorAffiliation} from './senado-profiles.ts';
 import type {deriveSenatorCoverage, SenatorMonth} from './senate-coverage.ts';
 import type {DB} from './store.ts';
 
@@ -27,12 +29,14 @@ export type SenatorsYearRun = {
   parsed: CeapsParsed;
   audit: SenatorsAudit;
   coverage: SenatorCoverage[];
+  profiles?: SenadoProfilesFile;
 };
 
 export type SenatorExerciseMonth = {
   month: number;
   exercise: SenatorMonth['exercise'];
   uf: string | null;
+  party?: string | null;
   codigoMandato: string | null;
   participation: string | null;
 };
@@ -121,6 +125,32 @@ function buildYearRows(
   ceilingTable: SenatorCeilingTable = SENATOR_CEILING_TABLE,
 ): SenatorYearRecord[] {
   const {year, parsed, coverage} = run;
+  let affiliationsById: Map<number, SenatorAffiliation[]> | null = null;
+  if (run.profiles !== undefined) {
+    if (
+      !run.profiles ||
+      typeof run.profiles !== 'object' ||
+      run.profiles.schema !== 'clareia.senado-profiles.v1' ||
+      !Array.isArray(run.profiles.senators)
+    ) {
+      throw new Error(`Senadores de ${year}: perfis inválidos`);
+    }
+    affiliationsById = new Map<number, SenatorAffiliation[]>();
+    for (const entry of run.profiles.senators) {
+      if (
+        !entry ||
+        typeof entry !== 'object' ||
+        typeof entry.id !== 'number' ||
+        !Number.isSafeInteger(entry.id) ||
+        entry.id < 1 ||
+        !Array.isArray(entry.affiliations) ||
+        affiliationsById.has(entry.id)
+      ) {
+        throw new Error(`Senadores de ${year}: perfis inválidos`);
+      }
+      affiliationsById.set(entry.id, entry.affiliations);
+    }
+  }
   const covById = new Map<number, SenatorCoverage>();
   for (const entry of coverage) {
     if (covById.has(entry.id)) throw new Error(`Cobertura de senador repetida em ${year}: ${entry.id}`);
@@ -210,6 +240,9 @@ function buildYearRows(
             uf: m.uf,
             codigoMandato: m.codigoMandato,
             participation: m.participation,
+            ...(affiliationsById !== null
+              ? {party: partyForMonth(affiliationsById.get(senatorId) ?? [], year, m.month, m.exercise)}
+              : {}),
           }))
       : [];
 
@@ -491,7 +524,12 @@ export async function auditSenatorsVersion(
   return {status: failures.length ? 'failed' : 'passed', failures, checkedAt};
 }
 
-export async function writeSenatorsSite(db: DB, outDir: string, publicationId: string): Promise<string[]> {
+export async function writeSenatorsSite(
+  db: DB,
+  outDir: string,
+  publicationId: string,
+  photoIds: Set<number> = new Set(),
+): Promise<string[]> {
   const r = await db.query<{domain: Domain; body: Omit<SenatorsVersion, 'rows'>; status: string | null}>(
     'SELECT p.domain,p.body,a.status FROM publications p LEFT JOIN publication_audits a ON a.publication_id=p.id WHERE p.id=$1 AND p.id NOT IN (SELECT publication_id FROM withheld_publications)',
     [publicationId],
@@ -518,7 +556,12 @@ export async function writeSenatorsSite(db: DB, outDir: string, publicationId: s
   const indexYears: {year: number; file: string; senators: number; records: number; totalCents: number}[] = [];
 
   for (const year of row.body.scope.years) {
-    const senators = [...(byYear.get(year) ?? [])].sort((a, b) => a.senatorId - b.senatorId);
+    const senators = [...(byYear.get(year) ?? [])]
+      .sort((a, b) => a.senatorId - b.senatorId)
+      .map(s => ({
+        ...s,
+        photo: photoIds.has(s.senatorId) ? `/senadores/portraits/${s.senatorId}.jpg` : null,
+      }));
     const records = senators.reduce((s, x) => s + x.records, 0);
     const totalCents = senators.reduce((s, x) => s + x.totalCents, 0);
     const file = `${year}.json`;
