@@ -515,6 +515,7 @@ test('the home hero and footer follow Senado data and restore the Câmara highli
   const feature=app.elements['#editorial-feature'], portrait=app.elements['#hero-portrait'], footer=app.elements['.footer'];
   assert.match(app.elements['#app'].innerHTML,/<div class="editorial-feature" id="editorial-feature"><p role="status">Carregando dados do Senado…<\/p>/);
   assert.match(footer.innerHTML,/<p>Dados oficiais do Senado Federal<\/p>/);
+  assert.match(footer.innerHTML,/<a href="mailto:contato@clareia.org">contato@clareia.org<\/a>/);
   assert.doesNotMatch(footer.innerHTML,/Câmara|Versão Jan/);
 
   await flush();

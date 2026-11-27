@@ -1,1 +1,3460 @@
-[]
+[
+  {
+    "code": "1246",
+    "deputyId": 74317,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JULIO CESAR\" igual ao de Júlio Cesar (id 74317), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1270",
+    "deputyId": 141458,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOAO CARLOS BACELAR\" igual ao de João Carlos Bacelar (id 141458), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1271",
+    "deputyId": 74041,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZ COUTO\" igual ao de Luiz Couto (id 74041), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "1277",
+    "deputyId": 74043,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"WELLINGTON ROBERTO\" igual ao de Wellington Roberto (id 74043), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1283",
+    "deputyId": 74044,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"WILSON SANTIAGO\" igual ao de Wilson Santiago (id 74044), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1310",
+    "deputyId": 73701,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BENEDITA DA SILVA\" igual ao de Benedita da Silva (id 73701), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1331",
+    "deputyId": 74057,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALICE PORTUGAL\" igual ao de Alice Portugal (id 74057), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1339",
+    "deputyId": 74060,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANIEL ALMEIDA\" igual ao de Daniel Almeida (id 74060), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1349",
+    "deputyId": 74646,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AECIO NEVES\" igual ao de Aécio Neves (id 74646), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1362",
+    "deputyId": 74141,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSIAS GOMES\" igual ao de Josias Gomes (id 74141), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "1403",
+    "deputyId": 74156,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LEONARDO MONTEIRO\" igual ao de Leonardo Monteiro (id 74156), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1405",
+    "deputyId": 74158,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARIO HERINGER\" igual ao de Mário Heringer (id 74158), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1407",
+    "deputyId": 74159,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ODAIR CUNHA\" igual ao de Odair Cunha (id 74159), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1408",
+    "deputyId": 74160,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PATRUS ANANIAS\" igual ao de Patrus Ananias (id 74160), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1411",
+    "deputyId": 74161,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"REGINALDO LOPES\" igual ao de Reginaldo Lopes (id 74161), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1445",
+    "deputyId": 74374,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GERALDO RESENDE\" igual ao de Geraldo Resende (id 74374), único candidato. 100% do valor empenhado com UF vai para MS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "1451",
+    "deputyId": 74376,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"VANDER LOUBET\" igual ao de Vander Loubet (id 74376), único candidato. 100% do valor empenhado com UF vai para MS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1468",
+    "deputyId": 74171,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CHICO ALENCAR\" igual ao de Chico Alencar (id 74171), único candidato. 99% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "1504",
+    "deputyId": 74253,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JULIO LOPES\" igual ao de Julio Lopes (id 74253), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "1527",
+    "deputyId": 74262,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CARLOS SAMPAIO\" igual ao de Carlos Sampaio (id 74262), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1568",
+    "deputyId": 74270,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GILBERTO NASCIMENTO\" igual ao de Gilberto Nascimento (id 74270), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1581",
+    "deputyId": 74273,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JEFFERSON CAMPOS\" igual ao de Jefferson Campos (id 74273), único candidato. 99% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1619",
+    "deputyId": 74090,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ATILA LINS\" igual ao de Átila Lins (id 74090), único candidato. 100% do valor empenhado com UF vai para AM, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1690",
+    "deputyId": 73801,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RENILDO CALHEIROS\" igual ao de Renildo Calheiros (id 73801), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1775",
+    "deputyId": 74848,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JANDIRA FEGHALI\" igual ao de Jandira Feghali (id 74848), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1867",
+    "deputyId": 73778,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZ CARLOS HAULY\" igual ao de Luiz Carlos Hauly (id 73778), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "1960",
+    "deputyId": 74371,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RUBENS OTONI\" igual ao de Rubens Otoni (id 74371), único candidato. 99% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1968",
+    "deputyId": 74383,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GIACOBO\" igual ao de Giacobo (id 74383), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1983",
+    "deputyId": 74398,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARIA DO ROSARIO\" igual ao de Maria do Rosário (id 74398), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "1986",
+    "deputyId": 74400,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO PIMENTA\" igual ao de Paulo Pimenta (id 74400), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2026."
+  },
+  {
+    "code": "1997",
+    "deputyId": 74283,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"VICENTINHO\" igual ao de Vicentinho (id 74283), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2083",
+    "deputyId": 133439,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANDRE FIGUEIREDO\" igual ao de André Figueiredo (id 133439), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2098",
+    "deputyId": 136811,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AFONSO HAMM\" igual ao de Afonso Hamm (id 136811), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2170",
+    "deputyId": 141411,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DAGOBERTO NOGUEIRA\" igual ao de Dagoberto Nogueira (id 141411), único candidato. 100% do valor empenhado com UF vai para MS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2356",
+    "deputyId": 141391,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ARNALDO JARDIM\" igual ao de Arnaldo Jardim (id 141391), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2388",
+    "deputyId": 141408,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CLEBER VERDE\" igual ao de Cleber Verde (id 141408), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2392",
+    "deputyId": 141431,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FERNANDO COELHO FILHO\" igual ao de Fernando Coelho Filho (id 141431), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2397",
+    "deputyId": 141450,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"HUGO LEAL\" igual ao de Hugo Leal (id 141450), único candidato. 99% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2407",
+    "deputyId": 141485,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZ CARLOS BUSATO\" igual ao de Luiz Carlos Busato (id 141485), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "2441",
+    "deputyId": 141464,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSE AIRTON FELIX CIRILO\" igual ao de José Airton Félix Cirilo (id 141464), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2442",
+    "deputyId": 141470,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSE GUIMARAES\" igual ao de José Guimarães (id 141470), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2446",
+    "deputyId": 141459,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOAO MAIA\" igual ao de João Maia (id 141459), único candidato. 100% do valor empenhado com UF vai para RN, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2456",
+    "deputyId": 141421,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"EDUARDO DA FONTE\" igual ao de Eduardo da Fonte (id 141421), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2468",
+    "deputyId": 139285,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LIDICE DA MATA\" igual ao de Lídice da Mata (id 139285), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2471",
+    "deputyId": 73808,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SERGIO BRITO\" igual ao de Sérgio Brito (id 73808), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2482",
+    "deputyId": 141487,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZ FERNANDO FARIA\" igual ao de Luiz Fernando Faria (id 141487), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "2487",
+    "deputyId": 141516,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO ABI-ACKEL\" igual ao de Paulo Abi-Ackel (id 141516), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2488",
+    "deputyId": 141531,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RODRIGO DE CASTRO\" igual ao de Rodrigo de Castro (id 141531), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2517",
+    "deputyId": 141555,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"VINICIUS CARVALHO\" igual ao de Vinicius Carvalho (id 141555), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2520",
+    "deputyId": 141398,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CARLOS ZARATTINI\" igual ao de Carlos Zarattini (id 141398), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2528",
+    "deputyId": 141456,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JILMAR TATTO\" igual ao de Jilmar Tatto (id 141456), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "2532",
+    "deputyId": 141518,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULINHO DA FORCA\" igual ao de Paulinho da Força (id 141518), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2534",
+    "deputyId": 141488,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO TEIXEIRA\" igual ao de Paulo Teixeira (id 141488), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "2601",
+    "deputyId": 150418,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCIO MARINHO\" igual ao de Márcio Marinho (id 150418), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2616",
+    "deputyId": 152605,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GLAUBER BRAGA\" igual ao de Glauber Braga (id 152605), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2620",
+    "deputyId": 154178,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MILTON VIEIRA\" igual ao de Milton Vieira (id 154178), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "2675",
+    "deputyId": 160641,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PROFESSORA MARCIVANIA\" igual ao de Professora Marcivania (id 160641), único candidato. 100% do valor empenhado com UF vai para AP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2026."
+  },
+  {
+    "code": "2686",
+    "deputyId": 123756,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANTONIA LUCIA\" igual ao de Antônia Lúcia (id 123756), único candidato. 100% do valor empenhado com UF vai para AC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "2700",
+    "deputyId": 62881,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANILO FORTE\" igual ao de Danilo Forte (id 62881), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2701",
+    "deputyId": 143632,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DOMINGOS NETO\" igual ao de Domingos Neto (id 143632), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2711",
+    "deputyId": 160527,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AGUINALDO RIBEIRO\" igual ao de Aguinaldo Ribeiro (id 160527), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2712",
+    "deputyId": 160674,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"HUGO MOTTA\" igual ao de Hugo Motta (id 160674), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2714",
+    "deputyId": 160629,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROMERO RODRIGUES\" igual ao de Romero Rodrigues (id 160629), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "2715",
+    "deputyId": 160635,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RUY CARNEIRO\" igual ao de Ruy Carneiro (id 160635), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2718",
+    "deputyId": 160665,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AUGUSTO COUTINHO\" igual ao de Augusto Coutinho (id 160665), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2724",
+    "deputyId": 160642,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PASTOR EURICO\" igual ao de Pastor Eurico (id 160642), único candidato. 98% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2726",
+    "deputyId": 160541,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ARTHUR LIRA\" igual ao de Arthur Lira (id 160541), único candidato. 100% do valor empenhado com UF vai para AL, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2737",
+    "deputyId": 160553,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANTONIO BRITO\" igual ao de Antonio Brito (id 160553), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2739",
+    "deputyId": 160600,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ARTHUR OLIVEIRA MAIA\" igual ao de Arthur Oliveira Maia (id 160600), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2742",
+    "deputyId": 160666,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FELIX MENDONCA JUNIOR\" igual ao de Félix Mendonça Júnior (id 160666), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2750",
+    "deputyId": 160610,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"VALMIR ASSUNCAO\" igual ao de Valmir Assunção (id 160610), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2751",
+    "deputyId": 160569,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"WALDENOR PEREIRA\" igual ao de Waldenor Pereira (id 160569), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2754",
+    "deputyId": 160588,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DIEGO ANDRADE\" igual ao de Diego Andrade (id 160588), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2755",
+    "deputyId": 160599,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DIMAS FABIANO\" igual ao de Dimas Fabiano (id 160599), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2756",
+    "deputyId": 160758,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DOMINGOS SAVIO\" igual ao de Domingos Sávio (id 160758), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2759",
+    "deputyId": 160640,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"EROS BIONDINI\" igual ao de Eros Biondini (id 160640), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2762",
+    "deputyId": 160510,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIS TIBE\" igual ao de Luis Tibé (id 160510), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2764",
+    "deputyId": 160556,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PADRE JOAO\" igual ao de Padre João (id 160556), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2769",
+    "deputyId": 160632,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ZE SILVA\" igual ao de Zé Silva (id 160632), único candidato. 93% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2778",
+    "deputyId": 160512,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AUREO RIBEIRO\" igual ao de Aureo Ribeiro (id 160512), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2787",
+    "deputyId": 122158,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PEDRO PAULO\" igual ao de Pedro Paulo (id 122158), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2796",
+    "deputyId": 160545,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALEXANDRE LEITE\" igual ao de Alexandre Leite (id 160545), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2802",
+    "deputyId": 160548,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JONAS DONIZETTE\" igual ao de Jonas Donizette (id 160548), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "2812",
+    "deputyId": 160601,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PR. MARCO FELICIANO\" igual ao de Pr. Marco Feliciano (id 160601), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2813",
+    "deputyId": 160558,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO FREIRE COSTA\" igual ao de Paulo Freire Costa (id 160558), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2826",
+    "deputyId": 160575,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ERIKA KOKAY\" igual ao de Erika Kokay (id 160575), único candidato. 100% do valor empenhado com UF vai para DF, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2833",
+    "deputyId": 160598,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FLAVIA MORAIS\" igual ao de Flávia Morais (id 160598), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2847",
+    "deputyId": 160621,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SANDRO ALEX\" igual ao de Sandro Alex (id 160621), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2849",
+    "deputyId": 160592,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ZECA DIRCEU\" igual ao de Zeca Dirceu (id 160592), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2855",
+    "deputyId": 160604,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PEDRO UCZAI\" igual ao de Pedro Uczai (id 160604), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2858",
+    "deputyId": 160559,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALCEU MOREIRA\" igual ao de Alceu Moreira (id 160559), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2861",
+    "deputyId": 160552,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANRLEI DE DEUS HINTERHOLZ\" igual ao de Danrlei de Deus Hinterholz (id 160552), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2862",
+    "deputyId": 160538,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BOHN GASS\" igual ao de Bohn Gass (id 160538), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2863",
+    "deputyId": 160673,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GIOVANI CHERINI\" igual ao de Giovani Cherini (id 160673), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2867",
+    "deputyId": 160535,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCON\" igual ao de Marcon (id 160535), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2871",
+    "deputyId": 160508,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AFONSO FLORENCE\" igual ao de Afonso Florence (id 160508), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2874",
+    "deputyId": 162332,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZ NISHIMORI\" igual ao de Luiz Nishimori (id 162332), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2924",
+    "deputyId": 92776,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"STEFANO AGUIAR\" igual ao de Stefano Aguiar (id 92776), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2960",
+    "deputyId": 128760,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO MARINHO JR\" igual ao de Paulo Marinho Jr (id 128760), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2024."
+  },
+  {
+    "code": "2973",
+    "deputyId": 171617,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULAO\" igual ao de Paulão (id 171617), único candidato. 100% do valor empenhado com UF vai para AL, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "2979",
+    "deputyId": 171623,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FABIO REIS\" igual ao de Fabio Reis (id 171623), único candidato. 99% do valor empenhado com UF vai para SE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3020",
+    "deputyId": 178835,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AFONSO MOTTA\" igual ao de Afonso Motta (id 178835), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3041",
+    "deputyId": 178927,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALIEL MACHADO\" igual ao de Aliel Machado (id 178927), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3042",
+    "deputyId": 178937,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALTINEU CORTES\" igual ao de Altineu Côrtes (id 178937), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3043",
+    "deputyId": 178881,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALUISIO MENDES\" igual ao de Aluisio Mendes (id 178881), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3045",
+    "deputyId": 178831,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANDRE ABDON\" igual ao de André Abdon (id 178831), único candidato. 100% do valor empenhado com UF vai para AP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2026."
+  },
+  {
+    "code": "3046",
+    "deputyId": 178882,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANDRE FUFUCA\" igual ao de André Fufuca (id 178882), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2025, 2026."
+  },
+  {
+    "code": "3051",
+    "deputyId": 69871,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BACELAR\" igual ao de Bacelar (id 69871), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3052",
+    "deputyId": 178975,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BALEIA ROSSI\" igual ao de Baleia Rossi (id 178975), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3064",
+    "deputyId": 178829,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CAPITAO AUGUSTO\" igual ao de Capitão Augusto (id 178829), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3067",
+    "deputyId": 178962,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CARLOS GOMES\" igual ao de Carlos Gomes (id 178962), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3068",
+    "deputyId": 178993,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CARLOS HENRIQUE GAGUIM\" igual ao de Carlos Henrique Gaguim (id 178993), único candidato. 100% do valor empenhado com UF vai para TO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3070",
+    "deputyId": 178876,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CELIO SILVEIRA\" igual ao de Célio Silveira (id 178876), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2025, 2026."
+  },
+  {
+    "code": "3077",
+    "deputyId": 178963,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"COVATTI FILHO\" igual ao de Covatti Filho (id 178963), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3082",
+    "deputyId": 178908,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADO EDER MAURO\" igual ao de Delegado Éder Mauro (id 178908), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3084",
+    "deputyId": 178929,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DIEGO GARCIA\" igual ao de Diego Garcia (id 178929), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3091",
+    "deputyId": 178854,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ELMAR NASCIMENTO\" igual ao de Elmar Nascimento (id 178854), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3101",
+    "deputyId": 178905,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FABIO GARCIA\" igual ao de Fabio Garcia (id 178905), único candidato. 100% do valor empenhado com UF vai para MT, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3134",
+    "deputyId": 66828,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FAUSTO PINATO\" igual ao de Fausto Pinato (id 66828), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3135",
+    "deputyId": 73433,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ARLINDO CHINAGLIA\" igual ao de Arlindo Chinaglia (id 73433), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3160",
+    "deputyId": 73441,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CELSO RUSSOMANNO\" igual ao de Celso Russomanno (id 73441), único candidato. 98% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3166",
+    "deputyId": 74537,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CLAUDIO CAJADO\" igual ao de Claudio Cajado (id 74537), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3176",
+    "deputyId": 73768,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DILCEU SPERAFICO\" igual ao de Dilceu Sperafico (id 73768), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3187",
+    "deputyId": 72442,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FELIPE CARRERAS\" igual ao de Felipe Carreras (id 72442), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3188",
+    "deputyId": 74075,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ELCIONE BARBALHO\" igual ao de Elcione Barbalho (id 74075), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3228",
+    "deputyId": 73531,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"IVAN VALENTE\" igual ao de Ivan Valente (id 73531), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3239",
+    "deputyId": 74550,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOAO LEAO\" igual ao de João Leão (id 74550), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3260",
+    "deputyId": 74079,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSE PRIANTE\" igual ao de José Priante (id 74079), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3262",
+    "deputyId": 74554,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSE ROCHA\" igual ao de José Rocha (id 74554), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3268",
+    "deputyId": 74856,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LAURA CARNEIRO\" igual ao de Laura Carneiro (id 74856), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3270",
+    "deputyId": 74299,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LEONIDAS CRISTINO\" igual ao de Leônidas Cristino (id 74299), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2026."
+  },
+  {
+    "code": "3273",
+    "deputyId": 74858,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LINDBERGH FARIAS\" igual ao de Lindbergh Farias (id 74858), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3298",
+    "deputyId": 178964,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"HEITOR SCHUCH\" igual ao de Heitor Schuch (id 178964), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3299",
+    "deputyId": 74428,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MENDONCA FILHO\" igual ao de Mendonça Filho (id 74428), único candidato. 95% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3312",
+    "deputyId": 178873,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"HELDER SALOMAO\" igual ao de Helder Salomão (id 178873), único candidato. 98% do valor empenhado com UF vai para ES, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3328",
+    "deputyId": 74084,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RAIMUNDO SANTOS\" igual ao de Raimundo Santos (id 74084), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3332",
+    "deputyId": 73788,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RICARDO BARROS\" igual ao de Ricardo Barros (id 73788), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3393",
+    "deputyId": 178884,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"HILDO ROCHA\" igual ao de Hildo Rocha (id 178884), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2026."
+  },
+  {
+    "code": "3496",
+    "deputyId": 74356,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SILAS CAMARA\" igual ao de Silas Câmara (id 74356), único candidato. 100% do valor empenhado com UF vai para AM, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3520",
+    "deputyId": 74454,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"EUNICIO OLIVEIRA\" igual ao de Eunício Oliveira (id 74454), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3530",
+    "deputyId": 74467,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DAMIAO FELICIANO\" igual ao de Damião Feliciano (id 74467), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3539",
+    "deputyId": 74478,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUCIANO BIVAR\" igual ao de Luciano Bivar (id 74478), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3568",
+    "deputyId": 74574,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO MAGALHAES\" igual ao de Paulo Magalhães (id 74574), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3595",
+    "deputyId": 74585,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LINCOLN PORTELA\" igual ao de Lincoln Portela (id 74585), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3611",
+    "deputyId": 74784,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZA ERUNDINA\" igual ao de Luiza Erundina (id 74784), único candidato. 90% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3630",
+    "deputyId": 73579,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALBERTO FRAGA\" igual ao de Alberto Fraga (id 73579), único candidato. 99% do valor empenhado com UF vai para DF, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3666",
+    "deputyId": 73486,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"POMPEO DE MATTOS\" igual ao de Pompeo de Mattos (id 73486), único candidato. 96% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3691",
+    "deputyId": 178970,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOAO DANIEL\" igual ao de João Daniel (id 178970), único candidato. 91% do valor empenhado com UF vai para SE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3692",
+    "deputyId": 178910,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOAQUIM PASSARINHO\" igual ao de Joaquim Passarinho (id 178910), único candidato. 98% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3694",
+    "deputyId": 178857,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JORGE SOLLA\" igual ao de Jorge Solla (id 178857), único candidato. 99% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3699",
+    "deputyId": 178886,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JUSCELINO FILHO\" igual ao de Juscelino Filho (id 178886), único candidato. 85% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2026."
+  },
+  {
+    "code": "3702",
+    "deputyId": 178832,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LEANDRE\" igual ao de Leandre (id 178832), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3705",
+    "deputyId": 178931,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUCIANO DUCCI\" igual ao de Luciano Ducci (id 178931), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3706",
+    "deputyId": 178954,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUCIO MOSQUINI\" igual ao de Lucio Mosquini (id 178954), único candidato. 100% do valor empenhado com UF vai para RO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3710",
+    "deputyId": 178866,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZIANNE LINS\" igual ao de Luizianne Lins (id 178866), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3713",
+    "deputyId": 179000,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCELO ALVARO ANTONIO\" igual ao de Marcelo Álvaro Antônio (id 179000), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3717",
+    "deputyId": 178983,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCIO ALVINO\" igual ao de Marcio Alvino (id 178983), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3718",
+    "deputyId": 179001,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCIO BIOLCHI\" igual ao de Márcio Biolchi (id 179001), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3724",
+    "deputyId": 178943,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCOS SOARES\" igual ao de Marcos Soares (id 178943), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3727",
+    "deputyId": 178858,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARIO NEGROMONTE JR.\" igual ao de Mário Negromonte Jr. (id 178858), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3730",
+    "deputyId": 178985,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MIGUEL LOMBARDI\" igual ao de Miguel Lombardi (id 178985), único candidato. 91% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3731",
+    "deputyId": 178895,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MISAEL VARELLA\" igual ao de Misael Varella (id 178895), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3733",
+    "deputyId": 178997,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MOSES RODRIGUES\" igual ao de Moses Rodrigues (id 178997), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "3734",
+    "deputyId": 178896,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"NEWTON CARDOSO JR\" igual ao de Newton Cardoso Jr (id 178896), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3735",
+    "deputyId": 178986,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"NILTO TATTO\" igual ao de Nilto Tatto (id 178986), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3737",
+    "deputyId": 178987,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ORLANDO SILVA\" igual ao de Orlando Silva (id 178987), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3738",
+    "deputyId": 178860,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO AZI\" igual ao de Paulo Azi (id 178860), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3746",
+    "deputyId": 178989,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RENATA ABREU\" igual ao de Renata Abreu (id 178989), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3756",
+    "deputyId": 178945,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROSANGELA GOMES\" igual ao de Rosangela Gomes (id 178945), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3758",
+    "deputyId": 178887,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RUBENS PEREIRA JUNIOR\" igual ao de Rubens Pereira Júnior (id 178887), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3765",
+    "deputyId": 178946,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SORAYA SANTOS\" igual ao de Soraya Santos (id 178946), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3766",
+    "deputyId": 178947,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SOSTENES CAVALCANTE\" igual ao de Sóstenes Cavalcante (id 178947), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3771",
+    "deputyId": 178934,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"TONINHO WANDSCHEER\" igual ao de Toninho Wandscheer (id 178934), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3775",
+    "deputyId": 137070,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"VICENTINHO JUNIOR\" igual ao de Vicentinho Júnior (id 137070), único candidato. 95% do valor empenhado com UF vai para TO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3777",
+    "deputyId": 178992,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"VITOR LIPPI\" igual ao de Vitor Lippi (id 178992), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3788",
+    "deputyId": 234406,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ELMANO FERRER\" igual ao de Elmano Férrer (id 234406), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "3809",
+    "deputyId": 178933,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SERGIO SOUZA\" igual ao de Sergio Souza (id 178933), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3813",
+    "deputyId": 92699,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FERNANDO MONTEIRO\" igual ao de Fernando Monteiro (id 92699), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3822",
+    "deputyId": 188097,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MERLONG SOLANO\" igual ao de Merlong Solano (id 188097), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3827",
+    "deputyId": 191923,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FLAVIO NOGUEIRA\" igual ao de Flávio Nogueira (id 191923), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3839",
+    "deputyId": 194260,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"NIVALDO ALBUQUERQUE\" igual ao de Nivaldo Albuquerque (id 194260), único candidato. 100% do valor empenhado com UF vai para AL, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "3893",
+    "deputyId": 81055,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCIO JERRY\" igual ao de Márcio Jerry (id 81055), único candidato. 99% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3897",
+    "deputyId": 204379,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ACACIO FAVACHO\" igual ao de Acácio Favacho (id 204379), único candidato. 100% do valor empenhado com UF vai para AP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3898",
+    "deputyId": 204560,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ADOLFO VIANA\" igual ao de Adolfo Viana (id 204560), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3899",
+    "deputyId": 204528,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ADRIANA VENTURA\" igual ao de Adriana Ventura (id 204528), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3900",
+    "deputyId": 121948,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ADRIANO DO BALDY\" igual ao de Adriano do Baldy (id 121948), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3901",
+    "deputyId": 204495,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AIRTON FALEIRO\" igual ao de Airton Faleiro (id 204495), único candidato. 98% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3905",
+    "deputyId": 204501,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALENCAR SANTANA\" igual ao de Alencar Santana (id 204501), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3906",
+    "deputyId": 204571,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALEX SANTANA\" igual ao de Alex Santana (id 204571), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3908",
+    "deputyId": 204503,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALEXANDRE PADILHA\" igual ao de Alexandre Padilha (id 204503), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "3910",
+    "deputyId": 204353,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALINE GURGEL\" igual ao de Aline Gurgel (id 204353), único candidato. 100% do valor empenhado com UF vai para AP, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "3912",
+    "deputyId": 204356,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AMARO NETO\" igual ao de Amaro Neto (id 204356), único candidato. 100% do valor empenhado com UF vai para ES, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3913",
+    "deputyId": 204423,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANDRE FERREIRA\" igual ao de André Ferreira (id 204423), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3914",
+    "deputyId": 204515,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANDRE JANONES\" igual ao de André Janones (id 204515), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3917",
+    "deputyId": 109429,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BENES LEOCADIO\" igual ao de Benes Leocádio (id 109429), único candidato. 100% do valor empenhado com UF vai para RN, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3918",
+    "deputyId": 204358,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BETO PEREIRA\" igual ao de Beto Pereira (id 204358), único candidato. 100% do valor empenhado com UF vai para MS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3919",
+    "deputyId": 204374,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BIA KICIS\" igual ao de Bia Kicis (id 204374), único candidato. 100% do valor empenhado com UF vai para DF, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3920",
+    "deputyId": 204388,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BIBO NUNES\" igual ao de Bibo Nunes (id 204388), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3924",
+    "deputyId": 204520,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JUNIO AMARAL\" igual ao de Junio Amaral (id 204520), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3926",
+    "deputyId": 204572,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CAPITAO ALBERTO NETO\" igual ao de Capitão Alberto Neto (id 204572), único candidato. 100% do valor empenhado com UF vai para AM, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3928",
+    "deputyId": 204507,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CARLA ZAMBELLI\" igual ao de Carla Zambelli (id 204507), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025."
+  },
+  {
+    "code": "3929",
+    "deputyId": 204361,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CARLOS CHIODINI\" igual ao de Carlos Chiodini (id 204361), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3930",
+    "deputyId": 204460,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CARLOS JORDY\" igual ao de Carlos Jordy (id 204460), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3931",
+    "deputyId": 204426,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CARLOS VERAS\" igual ao de Carlos Veras (id 204426), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3932",
+    "deputyId": 204369,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CAROLINE DE TONI\" igual ao de Caroline de Toni (id 204369), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3936",
+    "deputyId": 204488,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CELIO STUDART\" igual ao de Célio Studart (id 204488), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3938",
+    "deputyId": 204504,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CEZINHA DE MADUREIRA\" igual ao de Cezinha de Madureira (id 204504), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3939",
+    "deputyId": 205476,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CHARLES FERNANDES\" igual ao de Charles Fernandes (id 205476), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "3941",
+    "deputyId": 204476,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CHIQUINHO BRAZAO\" igual ao de Chiquinho Brazão (id 204476), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024."
+  },
+  {
+    "code": "3942",
+    "deputyId": 204462,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CHRIS TONIETTO\" igual ao de Chris Tonietto (id 204462), único candidato. 95% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3944",
+    "deputyId": 204376,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CORONEL ARMANDO\" igual ao de Coronel Armando (id 204376), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "3945",
+    "deputyId": 204378,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CORONEL CHRISOSTOMO\" igual ao de Coronel Chrisóstomo (id 204378), único candidato. 100% do valor empenhado com UF vai para RO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3948",
+    "deputyId": 204355,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DA VITORIA\" igual ao de Da Vitoria (id 204355), único candidato. 97% do valor empenhado com UF vai para ES, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3949",
+    "deputyId": 204367,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANIEL FREITAS\" igual ao de Daniel Freitas (id 204367), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3951",
+    "deputyId": 204409,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANIEL TRZECIAK\" igual ao de Daniel Trzeciak (id 204409), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3952",
+    "deputyId": 204459,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANIELA DO WAGUINHO\" igual ao de Daniela do Waguinho (id 204459), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3955",
+    "deputyId": 204511,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DAVID SOARES\" igual ao de David Soares (id 204511), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3957",
+    "deputyId": 204512,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADO MARCELO FREITAS\" igual ao de Delegado Marcelo Freitas (id 204512), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3960",
+    "deputyId": 204518,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DR. FREDERICO\" igual ao de Dr. Frederico (id 204518), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3961",
+    "deputyId": 204481,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DR. JAZIEL\" igual ao de Dr. Jaziel (id 204481), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3963",
+    "deputyId": 204450,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DOUTOR LUIZINHO\" igual ao de Doutor Luizinho (id 204450), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3964",
+    "deputyId": 204351,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DR. LUIZ OVANDO\" igual ao de Dr. Luiz Ovando (id 204351), único candidato. 100% do valor empenhado com UF vai para MS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3965",
+    "deputyId": 204412,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DR. ZACHARIAS CALIL\" igual ao de Dr. Zacharias Calil (id 204412), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3970",
+    "deputyId": 204541,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"EDUARDO BISMARCK\" igual ao de Eduardo Bismarck (id 204541), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3973",
+    "deputyId": 204364,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ELI BORGES\" igual ao de Eli Borges (id 204364), único candidato. 93% do valor empenhado com UF vai para TO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3975",
+    "deputyId": 198783,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"EMANUEL PINHEIRO NETO\" igual ao de Emanuel Pinheiro Neto (id 198783), único candidato. 100% do valor empenhado com UF vai para MT, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3976",
+    "deputyId": 161550,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"EMIDINHO MADEIRA\" igual ao de Emidinho Madeira (id 161550), único candidato. 80% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3978",
+    "deputyId": 204482,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"EUCLYDES PETTERSEN\" igual ao de Euclydes Pettersen (id 204482), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3980",
+    "deputyId": 204368,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FABIO SCHIOCHET\" igual ao de Fabio Schiochet (id 204368), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3982",
+    "deputyId": 204398,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FELIPE FRANCISCHINI\" igual ao de Felipe Francischini (id 204398), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3984",
+    "deputyId": 204407,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FERNANDA MELCHIONNA\" igual ao de Fernanda Melchionna (id 204407), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3985",
+    "deputyId": 204427,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FERNANDO RODOLFO\" igual ao de Fernando Rodolfo (id 204427), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3986",
+    "deputyId": 204411,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FILIPE BARROS\" igual ao de Filipe Barros (id 204411), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3991",
+    "deputyId": 204494,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FRED COSTA\" igual ao de Fred Costa (id 204494), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3994",
+    "deputyId": 204473,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GENERAL GIRAO\" igual ao de General Girão (id 204473), único candidato. 100% do valor empenhado com UF vai para RN, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3997",
+    "deputyId": 204394,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GERVASIO MAIA\" igual ao de Gervásio Maia (id 204394), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "3999",
+    "deputyId": 204491,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GILBERTO ABRAMO\" igual ao de Gilberto Abramo (id 204491), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4010",
+    "deputyId": 204419,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GLAUSTIN DA FOKUS\" igual ao de Glaustin da Fokus (id 204419), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025."
+  },
+  {
+    "code": "4011",
+    "deputyId": 107283,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GLEISI HOFFMANN\" igual ao de Gleisi Hoffmann (id 107283), único candidato. 85% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025."
+  },
+  {
+    "code": "4014",
+    "deputyId": 204456,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GUTEMBERG REIS\" igual ao de Gutemberg Reis (id 204456), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4016",
+    "deputyId": 204539,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"HERCILIO COELHO DINIZ\" igual ao de Hercílio Coelho Diniz (id 204539), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4023",
+    "deputyId": 204391,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSE NELTO\" igual ao de José Nelto (id 204391), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4024",
+    "deputyId": 204563,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSIMAR MARANHAOZINHO\" igual ao de Josimar Maranhãozinho (id 204563), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2025, 2026."
+  },
+  {
+    "code": "4026",
+    "deputyId": 204457,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JUNINHO DO PNEU\" igual ao de Juninho do Pneu (id 204457), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4027",
+    "deputyId": 204497,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JUNIOR FERRARI\" igual ao de Júnior Ferrari (id 204497), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4028",
+    "deputyId": 204550,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JUNIOR MANO\" igual ao de Júnior Mano (id 204550), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2026."
+  },
+  {
+    "code": "4029",
+    "deputyId": 98057,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LAFAYETTE DE ANDRADA\" igual ao de Lafayette de Andrada (id 98057), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4031",
+    "deputyId": 92102,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LEUR LOMANTO JUNIOR\" igual ao de Leur Lomanto Júnior (id 92102), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4033",
+    "deputyId": 204404,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUCAS REDECKER\" igual ao de Lucas Redecker (id 204404), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4034",
+    "deputyId": 204410,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUISA CANZIANI\" igual ao de Luisa Canziani (id 204410), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4036",
+    "deputyId": 204526,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZ PHILIPPE DE ORLEANS E BRAGANCA\" igual ao de Luiz Philippe de Orleans e Bragança (id 204526), único candidato. 82% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4039",
+    "deputyId": 204433,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCELO CALERO\" igual ao de Marcelo Calero (id 204433), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "4040",
+    "deputyId": 133810,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCELO MORAES\" igual ao de Marcelo Moraes (id 133810), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4042",
+    "deputyId": 204431,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCOS AURELIO SAMPAIO\" igual ao de Marcos Aurélio Sampaio (id 204431), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4046",
+    "deputyId": 204486,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MAURO BENEVIDES FILHO\" igual ao de Mauro Benevides Filho (id 204486), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4047",
+    "deputyId": 204449,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"NELSON BARBUDO\" igual ao de Nelson Barbudo (id 204449), único candidato. 100% do valor empenhado com UF vai para MT, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2025, 2026."
+  },
+  {
+    "code": "4049",
+    "deputyId": 204498,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"OLIVAL MARQUES\" igual ao de Olival Marques (id 204498), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4050",
+    "deputyId": 204422,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"OSSESIO SILVA\" igual ao de Ossesio Silva (id 204422), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4051",
+    "deputyId": 204441,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"OTONI DE PAULA\" igual ao de Otoni de Paula (id 204441), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4052",
+    "deputyId": 204570,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PASTOR GIL\" igual ao de Pastor Gil (id 204570), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4056",
+    "deputyId": 204395,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PEDRO LUPION\" igual ao de Pedro Lupion (id 204395), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4057",
+    "deputyId": 204524,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PINHEIRINHO\" igual ao de Pinheirinho (id 204524), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4058",
+    "deputyId": 204390,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PROFESSOR ALCIDES\" igual ao de Professor Alcides (id 204390), único candidato. 90% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4062",
+    "deputyId": 204362,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RICARDO GUIDI\" igual ao de Ricardo Guidi (id 204362), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4064",
+    "deputyId": 204480,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROGERIO CORREIA\" igual ao de Rogério Correia (id 204480), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4066",
+    "deputyId": 204387,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SARGENTO FAHUR\" igual ao de Sargento Fahur (id 204387), único candidato. 97% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4068",
+    "deputyId": 204557,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SIDNEY LEITE\" igual ao de Sidney Leite (id 204557), único candidato. 100% do valor empenhado com UF vai para AM, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4069",
+    "deputyId": 204425,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SILVIO COSTA FILHO\" igual ao de Silvio Costa Filho (id 204425), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "4070",
+    "deputyId": 204464,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"TALIRIA PETRONE\" igual ao de Talíria Petrone (id 204464), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4071",
+    "deputyId": 143084,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"TIAGO DIMAS\" igual ao de Tiago Dimas (id 143084), único candidato. 100% do valor empenhado com UF vai para TO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2026."
+  },
+  {
+    "code": "4073",
+    "deputyId": 204416,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SANDERSON\" igual ao de Sanderson (id 204416), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4077",
+    "deputyId": 204517,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ZE VITOR\" igual ao de Zé Vitor (id 204517), único candidato. 94% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4100",
+    "deputyId": 198197,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GREYCE ELIAS\" igual ao de Greyce Elias (id 198197), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4102",
+    "deputyId": 204444,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"HELIO LOPES\" igual ao de Helio Lopes (id 204444), único candidato. 86% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4110",
+    "deputyId": 204372,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JULIO CESAR RIBEIRO\" igual ao de Julio Cesar Ribeiro (id 204372), único candidato. 100% do valor empenhado com UF vai para DF, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2025, 2026."
+  },
+  {
+    "code": "4111",
+    "deputyId": 204574,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JUNIOR LOURENCO\" igual ao de Junior Lourenço (id 204574), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4114",
+    "deputyId": 204448,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZ ANTONIO CORREA\" igual ao de Luiz Antonio Corrêa (id 204448), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023."
+  },
+  {
+    "code": "4116",
+    "deputyId": 156190,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCEL VAN HATTEM\" igual ao de Marcel van Hattem (id 156190), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4119",
+    "deputyId": 204540,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARIA ROSAS\" igual ao de Maria Rosas (id 204540), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4120",
+    "deputyId": 204566,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARRECA FILHO\" igual ao de Marreca Filho (id 204566), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4123",
+    "deputyId": 204573,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"OTTO ALENCAR FILHO\" igual ao de Otto Alencar Filho (id 204573), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4125",
+    "deputyId": 122974,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PEDRO LUCAS FERNANDES\" igual ao de Pedro Lucas Fernandes (id 122974), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4128",
+    "deputyId": 204567,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RAIMUNDO COSTA\" igual ao de Raimundo Costa (id 204567), único candidato. 99% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4130",
+    "deputyId": 204535,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SAMIA BOMFIM\" igual ao de Sâmia Bomfim (id 204535), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4132",
+    "deputyId": 204534,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"TABATA AMARAL\" igual ao de Tabata Amaral (id 204534), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4148",
+    "deputyId": 204508,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"IGOR TIMO\" igual ao de Igor Timo (id 204508), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4152",
+    "deputyId": 205550,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JORGE BRAZ\" igual ao de Jorge Braz (id 205550), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4153",
+    "deputyId": 204472,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSE MEDEIROS\" igual ao de José Medeiros (id 204472), único candidato. 100% do valor empenhado com UF vai para MT, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4154",
+    "deputyId": 204474,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JUAREZ COSTA\" igual ao de Juarez Costa (id 204474), único candidato. 100% do valor empenhado com UF vai para MT, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4158",
+    "deputyId": 204455,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZ LIMA\" igual ao de Luiz Lima (id 204455), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4161",
+    "deputyId": 204506,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCOS PEREIRA\" igual ao de Marcos Pereira (id 204506), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4163",
+    "deputyId": 204453,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"NATALIA BONAVIDES\" igual ao de Natália Bonavides (id 204453), único candidato. 100% do valor empenhado com UF vai para RN, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4164",
+    "deputyId": 204479,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"NICOLETTI\" igual ao de Nicoletti (id 204479), único candidato. 99% do valor empenhado com UF vai para RR, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4166",
+    "deputyId": 204553,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PASTOR SARGENTO ISIDORIO\" igual ao de Pastor Sargento Isidório (id 204553), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4167",
+    "deputyId": 204492,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO GUEDES\" igual ao de Paulo Guedes (id 204492), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4168",
+    "deputyId": 204406,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PEDRO WESTPHALEN\" igual ao de Pedro Westphalen (id 204406), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4171",
+    "deputyId": 204525,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROSANA VALLE\" igual ao de Rosana Valle (id 204525), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4173",
+    "deputyId": 204360,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SILVIA CRISTINA\" igual ao de Silvia Cristina (id 204360), único candidato. 85% do valor empenhado com UF vai para RO, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4175",
+    "deputyId": 157130,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"TULIO GADELHA\" igual ao de Túlio Gadêlha (id 157130), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4190",
+    "deputyId": 209189,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSEILDO RAMOS\" igual ao de Joseildo Ramos (id 209189), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "4202",
+    "deputyId": 213762,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CARLA DICKSON\" igual ao de Carla Dickson (id 213762), único candidato. 100% do valor empenhado com UF vai para RN, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2026."
+  },
+  {
+    "code": "4209",
+    "deputyId": 214694,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JORGE GOETTEN\" igual ao de Jorge Goetten (id 214694), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4229",
+    "deputyId": 218086,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ELY SANTOS\" igual ao de Ely Santos (id 218086), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4258",
+    "deputyId": 221148,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALFREDINHO\" igual ao de Alfredinho (id 221148), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4289",
+    "deputyId": 220642,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADO BRUNO LIMA\" igual ao de Delegado Bruno Lima (id 220642), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2025, 2026."
+  },
+  {
+    "code": "4291",
+    "deputyId": 220714,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ADAIL FILHO\" igual ao de Adail Filho (id 220714), único candidato. 100% do valor empenhado com UF vai para AM, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4292",
+    "deputyId": 221328,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ADILSON BARROSO\" igual ao de Adilson Barroso (id 221328), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025."
+  },
+  {
+    "code": "4293",
+    "deputyId": 220538,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALBUQUERQUE\" igual ao de Albuquerque (id 220538), único candidato. 99% do valor empenhado com UF vai para RR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4294",
+    "deputyId": 220542,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALEXANDRE GUIMARAES\" igual ao de Alexandre Guimarães (id 220542), único candidato. 85% do valor empenhado com UF vai para TO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4295",
+    "deputyId": 220554,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALEXANDRE LINDENMEYER\" igual ao de Alexandre Lindenmeyer (id 220554), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4296",
+    "deputyId": 220576,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ALFREDO GASPAR\" igual ao de Alfredo Gaspar (id 220576), único candidato. 100% do valor empenhado com UF vai para AL, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4298",
+    "deputyId": 220707,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AMANDA GENTIL\" igual ao de Amanda Gentil (id 220707), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4299",
+    "deputyId": 220715,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"AMOM MANDEL\" igual ao de Amom Mandel (id 220715), único candidato. 100% do valor empenhado com UF vai para AM, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4300",
+    "deputyId": 107970,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANA PAULA LEAO\" igual ao de Ana Paula Leão (id 107970), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4301",
+    "deputyId": 220556,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANA PAULA LIMA\" igual ao de Ana Paula Lima (id 220556), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4302",
+    "deputyId": 220632,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANA PIMENTEL\" igual ao de Ana Pimentel (id 220632), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4303",
+    "deputyId": 220657,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANDRE FERNANDES\" igual ao de André Fernandes (id 220657), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2026."
+  },
+  {
+    "code": "4304",
+    "deputyId": 220676,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANDREIA SIQUEIRA\" igual ao de Andreia Siqueira (id 220676), único candidato. 99% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4306",
+    "deputyId": 220638,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANTONIO CARLOS RODRIGUES\" igual ao de Antonio Carlos Rodrigues (id 220638), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4308",
+    "deputyId": 220549,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ANY ORTIZ\" igual ao de Any Ortiz (id 220549), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4311",
+    "deputyId": 220605,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BANDEIRA DE MELLO\" igual ao de Bandeira de Mello (id 220605), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4312",
+    "deputyId": 220612,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BEBETO\" igual ao de Bebeto (id 220612), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4314",
+    "deputyId": 220683,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BETO RICHA\" igual ao de Beto Richa (id 220683), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4315",
+    "deputyId": 210989,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BRUNO FARIAS\" igual ao de Bruno Farias (id 210989), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4316",
+    "deputyId": 220635,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"BRUNO GANEM\" igual ao de Bruno Ganem (id 220635), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4317",
+    "deputyId": 220574,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CABO GILBERTO SILVA\" igual ao de Cabo Gilberto Silva (id 220574), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4318",
+    "deputyId": 220548,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CAMILA JARA\" igual ao de Camila Jara (id 220548), único candidato. 100% do valor empenhado com UF vai para MS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4319",
+    "deputyId": 220690,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CAPITAO ALDEN\" igual ao de Capitão Alden (id 220690), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4320",
+    "deputyId": 220704,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CAROL DARTORA\" igual ao de Carol Dartora (id 220704), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4321",
+    "deputyId": 220699,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CASTRO NETO\" igual ao de Castro Neto (id 220699), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4322",
+    "deputyId": 206018,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CELIA XAKRIABA\" igual ao de Célia Xakriabá (id 206018), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4323",
+    "deputyId": 220665,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CLARISSA TERCIO\" igual ao de Clarissa Tércio (id 220665), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4324",
+    "deputyId": 88256,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CLODOALDO MAGALHAES\" igual ao de Clodoaldo Magalhães (id 88256), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4325",
+    "deputyId": 98148,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"COBALCHINI\" igual ao de Cobalchini (id 98148), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4326",
+    "deputyId": 220594,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CORONEL ASSIS\" igual ao de Coronel Assis (id 220594), único candidato. 100% do valor empenhado com UF vai para MT, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4327",
+    "deputyId": 220595,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CORONEL FERNANDA\" igual ao de Coronel Fernanda (id 220595), único candidato. 100% do valor empenhado com UF vai para MT, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4328",
+    "deputyId": 220666,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CORONEL MEIRA\" igual ao de Coronel Meira (id 220666), único candidato. 99% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4330",
+    "deputyId": 220590,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CORONEL ULYSSES\" igual ao de Coronel Ulysses (id 220590), único candidato. 100% do valor empenhado com UF vai para AC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4331",
+    "deputyId": 220608,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"CRISTIANE LOPES\" igual ao de Cristiane Lopes (id 220608), único candidato. 100% do valor empenhado com UF vai para RO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4332",
+    "deputyId": 220555,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DAIANA SANTOS\" igual ao de Daiana Santos (id 220555), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4333",
+    "deputyId": 220692,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DAL BARRETO\" igual ao de Dal Barreto (id 220692), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4334",
+    "deputyId": 220629,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANDARA\" igual ao de Dandara (id 220629), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4335",
+    "deputyId": 220603,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANI CUNHA\" igual ao de Dani Cunha (id 220603), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4336",
+    "deputyId": 220571,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANIEL AGROBOM\" igual ao de Daniel Agrobom (id 220571), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4337",
+    "deputyId": 220582,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANIEL BARBOSA\" igual ao de Daniel Barbosa (id 220582), único candidato. 100% do valor empenhado com UF vai para AL, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4338",
+    "deputyId": 220614,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DR. DANIEL SORANZ\" igual ao de Dr. Daniel Soranz (id 220614), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4339",
+    "deputyId": 220557,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DANIELA REINEHR\" igual ao de Daniela Reinehr (id 220557), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4340",
+    "deputyId": 220659,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DAYANY BITTENCOURT\" igual ao de Dayany Bittencourt (id 220659), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4341",
+    "deputyId": 220539,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DEFENSOR STELIO DENER\" igual ao de Defensor Stélio Dener (id 220539), único candidato. 99% do valor empenhado com UF vai para RR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4342",
+    "deputyId": 220565,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADA ADRIANA ACCORSI\" igual ao de Delegada Adriana Accorsi (id 220565), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4343",
+    "deputyId": 220625,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADA IONE\" igual ao de Delegada Ione (id 220625), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4344",
+    "deputyId": 220561,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADA KATARINA\" igual ao de Delegada Katarina (id 220561), único candidato. 100% do valor empenhado com UF vai para SE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4345",
+    "deputyId": 220673,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADO CAVEIRA\" igual ao de Delegado Caveira (id 220673), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4346",
+    "deputyId": 220649,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADO DA CUNHA\" igual ao de Delegado da Cunha (id 220649), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4347",
+    "deputyId": 220583,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADO FABIO COSTA\" igual ao de Delegado Fabio Costa (id 220583), único candidato. 100% do valor empenhado com UF vai para AL, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4348",
+    "deputyId": 220701,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADO MATHEUS LAIOLA\" igual ao de Delegado Matheus Laiola (id 220701), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4349",
+    "deputyId": 220652,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADO PALUMBO\" igual ao de Delegado Palumbo (id 220652), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4350",
+    "deputyId": 220654,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DELEGADO PAULO BILYNSKYJ\" igual ao de Delegado Paulo Bilynskyj (id 220654), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4353",
+    "deputyId": 220553,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DENISE PESSOA\" igual ao de Denise Pessôa (id 220553), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4355",
+    "deputyId": 220691,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DIEGO CORONEL\" igual ao de Diego Coronel (id 220691), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4357",
+    "deputyId": 220602,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DIMAS GADELHA\" igual ao de Dimas Gadelha (id 220602), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4358",
+    "deputyId": 220573,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DORINALDO MALAFAIA\" igual ao de Dorinaldo Malafaia (id 220573), único candidato. 100% do valor empenhado com UF vai para AP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4360",
+    "deputyId": 220610,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DR. FERNANDO MAXIMO\" igual ao de Dr. Fernando Máximo (id 220610), único candidato. 98% do valor empenhado com UF vai para RO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4361",
+    "deputyId": 220688,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DR. FRANCISCO\" igual ao de Dr. Francisco (id 220688), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4362",
+    "deputyId": 220528,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DR. VICTOR LINHALIS\" igual ao de Dr. Victor Linhalis (id 220528), único candidato. 100% do valor empenhado com UF vai para ES, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4363",
+    "deputyId": 220674,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DRA. ALESSANDRA HABER\" igual ao de Dra. Alessandra Haber (id 220674), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4364",
+    "deputyId": 220686,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DUARTE JR.\" igual ao de Duarte Jr. (id 220686), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4365",
+    "deputyId": 220540,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DUDA RAMOS\" igual ao de Duda Ramos (id 220540), único candidato. 98% do valor empenhado com UF vai para RR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4366",
+    "deputyId": 220623,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"DUDA SALABERT\" igual ao de Duda Salabert (id 220623), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4367",
+    "deputyId": 220663,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ERIBERTO MEDEIROS\" igual ao de Eriberto Medeiros (id 220663), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4368",
+    "deputyId": 220645,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ERIKA HILTON\" igual ao de Erika Hilton (id 220645), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4369",
+    "deputyId": 220681,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FABIO MACEDO\" igual ao de Fábio Macedo (id 220681), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4370",
+    "deputyId": 220653,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FABIO TERUEL\" igual ao de Fábio Teruel (id 220653), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4372",
+    "deputyId": 220646,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FELIPE BECARI\" igual ao de Felipe Becari (id 220646), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4373",
+    "deputyId": 220656,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FERNANDA PESSOA\" igual ao de Fernanda Pessoa (id 220656), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4374",
+    "deputyId": 204445,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FERNANDO MINEIRO\" igual ao de Fernando Mineiro (id 204445), único candidato. 100% do valor empenhado com UF vai para RN, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4375",
+    "deputyId": 220545,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FILIPE MARTINS\" igual ao de Filipe Martins (id 220545), único candidato. 82% do valor empenhado com UF vai para TO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4376",
+    "deputyId": 220700,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FLORENTINO NETO\" igual ao de Florentino Neto (id 220700), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4377",
+    "deputyId": 220551,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FRANCIANE BAYER\" igual ao de Franciane Bayer (id 220551), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4379",
+    "deputyId": 220708,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GABRIEL NUNES\" igual ao de Gabriel Nunes (id 220708), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4380",
+    "deputyId": 220611,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GENERAL PAZUELLO\" igual ao de General Pazuello (id 220611), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4381",
+    "deputyId": 220702,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GERALDO MENDES\" igual ao de Geraldo Mendes (id 220702), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2026."
+  },
+  {
+    "code": "4383",
+    "deputyId": 220529,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GILSON DANIEL\" igual ao de Gilson Daniel (id 220529), único candidato. 100% do valor empenhado com UF vai para ES, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4384",
+    "deputyId": 220526,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GILVAN DA FEDERAL\" igual ao de Gilvan da Federal (id 220526), único candidato. 100% do valor empenhado com UF vai para ES, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4386",
+    "deputyId": 220639,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GUILHERME BOULOS\" igual ao de Guilherme Boulos (id 220639), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4387",
+    "deputyId": 220664,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GUILHERME UCHOA\" igual ao de Guilherme Uchoa (id 220664), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4388",
+    "deputyId": 220568,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GUSTAVO GAYER\" igual ao de Gustavo Gayer (id 220568), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2024."
+  },
+  {
+    "code": "4389",
+    "deputyId": 220537,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"HELENA LIMA\" igual ao de Helena Lima (id 220537), único candidato. 98% do valor empenhado com UF vai para RR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4390",
+    "deputyId": 220672,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"HENDERSON PINTO\" igual ao de Henderson Pinto (id 220672), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4391",
+    "deputyId": 220563,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ICARO DE VALMIR\" igual ao de Icaro de Valmir (id 220563), único candidato. 100% do valor empenhado com UF vai para SE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4392",
+    "deputyId": 98615,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ISMAEL\" igual ao de Ismael (id 98615), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4395",
+    "deputyId": 220696,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"IVONEIDE CAETANO\" igual ao de Ivoneide Caetano (id 220696), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4396",
+    "deputyId": 220670,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"IZA ARRUDA\" igual ao de Iza Arruda (id 220670), único candidato. 94% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4397",
+    "deputyId": 220527,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JACK ROCHA\" igual ao de Jack Rocha (id 220527), único candidato. 100% do valor empenhado com UF vai para ES, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4398",
+    "deputyId": 220697,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JADYEL ALENCAR\" igual ao de Jadyel Alencar (id 220697), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4399",
+    "deputyId": 220567,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JEFERSON RODRIGUES\" igual ao de Jeferson Rodrigues (id 220567), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4400",
+    "deputyId": 220578,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JOSENILDO\" igual ao de Josenildo (id 220578), único candidato. 100% do valor empenhado com UF vai para AP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4401",
+    "deputyId": 220559,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JULIA ZANATTA\" igual ao de Julia Zanatta (id 220559), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4402",
+    "deputyId": 220640,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JULIANA CARDOSO\" igual ao de Juliana Cardoso (id 220640), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4403",
+    "deputyId": 66385,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"JULIO ARCOVERDE\" igual ao de Julio Arcoverde (id 66385), único candidato. 100% do valor empenhado com UF vai para PI, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4404",
+    "deputyId": 220677,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"KENISTON BRAGA\" igual ao de Keniston Braga (id 220677), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4405",
+    "deputyId": 162067,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"KIKO CELEGUIM\" igual ao de Kiko Celeguim (id 162067), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4407",
+    "deputyId": 220566,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LEDA BORGES\" igual ao de Lêda Borges (id 220566), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4408",
+    "deputyId": 80815,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LEO PRATES\" igual ao de Leo Prates (id 80815), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4409",
+    "deputyId": 220662,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUCAS RAMOS\" igual ao de Lucas Ramos (id 220662), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4411",
+    "deputyId": 220616,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUCIANO VIEIRA\" igual ao de Luciano Vieira (id 220616), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4413",
+    "deputyId": 220658,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LUIZ GASTAO\" igual ao de Luiz Gastão (id 220658), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4414",
+    "deputyId": 220669,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LULA DA FONTE\" igual ao de Lula da Fonte (id 220669), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4415",
+    "deputyId": 220648,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARANGONI\" igual ao de Marangoni (id 220648), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4416",
+    "deputyId": 220599,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCELO CRIVELLA\" igual ao de Marcelo Crivella (id 220599), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4418",
+    "deputyId": 160161,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCELO QUEIROZ\" igual ao de Marcelo Queiroz (id 160161), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4419",
+    "deputyId": 220687,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCIO HONAISER\" igual ao de Márcio Honaiser (id 220687), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4420",
+    "deputyId": 220547,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCOS POLLON\" igual ao de Marcos Pollon (id 220547), único candidato. 89% do valor empenhado com UF vai para MS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4421",
+    "deputyId": 220604,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARCOS TAVARES\" igual ao de Marcos Tavares (id 220604), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4422",
+    "deputyId": 220668,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARIA ARRAES\" igual ao de Maria Arraes (id 220668), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4423",
+    "deputyId": 220655,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARIO FRIAS\" igual ao de Mario Frias (id 220655), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4424",
+    "deputyId": 220572,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MARUSSA BOLDRIN\" igual ao de Marussa Boldrin (id 220572), único candidato. 100% do valor empenhado com UF vai para GO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4425",
+    "deputyId": 220661,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MATHEUS NORONHA\" igual ao de Matheus Noronha (id 220661), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4426",
+    "deputyId": 220609,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MAURICIO CARVALHO\" igual ao de Maurício Carvalho (id 220609), único candidato. 100% do valor empenhado com UF vai para RO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4427",
+    "deputyId": 220628,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MAURICIO DO VOLEI\" igual ao de Mauricio do Vôlei (id 220628), único candidato. 96% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4428",
+    "deputyId": 220550,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MAURICIO MARCON\" igual ao de Mauricio Marcon (id 220550), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4430",
+    "deputyId": 220607,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MAX LEMOS\" igual ao de Max Lemos (id 220607), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4431",
+    "deputyId": 220591,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MEIRE SERAFIM\" igual ao de Meire Serafim (id 220591), único candidato. 100% do valor empenhado com UF vai para AC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4432",
+    "deputyId": 220585,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MERSINHO LUCENA\" igual ao de Mersinho Lucena (id 220585), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4433",
+    "deputyId": 220530,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MESSIAS DONATO\" igual ao de Messias Donato (id 220530), único candidato. 100% do valor empenhado com UF vai para ES, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4434",
+    "deputyId": 171786,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MIGUEL ANGELO\" igual ao de Miguel Ângelo (id 171786), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4435",
+    "deputyId": 220617,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MURILLO GOUVEA\" igual ao de Murillo Gouvea (id 220617), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4436",
+    "deputyId": 220584,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"MURILO GALDINO\" igual ao de Murilo Galdino (id 220584), único candidato. 100% do valor empenhado com UF vai para PB, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4437",
+    "deputyId": 220622,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"NELY AQUINO\" igual ao de Nely Aquino (id 220622), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4438",
+    "deputyId": 220703,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"NETO CARLETTO\" igual ao de Neto Carletto (id 220703), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4439",
+    "deputyId": 209787,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"NIKOLAS FERREIRA\" igual ao de Nikolas Ferreira (id 209787), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4440",
+    "deputyId": 220706,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PADOVANI\" igual ao de Padovani (id 220706), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4441",
+    "deputyId": 180214,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PASTOR DINIZ\" igual ao de Pastor Diniz (id 180214), único candidato. 97% do valor empenhado com UF vai para RR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4442",
+    "deputyId": 220615,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PASTOR HENRIQUE VIEIRA\" igual ao de Pastor Henrique Vieira (id 220615), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4444",
+    "deputyId": 220650,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO ALEXANDRE BARBOSA\" igual ao de Paulo Alexandre Barbosa (id 220650), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4445",
+    "deputyId": 220685,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO LITRO\" igual ao de Paulo Litro (id 220685), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4446",
+    "deputyId": 220630,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PEDRO AIHARA\" igual ao de Pedro Aihara (id 220630), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4447",
+    "deputyId": 220667,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PEDRO CAMPOS\" igual ao de Pedro Campos (id 220667), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4449",
+    "deputyId": 220533,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PROF. REGINALDO VERAS\" igual ao de Prof. Reginaldo Veras (id 220533), único candidato. 99% do valor empenhado com UF vai para DF, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4451",
+    "deputyId": 221338,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PROFESSORA LUCIENE CAVALCANTE\" igual ao de Professora Luciene Cavalcante (id 221338), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4452",
+    "deputyId": 220586,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RAFAEL BRITO\" igual ao de Rafael Brito (id 220586), único candidato. 100% do valor empenhado com UF vai para AL, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4453",
+    "deputyId": 220532,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RAFAEL PRUDENTE\" igual ao de Rafael Prudente (id 220532), único candidato. 85% do valor empenhado com UF vai para DF, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4454",
+    "deputyId": 220626,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RAFAEL SIMOES\" igual ao de Rafael Simoes (id 220626), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4455",
+    "deputyId": 221378,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"REGINETE BISPO\" igual ao de Reginete Bispo (id 221378), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025."
+  },
+  {
+    "code": "4456",
+    "deputyId": 220606,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"REIMONT\" igual ao de Reimont (id 220606), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4457",
+    "deputyId": 153423,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RENILCE NICODEMOS\" igual ao de Renilce Nicodemos (id 153423), único candidato. 100% do valor empenhado com UF vai para PA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4458",
+    "deputyId": 221329,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RICARDO ABRAO\" igual ao de Ricardo Abrão (id 221329), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2026."
+  },
+  {
+    "code": "4459",
+    "deputyId": 220543,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RICARDO AYRES\" igual ao de Ricardo Ayres (id 220543), único candidato. 100% do valor empenhado com UF vai para TO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4460",
+    "deputyId": 220694,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RICARDO MAIA\" igual ao de Ricardo Maia (id 220694), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4461",
+    "deputyId": 220633,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RICARDO SALLES\" igual ao de Ricardo Salles (id 220633), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4462",
+    "deputyId": 220693,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROBERTA ROMA\" igual ao de Roberta Roma (id 220693), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4463",
+    "deputyId": 220588,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROBERTO DUARTE\" igual ao de Roberto Duarte (id 220588), único candidato. 100% do valor empenhado com UF vai para AC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4464",
+    "deputyId": 220613,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROBERTO MONTEIRO PAI\" igual ao de Roberto Monteiro Pai (id 220613), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4465",
+    "deputyId": 220624,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROBINSON FARIA\" igual ao de Robinson Faria (id 220624), único candidato. 100% do valor empenhado com UF vai para RN, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4466",
+    "deputyId": 220546,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RODOLFO NOGUEIRA\" igual ao de Rodolfo Nogueira (id 220546), único candidato. 98% do valor empenhado com UF vai para MS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4468",
+    "deputyId": 220641,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RODRIGO GAMBALE\" igual ao de Rodrigo Gambale (id 220641), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4469",
+    "deputyId": 165470,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RODRIGO VALADARES\" igual ao de Rodrigo Valadares (id 165470), único candidato. 100% do valor empenhado com UF vai para SE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4470",
+    "deputyId": 220695,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROGERIA SANTOS\" igual ao de Rogéria Santos (id 220695), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4471",
+    "deputyId": 220644,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROSANGELA MORO\" igual ao de Rosangela Moro (id 220644), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4472",
+    "deputyId": 220620,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROSANGELA REIS\" igual ao de Rosângela Reis (id 220620), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4473",
+    "deputyId": 220631,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SAMUEL VIANA\" igual ao de Samuel Viana (id 220631), único candidato. 100% do valor empenhado com UF vai para MG, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4474",
+    "deputyId": 220621,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SARGENTO GONCALVES\" igual ao de Sargento Gonçalves (id 220621), único candidato. 100% do valor empenhado com UF vai para RN, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4475",
+    "deputyId": 220618,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SARGENTO PORTUGAL\" igual ao de Sargento Portugal (id 220618), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4476",
+    "deputyId": 220713,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SAULLO VIANNA\" igual ao de Saullo Vianna (id 220713), único candidato. 100% do valor empenhado com UF vai para AM, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4479",
+    "deputyId": 220651,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SIMONE MARQUETTO\" igual ao de Simone Marquetto (id 220651), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4480",
+    "deputyId": 104552,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SOCORRO NERI\" igual ao de Socorro Neri (id 104552), único candidato. 100% do valor empenhado com UF vai para AC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4482",
+    "deputyId": 220682,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"TADEU VENERI\" igual ao de Tadeu Veneri (id 220682), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4483",
+    "deputyId": 220598,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"TARCISIO MOTTA\" igual ao de Tarcísio Motta (id 220598), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4484",
+    "deputyId": 220552,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ZUCCO\" igual ao de Zucco (id 220552), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4485",
+    "deputyId": 220560,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"THIAGO DE JOALDO\" igual ao de Thiago de Joaldo (id 220560), único candidato. 100% do valor empenhado com UF vai para SE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4486",
+    "deputyId": 220597,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"THIAGO FLORES\" igual ao de Thiago Flores (id 220597), único candidato. 100% do valor empenhado com UF vai para RO, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4487",
+    "deputyId": 220684,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"TIAO MEDEIROS\" igual ao de Tião Medeiros (id 220684), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4488",
+    "deputyId": 91228,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"WALDEMAR OLIVEIRA\" igual ao de Waldemar Oliveira (id 91228), único candidato. 100% do valor empenhado com UF vai para PE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4490",
+    "deputyId": 220564,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"YANDRA MOURA\" igual ao de Yandra Moura (id 220564), único candidato. 100% do valor empenhado com UF vai para SE, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4492",
+    "deputyId": 220536,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ZE HAROLDO CATHEDRAL\" igual ao de Zé Haroldo Cathedral (id 220536), único candidato. 99% do valor empenhado com UF vai para RR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4493",
+    "deputyId": 220558,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ZE TROVAO\" igual ao de Zé Trovão (id 220558), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4494",
+    "deputyId": 220592,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ZEZINHO BARBARY\" igual ao de Zezinho Barbary (id 220592), único candidato. 88% do valor empenhado com UF vai para AC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4498",
+    "deputyId": 224117,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GABRIEL MOTA\" igual ao de Gabriel Mota (id 224117), único candidato. 98% do valor empenhado com UF vai para RR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4499",
+    "deputyId": 220589,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"EDUARDO VELLOSO\" igual ao de Eduardo Velloso (id 220589), único candidato. 100% do valor empenhado com UF vai para AC, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4500",
+    "deputyId": 224333,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"WELTER\" igual ao de Welter (id 224333), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4512",
+    "deputyId": 226837,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SAULO PEDROSO\" igual ao de Saulo Pedroso (id 226837), único candidato. 100% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2024, 2025, 2026."
+  },
+  {
+    "code": "4513",
+    "deputyId": 227310,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"SILVIO ANTONIO\" igual ao de Silvio Antonio (id 227310), único candidato. 100% do valor empenhado com UF vai para MA, UF do deputado no histórico da Câmara. Anos das emendas: 2024."
+  },
+  {
+    "code": "4546",
+    "deputyId": 230768,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ZE ADRIANO\" igual ao de Zé Adriano (id 230768), único candidato. 100% do valor empenhado com UF vai para AC, UF do deputado no histórico da Câmara. Anos das emendas: 2026."
+  },
+  {
+    "code": "4548",
+    "deputyId": 230767,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RODRIGO DA ZAELI\" igual ao de Rodrigo da Zaeli (id 230767), único candidato. 100% do valor empenhado com UF vai para MT, UF do deputado no histórico da Câmara. Anos das emendas: 2026."
+  },
+  {
+    "code": "4550",
+    "deputyId": 230765,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ENFERMEIRA REJANE\" igual ao de Enfermeira Rejane (id 230765), único candidato. 100% do valor empenhado com UF vai para RJ, UF do deputado no histórico da Câmara. Anos das emendas: 2026."
+  },
+  {
+    "code": "4553",
+    "deputyId": 231911,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"LENIR DE ASSIS\" igual ao de Lenir de Assis (id 231911), único candidato. 100% do valor empenhado com UF vai para PR, UF do deputado no histórico da Câmara. Anos das emendas: 2026."
+  },
+  {
+    "code": "4556",
+    "deputyId": 233592,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"PAULO LEMOS\" igual ao de Paulo Lemos (id 233592), único candidato. 100% do valor empenhado com UF vai para AP, UF do deputado no histórico da Câmara. Anos das emendas: 2026."
+  },
+  {
+    "code": "4557",
+    "deputyId": 233594,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RAFAEL FERA\" igual ao de Rafael Fera (id 233594), único candidato. 100% do valor empenhado com UF vai para RO, UF do deputado no histórico da Câmara. Anos das emendas: 2026."
+  },
+  {
+    "code": "4559",
+    "deputyId": 74065,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"FATIMA PELAES\" igual ao de Fatima Pelaes (id 74065), único candidato. 100% do valor empenhado com UF vai para AP, UF do deputado no histórico da Câmara. Anos das emendas: 2026."
+  },
+  {
+    "code": "9032",
+    "deputyId": 73604,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"RUI FALCAO\" igual ao de Rui Falcão (id 73604), único candidato. 99% do valor empenhado com UF vai para SP, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "9048",
+    "deputyId": 73692,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"OSMAR TERRA\" igual ao de Osmar Terra (id 73692), único candidato. 100% do valor empenhado com UF vai para RS, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "9055",
+    "deputyId": 204365,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"GILSON MARQUES\" igual ao de Gilson Marques (id 204365), único candidato. 100% do valor empenhado com UF vai para SC, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "9162",
+    "deputyId": 204489,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ROBERIO MONTEIRO\" igual ao de Robério Monteiro (id 204489), único candidato. 100% do valor empenhado com UF vai para CE, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  },
+  {
+    "code": "9191",
+    "deputyId": 204559,
+    "reviewer": "supervisor (Claude)",
+    "reviewedAt": "2026-11-27",
+    "evidence": "Nome do autor \"ZE NETO\" igual ao de Zé Neto (id 204559), único candidato. 100% do valor empenhado com UF vai para BA, UF do deputado no histórico da Câmara. Anos das emendas: 2023, 2024, 2025, 2026."
+  }
+]
