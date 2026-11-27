@@ -29,3 +29,9 @@ test('missing headers, changed bytes and cached 404 are reported',async()=>{
   assert.equal(failures.length,3);
   assert.match(failures.join('|'),/content-security-policy[\s\S]*sha256[\s\S]*no-store/);
 });
+test('an indexed build must not send noindex, and a noindex build must',async()=>{
+  const indexed=async(u:string)=>new URL(u).pathname==='/'?new Response('<html>',{headers:{'content-security-policy':'x','strict-transport-security':'x'}}):good(u);
+  assert.deepEqual(await smokeSite('https://x.dev',await setup(),indexed,true),[]);
+  assert.deepEqual(await smokeSite('https://x.dev',await setup(),good,true),['/: x-robots-tag noindex num build indexado']);
+  assert.deepEqual(await smokeSite('https://x.dev',await setup(),indexed),['/: sem x-robots-tag noindex']);
+});

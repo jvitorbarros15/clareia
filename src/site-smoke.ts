@@ -4,7 +4,7 @@ import path from 'node:path';
 
 type Fetch=(url:string)=>Promise<Response>;
 
-export async function smokeSite(url:string,dir:string,get:Fetch=u=>fetch(u,{cache:'no-store',redirect:'manual'})):Promise<string[]>{
+export async function smokeSite(url:string,dir:string,get:Fetch=u=>fetch(u,{cache:'no-store',redirect:'manual'}),index=false):Promise<string[]>{
   const site=url.replace(/\/+$/,''),failures:string[]=[];
   const local=JSON.parse(await fs.readFile(path.join(dir,'manifest.json'),'utf8')) as {base:string};
   const person=(await fs.readdir(path.join(dir,local.base,'deputados')))[0];
@@ -13,7 +13,9 @@ export async function smokeSite(url:string,dir:string,get:Fetch=u=>fetch(u,{cach
     const r=await get(site+'/');await r.arrayBuffer();
     if(r.status!==200)throw new Error(`status ${r.status}`);
     for(const h of ['content-security-policy','strict-transport-security'])if(!r.headers.get(h))throw new Error(`sem ${h}`);
-    if(!/noindex/i.test(r.headers.get('x-robots-tag')??''))throw new Error('sem x-robots-tag noindex');
+    const noindex=/noindex/i.test(r.headers.get('x-robots-tag')??'');
+    if(!index&&!noindex)throw new Error('sem x-robots-tag noindex');
+    if(index&&noindex)throw new Error('x-robots-tag noindex num build indexado');
   });
   await check('/manifest.json',async()=>{
     const r=await get(site+'/manifest.json');
