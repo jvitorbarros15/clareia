@@ -32,7 +32,8 @@
     ]
   },
   "ceilingRuns": {
-    "2025": "ceiling-2025-20261111"
+    "2025": "ceiling-2025-20261111",
+    "2026": "ceiling-2026-20261127"
   },
   "defaultYear": 2025,
   "billsRuns": [
