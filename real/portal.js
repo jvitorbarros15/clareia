@@ -274,7 +274,10 @@
   }
   const sections = [['panorama',overview],['despesas',spending],['atlas',atlas],['pessoas',directory],['comparacao',comparison],['projetos',projectSection],['votacoes',voteSection],['dimensoes',moreSection],['acompanhar',following],['perguntar',closing]];
   function fillFooter() {
-    $('.footer').innerHTML=`<div class="footer-brand"><span class="logo">${C.logo}</span><p>Entenda. Confira. Acompanhe.</p></div><div class="footer-links"><a href="#despesas">Gastos por categoria</a><a href="#comparacao">Comparar</a><a href="/sobre">Sobre</a><a href="/correcoes">Correções</a><a href="/metodologia">Metodologia</a><a href="/dados-abertos">Dados abertos</a><a href="/apoie">Apoie o projeto</a><button data-p="coverage">Cobertura desta versão</button><button data-p="reset-saved">Apagar favoritos locais</button></div><div class="footer-disclaimer"><span>Versão ${C.span()}</span><p>Dados oficiais da Câmara dos Deputados, ${C.span()}. Versão de teste. Busca por regras locais, sem IA conectada.</p><button data-p="top">Voltar ao topo ↑</button></div>`;
+    const senado=C.state.house==='senado', period=senado?C.senatorPeriod:C.span();
+    const disclaimer=senado?`Dados oficiais do Senado Federal${period?` (CEAPS), ${period}`:''}`:`Dados oficiais da Câmara dos Deputados, ${period}. Versão de teste. Busca por regras locais, sem IA conectada.`;
+    if($('.footer-disclaimer p')?.textContent===disclaimer)return;
+    $('.footer').innerHTML=`<div class="footer-brand"><span class="logo">${C.logo}</span><p>Entenda. Confira. Acompanhe.</p></div><div class="footer-links"><a href="#despesas">Gastos por categoria</a><a href="#comparacao">Comparar</a><a href="/sobre">Sobre</a><a href="/correcoes">Correções</a><a href="/metodologia">Metodologia</a><a href="/dados-abertos">Dados abertos</a><a href="/apoie">Apoie o projeto</a><button data-p="coverage">Cobertura desta versão</button><button data-p="reset-saved">Apagar favoritos locais</button></div><div class="footer-disclaimer">${period?`<span>Versão ${esc(period)}</span>`:''}<p>${esc(disclaimer)}</p><button data-p="top">Voltar ao topo ↑</button></div>`;
   }
   function mount() {
     const main=$('#main');
@@ -404,6 +407,7 @@
   const syncEstado=()=>C.setPath(state.mapUF?`/estado/${state.mapUF}`:'/',state.mapUF?`${UF[state.mapUF][0]} — Clareia`:homeTitle);
   document.addEventListener('clareia:reset',()=>{state.month=COVER;state.highlightCategory=null;state.othersOpen=false;state.catsOpen=false;state.mapUF=null;syncEstado();state.mapMetric='total';state.from=1;state.to=COVERAGE.length;});
   document.addEventListener('clareia:change',updateAll);
+  document.addEventListener('clareia:change',fillFooter);
   // Empty space in a directory card opens the profile; buttons, links and text selection keep their own behavior.
   document.addEventListener('click',e=>{
     const card=e.target.closest('.directory-card');

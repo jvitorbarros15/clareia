@@ -209,6 +209,7 @@ test('buildSite writes senadores/, manifest.senators, senator pages and sitemap 
 
 const DATA_JS=await fs.readFile(path.join(import.meta.dirname,'..','real','data.js'),'utf8');
 const APP_JS=await fs.readFile(path.join(import.meta.dirname,'..','real','app.js'),'utf8');
+const PORTAL_JS=await fs.readFile(path.join(import.meta.dirname,'..','real','portal.js'),'utf8');
 const flush=async()=>{for(let i=0;i<6;i++)await new Promise<void>(r=>setImmediate(r));};
 
 async function bootDataJs(manifestSenators:unknown):Promise<boolean>{
@@ -287,14 +288,16 @@ function bootAppJs(opts:{
   deputyPhoto?:string|null;
   pathname?:string;
   search?:string;
+  portal?:boolean;
   suppliersLoaded?:()=>boolean;
   loadSuppliers?:()=>Promise<void>;
   fetchImpl?:AppFetch;
 }={}){
   const origin='https://clareia.test';
-  const loc={origin,pathname:opts.pathname??'/',search:opts.search??'',href:''};
+  const loc={origin,pathname:opts.pathname??'/',search:opts.search??'',href:'',assign(input:URL){setUrl(input);}};
   const setUrl=(input:string|URL)=>{const u=new URL(String(input),origin);loc.pathname=u.pathname;loc.search=u.search;loc.href=u.href;};
   setUrl((opts.pathname??'/')+(opts.search??''));
+  const year=new URLSearchParams(loc.search).get('ano')??'2025';
   const historyStack:{state:unknown;href:string}[]=[{state:null,href:loc.href}];
   let historyIdx=0;
   const winListeners=new Map<string,{fn:(ev?:unknown)=>void;once?:boolean}[]>();
@@ -396,7 +399,7 @@ function bootAppJs(opts:{
     '#app':withHouseHtml(makeBox()),'#universo':makeBox(),'#answer-slot':makeBox(),'#rank-slot':withHouseHtml(makeBox(),true),
     '#editorial-feature':makeBox(),'#hero-portrait':makeBox(),'#query':makeBox(),'#suggestions':makeBox(),
     '.search-wrap':makeBox(),'.editorial-search-examples':makeBox(),'.header-search':makeBox(),
-    '#detail-title':makeBox(),'#detail-body':makeBox(),'#detail .close-button':makeBox(),'#toast':makeBox(),
+    '#detail-title':makeBox(),'#detail-body':makeBox(),'#detail .close-button':makeBox(),'#toast':makeBox(),'.footer':makeBox(),
   };
   let scopeChip:ReturnType<typeof makeBox>|null=null;
   const people=[
@@ -408,7 +411,7 @@ function bootAppJs(opts:{
     label:(c:string)=>c,dataset:()=>people,categories:['TEST'],
     monthNames:['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'],
     index:{snapshotId:'snap1234567890',collectedAt:'2025-03-01T00:00:00Z',publishedAt:'2025-03-01T00:00:00Z',scope:{year:2025,months:[1],ids:[1,2]},validation:{sourceKind:'annual',limitations:[]}},
-    base:'/data/pub1',sharedBase:'/data/pub1',year:'2025',defaultYear:'2025',years:[{year:2025,months:[1],partial:true}],
+    base:'/data/pub1',sharedBase:'/data/pub1',year,defaultYear:'2025',years:[{year:2025,months:[1],partial:true},{year:2024,months:[1],partial:false}],
     partial:true,partialLabel:'parcial · jan 2025',provisional:[],provisionalNote:'',ceilingPending:false,shareImages:false,
     senators:opts.senators??true,yearBase:()=>'/data/pub1',coverage:[0],
     suppliersLoaded:opts.suppliersLoaded??(()=>true),
@@ -449,28 +452,29 @@ function bootAppJs(opts:{
       return [];
     },
     addEventListener(type:string,fn:(ev:unknown)=>void){const list=docListeners.get(type)??[];list.push(fn);docListeners.set(type,list);},
-    dispatchEvent(){},
+    dispatchEvent(event:{type:string}){for(const fn of docListeners.get(event.type)??[])fn(event);},
   };
   class CustomEvent{type:string;constructor(type:string){this.type=type;}}
   const unrefTimeout=(fn:()=>void,ms?:number)=>{const t=setTimeout(fn,ms);t.unref?.();return t;};
   const sandbox:Record<string,unknown>={
     window:win,document:doc,location:loc,history,ClareiaView,URL,URLSearchParams,CustomEvent,
-    matchMedia:()=>({matches:true}),setTimeout:unrefTimeout,clearTimeout,
+    matchMedia:()=>({matches:true,addEventListener(){}}),setTimeout:unrefTimeout,clearTimeout,
     fetch:opts.fetchImpl??(async()=>({ok:false,status:404,json:async()=>({})})),
   };
   vm.runInNewContext(APP_JS,sandbox);
+  if(opts.portal)vm.runInNewContext(PORTAL_JS,{...sandbox,ResizeObserver:class{},addEventListener:win.addEventListener});
   const clickHouse=(house:'camara'|'senado')=>{
     const target={tagName:'BUTTON',dataset:{house},closest(sel:string){return sel.includes('[data-house]')?target:null;}};
     for(const fn of docListeners.get('click')??[])fn({target,preventDefault(){}});
   };
   const fireDoc=(type:string,ev:unknown)=>{for(const fn of docListeners.get(type)??[])fn(ev);};
-  const clickAction=(action:string)=>{
-    const target={tagName:'BUTTON',dataset:{action},closest(sel:string){return sel.includes('[data-action]')?target:null;}};
+  const clickAction=(action:string,id?:string)=>{
+    const target={tagName:'BUTTON',dataset:{action,id},closest(sel:string){return sel.includes('[data-action]')?target:null;}};
     for(const fn of docListeners.get('click')??[])fn({target,preventDefault(){}});
   };
   return {
     clareia:win.Clareia as {
-      state:{house:string;query:string;tab:string;answer:{type:string}|null};
+      state:{house:string;query:string;tab:string;featured:string;answer:{type:string}|null};
       ask:(q:string,scroll?:boolean)=>void;
       openRoute:(route:{type:string;id?:string;slug?:string},opts?:{initial?:boolean})=>void;
       closeDialog:()=>Promise<void>;
@@ -494,6 +498,57 @@ const VALID_SENATORS_YEAR={
     review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
   }],
 };
+
+test('the home hero and footer follow Senado data and restore the Câmara highlight',async()=>{
+  const sample=VALID_SENATORS_YEAR.senators[0];
+  const leader={...sample,name:'Átila Lins',senatorId:475,photo:'/senadores/portraits/475.jpg'};
+  const unnamed={...sample,name:null,senatorId:800,totalCents:200000};
+  const year={...VALID_SENATORS_YEAR,senators:[sample,leader,unnamed,{...sample,senatorId:900,totalCents:100000}]};
+  const previous={...year,year:2024,senators:[{...leader,year:2024,months:[{...leader.months[0],month:12}]}]};
+  const index={...VALID_SENATORS_INDEX,years:[...VALID_SENATORS_INDEX.years,{year:2024,file:'2024.json'}]};
+  const options={
+    portal:true,
+    loadSuppliers:()=>new Promise<void>(()=>{}),
+    fetchImpl:async(url:string)=>({ok:true,json:async()=>url.endsWith('index.json')?index:url.endsWith('2024.json')?previous:year}),
+  };
+  const app=bootAppJs({...options,search:'?casa=senado&aba=menos&metrica=mensal&destaque=2'});
+  const feature=app.elements['#editorial-feature'], portrait=app.elements['#hero-portrait'], footer=app.elements['.footer'];
+  assert.match(app.elements['#app'].innerHTML,/<div class="editorial-feature" id="editorial-feature"><p role="status">Carregando dados do Senado…<\/p>/);
+  assert.match(footer.innerHTML,/<p>Dados oficiais do Senado Federal<\/p>/);
+  assert.doesNotMatch(footer.innerHTML,/Câmara|Versão Jan/);
+
+  await flush();
+  assert.match(feature.innerHTML,/R\$\s3,8 mil/);
+  assert.match(feature.innerHTML,/foi o total de despesas de Átila Lins na CEAPS em Jan–Jan 2025\./);
+  assert.match(feature.innerHTML,/href="\/senador\/475-atila-lins" data-action="senator-profile" data-senator-id="475">Como chegamos nisso\? →/);
+  assert.match(portrait.innerHTML,/src="\/senadores\/portraits\/475.jpg"/);
+  assert.deepEqual([...feature.innerHTML.matchAll(/data-action="feature" data-id="(\d+)"/g)].map(m=>m[1]),['475','5899','800']);
+  assert.match(footer.innerHTML,/<span>Versão Jan–Jan 2025<\/span><p>Dados oficiais do Senado Federal \(CEAPS\), Jan–Jan 2025<\/p>/);
+  assert.doesNotMatch(footer.innerHTML,/Câmara/);
+
+  app.clickAction('feature','5899');
+  assert.match(feature.innerHTML,/Vanderlan Cardoso na CEAPS/);
+  assert.match(portrait.innerHTML,/>VC<\/span>/);
+  app.clickAction('feature','800');
+  assert.match(feature.innerHTML,/Senador\(a\) sem nome cadastrado \(ID 800\) na CEAPS/);
+  assert.doesNotMatch(feature.innerHTML,/senator-profile/);
+  assert.match(portrait.innerHTML,/<span class="initials"[^>]*><\/span>/);
+  assert.equal(app.clareia.state.featured,'2');
+
+  app.clickHouse('camara');
+  assert.match(feature.innerHTML,/Bruno Lima na cota parlamentar em Jan–Jan 2025/);
+  assert.match(portrait.innerHTML,/>BL<\/span>/);
+  assert.match(footer.innerHTML,/<span>Versão Jan–Jan 2025<\/span><p>Dados oficiais da Câmara dos Deputados, Jan–Jan 2025\. Versão de teste\. Busca por regras locais, sem IA conectada\.<\/p>/);
+
+  app.clickHouse('senado');
+  app.fireDoc('change',{target:{value:'2024',matches:(sel:string)=>sel==='[data-year-select]'}});
+  assert.equal(new URLSearchParams(app.location.search).get('casa'),'senado');
+  assert.equal(new URLSearchParams(app.location.search).get('ano'),'2024');
+  const reloaded=bootAppJs({...options,search:app.location.search});
+  await flush();
+  assert.match(reloaded.elements['#editorial-feature'].innerHTML,/na CEAPS em Dez–Dez 2024.*href="\/senador\/475-atila-lins\?ano=2024"/);
+  assert.match(reloaded.elements['.footer'].innerHTML,/<span>Versão Dez–Dez 2024<\/span><p>Dados oficiais do Senado Federal \(CEAPS\), Dez–Dez 2024<\/p>/);
+});
 
 test('real/data.js enables senators only when manifest.senators is strictly true',async()=>{
   assert.equal(await bootDataJs('false'),false);
