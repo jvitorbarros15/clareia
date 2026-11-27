@@ -384,7 +384,7 @@ function bootAppJs(opts:{
     body:bodyEl,
     get activeElement(){return activeEl;},
     set activeElement(v:MockBox|null){activeEl=v;},
-    createElement(){const box=makeBox();scopeChip=box;return box;},
+    createElement(tag?:string){const box=makeBox();if(tag==='div')scopeChip=box;return box;},
     querySelector(sel:string){
       if(sel==='#detail')return dialog;
       if(sel==='#scope-chip')return scopeChip;
@@ -412,6 +412,7 @@ function bootAppJs(opts:{
     const target={tagName:'BUTTON',dataset:{house},closest(sel:string){return sel.includes('[data-house]')?target:null;}};
     for(const fn of docListeners.get('click')??[])fn({target,preventDefault(){}});
   };
+  const fireDoc=(type:string,ev:unknown)=>{for(const fn of docListeners.get(type)??[])fn(ev);};
   return {
     clareia:win.Clareia as {
       state:{house:string;query:string;tab:string;answer:{type:string}|null};
@@ -419,7 +420,7 @@ function bootAppJs(opts:{
       openRoute:(route:{type:string;id?:string;slug?:string},opts?:{initial?:boolean})=>void;
       closeDialog:()=>Promise<void>;
     },
-    dialog,elements,location:loc,clickHouse,
+    dialog,elements,location:loc,clickHouse,fireDoc,
     activeElement:()=>activeEl,
     focusHouse:(house:'camara'|'senado')=>{houseButtons[house]?.focus();},
   };
@@ -637,4 +638,174 @@ test('Câmara-only search and examples are hidden while Senado is selected and r
   for(const sel of ['.search-wrap','.editorial-search-examples','.header-search','#universo','#answer-slot']){
     assert.equal(directSenado.elements[sel].hidden,true,`${sel} hidden on direct ?casa=senado load`);
   }
+});
+
+test('senatorDescription and renderSenator include distinct parties and photo meta/JSON-LD only when set',()=>{
+  const base:Senator={
+    senatorId:5899,year:2025,name:'Vanderlan Cardoso',totalCents:913383,records:2,
+    months:[
+      {month:1,exercise:'full',uf:'GO',party:'PSD',codigoMandato:'538',participation:'Titular'},
+      {month:7,exercise:'partial',uf:'GO',party:'MDB',codigoMandato:'538',participation:'Titular'},
+      {month:8,exercise:'outside',uf:null,party:null,codigoMandato:null,participation:null},
+    ],
+    review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
+  };
+  assert.ok(senatorDescription(base).startsWith('Senador(a) · PSD / MDB · GO.'));
+  assert.ok(senatorDescription({...base,months:[{month:1,exercise:'full',uf:'GO',party:null,codigoMandato:'538',participation:'Titular'}]}).startsWith('Senador(a) · GO.'));
+  assert.ok(senatorDescription({...base,months:[{month:1,exercise:'full',uf:null,party:'PSD',codigoMandato:'538',participation:'Titular'}]}).startsWith('Senador(a) · PSD.'));
+
+  const jsonLd=(html:string)=>{const m=/<script type="application\/ld\+json">([^<]*)<\/script>/.exec(html);return m?JSON.parse(m[1]):null;};
+  const withoutPhoto=renderSenator(shell,{...base,photo:null},SITE);
+  assert.equal(meta(withoutPhoto,'og:image'),`${SITE}/icon-512.png`);
+  assert.equal(meta(withoutPhoto,'twitter:image'),`${SITE}/icon-512.png`);
+  assert.equal(jsonLd(withoutPhoto).image,undefined);
+
+  const withPhoto=renderSenator(shell,{...base,photo:'/senadores/portraits/5899.jpg'},SITE);
+  assert.equal(meta(withPhoto,'og:image'),`${SITE}/senadores/portraits/5899.jpg`);
+  assert.equal(meta(withPhoto,'twitter:image'),`${SITE}/senadores/portraits/5899.jpg`);
+  assert.equal(jsonLd(withPhoto).image,`${SITE}/senadores/portraits/5899.jpg`);
+});
+
+test('buildSite copies valid senator JPEGs, skips missing/corrupt files, and wires photo and party to JSON and HTML',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-build-sen-photo-')),portraits=path.join(dir,'portraits'),db=await openDB(true);
+  await fs.mkdir(portraits);
+  const validJpeg=Buffer.from([0xff,0xd8,0xff,0xc0,0x00,0x0b,0x08,0x01,0x90,0x01,0x2c,0x01,0x01,0x11,0x00,0xff,0xd9]);
+  await fs.writeFile(path.join(portraits,'sen-5899.jpg'),validJpeg);
+  await fs.writeFile(path.join(portraits,'sen-5917.jpg'),Buffer.from('not-a-jpeg'));
+  try{
+    const dep=deputyVersion();
+    await publishDomain(db,'despesas',dep);
+    await recordDomainAudit(db,dep.id,'passed',{checkedAt:'2025-03-02T00:00:00Z'});
+    const senRows:SenatorYearRecord[]=[
+      {
+        senatorId:5899,year:2025,name:'Vanderlan Cardoso',totalCents:375000,records:1,
+        byType:{'Aluguel de imóveis':375000},byMonth:{'1':{'Aluguel de imóveis':375000}},
+        suppliers:{'Fornecedor pessoa física':375000},
+        months:[
+          {month:1,exercise:'full',uf:'GO',party:'PSD',codigoMandato:'538',participation:'Titular'},
+          {month:7,exercise:'partial',uf:'GO',party:'MDB',codigoMandato:'538',participation:'Titular'},
+        ],
+        review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
+      },
+      {
+        senatorId:5917,year:2025,name:'Fernando Dueire',totalCents:10000,records:1,
+        byType:{'Passagens':10000},byMonth:{'1':{'Passagens':10000}},
+        suppliers:{'EMPRESA AEREA LTDA':10000},
+        months:[{month:1,exercise:'full',uf:'PE',party:'MDB',codigoMandato:'526',participation:'1º Suplente'}],
+        review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
+      },
+    ];
+    const senVer=makeSenatorsVersion(senRows);
+    await storeSenatorsVersion(db,senVer);
+    await recordDomainAudit(db,senVer.id,'passed',{checkedAt:'2026-11-26T12:00:00.000Z'});
+
+    const dist=path.join(dir,'dist');
+    await buildSite(db,dist,portraits,{siteUrl:SITE,sitemap:true,approvedNames:[]},{defaultYear:2025,years:[{year:2025,publicationId:dep.id,ceiling:null}],senators:{publicationId:senVer.id}});
+
+    assert.deepEqual(await fs.readFile(path.join(dist,'senadores','portraits','5899.jpg')),validJpeg);
+    await assert.rejects(fs.access(path.join(dist,'senadores','portraits','5917.jpg')));
+
+    const yearJson=JSON.parse(await fs.readFile(path.join(dist,'senadores','2025.json'),'utf8')) as {senators:Array<{senatorId:number;photo:string|null}>};
+    assert.equal(yearJson.senators.find(s=>s.senatorId===5899)?.photo,'/senadores/portraits/5899.jpg');
+    assert.equal(yearJson.senators.find(s=>s.senatorId===5917)?.photo,null);
+
+    const html5899=await fs.readFile(path.join(dist,'senador','5899-vanderlan-cardoso.html'),'utf8');
+    assert.equal(meta(html5899,'og:image'),`${SITE}/senadores/portraits/5899.jpg`);
+    assert.equal(meta(html5899,'og:image:width'),'300');
+    assert.equal(meta(html5899,'og:image:height'),'400');
+    assert.ok(meta(html5899,'description')?.startsWith('Senador(a) · PSD / MDB · GO.'));
+    const ld5899=JSON.parse(/<script type="application\/ld\+json">([^<]*)<\/script>/.exec(html5899)![1]);
+    assert.equal(ld5899.image,`${SITE}/senadores/portraits/5899.jpg`);
+
+    const html5917=await fs.readFile(path.join(dist,'senador','5917-fernando-dueire.html'),'utf8');
+    assert.equal(meta(html5917,'og:image'),`${SITE}/icon-512.png`);
+    const ld5917=JSON.parse(/<script type="application\/ld\+json">([^<]*)<\/script>/.exec(html5917)![1]);
+    assert.equal(ld5917.image,undefined);
+  }finally{
+    await db.close();
+    await fs.rm(dir,{recursive:true,force:true});
+  }
+});
+
+test('real/app.js validates senator photo and party, renders photos/placeholder/fallback and shows party per month',async()=>{
+  // Reject bad photo paths and non-string party
+  for(const badFields of [
+    {photo:'https://www.senado.leg.br/senador5899.jpg'},
+    {photo:'/senadores/portraits/5899.png'},
+    {photo:'/senadores/portraits/abc.jpg'},
+    {photo:''},
+    {photo:123},
+    {months:[{month:1,exercise:'full',uf:'GO',party:123,codigoMandato:null,participation:null}]},
+  ]){
+    const badYear={...VALID_SENATORS_YEAR,senators:[{...VALID_SENATORS_YEAR.senators[0],...badFields}]};
+    const app=bootAppJs({
+      senators:true,
+      fetchImpl:async url=>{
+        if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+        if(url==='/senadores/2025.json')return {ok:true,json:async()=>badYear};
+        return {ok:false,status:404,json:async()=>({})};
+      },
+    });
+    app.clickHouse('senado');
+    await flush();
+    assert.ok(app.elements['#rank-slot'].innerHTML.includes('senators-error'),`invalid ${JSON.stringify(badFields)} should error`);
+  }
+
+  const richYear={
+    ...VALID_SENATORS_YEAR,
+    senators:[
+      {
+        ...VALID_SENATORS_YEAR.senators[0],
+        photo:'/senadores/portraits/5899.jpg',
+        months:[
+          {month:1,exercise:'full',uf:'GO',party:'PSD',codigoMandato:'538',participation:'Titular'},
+          {month:7,exercise:'partial',uf:'GO',party:'MDB',codigoMandato:'538',participation:'Titular'},
+          {month:8,exercise:'outside',uf:null,party:null,codigoMandato:null,participation:null},
+        ],
+      },
+      {
+        ...VALID_SENATORS_YEAR.senators[0],
+        senatorId:5917,name:'Fernando Dueire',totalCents:100000,photo:null,
+        months:[{month:1,exercise:'full',uf:'PE',party:null,codigoMandato:'526',participation:'1º Suplente'}],
+      },
+    ],
+  };
+  const app=bootAppJs({
+    senators:true,
+    fetchImpl:async url=>{
+      if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+      if(url==='/senadores/2025.json')return {ok:true,json:async()=>richYear};
+      return {ok:false,status:404,json:async()=>({})};
+    },
+  });
+  app.clickHouse('senado');
+  await flush();
+
+  const rankHtml=app.elements['#rank-slot'].innerHTML;
+  assert.ok(rankHtml.includes('<img src="/senadores/portraits/5899.jpg"'));
+  assert.ok(rankHtml.includes('Senador(a) · PSD / MDB · GO'));
+  assert.ok(rankHtml.includes('Senador(a) · PE'));
+  assert.ok(rankHtml.includes('class="initials" aria-label="Fernando Dueire — sem retrato">FD</span>'));
+
+  // Open profile for 5899 and verify header photo, context line and per-month party
+  app.clareia.openRoute({type:'senador',id:'5899',slug:'vanderlan-cardoso'});
+  await flush();
+  const detailHtml=app.elements['#detail-body'].innerHTML;
+  assert.ok(detailHtml.includes('<img src="/senadores/portraits/5899.jpg"'));
+  assert.ok(detailHtml.includes('Senador(a) · PSD / MDB · GO'));
+  assert.ok(detailHtml.includes('<strong>Janeiro · PSD · GO</strong>'));
+  assert.ok(detailHtml.includes('<strong>Julho · MDB · GO</strong>'));
+  assert.ok(detailHtml.includes('<strong>Agosto</strong>'));
+
+  // Image load error swaps the photo wrapper for the initials placeholder
+  const replaced:{className:string;textContent:string;attrs:Record<string,string>}[]=[];
+  const wrap={
+    dataset:{fallbackName:'Vanderlan Cardoso'},
+    replaceWith(el:{className:string;textContent:string;attrs:Record<string,string>}){replaced.push(el);},
+  };
+  app.fireDoc('error',{target:{tagName:'IMG',closest:(sel:string)=>sel.includes('.photo')?wrap:null}});
+  assert.equal(replaced.length,1,'image error replaces photo wrapper');
+  assert.equal(replaced[0].className,'initials');
+  assert.equal(replaced[0].textContent,'VC');
+  assert.equal(replaced[0].attrs['aria-label'],'Vanderlan Cardoso — sem retrato');
 });

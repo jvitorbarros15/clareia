@@ -1,6 +1,6 @@
 const RUN=/^[a-zA-Z0-9-]{1,80}$/,YEAR=/^[0-9]{4}$/;
 export type CoveragePair={historyRun:string;legacyRun:string};
-export type SenatorsConfig={years:Record<number,string>};
+export type SenatorsConfig={years:Record<number,string>;profilesRun?:string};
 export type FullSiteConfig={historyRun:string;legacyRun:string;coverageRuns:Record<number,CoveragePair>;expenseYears:Record<number,string[]>;ceilingRuns:Record<number,string>;defaultYear:number;billsRuns:string[];votesRuns:string[];socialRun?:string;amendmentsRun?:string;senators?:SenatorsConfig};
 const runs=(list:unknown,key:string)=>{if(!Array.isArray(list)||!list.length||!list.every(r=>typeof r==='string'&&RUN.test(r))||new Set(list).size!==list.length)throw new Error(`Configuração inválida: ${key}`);return list as string[];};
 const one=(value:unknown,key:string)=>{if(typeof value!=='string'||!RUN.test(value))throw new Error(`Configuração inválida: ${key}`);return value;};
@@ -30,9 +30,13 @@ export function parseFullSiteConfig(raw:Record<string,unknown>):FullSiteConfig{
   let senators:SenatorsConfig|undefined;
   if(raw.senators!==undefined){
     if(typeof raw.senators!=='object'||raw.senators===null||Array.isArray(raw.senators))throw new Error('Configuração inválida: senators');
-    const entries=byYear((raw.senators as Record<string,unknown>).years,'senators.years');
+    const s=raw.senators as Record<string,unknown>;
+    const entries=byYear(s.years,'senators.years');
     if(!entries.length)throw new Error('Configuração inválida: senators.years');
-    senators={years:Object.fromEntries(entries.map(([y,run])=>[y,one(run,`senators.years.${y}`)]))};
+    senators={
+      years:Object.fromEntries(entries.map(([y,run])=>[y,one(run,`senators.years.${y}`)])),
+      ...s.profilesRun===undefined?{}:{profilesRun:one(s.profilesRun,'senators.profilesRun')},
+    };
   }
   return {historyRun,legacyRun,coverageRuns,expenseYears,ceilingRuns,defaultYear:raw.defaultYear,billsRuns:runs(raw.billsRuns,'billsRuns'),votesRuns:runs(raw.votesRuns,'votesRuns'),...raw.socialRun===undefined?{}:{socialRun:one(raw.socialRun,'socialRun')},...raw.amendmentsRun===undefined?{}:{amendmentsRun:one(raw.amendmentsRun,'amendmentsRun')},...senators===undefined?{}:{senators}};
 }

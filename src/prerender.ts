@@ -40,7 +40,7 @@ export const statePath=(uf:string)=>`/estado/${uf}`;
 export const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
 
 export type Deputy={id:number;name:string;uf:string|null;ufNote:string|null;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];exerciseReviewMonths:number[];comparable:boolean;cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse;social?:{network:string;url:string}[]};
-export type Senator={senatorId:number;year:number;name:string|null;totalCents:number;records:number;months:SenatorYearRecord['months'];review:SenatorYearRecord['review'];collectedAt?:string|null};
+export type Senator={senatorId:number;year:number;name:string|null;totalCents:number;records:number;months:SenatorYearRecord['months'];review:SenatorYearRecord['review'];collectedAt?:string|null;photo?:string|null};
 export type Period={year:string;coverage:number[];minMonths:number;collectedAt?:string|null};
 export const cutoffOf=(period:Period)=>cutoffLine(period.coverage.map(m=>m+1),Number(period.year),period.collectedAt);
 
@@ -138,25 +138,32 @@ export function renderState(shell:string,uf:string,deputies:Deputy[],period:Peri
   return page(shell,{title,description,url:siteUrl+statePath(uf),type:'website',image:icon(siteUrl)},noscript);
 }
 
+const SENATOR_PHOTO=/^\/senadores\/portraits\/\d+\.jpg$/;
+const senatorParty=(months:Senator['months']):string|null=>{
+  const parties=[...new Set(months.map(m=>m.party).filter((p):p is string=>Boolean(p)))];
+  return parties.length?parties.join(' / '):null;
+};
 const senatorUf=(months:Senator['months']):string|null=>{
   const ufs=[...new Set(months.map(m=>m.uf).filter((u):u is string=>Boolean(u)))];
   return ufs.length?ufs.join(' / '):null;
 };
 export function senatorDescription(s:Senator):string{
-  const who=['Senador(a)',senatorUf(s.months)].filter(Boolean).join(' · ');
+  const who=['Senador(a)',senatorParty(s.months),senatorUf(s.months)].filter(Boolean).join(' · ');
   const spend=`Despesas da CEAPS em ${s.year}: ${money(s.totalCents)} (${s.records} ${s.records===1?'registro':'registros'}).`;
   const empty=s.review['empty-type']??0;
   const emptyNote=empty>0?`${empty} ${empty===1?'lançamento sem tipo de despesa fica':'lançamentos sem tipo de despesa ficam'} fora dos totais.`:'';
   return [`${who}.`,spend,emptyNote,'Dados oficiais do Senado Federal (CEAPS).'].filter(Boolean).join(' ');
 }
-export function renderSenator(shell:string,s:Senator,siteUrl:string):string{
+export function renderSenator(shell:string,s:Senator,siteUrl:string,portraitSize:{width:number;height:number}|null=null):string{
   if(!s.name||!plain(s.name))throw new Error(`Senador ${s.senatorId} sem nome não recebe página`);
   const name=plain(s.name),description=senatorDescription(s),title=`${name} — Clareia`,url=siteUrl+senatorPath(s.senatorId,name);
+  const photoUrl=typeof s.photo==='string'&&SENATOR_PHOTO.test(s.photo)?siteUrl+s.photo:null;
+  const image:Image=photoUrl?{url:photoUrl,...portraitSize??{},alt:`Retrato oficial de ${name}, do Senado Federal`}:icon(siteUrl);
   const coverage=s.months.map(m=>m.month-1).filter(m=>m>=0&&m<12);
   const cutoff=s.collectedAt&&coverage.length?`<p class="cutoff">${esc(cutoffOf({year:String(s.year),coverage,minMonths:1,collectedAt:s.collectedAt}))}</p>`:'';
   const noscript=`<noscript><main id="main"><h1>${esc(name)}</h1><p>${esc(description)}</p>${cutoff}<p>Ative o JavaScript para explorar os dados.</p><p><a href="/?casa=senado">Senadores no Clareia</a></p>${homeLink}</main></noscript>`;
-  const ld={'@type':'Person',name,jobTitle:'Senador(a)',url};
-  return page(shell,{title,description,url,type:'profile',image:icon(siteUrl)},noscript,ld);
+  const ld={'@type':'Person',name,jobTitle:'Senador(a)',url,...photoUrl?{image:photoUrl}:{}};
+  return page(shell,{title,description,url,type:'profile',image},noscript,ld);
 }
 
 export function jpegSize(b:Buffer):{width:number;height:number}|null{
@@ -240,9 +247,10 @@ export async function writePrerendered(outDir:string,publicationId:string,deputi
   }
   for(const s of senators){
     if(!s.name||!plain(s.name))continue;
+    const portraitBytes=typeof s.photo==='string'&&SENATOR_PHOTO.test(s.photo)?await fs.readFile(path.join(outDir,s.photo.slice(1))).catch(()=>null):null;
     const file=path.join(outDir,`${senatorPath(s.senatorId,plain(s.name)).slice(1)}.html`);
     await fs.mkdir(path.dirname(file),{recursive:true});
-    await fs.writeFile(file,renderSenator(shell,s,options.siteUrl));
+    await fs.writeFile(file,renderSenator(shell,s,options.siteUrl,portraitBytes?jpegSize(portraitBytes):null));
   }
   for(const uf of Object.keys(UFS)){
     await fs.mkdir(path.join(outDir,'estado'),{recursive:true});
