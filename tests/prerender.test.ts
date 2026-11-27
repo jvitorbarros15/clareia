@@ -160,6 +160,7 @@ test('a replacement name with dollar signs is not interpreted',()=>{
 });
 test('sitemap and noindex are exclusive and drive robots.txt',()=>{
   assert.throws(()=>resolveOptions({sitemap:true,noindex:true}),/não podem ser usados juntos/);
+  assert.equal(resolveOptions({}).siteUrl,'https://clareia.org');
   assert.equal(robotsTxt(resolveOptions({noindex:true})),'User-agent: *\nDisallow: /\n');
   assert.equal(robotsTxt(resolveOptions({sitemap:true,siteUrl:'https://clareia.example/'})),'User-agent: *\nAllow: /\n\nSitemap: https://clareia.example/sitemap.xml\n');
   assert.ok(!robotsTxt(resolveOptions()).includes('Sitemap'));
