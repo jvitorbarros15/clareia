@@ -11,6 +11,7 @@ import {billsReport} from '../src/bills.ts';
 import {scanCpfs} from '../src/cpf-scan.ts';
 import {canonical, hash} from '../src/model.ts';
 import type {Expense} from '../src/model.ts';
+import {senatorPath} from '../src/prerender.ts';
 import {parseCeapsYear} from '../src/senado-expenses.ts';
 import {auditCeapsYear} from '../src/senado-expenses-audit.ts';
 import {deriveSenatorCoverage} from '../src/senate-coverage.ts';
@@ -222,22 +223,32 @@ test('full-site build keeps deputy files and summary byte-identical with or with
     assert.equal(Object.hasOwn(withoutA.parsed, 'senators'), false);
 
     const withSen = await runBuild(cfgWith, distWith);
-    const {senators: builtSenators, ...withSenRest} = withSen.parsed;
-    assert.deepEqual(withSenRest, withoutA.parsed);
+    const {senators: builtSenators, files: withFiles, ...withSenRest} = withSen.parsed;
+    const {files: withoutFiles, ...withoutRest} = withoutA.parsed;
+    assert.deepEqual(withSenRest, withoutRest);
     assert.deepEqual(builtSenators, drySenators);
 
     const withoutTree = await tree(distWithoutA);
     const withTree = await tree(distWith);
-    assert.equal(Object.keys(withoutTree).some(k => k.startsWith('senadores/')), false);
-    const withOutside = Object.fromEntries(Object.entries(withTree).filter(([k]) => !k.startsWith('senadores/')));
-    assert.deepEqual(withOutside, withoutTree);
+    const isSenatorFile = (k: string) => k.startsWith('senadores/') || k.startsWith('senador/');
+    assert.equal(Object.keys(withoutTree).some(isSenatorFile), false);
+    const senatorFiles = Object.keys(withTree).filter(isSenatorFile);
+    assert.equal(withFiles, (withoutFiles as number) + senatorFiles.length);
+    const withOutside = Object.fromEntries(Object.entries(withTree).filter(([k]) => !isSenatorFile(k) && k !== 'manifest.json'));
+    const withoutOutside = Object.fromEntries(Object.entries(withoutTree).filter(([k]) => k !== 'manifest.json'));
+    assert.deepEqual(withOutside, withoutOutside);
     assert.deepEqual(
       Object.keys(withTree).filter(k => k.startsWith('senadores/')).sort(),
       ['senadores/2025.json', 'senadores/index.json'],
     );
 
-    const manifestWith = JSON.parse(await fs.readFile(path.join(distWith, 'manifest.json'), 'utf8')) as {domains: Record<string, unknown>};
+    const manifestWithout = JSON.parse(await fs.readFile(path.join(distWithoutA, 'manifest.json'), 'utf8')) as Record<string, unknown>;
+    const manifestWith = JSON.parse(await fs.readFile(path.join(distWith, 'manifest.json'), 'utf8')) as {domains: Record<string, unknown>; senators?: unknown; [k: string]: unknown};
+    assert.equal(Object.hasOwn(manifestWithout, 'senators'), false);
+    assert.equal(manifestWith.senators, true);
     assert.equal(Object.hasOwn(manifestWith.domains, 'senadores'), false);
+    const {senators: _senatorsFlag, ...manifestWithRest} = manifestWith;
+    assert.deepEqual(manifestWithRest, manifestWithout);
 
     for (const [f, beforeText] of reviewAfterWithout) {
       const afterText = await fs.readFile(path.join(reviewDir, f), 'utf8').catch(() => null);
@@ -262,10 +273,25 @@ test('full-site build keeps deputy files and summary byte-identical with or with
         assert.equal(text.includes(forbidden), false, `${rel}: ${forbidden}`);
       }
     }
-    const senYear = JSON.parse(await fs.readFile(path.join(distWith, 'senadores', '2025.json'), 'utf8')) as {publishedAt: string; totalCents: number; records: number};
+    const senYear = JSON.parse(await fs.readFile(path.join(distWith, 'senadores', '2025.json'), 'utf8')) as {
+      publishedAt: string;
+      totalCents: number;
+      records: number;
+      senators: {senatorId: number; name: string | null}[];
+    };
     assert.equal(senYear.publishedAt, senatorsChecked);
     assert.equal(senYear.totalCents, 2236272);
     assert.equal(senYear.records, 15);
+    const expectedSenatorPages = senYear.senators
+      .filter((s): s is {senatorId: number; name: string} => typeof s.name === 'string' && s.name.trim().length > 0)
+      .map(s => `${senatorPath(s.senatorId, s.name).slice(1)}.html`)
+      .sort();
+    const actualSenatorPages = Object.keys(withTree).filter(k => k.startsWith('senador/')).sort();
+    assert.deepEqual(actualSenatorPages, expectedSenatorPages);
+    for (const rel of actualSenatorPages) {
+      const text = await fs.readFile(path.join(distWith, rel), 'utf8');
+      assert.equal(scanCpfs(text, new Set()), 0, rel);
+    }
   } finally {
     for (const f of reviewFiles) await fs.rm(path.join(reviewDir, f), {force: true});
     await fs.rm(dir, {recursive: true, force: true});

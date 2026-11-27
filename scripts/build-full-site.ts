@@ -16,7 +16,7 @@ import {assertHeaders,addNoindex,latestCheckedAt} from '../src/site-headers.ts';
 import {openDB} from '../src/store.ts';
 import {auditRecord} from '../src/audit-record.ts';
 import {AMENDMENT_LINKS_FILE,assertApprovable,auditAmendmentsVersion,buildAmendmentsVersion,loadReviewedLinks,reobserveAmendmentsVersion,storeAmendmentsVersion} from '../src/amendments-publication.ts';
-import {auditSenatorsVersion,buildSenatorsVersion,reobserveSenatorsVersion,senatorsSummary,storeSenatorsVersion,writeSenatorsSite} from '../src/senado-publication.ts';
+import {auditSenatorsVersion,buildSenatorsVersion,reobserveSenatorsVersion,senatorsSummary,storeSenatorsVersion} from '../src/senado-publication.ts';
 import type {SenatorsYearRun} from '../src/senado-publication.ts';
 import {auditVotesVersion,buildVotesVersion,storeVotesVersion} from '../src/votes-publication.ts';
 
@@ -108,8 +108,7 @@ try{
   if(amendmentsVersion)expected.push(['emendas',amendmentsVersion.id]);
   if(senatorsVersion)expected.push(['senadores',senatorsVersion.id]);
   for(const [domain,id] of expected)if((await activePublication(db,domain))?.id!==id)throw new Error(`Versão de ${domain} não ficou ativa`);
-  const {years:yearResults,...built}=await buildSite(db,out,portraits,siteOptions,{defaultYear:config.defaultYear,years:versions.map(v=>({year:v.year,publicationId:v.expenses.id,ceiling:ceilingOf.get(v.year)!})),social,...amendmentsVersion?{amendments:{publicationId:amendmentsVersion.id}}:{}}),allIds=[...new Set(versions.flatMap(v=>v.expenses.scope.ids))],have=await Promise.all(allIds.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
-  if(senatorsVersion)await writeSenatorsSite(db,out,senatorsVersion.id);
+  const {years:yearResults,...built}=await buildSite(db,out,portraits,siteOptions,{defaultYear:config.defaultYear,years:versions.map(v=>({year:v.year,publicationId:v.expenses.id,ceiling:ceilingOf.get(v.year)!})),social,...amendmentsVersion?{amendments:{publicationId:amendmentsVersion.id}}:{},...senatorsVersion?{senators:{publicationId:senatorsVersion.id}}:{}}),allIds=[...new Set(versions.flatMap(v=>v.expenses.scope.ids))],have=await Promise.all(allIds.map(id=>fs.access(path.join(portraits,`${id}.jpg`)).then(()=>true,()=>false))),noPortrait=have.filter(h=>!h).length;
   const {review,partyReview,names}=yearResults.find(r=>r.year===config.defaultYear)!;
   await writeReview(built.publicationId,review,names,partyReview);await writeSignReview(built.publicationId,signReviewItems(expenses.records,expenses.people));
   // A non-default year's lists carry the year in the file name so they never overwrite the default year's.

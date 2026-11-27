@@ -336,7 +336,7 @@
     $('#despesas output')&&($('#despesas output').textContent=rangeText());
     $('#spend-range')?.setAttribute('aria-valuetext',rangeValueText());
   }
-  function updateAll() { sections.forEach(([id,render])=>renderPart(id,render));watchMotion(); }
+  function updateAll() { syncHouse(); if(C.state.house==='senado')return; sections.forEach(([id,render])=>renderPart(id,render));watchMotion(); }
   function updateFollowCount() {
     const count = $('#saved-count'), n = state.favorites.size;
     const changed = count.textContent !== String(n || '');
@@ -514,7 +514,7 @@
     if(id==='roster-uf'||id==='roster-party'){state[id==='roster-uf'?'rosterUF':'rosterParty']=val;renderPart('directory-grid',directoryCards);}
   });
   document.addEventListener('submit',e=>{if(e.target.id==='assistant-form'){e.preventDefault();const q=$('#assistant-query').value.trim();if(q)runAsk(q);}});
-  document.addEventListener('keydown',e=>{if(e.target.matches('.donut-legend [data-p-highlight]')&&['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();const rows=[...document.querySelectorAll('.donut-legend [data-p-highlight]:not(:disabled)')],next=rows[rows.indexOf(e.target)+(e.key==='ArrowDown'?1:-1)];next?.click();return;}if(e.target.matches('[data-p-uf]')&&['Enter',' '].includes(e.key)){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}));}if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)&&!$('#detail').open){e.preventDefault();$('#query').focus();$('#query').scrollIntoView({block:'center',behavior:state.motion?'smooth':'instant'});}});
+  document.addEventListener('keydown',e=>{if(e.target.matches('.donut-legend [data-p-highlight]')&&['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();const rows=[...document.querySelectorAll('.donut-legend [data-p-highlight]:not(:disabled)')],next=rows[rows.indexOf(e.target)+(e.key==='ArrowDown'?1:-1)];next?.click();return;}if(e.target.matches('[data-p-uf]')&&['Enter',' '].includes(e.key)){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}));}if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)&&!$('#detail').open&&C.state.house!=='senado'){e.preventDefault();$('#query').focus();$('#query').scrollIntoView({block:'center',behavior:state.motion?'smooth':'instant'});}});
   let ticking=false;
   addEventListener('scroll',()=>{if(!ticking){requestAnimationFrame(()=>{const max=document.documentElement.scrollHeight-innerHeight;const bar=$('.page-progress i');if(bar)bar.style.width=`${max?scrollY/max*100:0}%`;spySections();document.body.classList.toggle('past-hero',scrollY>innerHeight*.9);ticking=false;});ticking=true;}},{passive:true});
   document.addEventListener('pointermove',e=>{if(C.model!=='explorador'||!state.motion||e.pointerType==='touch')return;const card=e.target.closest('.dossier-card,.project-card');if(!card)return;const r=card.getBoundingClientRect();card.style.setProperty('--tilt-x',`${-(e.clientY-r.top-r.height/2)/r.height*3}deg`);card.style.setProperty('--tilt-y',`${(e.clientX-r.left-r.width/2)/r.width*3}deg`);});
@@ -553,12 +553,23 @@
   });
   const route=C.parseRoute(location.pathname);
   if(route?.type==='page'){C.renderPage(route.name);fillFooter();return;}
+  if(route?.type==='senador'){fillFooter();C.openRoute(route,{initial:true});}
   if(route?.type==='estado'&&UF[route.uf])state.mapUF=route.uf;
+  function syncHouse() {
+    const senado=C.state.house==='senado';
+    const portal=$('.full-portal');if(portal)portal.hidden=senado;
+    const dock=$('.section-dock');if(dock)dock.hidden=senado;
+    const pending=$('.supplier-pending');if(pending)pending.hidden=senado;
+    const launcher=$('.assistant-launcher');if(launcher)launcher.hidden=senado;
+    for(const id of ['atlas','projetos','votacoes']){const el=$('#'+id);if(el)el.hidden=senado;}
+  }
+  if(C.state.house==='senado'){fillFooter();syncHouse();}
   // Every section reads the monthly and supplier cells, so the page is drawn only once they are loaded.
   window.ClareiaData.loadSuppliers().then(()=>{
     mount();
     updateFollowCount();
+    syncHouse();
     if(route?.type==='estado'&&UF[route.uf]){syncEstado();(document.fonts?.ready??Promise.resolve()).then(()=>requestAnimationFrame(()=>$('#atlas')?.scrollIntoView({block:'start'})));}
-    else if(route)C.openRoute(route,{initial:true});
+    else if(route&&route.type!=='senador')C.openRoute(route,{initial:true});
   },()=>{});
 })();
