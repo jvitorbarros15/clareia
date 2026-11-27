@@ -1,4 +1,5 @@
 node_modules/
+.senado-npm-test-*/
 .env
 .env.*
 !.env.example
