@@ -58,6 +58,8 @@ body{font-family:"Public Sans",sans-serif;color:#0b0e18;-webkit-font-smoothing:a
 .square .value.big{font-size:118px}.square .value.mid{font-size:92px}.square .value.small{font-size:68px}
 .ceil{margin-top:12px;text-wrap:balance;font-size:21px;line-height:1.35;color:#3a3f4e;max-width:900px}
 .square .ceil{font-size:25px}
+.ceil.long{margin-top:10px;font-size:17px;line-height:1.28}
+.square .ceil.long{font-size:21px;line-height:1.3}
 .notes{margin-top:14px;font-size:21px;line-height:1.35;color:#3a3f4e;max-width:900px}
 .square .notes{font-size:25px}
 .foot{display:flex;justify-content:space-between;gap:24px;margin-top:18px;padding-top:14px;border-top:1px solid #dbdcd9;font-size:19px;color:#656977}
@@ -76,7 +78,7 @@ export function shareBody(fact:ShareFact,format:ShareFormat,assets:Pick<ShareAss
     +`<div class="head"><img class="logo" src="${assets.logo}" alt=""><span class="brand">Clareia</span></div>`
     +`<div class="body"><div class="who"><h1 class="name ${nameSize(fact.name,format)}">${esc(fact.name)}</h1><p class="context">${esc(fact.context)}</p></div>`
     +`<div class="photo">${picture}</div>`
-    +`<div class="fact">${fact.label?`<p class="label">${esc(fact.label)}</p>`:''}<p class="value ${valueSize(fact.value)}">${esc(fact.value)}</p>${fact.ceiling?`<p class="ceil">${esc(fact.ceiling)}</p>`:''}${fact.notes.map(n=>`<p class="notes">${esc(n)}</p>`).join('')}</div></div>`
+    +`<div class="fact">${fact.label?`<p class="label">${esc(fact.label)}</p>`:''}<p class="value ${valueSize(fact.value)}">${esc(fact.value)}</p>${fact.ceiling?`<p class="ceil${fact.ceiling.length>100?' long':''}">${esc(fact.ceiling)}</p>`:''}${fact.notes.map(n=>`<p class="notes">${esc(n)}</p>`).join('')}</div></div>`
     +`<div class="foot"><span>${esc(SOURCE)}</span><b>${esc(DISCLAIMER)}</b></div></div>`;
 }
 
@@ -135,12 +137,12 @@ export async function openRenderer(assets:ShareAssets,concurrency=4):Promise<Ren
 export type ShareResult={names:Map<number,{name:string;alt:string}>;rendered:number;reused:number;ms:number};
 const exists=(file:string)=>fs.access(file).then(()=>true,()=>false);
 
-export async function generateShareImages(o:{outDir:string;publicationId:string;deputies:Deputy[];period:Period;portraitsDir:string;pageDir:string;cacheDir:string;renderer?:Renderer}):Promise<ShareResult>{
+export async function generateShareImages(o:{outDir:string;publicationId:string;deputies:Deputy[];period:Period;portraitsDir:string;pageDir:string;cacheDir:string;ceilingNote?:string;renderer?:Renderer}):Promise<ShareResult>{
   const started=Date.now(),assets=await loadShareAssets(o.pageDir),dir=path.join(o.outDir,'data',o.publicationId,'share');
   await fs.mkdir(dir,{recursive:true});await fs.mkdir(o.cacheDir,{recursive:true});
   const standings=ufStandings(o.deputies.map(p=>({id:p.id,name:p.name,use:p.use,comparable:p.comparable})));
   const plan=await Promise.all(o.deputies.map(async p=>{
-    const portrait=await fs.readFile(path.join(o.portraitsDir,`${p.id}.jpg`)).catch(()=>null),fact=shareFactOf(p,o.period,standings.get(p.id)??null),h=shareHash(fact,portrait,assets.sha);
+    const portrait=await fs.readFile(path.join(o.portraitsDir,`${p.id}.jpg`)).catch(()=>null),fact=shareFactOf(p,o.period,standings.get(p.id)??null,o.ceilingNote),h=shareHash(fact,portrait,assets.sha);
     return {id:p.id,fact,portrait,hash:h};
   }));
   const keep=new Set<string>(),todo:{item:typeof plan[number];format:ShareFormat}[]=[];

@@ -203,7 +203,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     if(ids.length)extras.push({deputies:deputiesOf({ids,people:year.people,summary:ys,suppliers:yp}),period:{year:String(year.scope.year),coverage:year.scope.months.map(m=>m-1),minMonths:ys.minMonths,collectedAt:year.collectedAt}});
   }
   // The cache sits beside the output so an unchanged image is copied, not rendered again; the output folder itself is rebuilt every time.
-  const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId:STAGING,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache'}):null;
+  const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId:STAGING,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache',ceilingNote:summary.ceiling?.note}):null;
   if(share)console.error(`Imagens de compartilhamento: ${share.rendered} geradas, ${share.reused} reaproveitadas, ${(share.ms/1000).toFixed(1)} s`);
   const publicationId=await dataFolderId(data);
   await fs.rename(data,path.join(outDir,'data',publicationId));

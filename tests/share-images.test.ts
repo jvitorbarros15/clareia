@@ -5,12 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import {deputyDescription,renderDeputy} from '../src/prerender.ts';
 import type {Deputy,Period} from '../src/prerender.ts';
-import {ufStandings} from '../src/ceiling-use.ts';
+import {ceilingUse,ufStandings} from '../src/ceiling-use.ts';
 import type {CeilingUse} from '../src/ceiling-use.ts';
+import {PORTAL_2026_NOTE} from '../src/cota-ceiling-2026-portal.ts';
+import {buildSiteCeiling} from '../src/ceiling-site.ts';
 import {ceilingLine,DISCLAIMER,FORMATS,SOURCE,monogram,monogramColors,nameSize,shareFactOf,shareHash,shareName,valueSize} from '../src/share-facts.ts';
 import {generateShareImages,loadShareAssets,openRenderer,shareBody,shareDocument} from '../src/share-images.ts';
 import {jpegSize} from '../src/prerender.ts';
 import type {Renderer} from '../src/share-images.ts';
+import {mixedCeiling2026,reportFor} from './fixtures/cota-ceiling.ts';
 
 const PAGE=path.join(import.meta.dirname,'..','real');
 const shell=await fs.readFile(path.join(PAGE,'index.html'),'utf8');
@@ -153,6 +156,8 @@ test('a render with the wrong size stops the build',async()=>{
   }finally{await fs.rm(tmp,{recursive:true,force:true});}
 });
 
+const okUse=(tenths:number,uf='AC'):CeilingUse=>({status:'ok',counted:[{month:1,uf,expenseCents:1,ceilingCents:1,records:1}],excluded:[],outside:[],expenseCents:1,ceilingCents:1,tenths});
+
 test('real renderer: exact sizes, long name, no portrait, and a layout that does not fit is refused',async t=>{
   let renderer:Renderer;
   try{renderer=await openRenderer(assets,1);}catch(e){t.skip(String((e as Error).message));return;}
@@ -163,12 +168,18 @@ test('real renderer: exact sizes, long name, no portrait, and a layout that does
       const bytes=await renderer.render({fact:shareFactOf(d,period),format,portrait:null});
       assert.deepEqual(jpegSize(bytes),{width:FORMATS[format].width,height:FORMATS[format].height});
     }
+    const longCeiling={...long,id:105,heldMonths:[],use:okUse(818,'SP')};
+    const mergedCeiling={...merged,id:106,heldMonths:[],use:okUse(1048,'SP')};
+    const standing={uf:'SP',rank:12,total:70};
+    for(const d of [longCeiling,mergedCeiling])for(const format of ['wide','square'] as const){
+      const bytes=await renderer.render({fact:shareFactOf(d,{...period,year:'2026'},standing,PORTAL_2026_NOTE),format,portrait:null});
+      assert.deepEqual(jpegSize(bytes),{width:FORMATS[format].width,height:FORMATS[format].height});
+    }
     const absurd={...normal,name:'W'.repeat(400)};
     await assert.rejects(renderer.render({fact:shareFactOf(absurd,period),format:'wide',portrait:null}),/não cabe no modelo/);
   }finally{await renderer.close();}
 });
 
-const okUse=(tenths:number,uf='AC'):CeilingUse=>({status:'ok',counted:[{month:1,uf,expenseCents:1,ceilingCents:1,records:1}],excluded:[],outside:[],expenseCents:1,ceilingCents:1,tenths});
 test('the ceiling line states the share and the position among comparable deputies of the state',()=>{
   assert.equal(ceilingLine(okUse(818),{uf:'AC',rank:1,total:7}),'81,8% do teto da cota do AC · maior uso entre 7 deputados comparáveis do estado');
   assert.equal(ceilingLine(okUse(818),{uf:'AC',rank:3,total:7}),'81,8% do teto da cota do AC · 3º maior uso entre 7 deputados comparáveis do estado');
@@ -208,4 +219,37 @@ test('the line reaches the fact and the alt text only for a full or few-months t
   assert.equal(shareFactOf({...withUse,hasCells:false,heldMonths:[2]},period,st).ceiling,'');
   assert.equal(shareFactOf({...withUse,noExercise:true},period,st).ceiling,'');
   assert.equal(shareFactOf(normal,period).ceiling,'');
+});
+
+test('2026 mixed ceiling appends the note in the share text while 2025 has no note',async()=>{
+  const site2026=mixedCeiling2026(),{report:r2025,audit:a2025}=reportFor(2025),site2025=buildSiteCeiling(r2025,a2025,2025);
+  assert.equal(site2025.note,undefined);
+  const m=(month:number,cents:number)=>({month,cents,records:1,exercise:'full',held:false,ufStatus:'single',uf:'SP'});
+  const use2026=ceilingUse([m(1,1000000),m(2,9999999),m(3,2000000)],site2026,true);
+  const use2025=ceilingUse([m(1,1000000),m(2,2000000),m(3,2000000)],site2025,true);
+  assert.equal(use2026.status,'ok');assert.equal(use2025.status,'ok');
+  const period2026:Period={year:'2026',coverage:[0,1,2],minMonths:3};
+  const st={uf:'SP',rank:1,total:2};
+  assert.ok(ceilingLine(use2026,st,site2026.note).endsWith(` · ${PORTAL_2026_NOTE}`));
+  assert.ok(ceilingLine(use2026,null,site2026.note).endsWith(` · ${PORTAL_2026_NOTE}`));
+  assert.equal(ceilingLine({status:'unconfirmed',counted:[],excluded:[],outside:[],missing:[1]},st,site2026.note),'');
+  const d2026:Deputy={...normal,id:201,use:use2026},d2025:Deputy={...normal,id:202,use:use2025};
+  const f2026=shareFactOf(d2026,period2026,st,site2026.note);
+  const f2025=shareFactOf(d2025,period,st,site2025.note);
+  assert.ok(f2026.ceiling.includes(PORTAL_2026_NOTE)&&f2026.alt.includes(PORTAL_2026_NOTE));
+  assert.ok(shareBody(f2026,'wide',assets,null).includes(PORTAL_2026_NOTE));
+  assert.ok(!f2025.ceiling.includes(PORTAL_2026_NOTE)&&!f2025.alt.includes(PORTAL_2026_NOTE));
+  assert.notEqual(shareHash(f2026,null,assets.sha),shareHash(shareFactOf(d2026,period2026,st),null,assets.sha));
+
+  const tmp=await fs.mkdtemp(path.join(os.tmpdir(),'share-note-'));
+  try{
+    const seen2026:string[]=[],seen2025:string[]=[];
+    const capture=(out:string[]):Renderer=>({async render(job){out.push(job.fact.ceiling);const {width,height}=FORMATS[job.format];return png(width,height);},async close(){}});
+    const r26=await generateShareImages({outDir:path.join(tmp,'out26'),publicationId:'p',deputies:[d2026],period:period2026,portraitsDir:tmp,pageDir:PAGE,cacheDir:path.join(tmp,'c26'),ceilingNote:site2026.note,renderer:capture(seen2026)});
+    const r25=await generateShareImages({outDir:path.join(tmp,'out25'),publicationId:'p',deputies:[d2025],period,portraitsDir:tmp,pageDir:PAGE,cacheDir:path.join(tmp,'c25'),ceilingNote:site2025.note,renderer:capture(seen2025)});
+    assert.ok(seen2026.length>0&&seen2026.every(c=>c.includes(PORTAL_2026_NOTE)));
+    assert.ok(r26.names.get(201)!.alt.includes(PORTAL_2026_NOTE));
+    assert.ok(seen2025.length>0&&seen2025.every(c=>!c.includes(PORTAL_2026_NOTE)));
+    assert.ok(!r25.names.get(202)!.alt.includes(PORTAL_2026_NOTE));
+  }finally{await fs.rm(tmp,{recursive:true,force:true});}
 });
