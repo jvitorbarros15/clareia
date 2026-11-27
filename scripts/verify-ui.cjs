@@ -2922,15 +2922,17 @@ check('provisional months mark the chart, profile and year label without changin
 
 check('senators switch, ranking, profile and non-blocking route at 1440 and 390', async () => {
   const manifest = await (await fetch(`${base}/manifest.json`)).json();
-  needCase(Boolean(manifest.senators), 'the built site has no senadores/ published');
+  needCase(manifest.senators === true, 'the built site has no senadores/ published');
   const idxRes = await fetch(`${base}/senadores/index.json`);
-  needCase(idxRes.ok, 'the built site has no senadores/index.json');
+  assert.ok(idxRes.ok, `manifest.senators is true but /senadores/index.json returned ${idxRes.status}`);
   const sIndex = await idxRes.json();
   const defYear = String(manifest.defaultYear || '');
-  const yearEntry = sIndex.years.find(y => String(y.year) === defYear) || sIndex.years[0];
-  needCase(Boolean(yearEntry), 'senadores/index.json has no years');
-  const yearData = await (await fetch(`${base}/senadores/${yearEntry.file}`)).json();
-  const firstNamed = yearData.senators.find(s => typeof s.name === 'string' && s.name.trim());
+  const yearEntry = Array.isArray(sIndex.years) ? (sIndex.years.find(y => String(y.year) === defYear) || sIndex.years[0]) : null;
+  assert.ok(yearEntry, 'senadores/index.json advertises no years');
+  const yearRes = await fetch(`${base}/senadores/${yearEntry.file}`);
+  assert.ok(yearRes.ok, `senadores/index.json advertises ${yearEntry.file} but fetch returned ${yearRes.status}`);
+  const yearData = await yearRes.json();
+  const firstNamed = Array.isArray(yearData.senators) ? yearData.senators.find(s => typeof s.name === 'string' && s.name.trim()) : null;
   needCase(Boolean(firstNamed), 'senators year data has a named senator');
 
   for (const width of [1440, 390]) {

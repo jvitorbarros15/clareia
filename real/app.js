@@ -262,17 +262,19 @@
   const senatorUf = s => [...new Set((s.months || []).map(m => m.uf).filter(Boolean))].join(' / ');
   const isPlainObj = v => typeof v === 'object' && v !== null && !Array.isArray(v);
   const isSafeNumRecord = obj => isPlainObj(obj) && Object.values(obj).every(v => typeof v === 'number' && Number.isSafeInteger(v));
+  const isOptNullableStr = v => v === undefined || v === null || typeof v === 'string';
+  const validSenatorMonth = m => isPlainObj(m) && Number.isInteger(m.month) && m.month >= 1 && m.month <= 12 && typeof m.exercise === 'string' && m.exercise.length > 0 && isOptNullableStr(m.uf) && isOptNullableStr(m.codigoMandato) && isOptNullableStr(m.participation);
   function validSenatorsIndex(raw) {
     if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-index.v1' || !Array.isArray(raw.years)) return null;
     if (!raw.years.every(y => isPlainObj(y) && Number.isInteger(y.year) && typeof y.file === 'string' && /^\d{4}\.json$/.test(y.file))) return null;
     return raw;
   }
   function validSenatorsYear(raw) {
-    if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-year.v1' || !Number.isInteger(raw.year) || !Number.isSafeInteger(raw.totalCents) || !Number.isSafeInteger(raw.records) || !Array.isArray(raw.senators)) return null;
+    if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-year.v1' || !Number.isInteger(raw.year) || !Number.isSafeInteger(raw.totalCents) || !Number.isSafeInteger(raw.records) || !isOptNullableStr(raw.collectedAt) || !Array.isArray(raw.senators)) return null;
     for (const s of raw.senators) {
-      if (!isPlainObj(s) || !Number.isInteger(s.senatorId) || (s.name !== null && typeof s.name !== 'string') || !Number.isSafeInteger(s.totalCents) || !Number.isSafeInteger(s.records)) return null;
+      if (!isPlainObj(s) || !Number.isInteger(s.senatorId) || !Number.isInteger(s.year) || (s.name !== null && typeof s.name !== 'string') || !Number.isSafeInteger(s.totalCents) || !Number.isSafeInteger(s.records)) return null;
       if (!isSafeNumRecord(s.byType) || !isSafeNumRecord(s.suppliers) || !isPlainObj(s.byMonth) || !Object.values(s.byMonth).every(isSafeNumRecord)) return null;
-      if (!Array.isArray(s.months) || !isPlainObj(s.review)) return null;
+      if (!Array.isArray(s.months) || !s.months.every(validSenatorMonth) || !isSafeNumRecord(s.review)) return null;
     }
     return raw;
   }
@@ -521,13 +523,33 @@
     'COMPLEMENTAÇÃO DO AUXÍLIO-MORADIA': ['auxilio', 'moradia']
   };
   const categoryFor = q => categories.find(c => (categoryTerms[c] || []).some(term => new RegExp(`\\b${term}`).test(q)));
+  let askRun = 0;
   // `fixed` holds filters the caller already decided (a shared link); they win over what the words imply. The answer is computed once, from the final state.
   function ask(query, scroll = true, fixed = {}) {
     state.query = query.trim();
     if (!state.query) { $('#query').focus(); return; }
     if (state.house === 'senado') state.house = 'camara';
     // The category order and the monthly cells come from fornecedores.json, so an answer waits for it.
-    if (!D.suppliersLoaded()) { state.answer = { type: 'loading' }; refresh(); D.loadSuppliers().then(() => ask(query, scroll, fixed), () => { state.answer = null; refresh(); }); return; }
+    if (!D.suppliersLoaded()) {
+      const run = ++askRun, pendingQuery = state.query;
+      state.answer = { type: 'loading' };
+      refresh();
+      D.loadSuppliers().then(() => {
+        if (run !== askRun || state.house !== 'camara' || state.query !== pendingQuery) {
+          if (run === askRun && state.answer?.type === 'loading') state.answer = null;
+          return;
+        }
+        ask(pendingQuery, scroll, fixed);
+      }, () => {
+        if (run !== askRun || state.house !== 'camara' || state.query !== pendingQuery) {
+          if (run === askRun && state.answer?.type === 'loading') state.answer = null;
+          return;
+        }
+        state.answer = null;
+        refresh();
+      });
+      return;
+    }
     const q = norm(state.query), years = q.match(/\b20\d{2}\b/g);
     let message;
     const asked = years?.find(y => y !== state.year), askedPublished = asked && otherYears().includes(asked);
@@ -648,12 +670,20 @@
     const found = route.type === 'deputado' && route.id ? person(route.id) : null;
     if (found) profile(found.id); else if (route.type === 'deputado' && route.id && D.years.length > 1) absentDeputy(route, target); else notFound(route.type, target);
   }
+  let senatorRouteRun = 0;
   async function openSenatorRoute(route, target) {
+    const run = ++senatorRouteRun;
     if (!D.senators || !route.id) { notFound('senador', target); return; }
-    showDialog('Perfil do senador', '<p class="records-note records-loading" role="status">Carregando dados do Senado…</p>', true, { url: target, title: 'Senado — Clareia' });
+    const stillActive = () => run === senatorRouteRun && $('#detail').open && $('#detail [data-senator-run]')?.dataset.senatorRun === String(run);
+    showDialog('Perfil do senador', `<p class="records-note records-loading" data-senator-run="${run}" role="status">Carregando dados do Senado…</p>`, true, { url: target, title: 'Senado — Clareia' });
     let loaded;
     try { loaded = await loadSenatorsYear(state.year); }
-    catch { showDialog('Dados indisponíveis', '<p class="records-note" role="alert">Não foi possível carregar os dados do Senado agora. Nenhum valor foi estimado.</p><div class="action-row"><button type="button" class="outline-button primary" data-action="close">Fechar</button></div>', true, { url: target, title: 'Dados indisponíveis — Clareia' }); return; }
+    catch {
+      if (!stillActive()) return;
+      showDialog('Dados indisponíveis', '<p class="records-note" role="alert">Não foi possível carregar os dados do Senado agora. Nenhum valor foi estimado.</p><div class="action-row"><button type="button" class="outline-button primary" data-action="close">Fechar</button></div>', true, { url: target, title: 'Dados indisponíveis — Clareia' });
+      return;
+    }
+    if (!stillActive()) return;
     const found = loaded.data?.senators.find(s => String(s.senatorId) === String(route.id) && senatorNamed(s));
     if (found) {
       if (senatorState.year === state.year && !senatorState.data) { senatorState.index = loaded.index; senatorState.data = loaded.data; senatorState.status = 'ready'; }
@@ -667,6 +697,7 @@
         if (other.data?.senators.some(s => String(s.senatorId) === String(route.id) && senatorNamed(s))) present.push(String(y.year));
       } catch { /* an unreachable year just does not get offered */ }
     }));
+    if (!stillActive()) return;
     if (!present.length) { notFound('senador', target); return; }
     present.sort();
     const path = `/senador/${route.id}${route.slug ? '-' + route.slug : ''}`, link = y => `${path}${y === D.defaultYear ? '' : `?ano=${y}`}`;
@@ -699,7 +730,7 @@
       const ex = EXERCISE_LABEL[m.exercise] || m.exercise;
       const warn = m.exercise !== 'full';
       const isSub = typeof m.participation === 'string' && /suplente/i.test(m.participation);
-      return `<li class="senator-month-row"><strong>${months[m.month - 1] || `Mês ${m.month}`}${m.uf ? ` · ${escape(m.uf)}` : ''}</strong><span class="senator-tags"><span class="senator-tag${warn ? ' senator-tag-warn' : ''}">${escape(ex)}</span>${isSub ? `<span class="senator-tag senator-tag-sub">${escape(m.participation)}</span>` : ''}</span></li>`;
+      return `<li class="senator-month-row"><strong>${months[m.month - 1] || `Mês ${escape(m.month)}`}${m.uf ? ` · ${escape(m.uf)}` : ''}</strong><span class="senator-tags"><span class="senator-tag${warn ? ' senator-tag-warn' : ''}">${escape(ex)}</span>${isSub ? `<span class="senator-tag senator-tag-sub">${escape(m.participation)}</span>` : ''}</span></li>`;
     }).join('');
     const exerciseHtml = exerciseRows ? `<ul class="senator-months">${exerciseRows}</ul>` : '<p class="context">Sem cobertura mensal informada para este ano.</p>';
     const emptyCount = Number(s.review?.['empty-type'] ?? 0);
@@ -1012,8 +1043,12 @@
       if (next !== state.house) {
         state.house = next;
         state.barLimit = BAR_STEP;
-        if (next === 'senado' && state.tab === 'projetos') state.tab = 'gastos';
-        if (next === 'senado') ensureSenatorsLoaded();
+        if (next === 'senado') {
+          askRun++;
+          if (state.answer?.type === 'loading') state.answer = null;
+          if (state.tab === 'projetos') state.tab = 'gastos';
+          ensureSenatorsLoaded();
+        }
         refresh();
       }
       return;
@@ -1071,6 +1106,7 @@
   });
   $('#detail').addEventListener('click', event => { if (event.target === $('#detail')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right) closeDialog(); } });
   $('#detail').addEventListener('close', () => {
+    senatorRouteRun++;
     dialogTrail = []; dialogView = null;
     if (session?.live) {
       session.live = false;
