@@ -280,6 +280,7 @@ async function bootDataJs(manifestSenators:unknown):Promise<boolean>{
 type AppFetch=(url:string)=>Promise<{ok:boolean;status?:number;json:()=>Promise<unknown>}>;
 function bootAppJs(opts:{
   senators?:boolean;
+  deputyPhoto?:string|null;
   pathname?:string;
   search?:string;
   suppliersLoaded?:()=>boolean;
@@ -360,7 +361,7 @@ function bootAppJs(opts:{
   };
   let scopeChip:ReturnType<typeof makeBox>|null=null;
   const people=[
-    {id:'1',officialId:1,name:'Ana Souza',photo:null,sourceUrl:'',social:[],uf:'SP',ufNote:null,party:'PL',partyNote:null,partyInReview:false,lastConfirmedParty:null,profileFetchedAt:'2025-03-01T00:00:00Z',months:1,exercisedMonths:1,noExercise:false,heldMonths:[],exerciseReviewMonths:[],comparable:true,use:{status:'unconfirmed',counted:[],excluded:[],outside:[],missing:[1]},projects:null,approved:null,votes:null,cells:[{month:0,category:'TEST',supplier:'EMPRESA LTDA',amount:50000,count:1}],total:50000},
+    {id:'1',officialId:1,name:'Ana Souza',photo:opts.deputyPhoto??null,sourceUrl:'',social:[],uf:'SP',ufNote:null,party:'PL',partyNote:null,partyInReview:false,lastConfirmedParty:null,profileFetchedAt:'2025-03-01T00:00:00Z',months:1,exercisedMonths:1,noExercise:false,heldMonths:[],exerciseReviewMonths:[],comparable:true,use:{status:'unconfirmed',counted:[],excluded:[],outside:[],missing:[1]},projects:null,approved:null,votes:null,cells:[{month:0,category:'TEST',supplier:'EMPRESA LTDA',amount:50000,count:1}],total:50000},
     {id:'2',officialId:2,name:'Bruno Lima',photo:null,sourceUrl:'',social:[],uf:'RJ',ufNote:null,party:'PT',partyNote:null,partyInReview:false,lastConfirmedParty:null,profileFetchedAt:'2025-03-01T00:00:00Z',months:1,exercisedMonths:1,noExercise:false,heldMonths:[],exerciseReviewMonths:[],comparable:true,use:{status:'unconfirmed',counted:[],excluded:[],outside:[],missing:[1]},projects:null,approved:null,votes:null,cells:[{month:0,category:'TEST',supplier:'EMPRESA LTDA',amount:20000,count:1}],total:20000},
   ];
   const clareiaData={
@@ -772,17 +773,23 @@ test('real/app.js validates senator photo and party, renders photos/placeholder/
   };
   const app=bootAppJs({
     senators:true,
+    deputyPhoto:'/portraits/1.jpg',
     fetchImpl:async url=>{
       if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
       if(url==='/senadores/2025.json')return {ok:true,json:async()=>richYear};
       return {ok:false,status:404,json:async()=>({})};
     },
   });
+  // Deputy portraits must not receive the senator-only fallback marker
+  const deputyHtml=app.elements['#app'].innerHTML;
+  assert.ok(deputyHtml.includes('<span class="photo"><img src="/portraits/1.jpg"'));
+  assert.ok(!deputyHtml.includes('data-fallback-name'));
+
   app.clickHouse('senado');
   await flush();
 
   const rankHtml=app.elements['#rank-slot'].innerHTML;
-  assert.ok(rankHtml.includes('<img src="/senadores/portraits/5899.jpg"'));
+  assert.ok(rankHtml.includes('<span class="photo" data-fallback-name="Vanderlan Cardoso"><img src="/senadores/portraits/5899.jpg"'));
   assert.ok(rankHtml.includes('Senador(a) · PSD / MDB · GO'));
   assert.ok(rankHtml.includes('Senador(a) · PE'));
   assert.ok(rankHtml.includes('class="initials" aria-label="Fernando Dueire — sem retrato">FD</span>'));
@@ -791,21 +798,26 @@ test('real/app.js validates senator photo and party, renders photos/placeholder/
   app.clareia.openRoute({type:'senador',id:'5899',slug:'vanderlan-cardoso'});
   await flush();
   const detailHtml=app.elements['#detail-body'].innerHTML;
-  assert.ok(detailHtml.includes('<img src="/senadores/portraits/5899.jpg"'));
+  assert.ok(detailHtml.includes('<span class="photo" data-fallback-name="Vanderlan Cardoso"><img src="/senadores/portraits/5899.jpg"'));
   assert.ok(detailHtml.includes('Senador(a) · PSD / MDB · GO'));
   assert.ok(detailHtml.includes('<strong>Janeiro · PSD · GO</strong>'));
   assert.ok(detailHtml.includes('<strong>Julho · MDB · GO</strong>'));
   assert.ok(detailHtml.includes('<strong>Agosto</strong>'));
 
-  // Image load error swaps the photo wrapper for the initials placeholder
+  // Image load error swaps senator photo wrappers for initials, but leaves deputy portraits untouched
   const replaced:{className:string;textContent:string;attrs:Record<string,string>}[]=[];
   const wrap={
     dataset:{fallbackName:'Vanderlan Cardoso'},
     replaceWith(el:{className:string;textContent:string;attrs:Record<string,string>}){replaced.push(el);},
   };
-  app.fireDoc('error',{target:{tagName:'IMG',closest:(sel:string)=>sel.includes('.photo')?wrap:null}});
-  assert.equal(replaced.length,1,'image error replaces photo wrapper');
+  app.fireDoc('error',{target:{tagName:'IMG',closest:(sel:string)=>sel==='.photo[data-fallback-name]'?wrap:null}});
+  assert.equal(replaced.length,1,'senator image error replaces photo wrapper');
   assert.equal(replaced[0].className,'initials');
   assert.equal(replaced[0].textContent,'VC');
   assert.equal(replaced[0].attrs['aria-label'],'Vanderlan Cardoso — sem retrato');
+
+  const deputyReplaced:unknown[]=[];
+  const deputyWrap={dataset:{},replaceWith(el:unknown){deputyReplaced.push(el);}};
+  app.fireDoc('error',{target:{tagName:'IMG',closest:(sel:string)=>sel==='.photo'?deputyWrap:null}});
+  assert.equal(deputyReplaced.length,0,'deputy image error does not swap to initials');
 });

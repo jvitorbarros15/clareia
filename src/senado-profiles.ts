@@ -95,7 +95,9 @@ export function isJpegBytes(bytes: Uint8Array): boolean {
 
 export function isAllowedSenadoPhotoUrl(url: string): boolean {
   if (typeof url !== 'string' || !url || url.trim() !== url) return false;
-  if (/[\u0000-\u001f\u007f]/.test(url) || url.includes('#') || /^https:\/\/[^/?#\\]*[:@\\]/i.test(url)) return false;
+  if (/[\u0000-\u001f\u007f]/.test(url) || url.includes('#')) return false;
+  const authorityMatch = /^https:\/\/([^/?#\\]+)(?:[/?]|$)/i.exec(url);
+  if (!authorityMatch || !ALLOWED_PHOTO_HOSTS.has(authorityMatch[1].toLowerCase())) return false;
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -240,10 +242,10 @@ async function downloadPhoto(
   fetcher: Fetcher,
   timeoutMs: number,
 ): Promise<'downloaded' | 'exists' | 'failed'> {
-  if (await fileExists(destFile)) return 'exists';
   let current = url;
   const tmpFile = `${destFile}.${randomBytes(6).toString('hex')}.tmp`;
   try {
+    if (await fileExists(destFile)) return 'exists';
     let response: Response | null = null;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
       if (!isAllowedSenadoPhotoUrl(current)) return 'failed';
@@ -255,7 +257,7 @@ async function downloadPhoto(
       if (res.status >= 300 && res.status < 400) {
         await res.body?.cancel().catch(() => {});
         const location = res.headers.get('location');
-        if (!location || hop === MAX_REDIRECTS || location.includes('#')) return 'failed';
+        if (!location || hop === MAX_REDIRECTS || location.includes('#') || location.trim() !== location || /[\u0000-\u001f\u007f]/.test(location)) return 'failed';
         let next: URL;
         try {
           next = new URL(location, current);
@@ -263,7 +265,7 @@ async function downloadPhoto(
           return 'failed';
         }
         if (/^https?:/i.test(location) && !isAllowedSenadoPhotoUrl(location)) return 'failed';
-        if (location.startsWith('//') && !isAllowedSenadoPhotoUrl(`https:${location}`)) return 'failed';
+        if (/^[\/\\]{2}/.test(location) && !isAllowedSenadoPhotoUrl(`https:${location}`)) return 'failed';
         if (!isAllowedSenadoPhotoUrl(next.href)) return 'failed';
         current = next.href;
         continue;

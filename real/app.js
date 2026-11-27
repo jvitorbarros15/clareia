@@ -120,11 +120,11 @@
     return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.arrow}</svg>`;
   };
   const initialsOf = name => name.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2);
-  function photo(p) {
+  function photo(p, fallback = false) {
     if (!safeImage(p.photo)) return `<span class="initials" aria-label="${escape(p.name)} — sem retrato">${escape(initialsOf(p.name))}</span>`;
-    return `<span class="photo" data-fallback-name="${escape(p.name)}"><img src="${escape(p.photo)}" alt="Retrato oficial de ${escape(p.name)}" loading="lazy"></span>`;
+    return `<span class="photo"${fallback ? ` data-fallback-name="${escape(p.name)}"` : ''}><img src="${escape(p.photo)}" alt="Retrato oficial de ${escape(p.name)}" loading="lazy"></span>`;
   }
-  const avatar = p => `<span class="avatar">${photo(p)}</span>`;
+  const avatar = (p, fallback = false) => `<span class="avatar">${photo(p, fallback)}</span>`;
   function setPath(path, title) {
     const url = new URL(location.href);
     if (url.pathname !== path) { url.pathname = path; writeHistory('replaceState', history.state, url); }
@@ -349,8 +349,8 @@
       const ctx = ['Senador(a)', party, uf].filter(Boolean).join(' · ');
       const cap = state.metric === 'mensal' ? `Média mensal · ${exercised} ${monthsWord(exercised)} de exercício` : `CEAPS ${data.year} · ${number(s.records)} ${s.records === 1 ? 'registro' : 'registros'}`;
       const portrait = named
-        ? `<button type="button" class="portrait-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="Abrir perfil de ${escape(name)}">${photo({ name, photo: s.photo ?? null })}<span class="rank-number">0${i + 1}</span></button>`
-        : `<div class="portrait-button">${photo({ name: 'S', photo: s.photo ?? null })}<span class="rank-number">0${i + 1}</span></div>`;
+        ? `<button type="button" class="portrait-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="Abrir perfil de ${escape(name)}">${photo({ name, photo: s.photo ?? null }, true)}<span class="rank-number">0${i + 1}</span></button>`
+        : `<div class="portrait-button">${photo({ name: 'S', photo: s.photo ?? null }, true)}<span class="rank-number">0${i + 1}</span></div>`;
       const amountEl = named
         ? `<button type="button" class="value-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="${escape(name)}: ${money(val)}. Ver detalhes">${compact(val)}</button>`
         : `<span class="value-button">${compact(val)}</span>`;
@@ -364,7 +364,7 @@
     if (!ranked.length) return '';
     const max = Math.max(1, ...ranked.map(x => Math.abs(x.value)));
     return `<section class="bar-section" id="comparison"><h2>Comparativo de senadores · ${escape(data.year)}</h2><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map(({ senator: s, value: val }, i) => {
-      const named = senatorNamed(s), name = senatorDisplayName(s), inner = `<span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar({ name: named ? name : 'S', photo: s.photo ?? null })}<span class="bar-name">${escape(name)}</span><span class="track"><i style="width:${Math.abs(val) / max * 100}%"></i></span><span class="bar-value">${money(val)}</span>`;
+      const named = senatorNamed(s), name = senatorDisplayName(s), inner = `<span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar({ name: named ? name : 'S', photo: s.photo ?? null }, true)}<span class="bar-name">${escape(name)}</span><span class="track"><i style="width:${Math.abs(val) / max * 100}%"></i></span><span class="bar-value">${money(val)}</span>`;
       return named
         ? `<a class="bar-row" href="${escape(withYear(senatorPath(s)))}" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="${escape(name)}, ${money(val)}: abrir perfil" style="--opacity:${Math.max(.25, 1 - i * .18)}">${inner}</a>`
         : `<div class="bar-row is-unlinked" style="--opacity:${Math.max(.25, 1 - i * .18)}">${inner}</div>`;
@@ -746,7 +746,7 @@
       ? `<p class="records-note" role="note">${number(emptyCount)} ${emptyCount === 1 ? 'lançamento sem tipo de despesa ficou' : 'lançamentos sem tipo de despesa ficaram'} fora dos totais desta página.</p>`
       : '<p class="records-note">Lançamentos sem tipo de despesa ficam fora dos totais.</p>';
     const cutoffHtml = yearData?.collectedAt && s.months?.length ? `<p class="context cutoff">${escape(ClareiaView.cutoffLine(s.months.map(m => m.month), s.year, yearData.collectedAt))}</p>` : '';
-    const html = `<div class="profile-head">${avatar({ name, photo: s.photo ?? null })}<div><h3>${escape(name)}</h3><p class="context">${escape(ctx)} • Código Senado ${escape(s.senatorId)}</p><p class="context">CEAPS ${escape(s.year)} • ${number(s.records)} ${s.records === 1 ? 'registro' : 'registros'}</p>${cutoffHtml}</div></div>` +
+    const html = `<div class="profile-head">${avatar({ name, photo: s.photo ?? null }, true)}<div><h3>${escape(name)}</h3><p class="context">${escape(ctx)} • Código Senado ${escape(s.senatorId)}</p><p class="context">CEAPS ${escape(s.year)} • ${number(s.records)} ${s.records === 1 ? 'registro' : 'registros'}</p>${cutoffHtml}</div></div>` +
       `<div class="profile-stats"><div class="profile-stat"><span>Despesas em ${escape(s.year)}</span><strong>${money(s.totalCents)}</strong></div><div class="profile-stat"><span>Média por mês de exercício</span><strong>${monthly !== null ? money(monthly) : 'Sem mês de exercício'}</strong></div></div>` +
       `<p class="context">${exercised > 0 ? `${exercised} ${monthsWord(exercised)} com exercício completo ou parcial no ano.` : 'Sem exercício completo ou parcial no ano; fora do ranking por mês.'}</p>${emptyNote}` +
       `<section class="detail-section"><h3>Despesas por tipo</h3>${byTypeHtml}</section>` +

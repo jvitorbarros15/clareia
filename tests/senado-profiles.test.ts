@@ -98,6 +98,12 @@ test('isAllowedSenadoPhotoUrl accepts only exact https senado hosts without cred
     'https://@www.senado.leg.br/foto.jpg',
     'https://www.senado.leg.br:8443/foto.jpg',
     'https://www.senado.leg.br:443/foto.jpg',
+    'https:///www.senado.leg.br:443/foto.jpg',
+    'https:///www.senado.leg.br/foto.jpg',
+    'https:/www.senado.leg.br:443/foto.jpg',
+    'https:www.senado.leg.br:443/foto.jpg',
+    'https://www.senado.leg.br:/foto.jpg',
+    'https://www.senado.leg.br\\foto.jpg',
     'https://www.senado.leg.br/foto.jpg#section',
     'https://www.senado.leg.br/foto.jpg#',
     'https://www.senado.\tleg.br/foto.jpg',
@@ -214,7 +220,7 @@ test('collectSenadoProfiles fetches with redirect:manual, handles redirects/fail
   );
   await fs.writeFile(
     path.join(ceapsBaseDir, 'ceaps-2026', 'coverage.json'),
-    JSON.stringify([{id: 5899}, {id: 1003}, {id: 1004}, {id: 1005}]),
+    JSON.stringify([{id: 5899}, {id: 1003}, {id: 1004}, {id: 1005}, {id: 1006}, {id: 1007}]),
   );
 
   // Pre-existing portrait for 1001 must never be overwritten.
@@ -279,6 +285,24 @@ test('collectSenadoProfiles fetches with redirect:manual, handles redirects/fail
       big[2] = 0xff;
       return new Response(big, {status: 200});
     }
+    if (url === senatorDetailUrl(1006)) {
+      return Response.json(detailEnvelope(1006, {photo: 'https://www.senado.leg.br/bad-authority-1006.jpg'}));
+    }
+    if (url === senatorAffiliationsUrl(1006)) {
+      return Response.json(affiliationsEnvelope(1006, {party: 'PSB', start: '2023-01-01'}));
+    }
+    if (url === 'https://www.senado.leg.br/bad-authority-1006.jpg') {
+      return new Response('', {status: 302, headers: {location: 'https:///www.senado.leg.br:443/1006.jpg'}});
+    }
+    if (url === senatorDetailUrl(1007)) {
+      return Response.json(detailEnvelope(1007, {photo: 'https://www.senado.leg.br/bad-authority-1007.jpg'}));
+    }
+    if (url === senatorAffiliationsUrl(1007)) {
+      return Response.json(affiliationsEnvelope(1007, {party: 'UNIÃO', start: '2023-01-01'}));
+    }
+    if (url === 'https://www.senado.leg.br/bad-authority-1007.jpg') {
+      return new Response('', {status: 302, headers: {location: '///www.senado.leg.br:443/1007.jpg'}});
+    }
     if (url === senatorDetailUrl(5899)) {
       return Response.json(detailEnvelope(5899, {photo: 'https://www.senado.leg.br/senador5899.jpg'}));
     }
@@ -305,12 +329,13 @@ test('collectSenadoProfiles fetches with redirect:manual, handles redirects/fail
     fetcher,
   });
 
-  assert.equal(result.senators, 6);
+  assert.equal(result.senators, 8);
   assert.equal(result.photosDownloaded, 2); // 1002 and 5899
   assert.equal(result.photosSkipped, 1); // 1001 already existed
-  assert.equal(result.photosFailed, 3); // 1003 bad redirect, 1004 non-JPEG, 1005 oversize
+  assert.equal(result.photosFailed, 5); // 1003 bad redirect, 1004 non-JPEG, 1005 oversize, 1006/1007 non-canonical authority redirects
   assert.equal(calls.some(c => c.url.includes('evil.com')), false);
   assert.equal(calls.some(c => c.url === 'https://www.senado.leg.br/p1001.jpg'), false);
+  assert.equal(calls.some(c => c.url.endsWith('/1006.jpg') || c.url.endsWith('/1007.jpg')), false);
 
   assert.deepEqual(await fs.readFile(path.join(portraitsDir, 'sen-1001.jpg')), existingBytes);
   assert.deepEqual(await fs.readFile(path.join(portraitsDir, 'sen-1002.jpg')), VALID_JPEG);
@@ -319,7 +344,7 @@ test('collectSenadoProfiles fetches with redirect:manual, handles redirects/fail
 
   const written = JSON.parse(await fs.readFile(path.join(outBaseDir, 'profiles-2026', 'profiles.json'), 'utf8'));
   assert.equal(written.schema, 'clareia.senado-profiles.v1');
-  assert.deepEqual(written.senators.map((s: {id: number}) => s.id), [1001, 1002, 1003, 1004, 1005, 5899]);
+  assert.deepEqual(written.senators.map((s: {id: number}) => s.id), [1001, 1002, 1003, 1004, 1005, 1006, 1007, 5899]);
 
   // CPF refusal: profiles.json must not be written.
   const cpfCeaps = path.join(ceapsBaseDir, 'cpf-run');
@@ -343,6 +368,51 @@ test('collectSenadoProfiles fetches with redirect:manual, handles redirects/fail
     /CPF detectado/,
   );
   await assert.rejects(fs.access(path.join(outBaseDir, 'profiles-cpf', 'profiles.json')));
+});
+
+test('collectSenadoProfiles continues when portraits directory denies access', async t => {
+  const dir = await tempDir(t);
+  const ceapsBaseDir = path.join(dir, 'senado-ceaps');
+  const outBaseDir = path.join(dir, 'senado-profiles');
+  const portraitsDir = path.join(dir, 'portraits');
+  await fs.mkdir(path.join(ceapsBaseDir, 'ceaps-2025'), {recursive: true});
+  await fs.writeFile(path.join(ceapsBaseDir, 'ceaps-2025', 'coverage.json'), JSON.stringify([{id: 5899}]));
+
+  const origAccess = fs.access;
+  t.mock.method(fs, 'access', async (file: Parameters<typeof fs.access>[0], mode?: Parameters<typeof fs.access>[1]) => {
+    if (String(file).startsWith(portraitsDir)) {
+      throw Object.assign(new Error('permission denied'), {code: 'EACCES'});
+    }
+    return origAccess(file, mode);
+  });
+
+  const fetched: string[] = [];
+  const result = await collectSenadoProfiles({
+    runId: 'profiles-eacces',
+    ceapsRuns: ['ceaps-2025'],
+    portraitsDir,
+    ceapsBaseDir,
+    outBaseDir,
+    fetcher: async url => {
+      fetched.push(url);
+      if (url === senatorDetailUrl(5899)) {
+        return Response.json(detailEnvelope(5899, {photo: 'https://www.senado.leg.br/senador5899.jpg'}));
+      }
+      if (url === senatorAffiliationsUrl(5899)) {
+        return Response.json(affiliationsEnvelope(5899, {party: 'PSD', start: '2023-01-01'}));
+      }
+      throw new Error(`Unexpected ${url}`);
+    },
+  });
+
+  assert.equal(result.senators, 1);
+  assert.equal(result.photosDownloaded, 0);
+  assert.equal(result.photosSkipped, 0);
+  assert.equal(result.photosFailed, 1);
+  assert.equal(fetched.includes('https://www.senado.leg.br/senador5899.jpg'), false);
+  const written = JSON.parse(await fs.readFile(path.join(outBaseDir, 'profiles-eacces', 'profiles.json'), 'utf8'));
+  assert.equal(written.senators.length, 1);
+  assert.equal(written.senators[0].id, 5899);
 });
 
 test('CLI arg parser accepts valid flags and rejects duplicates and bad values', () => {
