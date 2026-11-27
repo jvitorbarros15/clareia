@@ -37,6 +37,28 @@ test('config accepts an optional amendmentsRun and rejects a bad value',()=>{
   assert.equal(parseFullSiteConfig({...base(),amendmentsRun:'run-1'}).amendmentsRun,'run-1');
   assert.throws(()=>parseFullSiteConfig({...base(),amendmentsRun:'../x'}),/Configuração inválida: amendmentsRun/);
 });
+test('config accepts an optional senators section and rejects invalid shapes',()=>{
+  const without=parseFullSiteConfig(base());
+  assert.equal(Object.hasOwn(without,'senators'),false);
+  const withSenators=parseFullSiteConfig({...base(),senators:{years:{'2025':'senado-2025','2026':'senado-2026'}}});
+  assert.deepEqual(withSenators.senators,{years:{2025:'senado-2025',2026:'senado-2026'}});
+  const {senators:_s,...rest}=withSenators;
+  assert.deepEqual(rest,without);
+  for(const bad of [
+    null,
+    [],
+    'senado-2025',
+    {},
+    {years:{}},
+    {years:[]},
+    {years:{'25':'senado-2025'}},
+    {years:{'2025':'../senado'}},
+    {years:{'2025':''}},
+    {years:{'2025':123}},
+  ]){
+    assert.throws(()=>parseFullSiteConfig({...base(),senators:bad}),(e:unknown)=>e instanceof Error&&e.message.startsWith('Configuração inválida: senators'));
+  }
+});
 test('config accepts a third year with its own coverage pair',()=>{
   const config=parseFullSiteConfig({...threeYears(),coverageRuns:{2024:pair2024}});
   assert.deepEqual(config.coverageRuns,{2024:pair2024});

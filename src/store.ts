@@ -34,6 +34,7 @@ export async function openDB(memory=false):Promise<DB> {
     `CREATE TABLE IF NOT EXISTS vote_ballots_v1 (publication_id text REFERENCES publications(id), position integer NOT NULL, vote_id text NOT NULL, deputy_id integer NOT NULL, category text NOT NULL, PRIMARY KEY(publication_id,vote_id,deputy_id))`,
     `CREATE INDEX IF NOT EXISTS vote_ballots_deputy ON vote_ballots_v1(publication_id,deputy_id)`,
     `CREATE TABLE IF NOT EXISTS amendments_v1 (publication_id text REFERENCES publications(id), position integer NOT NULL, deputy_id integer NOT NULL, year integer NOT NULL, record jsonb NOT NULL, PRIMARY KEY(publication_id,position))`,
+    `CREATE TABLE IF NOT EXISTS senators_v1 (publication_id text REFERENCES publications(id), position integer NOT NULL, senator_id integer NOT NULL, year integer NOT NULL, record jsonb NOT NULL, PRIMARY KEY(publication_id,position))`,
     `CREATE TABLE IF NOT EXISTS active_publication (domain text PRIMARY KEY, publication_id text NOT NULL REFERENCES publications(id))`,
     `CREATE TABLE IF NOT EXISTS withheld_publications (publication_id text PRIMARY KEY REFERENCES publications(id), reason text NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS publication_audits (publication_id text PRIMARY KEY REFERENCES publications(id), status text NOT NULL CHECK(status IN ('passed','failed')), checked_at timestamptz NOT NULL, report jsonb NOT NULL)`,
