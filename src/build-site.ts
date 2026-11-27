@@ -203,7 +203,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     if(ids.length)extras.push({deputies:deputiesOf({ids,people:year.people,summary:ys,suppliers:yp}),period:{year:String(year.scope.year),coverage:year.scope.months.map(m=>m-1),minMonths:ys.minMonths,collectedAt:year.collectedAt}});
   }
   // The cache sits beside the output so an unchanged image is copied, not rendered again; the output folder itself is rebuilt every time.
-  const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId:STAGING,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache'}):null;
+  const share=siteOptions.shareImages?await generateShareImages({outDir,publicationId:STAGING,deputies,period,portraitsDir,pageDir:PAGE,cacheDir:finalDir+'.share-cache',ceilingNote:summary.ceiling?.note}):null;
   if(share)console.error(`Imagens de compartilhamento: ${share.rendered} geradas, ${share.reused} reaproveitadas, ${(share.ms/1000).toFixed(1)} s`);
   const publicationId=await dataFolderId(data);
   await fs.rename(data,path.join(outDir,'data',publicationId));
@@ -215,7 +215,8 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   // The all-months zip is the one file allowed past 10 MiB; zipOf already keeps it under the 25 MiB Workers asset limit.
   checkLimits(files.length,Math.max(...sizes.filter((_,i)=>!files[i].endsWith('.zip'))));
   await fs.rm(finalDir,{recursive:true,force:true});
-  await fs.rename(outDir,finalDir);
+  // Windows scanners can briefly hold a handle inside outDir right after writing files.
+  for(let i=0;;i++){try{await fs.rename(outDir,finalDir);break;}catch(e){const code=(e as NodeJS.ErrnoException)?.code;if(i>=5||(code!=='EPERM'&&code!=='EBUSY'))throw e;await new Promise(r=>setTimeout(r,50*(i+1)));}}
   return {publicationId,files:files.length,years:results};
 }
 

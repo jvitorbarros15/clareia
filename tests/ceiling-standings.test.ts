@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {ceilingUse,ufStandings,type UseMonth} from '../src/ceiling-use.ts';
+import {mixedCeiling2026} from './fixtures/cota-ceiling.ts';
 
 const ceiling={year:2025,byUf:{SP:[100000,100000],RR:[100000,100000]}};
 const month=(cents:number,overrides:Partial<UseMonth>={}):UseMonth=>({
@@ -31,4 +32,16 @@ test('UF standings exclude held, partial, unconfirmed and mixed-UF deputies from
     {id:5,name:'Eva',comparable:true,use:ceilingUse([month(90000),month(90000,{month:2,uf:'RR'})],ceiling,true)}
   ]);
   assert.deepEqual(standings,new Map([[1,{uf:'SP',rank:1,total:1}]]));
+});
+
+test('UF standings with mixed 2026 ceiling leave February out on both sides',()=>{
+  const c2026=mixedCeiling2026();
+  const ana=ceilingUse([month(100000,{month:1}),month(9999999,{month:2}),month(200000,{month:3})],c2026,true);
+  const bia=ceilingUse([month(200000,{month:1}),month(0,{month:2}),month(200000,{month:3})],c2026,true);
+  assert.equal(ana.status,'ok');assert.equal(bia.status,'ok');
+  const standings=ufStandings([
+    {id:1,name:'Ana',comparable:true,use:ana},
+    {id:2,name:'Bia',comparable:true,use:bia}
+  ]);
+  assert.deepEqual(standings,new Map([[2,{uf:'SP',rank:1,total:2}],[1,{uf:'SP',rank:2,total:2}]]));
 });

@@ -1,5 +1,6 @@
 import {parse} from 'parse5';
 import {canonical,hash,UFS} from './model.ts';
+import {PORTAL_2026_CAPTURED_AT,PORTAL_2026_CENTS,PORTAL_2026_URL} from './cota-ceiling-2026-portal.ts';
 
 export const CEILING_SOURCES={
   consolidated:'https://www2.camara.leg.br/legin/int/atomes/2009/atodamesa-43-21-maio-2009-588364-normaatualizada-cd-mesa.html',
@@ -12,8 +13,9 @@ export type CeilingSource={key:CeilingSourceKey;url:string;sha256:string;bytes:n
 export type CeilingRow={uf:string;year:number;month:number;ceilingCents:number;act:string;effectiveFrom:string;annexUrl:string;actUrl:string};
 export const CEILING_ACT='Ato da Mesa nº 270/2023, Anexo I (Anexo Único do Ato da Mesa nº 43/2009)';
 export const CEILING_EFFECTIVE_FROM='2023-02-01';
-// Ato da Mesa nº 244/2026 enters into force on 2026-02-20; months before it still use the 2023 annex.
-export const CEILING_YEARS=[2024,2025];
+export const PORTAL_2026_ACT='Portal da Câmara dos Deputados (gastos parlamentares)';
+// Ato da Mesa nº 244/2026 enters into force on 2026-02-20; months before it still use the 2023 annex, and March–December 2026 use the portal table.
+export const CEILING_YEARS=[2024,2025,2026];
 
 const dom=(bytes:Uint8Array):any=>{try{return parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{throw Error('HTML do ato inválido');}};
 function nodes(root:any):any[]{
@@ -57,7 +59,16 @@ export function deriveCeiling(year:number,files:CeilingFiles):{annex:[string,num
 }
 export function ceilingReport(year:number,derived:{annex:[string,number][]},sources:CeilingSource[],generatedAt:string){
   const rows:CeilingRow[]=[];
-  for(const [uf,ceilingCents] of derived.annex)for(let month=1;month<=12;month++)rows.push({uf,year,month,ceilingCents,act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,annexUrl:CEILING_SOURCES.consolidated,actUrl:CEILING_SOURCES.original});
+  if(year===2026){
+    for(const [uf,ceilingCents] of derived.annex){
+      rows.push({uf,year,month:1,ceilingCents,act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,annexUrl:CEILING_SOURCES.consolidated,actUrl:CEILING_SOURCES.original});
+      const portalCents=PORTAL_2026_CENTS[uf];
+      if(!Number.isInteger(portalCents)||portalCents<=0)throw Error('UF ausente na tabela do portal de 2026: '+uf);
+      for(let month=3;month<=12;month++)rows.push({uf,year,month,ceilingCents:portalCents,act:PORTAL_2026_ACT,effectiveFrom:PORTAL_2026_CAPTURED_AT,annexUrl:PORTAL_2026_URL,actUrl:PORTAL_2026_URL});
+    }
+  }else{
+    for(const [uf,ceilingCents] of derived.annex)for(let month=1;month<=12;month++)rows.push({uf,year,month,ceilingCents,act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,annexUrl:CEILING_SOURCES.consolidated,actUrl:CEILING_SOURCES.original});
+  }
   return {schema:'clareia.cota-ceiling.v1',year,unit:'monthly-ceiling-per-uf-cents',generatedAt,sources,rows,metrics:{ufs:derived.annex.length,rows:rows.length},publicationEligible:false,notes:['Limite mensal base do Anexo Único; não inclui adicionais de cargo, trechos aéreos do art. 1º §3º, Mercosul nem a proporcionalidade do art. 11.']};
 }
 export type CeilingReport=ReturnType<typeof ceilingReport>;

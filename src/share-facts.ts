@@ -16,25 +16,26 @@ export type ShareFact={deputyId:number;name:string;context:string;status:ShareSt
 const OF_UF:Record<string,string>={BA:'da',PB:'da',AL:'de',GO:'de',MT:'de',MS:'de',MG:'de',PE:'de',RO:'de',RR:'de',SC:'de',SP:'de',SE:'de'};
 const pct=(tenths:number)=>(tenths/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
 // The position only appears with at least two comparable peers; a figure that is not confirmed gets no line at all.
-export function ceilingLine(use:CeilingUse|undefined,standing:Standing|null):string{
+export function ceilingLine(use:CeilingUse|undefined,standing:Standing|null,note?:string):string{
   if(use?.status!=='ok')return '';
   const ufs=[...new Set(use.counted.map(c=>c.uf))];
   if(ufs.length!==1)return '';
   const head=`${pct(use.tenths)}% do teto da cota ${OF_UF[ufs[0]!]??'do'} ${ufs[0]}`;
-  if(!standing||standing.uf!==ufs[0]||standing.total<2)return head;
-  const {rank,total}=standing;
-  return `${head} · ${rank===1?'maior uso':rank===total?'menor uso':`${rank}º maior uso`} entre ${total} deputados comparáveis do estado`;
+  const line=!standing||standing.uf!==ufs[0]||standing.total<2
+    ?head
+    :`${head} · ${standing.rank===1?'maior uso':standing.rank===standing.total?'menor uso':`${standing.rank}º maior uso`} entre ${standing.total} deputados comparáveis do estado`;
+  return note?`${line} · ${note}`:line;
 }
 
 // The words come from the same helpers as deputyDescription, so the image says what the page says for the same person.
-export function shareFactOf(p:Deputy,period:Period,standing:Standing|null=null):ShareFact{
+export function shareFactOf(p:Deputy,period:Period,standing:Standing|null=null,note?:string):ShareFact{
   const context=['Deputado(a) federal',p.uf,p.ufNote,partyText(p)].filter(Boolean).join(' · ');
-  const note=p.noExercise?'':exclusionNote(p,period);
-  const status:ShareStatus=p.noExercise?'no-exercise':p.heldMonths.length&&!p.hasCells?'review':p.heldMonths.length?'partial':note?'few-months':'full';
+  const exNote=p.noExercise?'':exclusionNote(p,period);
+  const status:ShareStatus=p.noExercise?'no-exercise':p.heldMonths.length&&!p.hasCells?'review':p.heldMonths.length?'partial':exNote?'few-months':'full';
   const label=p.noExercise?'':`Despesas no recorte (${spanOf(period)})`;
   const value=p.noExercise?`Sem exercício confirmado em ${period.year}`:status==='review'?'Em revisão':money(p.cents);
-  const ceiling=status==='full'||status==='few-months'?ceilingLine(p.use,standing):'';
-  return {deputyId:p.id,name:p.name,context,status,label,value,ceiling,notes:note?[note]:[],alt:`Imagem de compartilhamento de ${p.name}. ${[label,value].filter(Boolean).join(': ')}. ${ceiling?ceiling+'. ':''}${DISCLAIMER}.`};
+  const ceiling=status==='full'||status==='few-months'?ceilingLine(p.use,standing,note):'';
+  return {deputyId:p.id,name:p.name,context,status,label,value,ceiling,notes:exNote?[exNote]:[],alt:`Imagem de compartilhamento de ${p.name}. ${[label,value].filter(Boolean).join(': ')}. ${ceiling?ceiling+'. ':''}${DISCLAIMER}.`};
 }
 
 const PARTICLES=new Set(['de','da','do','das','dos','e']);

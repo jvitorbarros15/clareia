@@ -135,12 +135,12 @@ export async function openRenderer(assets:ShareAssets,concurrency=4):Promise<Ren
 export type ShareResult={names:Map<number,{name:string;alt:string}>;rendered:number;reused:number;ms:number};
 const exists=(file:string)=>fs.access(file).then(()=>true,()=>false);
 
-export async function generateShareImages(o:{outDir:string;publicationId:string;deputies:Deputy[];period:Period;portraitsDir:string;pageDir:string;cacheDir:string;renderer?:Renderer}):Promise<ShareResult>{
+export async function generateShareImages(o:{outDir:string;publicationId:string;deputies:Deputy[];period:Period;portraitsDir:string;pageDir:string;cacheDir:string;ceilingNote?:string;renderer?:Renderer}):Promise<ShareResult>{
   const started=Date.now(),assets=await loadShareAssets(o.pageDir),dir=path.join(o.outDir,'data',o.publicationId,'share');
   await fs.mkdir(dir,{recursive:true});await fs.mkdir(o.cacheDir,{recursive:true});
   const standings=ufStandings(o.deputies.map(p=>({id:p.id,name:p.name,use:p.use,comparable:p.comparable})));
   const plan=await Promise.all(o.deputies.map(async p=>{
-    const portrait=await fs.readFile(path.join(o.portraitsDir,`${p.id}.jpg`)).catch(()=>null),fact=shareFactOf(p,o.period,standings.get(p.id)??null),h=shareHash(fact,portrait,assets.sha);
+    const portrait=await fs.readFile(path.join(o.portraitsDir,`${p.id}.jpg`)).catch(()=>null),fact=shareFactOf(p,o.period,standings.get(p.id)??null,o.ceilingNote),h=shareHash(fact,portrait,assets.sha);
     return {id:p.id,fact,portrait,hash:h};
   }));
   const keep=new Set<string>(),todo:{item:typeof plan[number];format:ShareFormat}[]=[];

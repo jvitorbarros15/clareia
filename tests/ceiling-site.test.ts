@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {canonical,hash,snapshotId} from '../src/model.ts';
 import type {Expense} from '../src/model.ts';
-import {ceilingReport,deriveCeiling} from '../src/cota-ceiling.ts';
+import {CEILING_ACT,CEILING_EFFECTIVE_FROM,CEILING_SOURCES,PORTAL_2026_ACT,ceilingReport,ceilingSha,deriveCeiling} from '../src/cota-ceiling.ts';
+import type {CeilingReport} from '../src/cota-ceiling.ts';
+import {PORTAL_2026_CAPTURED_AT,PORTAL_2026_NOTE,PORTAL_2026_URL} from '../src/cota-ceiling-2026-portal.ts';
 import {auditCeiling} from '../src/cota-ceiling-audit.ts';
 import {buildSiteCeiling} from '../src/ceiling-site.ts';
 import {ceilingUse,tenthsOf} from '../src/ceiling-use.ts';
@@ -16,7 +18,7 @@ import type {CrosscheckReport} from '../src/people-legacy.ts';
 import {openDB} from '../src/store.ts';
 import {publishDomain,recordDomainAudit} from '../src/publications.ts';
 import {buildSite} from '../src/build-site.ts';
-import {ceilingFiles,sourcesOf} from './fixtures/cota-ceiling.ts';
+import {ceilingFiles,mixedCeiling2026,reportFor,sourcesOf} from './fixtures/cota-ceiling.ts';
 
 const made=()=>{const files=ceilingFiles(),report=ceilingReport(2025,deriveCeiling(2025,files),sourcesOf(files,hash),'2026-11-11T12:00:00Z');return {report,audit:auditCeiling(report,s=>files[s.key])};};
 const person={id:1,name:'Pessoa 1',photo:null,sourceUrl:'https://x',profileFetchedAt:'2025-03-01T00:00:00Z'};
@@ -139,4 +141,69 @@ test('a review-outside month goes to missing, never outside or excluded, while a
   const uncrossed=ceilingUse([month(1,100000,{exercise:'full',ufStatus:'single',exerciseReview:true})],table,true);
   assert.equal(uncrossed.status,'ok');if(uncrossed.status!=='ok')return;
   assert.deepEqual(uncrossed.counted.map(c=>c.month),[1]);
+});
+
+test('2024 and 2025 site ceilings keep the exact current shape with no new keys',()=>{
+  for(const year of [2024,2025]){
+    const {report,audit}=reportFor(year),site=buildSiteCeiling(report,audit,year);
+    const expectedByUf=Object.fromEntries([...new Set(report.rows.map(r=>r.uf))].sort().map(uf=>[uf,new Array(12).fill(report.rows.find(r=>r.uf===uf)!.ceilingCents)]));
+    const expected={schema:'clareia.site-ceiling.v1' as const,year,unit:'monthly-ceiling-per-uf-cents' as const,act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,actUrl:CEILING_SOURCES.original,annexUrl:CEILING_SOURCES.consolidated,reportSha256:ceilingSha(report),byUf:expectedByUf};
+    assert.deepEqual(site,expected);
+    assert.deepEqual(Object.keys(site),Object.keys(expected));
+    assert.equal('noCeilingMonths' in site,false);
+    assert.equal('note' in site,false);
+    assert.equal('sources' in site,false);
+  }
+});
+test('2026 site ceiling carries noCeilingMonths, note, sources and keeps January official metadata at top level',()=>{
+  const site=mixedCeiling2026();
+  assert.equal(site.year,2026);
+  assert.equal(site.act,CEILING_ACT);
+  assert.equal(site.effectiveFrom,CEILING_EFFECTIVE_FROM);
+  assert.equal(site.actUrl,CEILING_SOURCES.original);
+  assert.equal(site.annexUrl,CEILING_SOURCES.consolidated);
+  assert.deepEqual(site.noCeilingMonths,[2]);
+  assert.equal(site.note,PORTAL_2026_NOTE);
+  assert.deepEqual(site.sources,[
+    {months:[1],act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,actUrl:CEILING_SOURCES.original,annexUrl:CEILING_SOURCES.consolidated,official:true},
+    {months:[3,4,5,6,7,8,9,10,11,12],act:PORTAL_2026_ACT,effectiveFrom:PORTAL_2026_CAPTURED_AT,actUrl:PORTAL_2026_URL,annexUrl:PORTAL_2026_URL,official:false}
+  ]);
+  assert.equal(site.byUf.RO[0],4946629);
+  assert.equal(site.byUf.RO[1],0);
+  assert.equal(site.byUf.RO[2],5626790);
+});
+test('buildSiteCeiling rejects mixed acts outside 2026, missing months other than February 2026, and any missing month in 2024 or 2025',()=>{
+  const ok=(r:CeilingReport)=>({status:'passed' as const,reportSha256:hash(canonical(r))});
+  for(const year of [2024,2025]){
+    const {report}=reportFor(year);
+    const mixed:CeilingReport={...report,rows:report.rows.map((r,i)=>i?r:{...r,act:PORTAL_2026_ACT,effectiveFrom:PORTAL_2026_CAPTURED_AT,actUrl:PORTAL_2026_URL,annexUrl:PORTAL_2026_URL})};
+    assert.throws(()=>buildSiteCeiling(mixed,ok(mixed),year),/atos diferentes/);
+    const missingFeb:CeilingReport={...report,rows:report.rows.filter(r=>r.month!==2)};
+    assert.throws(()=>buildSiteCeiling(missingFeb,ok(missingFeb),year),/incompleto/);
+    const missingJan:CeilingReport={...report,rows:report.rows.filter(r=>!(r.uf==='AC'&&r.month===1))};
+    assert.throws(()=>buildSiteCeiling(missingJan,ok(missingJan),year),/incompleto/);
+  }
+  const {report:r2026}=reportFor(2026);
+  const missingMar:CeilingReport={...r2026,rows:r2026.rows.filter(r=>!(r.uf==='SP'&&r.month===3))};
+  assert.throws(()=>buildSiteCeiling(missingMar,ok(missingMar),2026),/incompleto/);
+  const missingJan2026:CeilingReport={...r2026,rows:r2026.rows.filter(r=>r.month!==1)};
+  assert.throws(()=>buildSiteCeiling(missingJan2026,ok(missingJan2026),2026),/incompleto/);
+});
+test('ceilingUse with mixed 2026 fixture leaves February out on both sides and still rejects other months without a ceiling',()=>{
+  const c2026=mixedCeiling2026();
+  const u=ceilingUse([month(1,100000),month(2,9999999),month(3,200000)],c2026,true);
+  assert.equal(u.status,'ok');if(u.status!=='ok')return;
+  assert.deepEqual(u.counted.map(c=>c.month),[1,3]);
+  assert.deepEqual(u.excluded,[{month:2,reason:'noCeiling'}]);
+  assert.equal(u.expenseCents,300000);
+  assert.equal(u.ceilingCents,c2026.byUf.SP[0]+c2026.byUf.SP[2]);
+  assert.equal(u.tenths,tenthsOf(300000,c2026.byUf.SP[0]+c2026.byUf.SP[2]));
+  const febOnly=ceilingUse([month(2,500000)],c2026,true);
+  assert.equal(febOnly.status,'unconfirmed');
+  assert.deepEqual(febOnly.excluded,[{month:2,reason:'noCeiling'}]);
+  const otherZero={...c2026,byUf:{...c2026.byUf,SP:[...c2026.byUf.SP.slice(0,2),0,...c2026.byUf.SP.slice(3)]}};
+  const unconfirmed=ceilingUse([month(1,100000),month(2,200000),month(3,300000)],otherZero,true);
+  assert.equal(unconfirmed.status,'unconfirmed');if(unconfirmed.status!=='unconfirmed')return;
+  assert.deepEqual(unconfirmed.missing,[3]);
+  assert.deepEqual(unconfirmed.excluded,[{month:2,reason:'noCeiling'}]);
 });
