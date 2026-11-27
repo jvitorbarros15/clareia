@@ -592,13 +592,14 @@ test('mandates 302 redirect uses redirect:manual and enters mandatesMissing with
   const key = randomBytes(32);
   const base = makeFakeFetcher();
   const redirectTarget = 'https://example.org/senador/5899/mandatos';
+  const recorded: Array<{url: string; redirect: RequestInit['redirect']}> = [];
 
   const fetcher: Fetcher = async (url, init) => {
+    recorded.push({url, redirect: init?.redirect});
     if (url === senatorMandatesUrl(5899)) {
       if (init?.redirect === 'error') {
         throw new TypeError('fetch failed: unexpected redirect');
       }
-      assert.equal(init?.redirect, 'manual');
       base.calls.push(url);
       return new Response('', {status: 302, headers: {location: redirectTarget}});
     }
@@ -615,6 +616,11 @@ test('mandates 302 redirect uses redirect:manual and enters mandatesMissing with
 
   assert.equal(summary.status, 'review-required');
   assert.equal(summary.mandatesMissing.includes(5899), true);
+  assert.equal(recorded.length, 11);
+  assert.equal(recorded.some(c => c.url === senatorMandatesUrl(5899)), true);
+  for (const call of recorded) {
+    assert.equal(call.redirect, 'manual', `expected redirect:manual for ${call.url}`);
+  }
   assert.equal(base.calls.includes(redirectTarget), false);
   assert.equal(base.calls.every(isAllowedSenadoUrl), true);
   const stem5899 = hash(senatorMandatesUrl(5899));
