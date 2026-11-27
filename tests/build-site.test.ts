@@ -302,15 +302,43 @@ test('approved bills must cover the year shown on the site',()=>{
   assert.throws(()=>buildSiteSummary({...input,billsYears:[2024]}),/não cobrem/);assert.equal(buildSiteSummary({...input,billsYears:[2025]}).billsYears[0],2025);
 });
 
+const activityVote={id:'ok',date:'2025-01-15',organ:'PLEN',approved:'1',kind:'merito' as const,description:'Aprovado o Projeto',objects:[{billId:5,title:'PL 5/2025',summary:null}],declared:{yes:1,no:0,other:0},observed:{Sim:1},ballots:1,issues:[]};
+const activityVotes=[{...activityVote,id:'held',issues:['empty-ballot']},activityVote,{...activityVote,id:'nobill',objects:[]}];
+const activityBallots:[string,number,string][]=[['ok',1,'Sim'],['held',1,'Sim'],['nobill',1,'Sim']];
+const activityVotesMeta={schema:'clareia.votes-version.v1' as const,metric:'camara.votes.nominal.v1' as const,scope:{years:[2025]}};
+const activityVotesVersion={...activityVotesMeta,id:hash(canonical({...activityVotesMeta,votes:activityVotes,ballotsSha256:hash(canonical(activityBallots))})),collectedAt:'2026-11-09T00:00:00Z',publishedAt:'2026-11-09T00:00:00Z',votes:activityVotes,ballots:activityBallots};
+
 test('approved bills and votes produce a per-deputy activity file and held votes stay out',()=>setup(async(db,dist,portraits)=>{
   const {storeVotesVersion}=await import('../src/votes-publication.ts');
   const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
-  const vote=(id:string,issues:string[])=>({id,date:'2025-03-01',organ:'PLEN',approved:'1',kind:'merito' as const,description:'Aprovado o Projeto',objects:[{billId:5,title:'PL 5/2025',summary:null}],declared:{yes:1,no:0,other:0},observed:{Sim:1},ballots:1,issues});
-  const ballots:[string,number,string][]=[['ok',1,'Sim'],['held',1,'Sim'],['nobill',1,'Sim']],votes=[vote('held',['empty-ballot']),vote('ok',[]),{...vote('nobill',[]),objects:[]}],meta={schema:'clareia.votes-version.v1' as const,metric:'camara.votes.nominal.v1' as const,scope:{years:[2025]}};
-  const v={...meta,id:hash(canonical({schema:meta.schema,metric:meta.metric,scope:meta.scope,votes,ballotsSha256:hash(canonical(ballots))})),collectedAt:'2026-11-09T00:00:00Z',publishedAt:'2026-11-09T00:00:00Z',votes,ballots};
+  const v=activityVotesVersion;
   await storeVotesVersion(db,v);await recordDomainAudit(db,v.id,'passed',report);
   const built=await buildSite(db,dist,portraits),activity=await json(dist,'data',built.publicationId,'atividade','1.json'),summary=await json(dist,'data',built.publicationId,'summary.json');
   assert.deepEqual(activity.votes.map((x:{id:string})=>x.id),['nobill','ok']);assert.deepEqual(activity.votes[1].matters,['PL 5/2025']);assert.equal(activity.votes[1].billId,5);assert.equal(activity.votes[0].billId,null);assert.deepEqual(summary.people[0].votes,{Sim:2});assert.equal(summary.people[0].votesHeld,1);assert.equal(JSON.stringify(activity).includes('cents'),false);
+}));
+test('active votes and people coverage publish party votes without changing deputy activity',()=>setup(async(db,dist,portraits)=>{
+  const {storeVotesVersion}=await import('../src/votes-publication.ts');
+  const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  await storeVotesVersion(db,activityVotesVersion);await recordDomainAudit(db,activityVotesVersion.id,'passed',report);
+  const before=path.join(dist,'data',(await buildSite(db,dist,portraits)).publicationId);
+  await assert.rejects(fs.access(path.join(before,'votacoes')),{code:'ENOENT'});
+  const activity=await tree(path.join(before,'atividade'));
+
+  const coverage=coverageVersion('PL');await storePeopleCoverage(db,coverage);await recordDomainAudit(db,coverage.id,'passed',report);
+  const after=path.join(dist,'data',(await buildSite(db,dist,portraits)).publicationId),dir=path.join(after,'votacoes');
+  const {id,date,description,declared,approved}=activityVote;
+  const entry={id,date,description,objects:[{billId:5,title:'PL 5/2025'}],declared,approved,matchesDeclared:true};
+  assert.deepEqual(await json(dir,'index.json'),{schema:'clareia.party-votes-index.v1',votes:[{...entry,id:'nobill',objects:[]},entry]});
+  assert.deepEqual((await fs.readdir(dir)).sort(),['index.json','nobill.json','ok.json']);
+  assert.deepEqual(await json(dir,'ok.json'),{...entry,differences:{yes:0,no:0,other:0},rows:[
+    {party:'PL',label:'PL',counts:{Sim:1,semVoto:1},deputies:[{id:1,category:'Sim'},{id:2,category:null}]}
+  ]});
+  assert.deepEqual(await tree(path.join(after,'atividade')),activity);
+
+  const unsafeVotes=[{...activityVote,id:'../outside'}];
+  const unsafe={...activityVotesVersion,votes:unsafeVotes,ballots:[],id:hash(canonical({...activityVotesMeta,votes:unsafeVotes,ballotsSha256:hash(canonical([]))}))};
+  await storeVotesVersion(db,unsafe);await recordDomainAudit(db,unsafe.id,'passed',report);
+  await assert.rejects(buildSite(db,dist,portraits),/Identificador de votação inválido para publicação/);
 }));
 test('only a verified supplier publishes its supplier key',()=>setup(async(db,dist,portraits)=>{
   const a=version([record(100,1,0),{...record(250,1,1),supplierVerified:true,supplierKey:'verified-key'}]);

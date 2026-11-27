@@ -23,6 +23,7 @@ import type {SenatorYearRecord} from './senado-publication.ts';
 import {isJpegBytes} from './senado-profiles.ts';
 import {generateShareImages} from './share-images.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
+import {buildPartyVotes,selectKeyVotes} from './party-votes.ts';
 import {readAmendmentRows} from './amendments-publication.ts';
 import type {AmendmentRow,AmendmentsVersion} from './amendments-publication.ts';
 import type {SiteCeiling} from './ceiling-site.ts';
@@ -102,7 +103,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   if(votesVersion)await assertVotesMatchVersion(db,votesVersion.id);
   // People, portraits and activity are not per year: a deputy who appears in any year gets them once.
   const allIds=[...new Set(entries.flatMap(e=>pubs.get(e.year)!.scope.ids))];
-  const billList=billsVersion?await readBills(db,billsVersion.id):[],voteList=votesVersion?new Map((await readVotes(db,votesVersion.id)).map(v=>[v.id,v])):new Map();
+  const billList=billsVersion?await readBills(db,billsVersion.id):[],voteList=new Map((votesVersion?await readVotes(db,votesVersion.id):[]).map(v=>[v.id,v]));
   const ballotsOf=new Map<number,Awaited<ReturnType<typeof readBallots>>>(),voteTotals=new Map<number,Record<string,number>>(),votesHeld=new Map<number,number>();
   if(votesVersion)for(const id of allIds){const all=await readBallots(db,votesVersion.id,id),own=all.filter(b=>!voteList.get(b[0])?.issues.length),t:Record<string,number>={};votesHeld.set(id,all.length-own.length);for(const b of own)t[b[2]]=(t[b[2]]??0)+1;ballotsOf.set(id,own);voteTotals.set(id,t);}
   const approved=new Set(options.approvedNames??await readApprovedNames()),coverageRows=peopleVersion?await assertCoverageMatchesVersion(db,peopleVersion.id):[],billRows=billsVersion?await assertBillsMatchVersion(db,billsVersion.id):[];
@@ -182,6 +183,26 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
       const votes=(ballotsOf.get(id)??[]).map(([voteId,,category])=>{const v=voteList.get(voteId)!;return {id:voteId,date:v.date,organ:v.organ,kind:v.kind,description:redactCpf(v.description),matters:v.objects.map((o:{title:string|null})=>o.title?redactCpf(o.title):null).filter(Boolean),billId:v.objects.map((o:{billId:number|null})=>o.billId).find((b:number|null)=>b!==null)??null,category};}).sort((x,y)=>y.date.localeCompare(x.date)||x.id.localeCompare(y.id));
       await fs.mkdir(path.join(data,'atividade'),{recursive:true});const activity=JSON.stringify({bills,votes});if(scanCpfs(activity,new Set()))throw new Error('Identificador privado na atividade de um deputado');await fs.writeFile(path.join(data,'atividade',id+'.json'),activity);
     }
+  }
+  if(votesVersion&&peopleVersion){
+    const keyIds:unknown=JSON.parse(await fs.readFile(path.join(import.meta.dirname,'..','config','key-votes.json'),'utf8'));
+    if(!Array.isArray(keyIds)||keyIds.some(id=>typeof id!=='string'))throw new Error('config/key-votes.json deve ser uma lista de identificadores de votação');
+    const selected=selectKeyVotes([...voteList.values()],keyIds),ballots=await readBallots(db,votesVersion.id);
+    const dir=path.join(data,'votacoes'),votes=[];
+    await fs.mkdir(dir,{recursive:true});
+    for(const vote of selected){
+      const {id,date,description,objects,approved}=vote;
+      const details=buildPartyVotes(vote,ballots,coverageRows);
+      const entry={id,date,description:redactCpf(description),objects:objects.map(({billId,title})=>({billId,title:title===null?null:redactCpf(title)})),declared:details.declared,approved,matchesDeclared:details.matchesDeclared};
+      const json=JSON.stringify({...entry,rows:details.rows,differences:details.differences});
+      if(scanCpfs(json,new Set()))throw new Error('Identificador privado nas votações por partido');
+      if(/[/\\:]/.test(id)||id.toLowerCase()==='index')throw new Error('Identificador de votação inválido para publicação');
+      await fs.writeFile(path.join(dir,id+'.json'),json);
+      votes.push(entry);
+    }
+    const json=JSON.stringify({schema:'clareia.party-votes-index.v1',votes});
+    if(scanCpfs(json,new Set()))throw new Error('Identificador privado nas votações por partido');
+    await fs.writeFile(path.join(dir,'index.json'),json);
   }
   if(sitePlan.amendments&&amendmentsByDeputy.size){
     const dir=path.join(data,'emendas'),{publicationId}=sitePlan.amendments;
