@@ -59,6 +59,7 @@ try {
     runId,
     key,
     baseDir,
+    exportDir: path.resolve('data/private/senado-ceaps', runId),
     ...(previousRunId !== undefined ? {previousRunId} : {}),
   });
   console.log(JSON.stringify(summary, null, 2));

@@ -77,6 +77,7 @@ export type CollectSenadoOptions = {
   runId: string;
   key: Buffer;
   baseDir?: string;
+  exportDir?: string;
   previousRunId?: string;
   fetcher?: Fetcher;
   parse?: typeof parseCeapsYear;
@@ -399,6 +400,109 @@ function auditFailureCodes(failures: string[]): string[] {
   return [...new Set(failures.map(f => f.split(':', 1)[0]))];
 }
 
+export async function exportSenadoBuildFiles({
+  runDir,
+  outDir,
+  key,
+  parse = parseCeapsYear,
+  audit = auditCeapsYear,
+  renameDir = fs.rename,
+}: {
+  runDir: string;
+  outDir: string;
+  key: Buffer;
+  parse?: typeof parseCeapsYear;
+  audit?: typeof auditCeapsYear;
+  renameDir?: (from: string, to: string) => Promise<void>;
+}): Promise<number> {
+  const summaryError = 'Resumo da execução não permite exportação';
+  let summary: SenadoCeapsSummary;
+  try {
+    summary = JSON.parse(await fs.readFile(path.join(runDir, 'summary.json'), 'utf8'));
+  } catch {
+    throw new Error(summaryError);
+  }
+  if (
+    summary?.status !== 'review-required' || summary.audit?.ok !== true ||
+    !Array.isArray(summary.mandatesMissing) || summary.mandatesMissing.length !== 0
+  ) {
+    throw new Error(summaryError);
+  }
+
+  const {year} = summary;
+  let parsed: CeapsParsed;
+  let checkedAt: string;
+  try {
+    const {bytes, meta} = await readSealedCapture(path.join(runDir, 'pass-2'), ceapsYearUrl(year), key);
+    const context = toCeapsContext(year, meta);
+    parsed = parse(bytes, context);
+    if (audit(bytes, parsed, context).ok !== true) throw new Error();
+    checkedAt = meta.fetchedAt;
+  } catch {
+    throw new Error('Auditoria da captura não aprovada');
+  }
+
+  const cpfError = 'CPF detectado nos arquivos de exportação';
+  const parsedText = canonical(parsed);
+  if (scanCpfs(parsedText, new Set()) !== 0) throw new Error(cpfError);
+  const auditText = canonical({ok: true, failures: [], checkedAt, parsedSha256: hash(parsedText)});
+  if (scanCpfs(auditText, new Set()) !== 0) throw new Error(cpfError);
+
+  const codes = new Set([
+    ...parsed.records.map(record => record.codSenador),
+    ...parsed.review.map(item => item.codSenador),
+  ]);
+  const scope = {start: `${year}-01-01`, end: `${year}-12-31`};
+  const coverage: ReturnType<typeof deriveSenatorCoverage>[] = [];
+  for (const code of codes) {
+    try {
+      const {bytes} = await readSealedCapture(path.join(runDir, 'mandates'), senatorMandatesUrl(code), key);
+      const envelope: unknown = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+      if (!isValidMandateEnvelope(envelope, code)) throw new Error();
+      const entry = deriveSenatorCoverage(envelope, scope);
+      if (entry.issues.length !== 0) throw new Error();
+      coverage.push(entry);
+    } catch {
+      throw new Error('Mandato ausente ou inválido para exportação');
+    }
+  }
+  const coverageText = canonical(coverage.sort((a, b) => a.id - b.id));
+  if (scanCpfs(coverageText, new Set()) !== 0) throw new Error(cpfError);
+  const files = [
+    {name: 'parsed.json', text: parsedText},
+    {name: 'audit.json', text: auditText},
+    {name: 'coverage.json', text: coverageText},
+  ];
+
+  outDir = path.resolve(outDir);
+  const existing = await fs.lstat(outDir).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  });
+  if (existing) {
+    const matches = await Promise.all(files.map(async ({name, text}) => {
+      const bytes = await fs.readFile(path.join(outDir, name)).catch(() => null);
+      return bytes?.equals(Buffer.from(text));
+    }));
+    if (!matches.every(Boolean)) throw new Error('Diretório de exportação já existe com conteúdo diferente');
+    return year;
+  }
+
+  await fs.mkdir(path.dirname(outDir), {recursive: true});
+  const staging = `${outDir}.${randomBytes(6).toString('hex')}.tmp`;
+  await fs.mkdir(staging, {mode: 0o700});
+  try {
+    for (const {name, text} of files) {
+      await fs.writeFile(path.join(staging, name), text, {mode: 0o600});
+    }
+    await renameDir(staging, outDir);
+  } catch (err) {
+    await fs.rm(staging, {recursive: true, force: true});
+    throw err;
+  }
+  return year;
+}
+
 async function assertRunYear(runDir: string, year: number, url: string): Promise<void> {
   const summaryFile = path.join(runDir, 'summary.json');
   let rawSummary: string | null = null;
@@ -512,7 +616,7 @@ async function failRun(
 }
 
 export async function collectSenadoExpenses(options: CollectSenadoOptions): Promise<SenadoCeapsSummary> {
-  const {year, runId, key, previousRunId} = options;
+  const {year, runId, key, previousRunId, exportDir} = options;
   if (!RUN_ID_RE.test(runId)) throw new Error('Run ID inválido');
   if (previousRunId !== undefined && !RUN_ID_RE.test(previousRunId)) {
     throw new Error('Previous run ID inválido');
@@ -754,5 +858,8 @@ export async function collectSenadoExpenses(options: CollectSenadoOptions): Prom
     {name: 'summary.json', text: canonical(summary)},
   ]);
 
+  if (exportDir !== undefined && status === 'review-required' && mandatesMissing.length === 0) {
+    await exportSenadoBuildFiles({runDir, outDir: exportDir, key, parse, audit});
+  }
   return summary;
 }
