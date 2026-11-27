@@ -16,8 +16,10 @@ import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
 import type {ReviewItem,ReviewNames} from './review-list.ts';
 import {partyReviewItems,ufReviewItems} from './review-list.ts';
 import {deputiesOf,resolveOptions,writePrerendered,writeStaticPages} from './prerender.ts';
-import type {Deputy,Period} from './prerender.ts';
+import type {Deputy,Period,Senator} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
+import {writeSenatorsSite} from './senado-publication.ts';
+import type {SenatorYearRecord} from './senado-publication.ts';
 import {generateShareImages} from './share-images.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
 import {readAmendmentRows} from './amendments-publication.ts';
@@ -65,7 +67,7 @@ async function versionAssets(outDir:string):Promise<void>{
   await tagged('data.js',['app.js','portal.js']);
   for(const page of ['index.html','404.html'])await tagged(page,['view.js','pages.js','data.js','analytics.js','app.js','portal.js','styles.css']);
 }
-export type SitePlan={defaultYear:number;years:{year:number;publicationId:string;ceiling:SiteCeiling|null}[];social?:Record<string,unknown>;amendments?:{publicationId:string}};
+export type SitePlan={defaultYear:number;years:{year:number;publicationId:string;ceiling:SiteCeiling|null}[];social?:Record<string,unknown>;amendments?:{publicationId:string};senators?:{publicationId:string}};
 export type YearResult={year:number;review:ReviewItem[];names:ReviewNames;partyReview:ReviewItem[]};
 // A year is built only from the exact version the caller names, and only if its own audit passed; the active pointer is never consulted for it.
 async function approvedPublication(db:DB,id:string,year:number):Promise<Publication>{
@@ -207,10 +209,25 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   if(share)console.error(`Imagens de compartilhamento: ${share.rendered} geradas, ${share.reused} reaproveitadas, ${(share.ms/1000).toFixed(1)} s`);
   const publicationId=await dataFolderId(data);
   await fs.rename(data,path.join(outDir,'data',publicationId));
-  await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base:`data/${publicationId}`,domains,defaultYear:sitePlan.defaultYear,years:manifestYears}));
+  const prerenderSenators:Senator[]=[];
+  if(sitePlan.senators){
+    await writeSenatorsSite(db,outDir,sitePlan.senators.publicationId);
+    const senatorsIndex=JSON.parse(await fs.readFile(path.join(outDir,'senadores','index.json'),'utf8')) as {years:{year:number;file:string}[]};
+    const orderedSenatorYears=[...senatorsIndex.years].sort((a,b)=>(a.year===sitePlan.defaultYear?-1:b.year===sitePlan.defaultYear?1:a.year-b.year));
+    const seenSenators=new Set<number>();
+    for(const y of orderedSenatorYears){
+      const yData=JSON.parse(await fs.readFile(path.join(outDir,'senadores',y.file),'utf8')) as {collectedAt?:string;senators:SenatorYearRecord[]};
+      for(const s of yData.senators){
+        if(!s.name||!s.name.trim()||seenSenators.has(s.senatorId))continue;
+        seenSenators.add(s.senatorId);
+        prerenderSenators.push({senatorId:s.senatorId,year:s.year,name:s.name,totalCents:s.totalCents,records:s.records,months:s.months,review:s.review,collectedAt:yData.collectedAt??null});
+      }
+    }
+  }
+  await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base:`data/${publicationId}`,domains,defaultYear:sitePlan.defaultYear,years:manifestYears,...sitePlan.senators?{senators:true}:{}}));
   // Static pages first: both read the bare index.html, and the prerender overwrites it with the home page.
   await writeStaticPages(outDir,siteOptions);
-  await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names,extras);
+  await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names,extras,prerenderSenators);
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
   // The all-months zip is the one file allowed past 10 MiB; zipOf already keeps it under the 25 MiB Workers asset limit.
   checkLimits(files.length,Math.max(...sizes.filter((_,i)=>!files[i].endsWith('.zip'))));

@@ -1032,3 +1032,26 @@ body[data-model=editorial] .directory-stats small.held-tag{position:static;width
 .p-mini-bars.many .bar-provisional{writing-mode:vertical-rl;padding:4px 2px;line-height:1.1}
 @media(max-width:800px){.p-mini-bars .bar-provisional{font-size:10px;padding:1px 2px}.p-mini-bars.many .bar-provisional{padding:4px 1px}}
 .provisional-list{margin:0 0 10px;padding-left:18px;font-size:14px}
+.rank-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+body[data-model=editorial] .rank-head .tabs{width:auto;border-bottom:0}
+.house-switch{display:inline-flex;padding:3px;margin-bottom:8px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.house-switch button{min-height:44px;padding:8px 16px;border:0;border-radius:7px;background:none;color:var(--muted);font:600 14px/1.2 var(--sans);cursor:pointer;white-space:nowrap}
+.house-switch button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+@media(hover:hover) and (pointer:fine){.house-switch button:not([aria-pressed=true]):hover{color:var(--ink)}}
+@media(max-width:560px){.rank-head{border-bottom:0}body[data-model=editorial] .rank-head .tabs{width:100%;border-bottom:1px solid var(--line)}.house-switch{width:100%;margin-bottom:0}.house-switch button{flex:1;padding:8px 12px;font-size:13px}}
+a.bar-row{text-decoration:none;color:inherit}
+.bar-row.is-unlinked{cursor:default}
+.bar-row.is-unlinked:hover .bar-name{text-decoration:none}
+.senators-status,.senators-error{margin:20px 0;padding:18px 20px;border:1px solid var(--line);border-radius:8px;background:var(--soft);font-size:14px;color:var(--ink)}
+.senators-error p{margin:0 0 10px}
+.senators-error p:last-child{margin-bottom:0}
+.senator-months,.senator-sublist{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.senator-month-row,.senator-item{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.senator-item span{min-width:0;flex:1 1 180px;overflow-wrap:anywhere}
+.senator-item strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.senator-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.senator-tag{display:inline-flex;align-items:center;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;line-height:1.4;color:var(--muted);background:var(--surface)}
+.senator-tag-warn{border-color:var(--warn-line);background:var(--warn-bg);color:var(--warn-ink)}
+.senator-tag-sub{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.senator-month-group{margin:0 0 14px}
+.senator-month-group h4{margin:0 0 6px;font:600 14px/1.3 var(--sans);color:var(--ink)}

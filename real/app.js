@@ -29,11 +29,14 @@
   if (['gastos', 'menos', 'projetos'].includes(initial.get('aba'))) fromURL.tab = initial.get('aba');
   const urlUf = initial.get('uf');
   if (urlUf && D.dataset().some(p => !p.noExercise && p.uf === urlUf)) fromURL.uf = urlUf;
+  const isSenatorPath = /^\/senador(?:\/|$)/.test(location.pathname);
+  const initialHouse = D.senators && (initial.get('casa') === 'senado' || isSenatorPath) ? 'senado' : 'camara';
   const state = {
+    house: initialHouse,
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
-    tab: fromURL.tab ?? 'gastos', barLimit: BAR_STEP,
+    tab: initialHouse === 'senado' && fromURL.tab === 'projetos' ? 'gastos' : (fromURL.tab ?? 'gastos'), barLimit: BAR_STEP,
     query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && comparable(D.dataset().find(p => p.id === initial.get('destaque'))) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
   let dialogTrigger = null, toastTimer, listOrigin = null;
@@ -126,13 +129,27 @@
     if (url.pathname !== path) { url.pathname = path; writeHistory('replaceState', history.state, url); }
     if (title) document.title = pageTitle.value = title;
   }
+  const homeQuery = () => {
+    const p = new URLSearchParams();
+    if (D.year !== D.defaultYear) p.set('ano', D.year);
+    if (state.house === 'senado') p.set('casa', 'senado');
+    const q = p.toString();
+    return q ? '?' + q : '';
+  };
   function syncURL() {
+    if (parseRoute(location.pathname)?.type === 'senador') return;
     const url = new URL(location.href);
     url.search = '';
     if (D.year !== D.defaultYear) url.searchParams.set('ano', D.year);
-    // On load an absent parameter means "let the question decide", so a link with a question spells out every choice, defaults included.
-    const explicit = Boolean(state.query);
-    Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || state.metric !== 'total' ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
+    if (state.house === 'senado') {
+      url.searchParams.set('casa', 'senado');
+      if (state.metric !== 'total') url.searchParams.set('metrica', state.metric);
+      if (state.tab === 'menos') url.searchParams.set('aba', state.tab);
+    } else {
+      // On load an absent parameter means "let the question decide", so a link with a question spells out every choice, defaults included.
+      const explicit = Boolean(state.query);
+      Object.entries({ categoria: explicit || state.category !== 'Todas' ? state.category : '', metrica: explicit || state.metric !== 'total' ? state.metric : '', aba: explicit || state.tab !== 'gastos' ? state.tab : '', uf: state.uf === 'Brasil' ? '' : state.uf, destaque: state.featured, q: state.query }).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
+    }
     try { history.replaceState(null, '', url); } catch { /* file previews may restrict history */ }
   }
   const examples = () => { const [a, b] = byTotal(); return [`${first(a)} gastou mais que ${first(b)}?`, 'Quem mais gastou por mês?', 'Quem mais gastou com passagens?', 'Quem gastou menos?']; };
@@ -150,8 +167,16 @@
   function metricToggle() {
     return `<div class="metric-toggle" role="group" aria-label="Forma de comparar"><button data-metric="total" aria-pressed="${state.metric === 'total'}">Total</button><button data-metric="mensal" aria-pressed="${state.metric === 'mensal'}">Por mês</button></div>`;
   }
+  function houseSwitch() {
+    if (!D.senators) return '';
+    return `<div class="house-switch" role="group" aria-label="Casa legislativa"><button type="button" data-house="camara" aria-pressed="${state.house === 'camara'}">Câmara</button><button type="button" data-house="senado" aria-pressed="${state.house === 'senado'}">Senado</button></div>`;
+  }
   function tabs() {
-    return `<div class="tabs" role="tablist" aria-label="Indicador">${[['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']].map(([key, label]) => `<button role="tab" data-tab="${key}" aria-selected="${state.tab === key}" tabindex="${state.tab === key ? 0 : -1}">${label}</button>`).join('')}</div>`;
+    const items = state.house === 'senado'
+      ? [['gastos', 'Mais gastos'], ['menos', 'Menos gastos']]
+      : [['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']];
+    const list = `<div class="tabs" role="tablist" aria-label="Indicador">${items.map(([key, label]) => `<button role="tab" data-tab="${key}" aria-selected="${state.tab === key}" tabindex="${state.tab === key ? 0 : -1}">${label}</button>`).join('')}</div>`;
+    return D.senators ? `<div class="rank-head">${list}${houseSwitch()}</div>` : list;
   }
   const monthsWord = n => n === 1 ? 'mês' : 'meses';
   function caption(p) {
@@ -176,6 +201,7 @@
   // Long lists grow in steps; only the visible rows are drawn.
   const listMore = (total, limit, step, kind, noun) => total <= step ? '' : `<div class="list-more"><p class="list-count">Mostrando ${Math.min(limit, total)} de ${total} ${noun}</p>${total > limit ? `<button class="outline-button" data-action="${kind}-more">Mostrar mais ${Math.min(step, total - limit)}</button>` : ''}${limit > step ? `<button class="outline-button" data-action="${kind}-less">Mostrar menos</button>` : ''}</div>`;
   function barSection() {
+    if (state.house === 'senado') return senatorBarSection();
     const projects = state.tab === 'projetos';
     if (projects && (!window.ClareiaData.billsApproved || !projectRanking().length)) return '';
     const standings = !projects && D.ceiling && state.category === 'Todas' ? ClareiaView.ufStandings(all()) : new Map();
@@ -222,12 +248,146 @@
     syncURL();
     const url = new URL(location.href);
     if (String(year) === D.defaultYear) url.searchParams.delete('ano'); else url.searchParams.set('ano', year);
-    if (state.featured) {
+    if (state.house === 'camara' && state.featured) {
       try { const other = await (await fetch(`${D.yearBase(year)}/index.json`)).json(); if (!other.scope.ids.map(String).includes(String(state.featured))) url.searchParams.delete('destaque'); } catch { url.searchParams.delete('destaque'); }
     }
     location.assign(url);
   }
+  // Monthly spend = totalCents ÷ count of months whose exercise is full or partial; with zero such months the senator has no monthly value and stays out of the monthly ranking.
+  const senatorMonthly = s => ClareiaView.senatorMonthlyCents(s);
+  const senatorExercised = s => ClareiaView.senatorExercisedMonths(s.months);
+  // Senators with name: null stay in the ranking as "Senador(a) sem nome cadastrado (ID <id>)" in non-interactive rows, with no profile page or link.
+  const senatorNamed = s => typeof s.name === 'string' && s.name.trim().length > 0;
+  const senatorDisplayName = s => senatorNamed(s) ? s.name.trim() : `Senador(a) sem nome cadastrado (ID ${s.senatorId})`;
+  const senatorUf = s => [...new Set((s.months || []).map(m => m.uf).filter(Boolean))].join(' / ');
+  const isPlainObj = v => typeof v === 'object' && v !== null && !Array.isArray(v);
+  const isSafeNumRecord = obj => isPlainObj(obj) && Object.values(obj).every(v => typeof v === 'number' && Number.isSafeInteger(v));
+  function validSenatorsIndex(raw) {
+    if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-index.v1' || !Array.isArray(raw.years)) return null;
+    if (!raw.years.every(y => isPlainObj(y) && Number.isInteger(y.year) && typeof y.file === 'string' && /^\d{4}\.json$/.test(y.file))) return null;
+    return raw;
+  }
+  function validSenatorsYear(raw) {
+    if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-year.v1' || !Number.isInteger(raw.year) || !Number.isSafeInteger(raw.totalCents) || !Number.isSafeInteger(raw.records) || !Array.isArray(raw.senators)) return null;
+    for (const s of raw.senators) {
+      if (!isPlainObj(s) || !Number.isInteger(s.senatorId) || (s.name !== null && typeof s.name !== 'string') || !Number.isSafeInteger(s.totalCents) || !Number.isSafeInteger(s.records)) return null;
+      if (!isSafeNumRecord(s.byType) || !isSafeNumRecord(s.suppliers) || !isPlainObj(s.byMonth) || !Object.values(s.byMonth).every(isSafeNumRecord)) return null;
+      if (!Array.isArray(s.months) || !isPlainObj(s.review)) return null;
+    }
+    return raw;
+  }
+  let senatorsIndexPromise = null;
+  const senatorsYearCache = new Map();
+  const senatorState = { status: 'idle', year: null, data: null, index: null, error: null };
+  function loadSenatorsIndex() {
+    if (!senatorsIndexPromise) {
+      senatorsIndexPromise = fetch('/senadores/index.json')
+        .then(r => { if (!r.ok) throw new Error('Senadores indisponíveis'); return r.json(); })
+        .then(raw => { const idx = validSenatorsIndex(raw); if (!idx) throw new Error('Índice de senadores inválido'); return idx; })
+        .catch(err => { senatorsIndexPromise = null; throw err; });
+    }
+    return senatorsIndexPromise;
+  }
+  function loadSenatorsYear(year) {
+    const key = String(year);
+    if (!senatorsYearCache.has(key)) {
+      senatorsYearCache.set(key, loadSenatorsIndex().then(idx => {
+        const entry = idx.years.find(y => String(y.year) === key);
+        if (!entry) return { index: idx, data: null, missingYear: true };
+        return fetch(`/senadores/${entry.file}`)
+          .then(r => { if (!r.ok) throw new Error('Ano de senadores indisponível'); return r.json(); })
+          .then(raw => {
+            const parsed = validSenatorsYear(raw);
+            if (!parsed || String(parsed.year) !== key) throw new Error('Dados de senadores inválidos');
+            return { index: idx, data: parsed, missingYear: false };
+          });
+      }).catch(err => { senatorsYearCache.delete(key); throw err; }));
+    }
+    return senatorsYearCache.get(key);
+  }
+  function ensureSenatorsLoaded() {
+    if (!D.senators) return;
+    if (senatorState.year === state.year && (senatorState.status === 'ready' || senatorState.status === 'loading' || senatorState.status === 'missing-year')) return;
+    const reqYear = state.year;
+    senatorState.status = 'loading';
+    senatorState.year = reqYear;
+    senatorState.error = null;
+    loadSenatorsYear(reqYear).then(res => {
+      if (senatorState.year !== reqYear) return;
+      senatorState.index = res.index;
+      if (res.missingYear) { senatorState.status = 'missing-year'; senatorState.data = null; }
+      else { senatorState.status = 'ready'; senatorState.data = res.data; }
+      if (state.house === 'senado' && $('#rank-slot')) { $('#rank-slot').innerHTML = rankingSection(); markTab(false); }
+    }, () => {
+      if (senatorState.year !== reqYear) return;
+      senatorState.status = 'error';
+      senatorState.data = null;
+      senatorState.error = 'Não foi possível carregar os dados do Senado agora. Nenhum valor foi estimado.';
+      if (state.house === 'senado' && $('#rank-slot')) { $('#rank-slot').innerHTML = rankingSection(); markTab(false); }
+    });
+  }
+  function senatorRanking(data) {
+    const list = [];
+    let excludedMonthly = 0;
+    for (const s of data.senators) {
+      const val = state.metric === 'mensal' ? senatorMonthly(s) : s.totalCents;
+      if (val === null) { excludedMonthly++; continue; }
+      list.push({ senator: s, value: val, exercised: senatorExercised(s) });
+    }
+    list.sort((a, b) => (state.tab === 'menos' ? a.value - b.value : b.value - a.value) || senatorDisplayName(a.senator).localeCompare(senatorDisplayName(b.senator), 'pt-BR') || a.senator.senatorId - b.senator.senatorId);
+    return { list, excludedMonthly };
+  }
+  function senatorCards(data, ranked) {
+    if (!ranked.length) return `<div class="empty-state"><b>Nenhum senador neste recorte.</b><p>${state.metric === 'mensal' ? 'Nenhum senador tem mês com exercício completo ou parcial neste ano.' : 'Não há senadores listados para este ano.'}</p></div>`;
+    return ranked.slice(0, 3).map(({ senator: s, value: val, exercised }, i) => {
+      const named = senatorNamed(s), name = senatorDisplayName(s), uf = senatorUf(s);
+      const ctx = ['Senador(a)', uf].filter(Boolean).join(' · ');
+      const cap = state.metric === 'mensal' ? `Média mensal · ${exercised} ${monthsWord(exercised)} de exercício` : `CEAPS ${data.year} · ${number(s.records)} ${s.records === 1 ? 'registro' : 'registros'}`;
+      const portrait = named
+        ? `<button type="button" class="portrait-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="Abrir perfil de ${escape(name)}">${photo({ name, photo: null })}<span class="rank-number">0${i + 1}</span></button>`
+        : `<div class="portrait-button">${photo({ name: 'S', photo: null })}<span class="rank-number">0${i + 1}</span></div>`;
+      const amountEl = named
+        ? `<button type="button" class="value-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="${escape(name)}: ${money(val)}. Ver detalhes">${compact(val)}</button>`
+        : `<span class="value-button">${compact(val)}</span>`;
+      const proof = named ? `<div class="card-proofs"><a class="editorial-proof" href="${escape(withYear(senatorPath(s)))}" data-action="senator-profile" data-senator-id="${s.senatorId}">Ver detalhes →</a></div>` : '';
+      return `<article class="rank-card editorial-card${named ? '' : ' is-unlinked'}" data-person="sen-${s.senatorId}">${portrait}<div class="card-info"><h3 class="person-name">${escape(name)}</h3><p class="editorial-person-context">${escape(ctx)}</p>${amountEl}<p class="card-caption">${cap}</p>${proof}</div></article>`;
+    }).join('');
+  }
+  function senatorBarSection() {
+    if (senatorState.status !== 'ready' || !senatorState.data) return '';
+    const data = senatorState.data, { list: ranked } = senatorRanking(data);
+    if (!ranked.length) return '';
+    const max = Math.max(1, ...ranked.map(x => Math.abs(x.value)));
+    return `<section class="bar-section" id="comparison"><h2>Comparativo de senadores · ${escape(data.year)}</h2><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map(({ senator: s, value: val }, i) => {
+      const named = senatorNamed(s), name = senatorDisplayName(s), inner = `<span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar({ name: named ? name : 'S', photo: null })}<span class="bar-name">${escape(name)}</span><span class="track"><i style="width:${Math.abs(val) / max * 100}%"></i></span><span class="bar-value">${money(val)}</span>`;
+      return named
+        ? `<a class="bar-row" href="${escape(withYear(senatorPath(s)))}" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="${escape(name)}, ${money(val)}: abrir perfil" style="--opacity:${Math.max(.25, 1 - i * .18)}">${inner}</a>`
+        : `<div class="bar-row is-unlinked" style="--opacity:${Math.max(.25, 1 - i * .18)}">${inner}</div>`;
+    }).join('')}</div>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'senadores')}</section>`;
+  }
+  function senatorCutoff(data) {
+    if (!data?.collectedAt) return '';
+    const ms = [...new Set(data.senators.flatMap(s => (s.months || []).map(m => m.month)).filter(m => m >= 1 && m <= 12))];
+    return ms.length ? `<p class="context cutoff">${escape(ClareiaView.cutoffLine(ms, data.year, data.collectedAt))}</p>` : '';
+  }
+  function senatorRankingSection() {
+    let body = '';
+    if (senatorState.status === 'error') {
+      body = `<div class="senators-error" role="alert"><p>${escape(senatorState.error)}</p></div>`;
+    } else if (senatorState.status === 'missing-year') {
+      const others = (senatorState.index?.years ?? []).filter(y => String(y.year) !== state.year);
+      body = `<div class="senators-error" role="status"><p>Os dados de senadores não estão publicados para ${escape(state.year)}.</p>${others.length ? `<div class="action-row">${others.map(y => `<button type="button" class="outline-button primary" data-year="${escape(y.year)}">Ver ${escape(y.year)}</button>`).join('')}</div>` : ''}</div>`;
+    } else if (senatorState.status !== 'ready' || !senatorState.data) {
+      body = '<div class="senators-status" role="status">Carregando dados do Senado…</div>';
+    } else {
+      const data = senatorState.data, { list: ranked, excludedMonthly } = senatorRanking(data);
+      const note = `Dados oficiais do Senado Federal (CEAPS) em ${escape(data.year)}: ${number(data.senators.length)} senadores, total publicado de ${money(data.totalCents)} (${number(data.records)} registros). Lançamentos sem tipo de despesa ficam fora dos totais.${state.metric === 'mensal' ? ` Gasto mensal divide o total pelos meses com exercício completo ou parcial${excludedMonthly ? `; ${excludedMonthly} ${excludedMonthly === 1 ? 'senador sem mês de exercício ficou' : 'senadores sem mês de exercício ficaram'} fora do ranking por mês` : ''}.` : ''} Não exibimos porcentagem do teto para senadores. <button class="text-button" data-action="methodology">Fontes e metodologia →</button>`;
+      body = `<div class="cards">${senatorCards(data, ranked)}</div><p class="ranking-context">${note}</p>${senatorBarSection()}${editorialFollowUp()}`;
+    }
+    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Senadores de ${escape(state.year)}</h2>${tabs()}<div class="editorial-controls"><div class="selects">${yearSelector()}<span class="real-year">Senado · ${escape(state.year)}${Number(state.year) === 2026 ? ' (parcial)' : ''}</span>${senatorCutoff(senatorState.data)}</div>${metricToggle()}</div>${body}</section>`;
+  }
   function rankingSection() {
+    if (state.house === 'senado') return senatorRankingSection();
     return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados de ${state.year}</h2>${tabs()}<div class="editorial-controls"><div class="selects">${yearSelector()}<span class="real-year">${state.tab === 'projetos' && D.billsApproved && D.billsYears.length ? `Projetos apresentados em ${billsPeriod()}` : span()}</span><p class="context cutoff">${cutoff()}</p></div>${state.tab === 'projetos' ? '' : metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
   }
   function answerHTML() {
@@ -280,6 +440,10 @@
     document.body.dataset.model = model;
     const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗︎</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗︎</button></div></div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured))}</div>${handwrittenNote()}<div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section>${universe()}<div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
     $('#app').innerHTML = `<div class="site">${header()}<main id="main">${main}</main><footer class="footer"></footer></div>`;
+    if (state.house === 'senado') {
+      if ($('#universo')) $('#universo').hidden = true;
+      if ($('#answer-slot')) $('#answer-slot').hidden = true;
+    }
   }
   function editorialFeature() {
     const p = person(state.featured);
@@ -306,7 +470,7 @@
   function scopeChip() {
     let chip = $('#scope-chip');
     if (!chip) { chip = document.createElement('div'); chip.id = 'scope-chip'; chip.className = 'scope-chip'; chip.setAttribute('role', 'status'); $('#answer-slot').before(chip); }
-    const narrowed = state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric === 'mensal';
+    const narrowed = state.house === 'camara' && (state.uf !== 'Brasil' || state.category !== 'Todas' || state.metric === 'mensal');
     chip.hidden = !narrowed;
     const scope = [state.uf === 'Brasil' ? null : state.uf, state.category === 'Todas' ? null : label(state.category), state.metric === 'mensal' ? 'Por mês' : null].filter(Boolean).join(' · ');
     chip.innerHTML = narrowed ? `<span>Filtrando: ${escape(scope)}</span><button type="button" data-action="reset" aria-label="Limpar filtros"><span aria-hidden="true">✕</span> Limpar</button>` : '';
@@ -325,12 +489,15 @@
   function refresh() {
     state.popover = null;
     const focused = document.activeElement;
-    const focusKey = focused?.dataset.metric ? ['metric', focused.dataset.metric] : focused?.dataset.tab ? ['tab', focused.dataset.tab] : null;
+    const focusKey = focused?.dataset.house ? ['house', focused.dataset.house] : focused?.dataset.metric ? ['metric', focused.dataset.metric] : focused?.dataset.tab ? ['tab', focused.dataset.tab] : null;
     const before = new Map([...document.querySelectorAll('.rank-card')].map(el => [el.dataset.person, el.getBoundingClientRect()]));
+    const isSenado = state.house === 'senado';
+    if ($('#universo')) $('#universo').hidden = isSenado;
+    if ($('#answer-slot')) $('#answer-slot').hidden = isSenado;
     $('#rank-slot').innerHTML = rankingSection();
-    if ($('#editorial-feature')) $('#editorial-feature').innerHTML = editorialFeature();
-    if (state.answer?.type === 'rank') state.answer.ids = ranking('gastos').slice(0, 3).map(p => p.id);
-    $('#answer-slot').innerHTML = answerHTML();
+    if (!isSenado && $('#editorial-feature')) $('#editorial-feature').innerHTML = editorialFeature();
+    if (!isSenado && state.answer?.type === 'rank') state.answer.ids = ranking('gastos').slice(0, 3).map(p => p.id);
+    if (!isSenado) $('#answer-slot').innerHTML = answerHTML();
     if (focusKey) document.querySelector(`[data-${focusKey[0]}="${focusKey[1]}"]`)?.focus({ preventScroll: true });
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches && document.body.dataset.motion !== 'off') document.querySelectorAll('.rank-card').forEach(el => {
       const old = before.get(el.dataset.person), now = el.getBoundingClientRect();
@@ -358,6 +525,7 @@
   function ask(query, scroll = true, fixed = {}) {
     state.query = query.trim();
     if (!state.query) { $('#query').focus(); return; }
+    if (state.house === 'senado') state.house = 'camara';
     // The category order and the monthly cells come from fornecedores.json, so an answer waits for it.
     if (!D.suppliersLoaded()) { state.answer = { type: 'loading' }; refresh(); D.loadSuppliers().then(() => ask(query, scroll, fixed), () => { state.answer = null; refresh(); }); return; }
     const q = norm(state.query), years = q.match(/\b20\d{2}\b/g);
@@ -449,16 +617,19 @@
   }
   const slugOf = name => norm(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const deputyPath = p => `/deputado/${p.officialId}-${slugOf(p.name)}`;
+  const senatorPath = s => `/senador/${s.senatorId}-${slugOf(s.name)}`;
   function parseRoute(path) {
     let parts; try { parts = path.split('/').filter(Boolean).map(decodeURIComponent); } catch { return { type: 'unknown' }; }
     if (!parts.length || (parts.length === 1 && parts[0] === 'index.html')) return null;
     if (parts[0] === 'deputado') { const m = parts.length === 2 ? /^(\d+)(?:-.*)?$/.exec(parts[1]) : null; return { type: 'deputado', id: m?.[1] ?? null, slug: m ? parts[1].slice(m[1].length + 1) : '' }; }
+    if (parts[0] === 'senador') { const m = parts.length === 2 ? /^(\d+)(?:-.*)?$/.exec(parts[1]) : null; return { type: 'senador', id: m?.[1] ?? null, slug: m ? parts[1].slice(m[1].length + 1) : '' }; }
     if (parts[0] === 'estado' && parts.length === 2) return { type: 'estado', uf: parts[1].toUpperCase() };
     if (parts.length === 1 && ['sobre', 'correcoes', 'metodologia', 'dados-abertos', 'apoie'].includes(parts[0])) return { type: 'page', name: parts[0] };
     return { type: 'unknown' };
   }
   const NOT_FOUND = {
     deputado: ['Deputado(a) não encontrado(a)', 'Não existe deputado(a) com este endereço nesta versão dos dados. Confira o link ou procure pelo nome na busca. Nenhum outro perfil foi exibido no lugar.'],
+    senador: ['Senador(a) não encontrado(a)', 'Não existe senador(a) com este endereço nesta versão dos dados. Confira o link ou consulte o ranking do Senado. Nenhum outro perfil foi exibido no lugar.'],
     estado: ['Estado não encontrado', 'Este endereço não corresponde a nenhuma UF. Use a sigla de duas letras, como SP ou BA, ou escolha um estado no mapa.'],
     unknown: ['Página não encontrada', 'Este endereço não existe no Clareia. Volte ao início para ver os rankings e a busca.']
   };
@@ -468,9 +639,96 @@
   }
   function openRoute(route, { initial = false } = {}) {
     const target = location.pathname + location.search;
+    if (route.type === 'senador') {
+      if (initial) writeHistory('replaceState', null, '/' + homeQuery());
+      openSenatorRoute(route, target);
+      return;
+    }
     if (initial) writeHistory('replaceState', null, '/' + location.search);
     const found = route.type === 'deputado' && route.id ? person(route.id) : null;
     if (found) profile(found.id); else if (route.type === 'deputado' && route.id && D.years.length > 1) absentDeputy(route, target); else notFound(route.type, target);
+  }
+  async function openSenatorRoute(route, target) {
+    if (!D.senators || !route.id) { notFound('senador', target); return; }
+    showDialog('Perfil do senador', '<p class="records-note records-loading" role="status">Carregando dados do Senado…</p>', true, { url: target, title: 'Senado — Clareia' });
+    let loaded;
+    try { loaded = await loadSenatorsYear(state.year); }
+    catch { showDialog('Dados indisponíveis', '<p class="records-note" role="alert">Não foi possível carregar os dados do Senado agora. Nenhum valor foi estimado.</p><div class="action-row"><button type="button" class="outline-button primary" data-action="close">Fechar</button></div>', true, { url: target, title: 'Dados indisponíveis — Clareia' }); return; }
+    const found = loaded.data?.senators.find(s => String(s.senatorId) === String(route.id) && senatorNamed(s));
+    if (found) {
+      if (senatorState.year === state.year && !senatorState.data) { senatorState.index = loaded.index; senatorState.data = loaded.data; senatorState.status = 'ready'; }
+      senatorProfile(found, loaded.data);
+      return;
+    }
+    const present = [];
+    await Promise.all((loaded.index?.years ?? []).filter(y => String(y.year) !== state.year).map(async y => {
+      try {
+        const other = await loadSenatorsYear(y.year);
+        if (other.data?.senators.some(s => String(s.senatorId) === String(route.id) && senatorNamed(s))) present.push(String(y.year));
+      } catch { /* an unreachable year just does not get offered */ }
+    }));
+    if (!present.length) { notFound('senador', target); return; }
+    present.sort();
+    const path = `/senador/${route.id}${route.slug ? '-' + route.slug : ''}`, link = y => `${path}${y === D.defaultYear ? '' : `?ano=${y}`}`;
+    const title = `Sem dados em ${D.year}`;
+    showDialog(title, `<p class="records-note" role="alert">Este(a) senador(a) não tem dados publicados em ${escape(D.year)}. Há dados em ${present.map(escape).join(' e ')}.</p><div class="action-row">${present.map(y => `<a class="outline-button primary" href="${escape(link(y))}">Ver em ${escape(y)}</a>`).join('')}<button type="button" class="outline-button" data-action="close">Ir para o início</button></div>`, true, { url: target, title: `${title} — Clareia` });
+  }
+  const EXERCISE_LABEL = { full: 'Exercício completo', partial: 'Exercício parcial', outside: 'Fora do mandato', unknown: 'Exercício não confirmado', conflict: 'Exercício em revisão' };
+  function senatorProfile(s, yearData) {
+    if (!senatorNamed(s)) return;
+    const name = s.name.trim(), uf = senatorUf(s), exercised = senatorExercised(s), monthly = senatorMonthly(s);
+    const route = { url: withYear(senatorPath(s)), title: `${name} — Clareia` };
+    const types = Object.entries(s.byType).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+    const maxType = Math.max(1, ...types.map(([, v]) => Math.abs(v)));
+    const byTypeHtml = types.length
+      ? types.map(([tipo, cents]) => `<div class="category-row"><div class="category-head"><span>${escape(tipo)}</span><strong>${money(cents)}</strong></div><span class="track"><i style="width:${Math.abs(cents) / maxType * 100}%;opacity:.7"></i></span></div>`).join('')
+      : '<p class="context">Nenhuma despesa registrada neste ano.</p>';
+    const monthKeys = Object.keys(s.byMonth).map(Number).filter(m => m >= 1 && m <= 12).sort((a, b) => a - b);
+    const byMonthHtml = monthKeys.length
+      ? monthKeys.map(m => {
+        const items = Object.entries(s.byMonth[String(m)]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+        return `<div class="senator-month-group"><h4>${months[m - 1]} / ${escape(s.year)}</h4><ul class="senator-sublist">${items.map(([tipo, cents]) => `<li class="senator-item"><span>${escape(tipo)}</span><strong>${money(cents)}</strong></li>`).join('')}</ul></div>`;
+      }).join('')
+      : '<p class="context">Nenhuma despesa por mês registrada neste ano.</p>';
+    const allSuppliers = Object.entries(s.suppliers).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+    const topSuppliers = allSuppliers.slice(0, 10);
+    const suppliersHtml = topSuppliers.length
+      ? `<ul class="senator-sublist">${topSuppliers.map(([labelName, cents]) => `<li class="senator-item"><span>${escape(labelName)}</span><strong>${money(cents)}</strong></li>`).join('')}</ul>${allSuppliers.length > topSuppliers.length ? `<p class="context">Mostrando os ${topSuppliers.length} principais de ${number(allSuppliers.length)} fornecedores.</p>` : ''}`
+      : '<p class="context">Nenhum fornecedor registrado neste ano.</p>';
+    const exerciseRows = [...(s.months || [])].sort((a, b) => a.month - b.month).map(m => {
+      const ex = EXERCISE_LABEL[m.exercise] || m.exercise;
+      const warn = m.exercise !== 'full';
+      const isSub = typeof m.participation === 'string' && /suplente/i.test(m.participation);
+      return `<li class="senator-month-row"><strong>${months[m.month - 1] || `Mês ${m.month}`}${m.uf ? ` · ${escape(m.uf)}` : ''}</strong><span class="senator-tags"><span class="senator-tag${warn ? ' senator-tag-warn' : ''}">${escape(ex)}</span>${isSub ? `<span class="senator-tag senator-tag-sub">${escape(m.participation)}</span>` : ''}</span></li>`;
+    }).join('');
+    const exerciseHtml = exerciseRows ? `<ul class="senator-months">${exerciseRows}</ul>` : '<p class="context">Sem cobertura mensal informada para este ano.</p>';
+    const emptyCount = Number(s.review?.['empty-type'] ?? 0);
+    const emptyNote = emptyCount > 0
+      ? `<p class="records-note" role="note">${number(emptyCount)} ${emptyCount === 1 ? 'lançamento sem tipo de despesa ficou' : 'lançamentos sem tipo de despesa ficaram'} fora dos totais desta página.</p>`
+      : '<p class="records-note">Lançamentos sem tipo de despesa ficam fora dos totais.</p>';
+    const cutoffHtml = yearData?.collectedAt && s.months?.length ? `<p class="context cutoff">${escape(ClareiaView.cutoffLine(s.months.map(m => m.month), s.year, yearData.collectedAt))}</p>` : '';
+    const html = `<div class="profile-head">${avatar({ name, photo: null })}<div><h3>${escape(name)}</h3><p class="context">Senador(a)${uf ? ` • ${escape(uf)}` : ''} • Código Senado ${escape(s.senatorId)}</p><p class="context">CEAPS ${escape(s.year)} • ${number(s.records)} ${s.records === 1 ? 'registro' : 'registros'}</p>${cutoffHtml}</div></div>` +
+      `<div class="profile-stats"><div class="profile-stat"><span>Despesas em ${escape(s.year)}</span><strong>${money(s.totalCents)}</strong></div><div class="profile-stat"><span>Média por mês de exercício</span><strong>${monthly !== null ? money(monthly) : 'Sem mês de exercício'}</strong></div></div>` +
+      `<p class="context">${exercised > 0 ? `${exercised} ${monthsWord(exercised)} com exercício completo ou parcial no ano.` : 'Sem exercício completo ou parcial no ano; fora do ranking por mês.'}</p>${emptyNote}` +
+      `<section class="detail-section"><h3>Despesas por tipo</h3>${byTypeHtml}</section>` +
+      `<section class="detail-section"><h3>Despesas por mês</h3>${byMonthHtml}</section>` +
+      `<section class="detail-section"><h3>Principais fornecedores</h3>${suppliersHtml}</section>` +
+      `<section class="detail-section"><h3>Exercício do mandato por mês</h3>${exerciseHtml}</section>` +
+      `<div class="action-row"><button type="button" class="share-button" data-action="copy-senator-link" data-senator-id="${s.senatorId}">Compartilhar</button><button type="button" class="outline-button" data-action="methodology">Fontes e metodologia</button></div>` +
+      `<div class="fixture-note">Dados oficiais do Senado Federal (CEAPS), versão ${escape((yearData?.publicationId || '').slice(0, 12))}. Verificações automáticas não são auditoria do gasto.</div>`;
+    showDialog('Perfil do senador', html, true, route);
+  }
+  async function copySenatorLink(senatorId, button) {
+    const s = senatorState.data?.senators.find(x => String(x.senatorId) === String(senatorId) && senatorNamed(x));
+    if (!s) return;
+    const url = location.origin + withYear(senatorPath(s));
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) { try { await navigator.share({ title: `${s.name} — Clareia`, text: `Despesas de ${s.name} no Senado, com dados oficiais.`, url }); return; } catch (error) { if (error?.name === 'AbortError') return; } }
+    const copied = () => { toast('Link do perfil copiado.'); const text = button.textContent; button.textContent = 'Link copiado'; setTimeout(() => { if (button.isConnected) button.textContent = text; }, 2000); };
+    try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(url); copied(); return; } catch { /* falls back to a selectable field */ }
+    let box = $('#profile-link-box');
+    if (!box) { box = document.createElement('div'); box.id = 'profile-link-box'; box.className = 'manual-share'; box.innerHTML = `<label for="profile-link">Copie o link do perfil</label><input id="profile-link" readonly value="${escape(url)}">`; button.closest('.action-row').after(box); }
+    const field = $('#profile-link'); field.focus(); field.select();
+    try { if (document.execCommand('copy')) copied(); } catch { /* the selected field is the fallback */ }
   }
   async function absentDeputy(route, target) {
     const present = [];
@@ -488,7 +746,7 @@
     const st = history.state;
     if (session && st?.clareia === session.id && session.views[st.d]) { await restoreView(st.d); const after = afterRestore; afterRestore = null; after?.(); return; }
     const route = parseRoute(location.pathname);
-    if (route?.type === 'deputado' || route?.type === 'unknown') {
+    if (route?.type === 'deputado' || route?.type === 'senador' || route?.type === 'unknown') {
       adopting = true;
       try { openRoute(route); } finally { adopting = false; }
     } else if ($('#detail').open) closeFromHistory();
@@ -645,7 +903,7 @@
   function methodologyBody() {
     const v = index.validation, audit = index.audit, P = window.ClareiaPages;
     const auditLine = audit ? ` Releitura independente do arquivo anual: <b>${audit.status === 'passed' ? 'sem divergências' : 'divergência encontrada'}</b> (${number(audit.selected)} linhas, ${audit.groupsCompared !== undefined ? `${number(audit.groupsCompared)} grupos pessoa/mês/categoria` : `${number(audit.competences)} competências deputado/mês`}, ${date(audit.checkedAt)}).` : '';
-    return `${P.pages.metodologia.somamos(union())}${P.pages.metodologia.conferimos(auditLine)}${window.ClareiaData.billsApproved ? `<h3>Projetos aprovados</h3><p>Contamos PL, PLP e PEC apresentados em ${billsPeriod()} em que o deputado aparece como proponente na lista de autores da Câmara e cuja norma (lei ordinária, lei complementar ou emenda constitucional) foi identificada no despacho oficial. Coautoria não conta. Projetos com a situação 'Transformado em Norma Jurídica' sem norma identificável, ou retidos para revisão, ficam fora, e por isso a contagem pode ficar abaixo do total real. Deputados sem proposições coletadas não entram no ranking.</p>` : ''}${ceilingMethod()}${P.pages.metodologia.anos(D.years, D.defaultYear)}${P.pages.metodologia.naoConcluimos}<h3>Limites desta versão</h3><ul>${v.limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul>${P.pages.metodologia.privacidade}<h3>Versão</h3><dl class="trace"><dt>Identificador</dt><dd><code class="hash" tabindex="0" title="${escape(index.snapshotId)}">${escape(index.snapshotId)}</code></dd><dt>Métrica</dt><dd><code>${escape(index.metric)}</code></dd><dt>Coleta</dt><dd>${date(index.collectedAt)} (Brasília)</dd><dt>Publicação</dt><dd>${date(index.publishedAt)} (Brasília)</dd></dl><p><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dicionário oficial da CEAP ↗︎</a> · <a href="https://dadosabertos.camara.leg.br/swagger/api.html" target="_blank" rel="noopener noreferrer">Documentação da API ↗︎</a></p>`;
+    return `${P.pages.metodologia.somamos(union())}${P.pages.metodologia.conferimos(auditLine)}${P.pages.metodologia.senado}${window.ClareiaData.billsApproved ? `<h3>Projetos aprovados</h3><p>Contamos PL, PLP e PEC apresentados em ${billsPeriod()} em que o deputado aparece como proponente na lista de autores da Câmara e cuja norma (lei ordinária, lei complementar ou emenda constitucional) foi identificada no despacho oficial. Coautoria não conta. Projetos com a situação 'Transformado em Norma Jurídica' sem norma identificável, ou retidos para revisão, ficam fora, e por isso a contagem pode ficar abaixo do total real. Deputados sem proposições coletadas não entram no ranking.</p>` : ''}${ceilingMethod()}${P.pages.metodologia.anos(D.years, D.defaultYear)}${P.pages.metodologia.naoConcluimos}<h3>Limites desta versão</h3><ul>${v.limitations.map(l => `<li>${escape(l)}</li>`).join('')}</ul>${P.pages.metodologia.privacidade}<h3>Versão</h3><dl class="trace"><dt>Identificador</dt><dd><code class="hash" tabindex="0" title="${escape(index.snapshotId)}">${escape(index.snapshotId)}</code></dd><dt>Métrica</dt><dd><code>${escape(index.metric)}</code></dd><dt>Coleta</dt><dd>${date(index.collectedAt)} (Brasília)</dd><dt>Publicação</dt><dd>${date(index.publishedAt)} (Brasília)</dd></dl><p><a href="https://dadosabertos.camara.leg.br/howtouse/2023-12-26-dados-ceap.html" target="_blank" rel="noopener noreferrer">Dicionário oficial da CEAP ↗︎</a> · <a href="https://dadosabertos.camara.leg.br/swagger/api.html" target="_blank" rel="noopener noreferrer">Documentação da API ↗︎</a></p>`;
   }
   function auditTiles() {
     const a = index.audit;
@@ -741,10 +999,25 @@
     document.querySelector(`[role="tab"][data-tab="${all[to].dataset.tab}"]`)?.focus();
   });
   document.addEventListener('click', event => {
-    const target = event.target.closest('[data-action],[data-tab],[data-metric],[data-question],[data-year]');
+    const target = event.target.closest('[data-action],[data-house],[data-tab],[data-metric],[data-question],[data-year]');
     if (!event.target.closest('.search-wrap')) closeSuggestions();
     if (!target) return;
+    if (target.tagName === 'A' && target.dataset.action === 'senator-profile') {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+      event.preventDefault();
+    }
     if (target.tagName === 'A' && !target.href) event.preventDefault();
+    if (target.dataset.house) {
+      const next = target.dataset.house === 'senado' && D.senators ? 'senado' : 'camara';
+      if (next !== state.house) {
+        state.house = next;
+        state.barLimit = BAR_STEP;
+        if (next === 'senado' && state.tab === 'projetos') state.tab = 'gastos';
+        if (next === 'senado') ensureSenatorsLoaded();
+        refresh();
+      }
+      return;
+    }
     if (target.dataset.tab) { state.tab = target.dataset.tab; state.barLimit = BAR_STEP; refresh(); return; }
     if (target.dataset.metric) { state.metric = target.dataset.metric; refresh(); return; }
     if (target.dataset.question) { ask(target.dataset.question); return; }
@@ -764,6 +1037,11 @@
     else if (action === 'record') openView(() => recordDetail(person(id), target.dataset.record));
     else if (action === 'month') openView(() => recordTable(person(id), Number(target.dataset.month)));
     else if (action === 'profile') D.loadSuppliers().then(() => openView(() => profile(id)), () => {});
+    else if (action === 'senator-profile') {
+      const s = senatorState.data?.senators.find(x => String(x.senatorId) === String(target.dataset.senatorId) && senatorNamed(x));
+      if (s) openView(() => senatorProfile(s, senatorState.data));
+    }
+    else if (action === 'copy-senator-link') copySenatorLink(target.dataset.senatorId, target);
     else if (action === 'methodology') methodology();
     else if (action === 'focus-search') { $('#query').focus(); $('#query').scrollIntoView({ block: 'center' }); }
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog().then(() => ask(`Compare ${person(id).name} e ${peer.name}`)); }
@@ -796,15 +1074,16 @@
     dialogTrail = []; dialogView = null;
     if (session?.live) {
       session.live = false;
-      if (session.base === 'beneath') history.go(-(session.d + 1)); else writeHistory('replaceState', null, '/' + yearQuery());
+      if (session.base === 'beneath') history.go(-(session.d + 1)); else writeHistory('replaceState', null, '/' + homeQuery());
     }
     document.title = pageTitle.value;
     const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
   layout();
+  if (state.house === 'senado') ensureSenatorsLoaded();
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { yearSelector, yearQuery, parseRoute, openRoute, deputyPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, approvedText, billsPeriod, byTotal, compareValues };
+  window.Clareia = { yearSelector, yearQuery, parseRoute, openRoute, deputyPath, senatorPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, approvedText, billsPeriod, byTotal, compareValues };
   window.addEventListener('resize', () => markTab(false));
-  if (state.query) ask(state.query, false, fromURL);
+  if (state.query && state.house === 'camara') ask(state.query, false, fromURL);
 })();

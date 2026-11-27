@@ -2920,6 +2920,82 @@ check('provisional months mark the chart, profile and year label without changin
   }
 });
 
+check('senators switch, ranking, profile and non-blocking route at 1440 and 390', async () => {
+  const manifest = await (await fetch(`${base}/manifest.json`)).json();
+  needCase(Boolean(manifest.senators), 'the built site has no senadores/ published');
+  const idxRes = await fetch(`${base}/senadores/index.json`);
+  needCase(idxRes.ok, 'the built site has no senadores/index.json');
+  const sIndex = await idxRes.json();
+  const defYear = String(manifest.defaultYear || '');
+  const yearEntry = sIndex.years.find(y => String(y.year) === defYear) || sIndex.years[0];
+  needCase(Boolean(yearEntry), 'senadores/index.json has no years');
+  const yearData = await (await fetch(`${base}/senadores/${yearEntry.file}`)).json();
+  const firstNamed = yearData.senators.find(s => typeof s.name === 'string' && s.name.trim());
+  needCase(Boolean(firstNamed), 'senators year data has a named senator');
+
+  for (const width of [1440, 390]) {
+    const page = await at(width);
+    try {
+      assert.equal(await page.locator('.house-switch').count(), 1, `house switch present at ${width}`);
+      assert.equal(await page.locator('.house-switch [data-house=camara]').getAttribute('aria-pressed'), 'true', `Câmara selected by default at ${width}`);
+      assert.equal(await page.locator('.house-switch [data-house=senado]').getAttribute('aria-pressed'), 'false', `Senado not selected by default at ${width}`);
+
+      await page.locator('.house-switch [data-house=senado]').click();
+      await page.waitForSelector('#rankings .bar-row, #rankings .rank-card');
+      assert.equal(await page.locator('.house-switch [data-house=senado]').getAttribute('aria-pressed'), 'true', `Senado selected at ${width}`);
+      assert.equal(await page.evaluate(() => new URLSearchParams(location.search).get('casa')), 'senado', `URL carries casa=senado at ${width}`);
+
+      const visibleText = clean(await page.evaluate(() => document.body.innerText));
+      assert.ok(!visibleText.includes('% do teto'), `no "% do teto" in Senado view at ${width}`);
+      assert.equal(await page.locator('#rankings .ceiling-pill').count(), 0, `no ceiling pill for senators at ${width}`);
+      for (const id of ['atlas', 'projetos', 'votacoes']) {
+        assert.ok(await page.locator(`#${id}`).isHidden(), `#${id} hidden for senators at ${width}`);
+      }
+
+      if (width === 390) {
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no horizontal overflow at 390 in Senado ranking');
+      }
+
+      await page.locator('#rankings [data-metric=mensal]').click();
+      await page.waitForSelector('#rankings .bar-row, #rankings .empty-state');
+      assert.equal(await page.locator('#rankings [data-metric=mensal]').getAttribute('aria-pressed'), 'true', `monthly metric selected at ${width}`);
+      await page.locator('#rankings [data-metric=total]').click();
+      await page.waitForSelector('#rankings [data-action=senator-profile]');
+
+      await page.locator('#rankings [data-action=senator-profile]').first().click();
+      await page.waitForSelector('#detail[open] .senator-months');
+      assert.ok(await page.locator('#detail .senator-month-row').count() > 0, `exercise months listed in senator profile at ${width}`);
+      assert.match(await page.evaluate(() => location.pathname), /^\/senador\/\d+-/, `URL updated to /senador/ at ${width}`);
+      if (width === 390) {
+        const overflow = await page.evaluate(() => {
+          const d = document.querySelector('#detail');
+          return { page: document.documentElement.scrollWidth > window.innerWidth, dialog: d.scrollWidth > d.clientWidth };
+        });
+        assert.equal(overflow.page, false, 'no page horizontal overflow at 390 with senator profile');
+        assert.equal(overflow.dialog, false, 'no dialog horizontal overflow at 390 in senator profile');
+      }
+      assert.deepEqual(page.errors, [], `no JS errors in Senado flow at ${width}`);
+    } finally {
+      await page.close();
+    }
+  }
+
+  // Direct /senador/ route opens even if deputy fornecedores.json fails to load.
+  const slug = firstNamed.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  const pageErrors = [];
+  page.on('pageerror', err => pageErrors.push(err.message));
+  try {
+    await page.route('**/fornecedores.json', route => route.abort());
+    await page.goto(`${base}/senador/${firstNamed.senatorId}-${slug}${String(yearEntry.year) === defYear ? '' : `?ano=${yearEntry.year}`}`);
+    await page.waitForSelector('#detail[open] .senator-months');
+    assert.ok(await page.locator('#detail .senator-month-row').count() > 0, 'direct senator route shows exercise months without deputy suppliers');
+    assert.deepEqual(pageErrors, [], 'no uncaught JS errors on direct senator route');
+  } finally {
+    await page.close();
+  }
+});
+
 (async () => {
   browser = await chromium.launch({ headless: true });
   let failed = 0, ran = 0, skipped = 0;

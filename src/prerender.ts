@@ -6,6 +6,7 @@ import {ceilingUse} from './ceiling-use.ts';
 import {cutoffLine} from './year-view.ts';
 import type {CeilingUse} from './ceiling-use.ts';
 import type {SiteSummary,SupplierSummary} from './site-summary.ts';
+import type {SenatorYearRecord} from './senado-publication.ts';
 import {apiDocsInner,loadSpec} from './api-docs.ts';
 
 const REPO=path.join(import.meta.dirname,'..');
@@ -34,10 +35,12 @@ const norm=(value:string)=>value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]
 // The same rule as slugOf and deputyPath in real/app.js: the page and the app must agree on the address.
 export const slugOf=(name:string)=>norm(name).replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 export const deputyPath=(officialId:number,name:string)=>`/deputado/${officialId}-${slugOf(name)}`;
+export const senatorPath=(senatorId:number,name:string)=>`/senador/${senatorId}-${slugOf(name)}`;
 export const statePath=(uf:string)=>`/estado/${uf}`;
 export const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
 
 export type Deputy={id:number;name:string;uf:string|null;ufNote:string|null;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];exerciseReviewMonths:number[];comparable:boolean;cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse;social?:{network:string;url:string}[]};
+export type Senator={senatorId:number;year:number;name:string|null;totalCents:number;records:number;months:SenatorYearRecord['months'];review:SenatorYearRecord['review'];collectedAt?:string|null};
 export type Period={year:string;coverage:number[];minMonths:number;collectedAt?:string|null};
 export const cutoffOf=(period:Period)=>cutoffLine(period.coverage.map(m=>m+1),Number(period.year),period.collectedAt);
 
@@ -135,6 +138,27 @@ export function renderState(shell:string,uf:string,deputies:Deputy[],period:Peri
   return page(shell,{title,description,url:siteUrl+statePath(uf),type:'website',image:icon(siteUrl)},noscript);
 }
 
+const senatorUf=(months:Senator['months']):string|null=>{
+  const ufs=[...new Set(months.map(m=>m.uf).filter((u):u is string=>Boolean(u)))];
+  return ufs.length?ufs.join(' / '):null;
+};
+export function senatorDescription(s:Senator):string{
+  const who=['Senador(a)',senatorUf(s.months)].filter(Boolean).join(' · ');
+  const spend=`Despesas da CEAPS em ${s.year}: ${money(s.totalCents)} (${s.records} ${s.records===1?'registro':'registros'}).`;
+  const empty=s.review['empty-type']??0;
+  const emptyNote=empty>0?`${empty} ${empty===1?'lançamento sem tipo de despesa fica':'lançamentos sem tipo de despesa ficam'} fora dos totais.`:'';
+  return [`${who}.`,spend,emptyNote,'Dados oficiais do Senado Federal (CEAPS).'].filter(Boolean).join(' ');
+}
+export function renderSenator(shell:string,s:Senator,siteUrl:string):string{
+  if(!s.name||!plain(s.name))throw new Error(`Senador ${s.senatorId} sem nome não recebe página`);
+  const name=plain(s.name),description=senatorDescription(s),title=`${name} — Clareia`,url=siteUrl+senatorPath(s.senatorId,name);
+  const coverage=s.months.map(m=>m.month-1).filter(m=>m>=0&&m<12);
+  const cutoff=s.collectedAt&&coverage.length?`<p class="cutoff">${esc(cutoffOf({year:String(s.year),coverage,minMonths:1,collectedAt:s.collectedAt}))}</p>`:'';
+  const noscript=`<noscript><main id="main"><h1>${esc(name)}</h1><p>${esc(description)}</p>${cutoff}<p>Ative o JavaScript para explorar os dados.</p><p><a href="/?casa=senado">Senadores no Clareia</a></p>${homeLink}</main></noscript>`;
+  const ld={'@type':'Person',name,jobTitle:'Senador(a)',url};
+  return page(shell,{title,description,url,type:'profile',image:icon(siteUrl)},noscript,ld);
+}
+
 export function jpegSize(b:Buffer):{width:number;height:number}|null{
   if(b.length<4||b[0]!==0xff||b[1]!==0xd8)return null;
   let i=2;
@@ -149,8 +173,10 @@ export function jpegSize(b:Buffer):{width:number;height:number}|null{
   return null;
 }
 
-export function sitemapXml(siteUrl:string,deputies:Deputy[]):string{
-  const urls=[siteUrl+'/',...FIXED_PAGES.map(([route])=>`${siteUrl}/${route}`),...Object.keys(UFS).sort().map(uf=>siteUrl+statePath(uf)),...[...deputies].sort((a,b)=>a.id-b.id).map(p=>siteUrl+deputyPath(p.id,p.name))];
+export function sitemapXml(siteUrl:string,deputies:Deputy[],senators:Senator[]=[]):string{
+  // Senators with name: null get no page or sitemap entry.
+  const senatorUrls=[...senators].filter((s):s is Senator&{name:string}=>Boolean(s.name&&plain(s.name))).sort((a,b)=>a.senatorId-b.senatorId).map(s=>siteUrl+senatorPath(s.senatorId,plain(s.name)));
+  const urls=[siteUrl+'/',...FIXED_PAGES.map(([route])=>`${siteUrl}/${route}`),...Object.keys(UFS).sort().map(uf=>siteUrl+statePath(uf)),...[...deputies].sort((a,b)=>a.id-b.id).map(p=>siteUrl+deputyPath(p.id,p.name)),...senatorUrls];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(u=>`  <url><loc>${esc(u)}</loc></url>`).join('\n')}\n</urlset>\n`;
 }
 export function robotsTxt(o:ResolvedOptions):string{
@@ -159,7 +185,7 @@ export function robotsTxt(o:ResolvedOptions):string{
 }
 
 export type CorrectionEntry={date:string;title:string;detail:string};
-type StaticPages={CONTACT_EMAIL:string;POLICY:string;layout:(name:string,eyebrow:string,title:string,lede:string,inner:string,toc?:string)=>string;sections:(html:string)=>{html:string;toc:string};pages:{sobre:{title:string;description:string;body:()=>string};apoie:{title:string;description:string;body:()=>string};correcoes:{title:string;description:string;body:(list:CorrectionEntry[],email:string)=>string};metodologia:{title:string;description:string;naoConcluimos:string;privacidade:string};'dados-abertos':{title:string;description:string;body:(manifest:unknown,base:string)=>string}}};
+type StaticPages={CONTACT_EMAIL:string;POLICY:string;layout:(name:string,eyebrow:string,title:string,lede:string,inner:string,toc?:string)=>string;sections:(html:string)=>{html:string;toc:string};pages:{sobre:{title:string;description:string;body:()=>string};apoie:{title:string;description:string;body:()=>string};correcoes:{title:string;description:string;body:(list:CorrectionEntry[],email:string)=>string};metodologia:{title:string;description:string;senado:string;naoConcluimos:string;privacidade:string};'dados-abertos':{title:string;description:string;body:(manifest:unknown,base:string)=>string}}};
 // real/pages.js is the one copy of these texts: the browser loads it as a script, and here it is run in an empty sandbox.
 export async function loadStaticPages():Promise<StaticPages>{
   const sandbox:{window:{ClareiaPages?:StaticPages}}={window:{}};
@@ -194,7 +220,7 @@ export async function writeStaticPages(outDir:string,options:ResolvedOptions):Pr
   const published=await readOpenData(outDir);
   for(const name of FIXED_PAGES.map(([route])=>route).filter((route):route is Exclude<FixedRoute,'api'>=>route!=='api')){
     const entry=pages.pages[name];
-    const inner=name==='sobre'?pages.pages.sobre.body():name==='apoie'?pages.pages.apoie.body():name==='correcoes'?pages.pages.correcoes.body(corrections,pages.CONTACT_EMAIL):name==='dados-abertos'?pages.pages['dados-abertos'].body(published?.manifest??null,published?.base??''):pages.layout('metodologia','Metodologia',`Metodologia`,esc(entry.description),`<p>Ative o JavaScript para ler a metodologia completa e os números desta versão.</p>`);
+    const inner=name==='sobre'?pages.pages.sobre.body():name==='apoie'?pages.pages.apoie.body():name==='correcoes'?pages.pages.correcoes.body(corrections,pages.CONTACT_EMAIL):name==='dados-abertos'?pages.pages['dados-abertos'].body(published?.manifest??null,published?.base??''):pages.layout('metodologia','Metodologia',`Metodologia`,esc(entry.description),`<p>Ative o JavaScript para ler a metodologia completa e os números desta versão.</p><p>Para senadores, os dados vêm da API de dados abertos do Senado Federal (CEAPS); lançamentos sem tipo de despesa ficam fora dos totais.</p>`);
     const noscript=`<noscript><main id="main">${inner}</main></noscript>`;
     // Same rule as the deputy pages: <route>.html, so the route answers without a redirect.
     await fs.writeFile(path.join(outDir,`${name}.html`),page(shell,{title:entry.title,description:entry.description,url:options.siteUrl+`/${name}`,type:'website',image:icon(options.siteUrl)},noscript));
@@ -202,7 +228,7 @@ export async function writeStaticPages(outDir:string,options:ResolvedOptions):Pr
   await writeApiPage(outDir,shell,pages,options);
 }
 
-export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions,shares:Map<number,{name:string;alt:string}>=new Map(),extras:{deputies:Deputy[];period:Period}[]=[]):Promise<void>{
+export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions,shares:Map<number,{name:string;alt:string}>=new Map(),extras:{deputies:Deputy[];period:Period}[]=[],senators:Senator[]=[]):Promise<void>{
   const shell=await fs.readFile(path.join(outDir,'index.html'),'utf8');
   for(const {p,period:own} of [{deputies,period},...extras].flatMap(x=>x.deputies.map(p=>({p,period:x.period})))){
     const file=path.join(outDir,'data',publicationId,'portraits',`${p.id}.jpg`),bytes=await fs.readFile(file).catch(()=>null);
@@ -212,11 +238,17 @@ export async function writePrerendered(outDir:string,publicationId:string,deputi
     await fs.mkdir(path.dirname(page),{recursive:true});
     await fs.writeFile(page,renderDeputy(shell,p,own,options.siteUrl,portrait,shares.has(p.id)?{url:`${options.siteUrl}/data/${publicationId}/share/${shares.get(p.id)!.name}.jpg`,alt:shares.get(p.id)!.alt}:null));
   }
+  for(const s of senators){
+    if(!s.name||!plain(s.name))continue;
+    const file=path.join(outDir,`${senatorPath(s.senatorId,plain(s.name)).slice(1)}.html`);
+    await fs.mkdir(path.dirname(file),{recursive:true});
+    await fs.writeFile(file,renderSenator(shell,s,options.siteUrl));
+  }
   for(const uf of Object.keys(UFS)){
     await fs.mkdir(path.join(outDir,'estado'),{recursive:true});
     await fs.writeFile(path.join(outDir,'estado',`${uf}.html`),renderState(shell,uf,deputies,period,options.siteUrl));
   }
   await fs.writeFile(path.join(outDir,'index.html'),renderHome(shell,options.siteUrl));
   await fs.writeFile(path.join(outDir,'robots.txt'),robotsTxt(options));
-  if(options.sitemap)await fs.writeFile(path.join(outDir,'sitemap.xml'),sitemapXml(options.siteUrl,[...deputies,...extras.flatMap(x=>x.deputies)]));
+  if(options.sitemap)await fs.writeFile(path.join(outDir,'sitemap.xml'),sitemapXml(options.siteUrl,[...deputies,...extras.flatMap(x=>x.deputies)],senators));
 }

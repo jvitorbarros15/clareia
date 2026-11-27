@@ -7,3 +7,13 @@ export function csv(rows:Expense[]):string {
 export {ceilingUse,tenthsOf,ufStandings} from "./ceiling-use.ts";
 export {yearFolder,yearFolderOf,partialLabel,provisionalMonths,cutoffLine} from "./year-view.ts";
 export {rankingCsv,csvWarning} from "./ranking-csv.ts";
+
+// Monthly spend for senators divides the published totalCents by the count of months whose exercise is full or partial; with zero such months, no monthly value is computed and the senator stays out of the monthly ranking.
+export function senatorExercisedMonths(months:readonly {exercise?:string}[]|null|undefined):number{
+  if(!Array.isArray(months))return 0;
+  return months.filter(m=>Boolean(m&&(m.exercise==='full'||m.exercise==='partial'))).length;
+}
+export function senatorMonthlyCents(senator:{totalCents:number;months:readonly {exercise?:string}[]}):number|null{
+  const n=senatorExercisedMonths(senator.months);
+  return n>0?senator.totalCents/n:null;
+}
