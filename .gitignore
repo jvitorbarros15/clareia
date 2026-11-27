@@ -26,3 +26,4 @@ for agents/
 docs/superpowers/plans/
 build/
 .wrangler/
+.test-tmp-*/
