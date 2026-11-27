@@ -346,18 +346,53 @@ function bootAppJs(opts:{
     if(html.includes('data-house="camara"'))houseButtons.camara=makeHouseButton('camara');
     if(html.includes('data-house="senado"'))houseButtons.senado=makeHouseButton('senado');
   };
-  const withHouseHtml=(box:MockBox)=>{
+  let ceilingSectionHtml='';
+  let ceilingRows:(MockBox&{querySelector:(sel:string)=>MockBox|null})[]=[];
+  let ceilingMoreBtn:MockBox|null=null;
+  const parseCeilingSection=(html:string)=>{
+    const m=/<section class="senator-ceiling-section" id="senator-ceiling">[\s\S]*?<\/section>/.exec(html);
+    ceilingSectionHtml=m?m[0]:'';
+    ceilingRows=[];
+    ceilingMoreBtn=null;
+    if(!ceilingSectionHtml)return;
+    const rowRe=/<li class="senator-ceiling-row"([^>]*)>([\s\S]*?)<\/li>/g;
+    let rm:RegExpExecArray|null;
+    while((rm=rowRe.exec(ceilingSectionHtml))!==null){
+      const attrs=rm[1],inner=rm[2];
+      const row=makeBox() as MockBox&{querySelector:(sel:string)=>MockBox|null};
+      const mand=/data-mandato="([^"]*)"/.exec(attrs);
+      if(mand)row.dataset={mandato:mand[1]};
+      const tab=/tabindex="([^"]*)"/.exec(attrs);
+      if(tab)row.attrs.tabindex=tab[1];
+      row.focus=()=>{if('tabindex' in row.attrs)activeEl=row;};
+      const linkMatch=/<a\b[^>]*data-senator-id="([^"]*)"[^>]*>/.exec(inner);
+      let linkEl:MockBox|null=null;
+      if(linkMatch){
+        linkEl=makeBox();
+        linkEl.dataset={senatorId:linkMatch[1]};
+        linkEl.focus=()=>{activeEl=linkEl;};
+      }
+      row.querySelector=(sel:string)=>sel==='a'?linkEl:null;
+      ceilingRows.push(row);
+    }
+    if(ceilingSectionHtml.includes('data-action="senator-ceiling-more"')){
+      ceilingMoreBtn=makeBox();
+      ceilingMoreBtn.dataset={action:'senator-ceiling-more'};
+      ceilingMoreBtn.focus=()=>{activeEl=ceilingMoreBtn;};
+    }
+  };
+  const withHouseHtml=(box:MockBox,parseCeiling=false)=>{
     let html='';
     Object.defineProperty(box,'innerHTML',{
       get(){return html;},
-      set(v:string){html=v;rebuildHouseButtons(v);},
+      set(v:string){html=v;rebuildHouseButtons(v);if(parseCeiling)parseCeilingSection(v);},
       enumerable:true,
       configurable:true,
     });
     return box;
   };
   const elements:Record<string,MockBox>={
-    '#app':withHouseHtml(makeBox()),'#universo':makeBox(),'#answer-slot':makeBox(),'#rank-slot':withHouseHtml(makeBox()),
+    '#app':withHouseHtml(makeBox()),'#universo':makeBox(),'#answer-slot':makeBox(),'#rank-slot':withHouseHtml(makeBox(),true),
     '#editorial-feature':makeBox(),'#hero-portrait':makeBox(),'#query':makeBox(),'#suggestions':makeBox(),
     '.search-wrap':makeBox(),'.editorial-search-examples':makeBox(),'.header-search':makeBox(),
     '#detail-title':makeBox(),'#detail-body':makeBox(),'#detail .close-button':makeBox(),'#toast':makeBox(),
@@ -398,9 +433,20 @@ function bootAppJs(opts:{
       }
       const houseMatch=/^\[data-house="(camara|senado)"\]$/.exec(sel);
       if(houseMatch)return houseButtons[houseMatch[1]]??null;
+      if(sel==='#senator-ceiling'){
+        if(!ceilingSectionHtml)return null;
+        return {
+          get outerHTML(){return ceilingSectionHtml;},
+          set outerHTML(v:string){activeEl=bodyEl;parseCeilingSection(v);},
+        };
+      }
+      if(sel==='[data-action=senator-ceiling-more]')return ceilingMoreBtn;
       return elements[sel]??null;
     },
-    querySelectorAll(){return [];},
+    querySelectorAll(sel:string){
+      if(sel==='#senator-ceiling .senator-ceiling-row')return ceilingRows;
+      return [];
+    },
     addEventListener(type:string,fn:(ev:unknown)=>void){const list=docListeners.get(type)??[];list.push(fn);docListeners.set(type,list);},
     dispatchEvent(){},
   };
@@ -416,6 +462,10 @@ function bootAppJs(opts:{
     const target={tagName:'BUTTON',dataset:{house},closest(sel:string){return sel.includes('[data-house]')?target:null;}};
     for(const fn of docListeners.get('click')??[])fn({target,preventDefault(){}});
   };
+  const clickAction=(action:string)=>{
+    const target={tagName:'BUTTON',dataset:{action},closest(sel:string){return sel.includes('[data-action]')?target:null;}};
+    for(const fn of docListeners.get('click')??[])fn({target,preventDefault(){}});
+  };
   return {
     clareia:win.Clareia as {
       state:{house:string;query:string;tab:string;answer:{type:string}|null};
@@ -423,7 +473,7 @@ function bootAppJs(opts:{
       openRoute:(route:{type:string;id?:string;slug?:string},opts?:{initial?:boolean})=>void;
       closeDialog:()=>Promise<void>;
     },
-    dialog,elements,location:loc,clickHouse,
+    dialog,elements,location:loc,clickHouse,clickAction,
     activeElement:()=>activeEl,
     focusHouse:(house:'camara'|'senado')=>{houseButtons[house]?.focus();},
   };
@@ -729,11 +779,13 @@ test('real/app.js renders separate per-seat % do teto only in Senado view, ranks
   assert.ok(!noHtml.includes('id="senator-ceiling"'),'no ceiling section when monthsWithCeiling is 0');
   assert.ok(!noHtml.includes('0,0%'),'never renders 0,0% for a seat with no ceiling');
 
-  // validSenatorsYear rejects floats and invalid integer fields in ceiling / unassignedCents.
+  // validSenatorsYear rejects floats, null and invalid integer fields in ceiling / unassignedCents.
   const baseSeat=VALID_SENATORS_YEAR.senators[0].ceiling[0];
   for(const badFields of [
     {unassignedCents:1.5},
     {unassignedCents:'0'},
+    {unassignedCents:null},
+    {ceiling:null},
     {ceiling:[{...baseSeat,spentCents:10.5}]},
     {ceiling:[{...baseSeat,ceilingCents:100.2}]},
     {ceiling:[{...baseSeat,monthsWithCeiling:1.5}]},
@@ -754,4 +806,73 @@ test('real/app.js renders separate per-seat % do teto only in Senado view, ranks
     await flush();
     assert.ok(badApp.elements['#rank-slot'].innerHTML.includes('senators-error'),`invalid ceiling fields rejected: ${JSON.stringify(badFields)}`);
   }
+});
+
+test('real/app.js accepts legacy clareia.senators-year.v1 rows lacking unassignedCents and ceiling and omits the ceiling section',async()=>{
+  const {unassignedCents:_u,ceiling:_c,...legacySenator}=VALID_SENATORS_YEAR.senators[0];
+  const legacyYear={...VALID_SENATORS_YEAR,senators:[legacySenator]};
+  const app=bootAppJs({
+    senators:true,
+    fetchImpl:async url=>{
+      if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+      if(url==='/senadores/2025.json')return {ok:true,json:async()=>legacyYear};
+      return {ok:false,status:404,json:async()=>({})};
+    },
+  });
+  app.clickHouse('senado');
+  await flush();
+  const html=app.elements['#rank-slot'].innerHTML;
+  assert.ok(!html.includes('senators-error'),'legacy year must not fail validation');
+  assert.ok(html.includes('Vanderlan Cardoso'),'existing spending rankings stay visible');
+  assert.ok(html.includes('id="comparison"'),'spending comparison chart stays visible');
+  assert.ok(!html.includes('id="senator-ceiling"'),'ceiling section omitted until republished');
+});
+
+test('activating senator-ceiling-more focuses the first newly revealed link, or the row itself when unnamed',async()=>{
+  const makeTwelveSeats=(eleventhNamed:boolean)=>({
+    schema:'clareia.senators-year.v1',publicationId:'pub1234567890',year:2025,collectedAt:'2026-11-26T12:00:00Z',
+    totalCents:1200000,records:12,
+    senators:Array.from({length:12},(_,i)=>({
+      senatorId:9000+i,year:2025,
+      name:i===10&&!eleventhNamed?null:`Senador ${String(i+1).padStart(2,'0')}`,
+      totalCents:100000,unassignedCents:0,records:1,
+      byType:{Aluguel:100000},byMonth:{'3':{Aluguel:100000}},suppliers:{'EMPRESA LTDA':100000},
+      months:[{month:3,exercise:'full',uf:'GO',codigoMandato:`9${String(i).padStart(2,'0')}`,participation:'Titular'}],
+      ceiling:[{
+        codigoMandato:`9${String(i).padStart(2,'0')}`,uf:'GO',senatorIds:[9000+i],
+        spentCents:(20-i)*100000,ceilingCents:5000000,monthsWithCeiling:1,computedMonths:0,note:null,
+      }],
+      review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
+    })),
+  });
+
+  for(const eleventhNamed of [false,true]){
+    const yearData=makeTwelveSeats(eleventhNamed);
+    const app=bootAppJs({
+      senators:true,
+      fetchImpl:async url=>{
+        if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+        if(url==='/senadores/2025.json')return {ok:true,json:async()=>yearData};
+        return {ok:false,status:404,json:async()=>({})};
+      },
+    });
+    app.clickHouse('senado');
+    await flush();
+    app.clickAction('senator-ceiling-more');
+    if(eleventhNamed){
+      assert.equal(app.activeElement()?.dataset.senatorId,'9010','focus moves to first newly revealed senator link');
+    }else{
+      assert.equal(app.activeElement()?.dataset.mandato,'910','focus moves to newly revealed unnamed seat row');
+      assert.equal(app.activeElement()?.attrs.tabindex,'-1','unnamed seat row is programmatically focusable');
+    }
+    app.clickAction('senator-ceiling-less');
+    assert.equal(app.activeElement()?.dataset.action,'senator-ceiling-more','focus returns to show-more button on collapse');
+  }
+});
+
+test('real/styles.css underlines senator ceiling profile links and gives them a 44px tap area',async()=>{
+  const css=await fs.readFile(path.join(import.meta.dirname,'..','real','styles.css'),'utf8');
+  assert.match(css,/\.senator-ceiling-people a[^{]*\{[^}]*text-decoration:underline/);
+  assert.doesNotMatch(css,/\.senator-ceiling-people a[^{]*\{[^}]*text-decoration:none/);
+  assert.match(css,/\.senator-ceiling-people a[^{]*\{[^}]*min-height:44px/);
 });
