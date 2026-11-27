@@ -15,10 +15,10 @@ test('empty key vote config selects the latest ten eligible votes with ties orde
   assert.deepEqual(selectKeyVotes(votes,[]).map(v=>v.id),['vote-20','vote-99','vote-19','vote-18','vote-17','vote-16','vote-15','vote-14','vote-13','vote-12']);
 });
 
-test('listed votes keep config order and skip unknown and held ids',()=>{
+test('listed votes keep config order and skip duplicate, unknown and held ids',()=>{
   const procedural={...vote,id:'procedural',organ:'CCJC',kind:'requerimento' as const};
   const held={...vote,id:'held',issues:['empty-ballot']};
-  assert.deepEqual(selectKeyVotes([vote,held,procedural],['unknown','procedural','held','vote']),[procedural,vote]);
+  assert.deepEqual(selectKeyVotes([vote,held,procedural],['unknown','procedural','held','vote','procedural','vote']),[procedural,vote]);
 });
 
 test('party vote rows join the vote month, count ballots and include eligible deputies without ballots',()=>{

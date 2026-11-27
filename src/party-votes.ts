@@ -5,7 +5,7 @@ export function selectKeyVotes(votes:readonly Vote[],keyIds:readonly string[]):V
   const eligible=votes.filter(v=>!v.issues.length);
   if(keyIds.length){
     const byId=new Map(eligible.map(v=>[v.id,v]));
-    return keyIds.flatMap(id=>byId.get(id)??[]);
+    return [...new Set(keyIds)].flatMap(id=>byId.get(id)??[]);
   }
   return eligible.filter(v=>v.organ==='PLEN'&&v.kind==='merito').sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id)).slice(0,10);
 }
