@@ -42,6 +42,22 @@ test('unknown deputy and state routes get the app shell with 404 and no-store',a
     assert.equal(r.headers.get('Cache-Control'),'no-store',path);assert.deepEqual(a.seen,[path,'/'],path);
   }
 });
+test('unknown senator routes get the app shell with 404 and no-store',async()=>{
+  for(const path of ['/senador/123','/senador/123-fulano']){
+    const a=site(),r=await worker.fetch(new Request(`https://clareia.example${path}`),{ASSETS:a});
+    assert.equal(r.status,404,path);assert.equal(await r.text(),'<html>home',path);
+    assert.equal(r.headers.get('Cache-Control'),'no-store',path);assert.deepEqual(a.seen,[path,'/'],path);
+  }
+});
+test('HEAD on an unknown senator route answers 404 with no body and no-store',async()=>{
+  const a=site(),r=await worker.fetch(new Request('https://clareia.example/senador/123-fulano',{method:'HEAD'}),{ASSETS:a});
+  assert.equal(r.status,404);assert.equal(r.headers.get('Cache-Control'),'no-store');assert.equal(await r.text(),'');
+  assert.deepEqual(a.seen,['/senador/123-fulano','/']);
+});
+test('a malformed senator route gets the branded 404',async()=>{
+  const a=site(),r=await worker.fetch(new Request('https://clareia.example/senador/a/b'),{ASSETS:a});
+  assert.equal(r.status,404);assert.equal(await r.text(),'<html>404 page');assert.deepEqual(a.seen,['/senador/a/b','/404']);
+});
 test('HEAD on an unknown deputy route answers 404 with no body and no-store',async()=>{
   const r=await worker.fetch(new Request('https://clareia.example/deputado/999-x',{method:'HEAD'}),{ASSETS:site()});
   assert.equal(r.status,404);assert.equal(r.headers.get('Cache-Control'),'no-store');assert.equal(await r.text(),'');

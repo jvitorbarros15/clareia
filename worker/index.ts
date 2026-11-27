@@ -1,6 +1,6 @@
 type Assets={fetch(request:Request):Promise<Response>};
 
-const APP_ROUTE=/^\/(deputado\/[^/.]+|estado\/[A-Za-z]{2})\/?$/;
+const APP_ROUTE=/^\/(deputado\/[^/.]+|senador\/[^/.]+|estado\/[A-Za-z]{2})\/?$/;
 
 // Content-addressed files are immutable, but a missing one must never be cached under that rule.
 export async function serveData(request:Request,assets:Assets):Promise<Response>{
