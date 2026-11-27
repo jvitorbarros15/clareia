@@ -267,10 +267,11 @@ test('the fixed pages are the same as the menu in real/pages.js',async()=>{
   const nav=(await loadStaticPages()).layout('','','','','');
   assert.deepEqual([...nav.matchAll(/<a href="\/([^"]+)"/g)].map(m=>m[1]).sort(),FIXED_PAGES.map(([route])=>route).sort());
 });
-test('the corrections page shows the placeholder while no contact address is set, and escapes contact and entries',async()=>{
+test('the corrections page shows the contact address, the placeholder without one, and escapes contact and entries',async()=>{
   const pages=await loadStaticPages();
-  assert.equal(pages.CONTACT_EMAIL,'');
-  const empty=pages.pages.correcoes.body([],pages.CONTACT_EMAIL);
+  assert.equal(pages.CONTACT_EMAIL,'contato@clareia.org');
+  assert.ok(pages.pages.correcoes.body([],pages.CONTACT_EMAIL).includes('<a href="mailto:contato@clareia.org">contato@clareia.org</a>'));
+  const empty=pages.pages.correcoes.body([],'');
   assert.ok(empty.includes('Canal de correções em configuração.'));
   assert.ok(!empty.includes('mailto:'));
   assert.ok(empty.includes('Nenhuma correção registrada até agora.'));
