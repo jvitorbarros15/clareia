@@ -221,3 +221,14 @@ test('ceilingUse excludes configured no-ceiling months even when their UF or exe
     assert.equal(u.tenths,tenthsOf(300000,c2026.byUf.SP[0]+c2026.byUf.SP[2]));
   }
 });
+test('ceilingUse excludes a disputed zero-record no-ceiling month instead of leaving the figure unconfirmed',()=>{
+  const c2026=mixedCeiling2026();
+  const u=ceilingUse([month(1,100000),month(2,0,{records:0,exercise:'outside',exerciseReview:true}),month(3,200000)],c2026,true);
+  assert.equal(u.status,'ok');if(u.status!=='ok')return;
+  assert.deepEqual(u.counted.map(c=>c.month),[1,3]);
+  assert.deepEqual(u.excluded,[{month:2,reason:'noCeiling'}]);
+  assert.deepEqual(u.outside,[]);
+  assert.equal(u.expenseCents,300000);
+  assert.equal(u.ceilingCents,c2026.byUf.SP[0]+c2026.byUf.SP[2]);
+  assert.equal(u.tenths,tenthsOf(300000,c2026.byUf.SP[0]+c2026.byUf.SP[2]));
+});

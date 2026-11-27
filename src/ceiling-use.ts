@@ -12,12 +12,12 @@ export function ceilingUse(months:UseMonth[],ceiling:UseCeiling|null,coverageApp
   const counted:CountedMonth[]=[],excluded:Excluded[]=[],outside:number[]=[],missing:number[]=[];
   const noCeiling=new Set(ceiling?.noCeilingMonths??[]);
   for(const m of months){
+    if(coverageApproved&&noCeiling.has(m.month)){excluded.push({month:m.month,reason:'noCeiling'});continue;}
     // A month the official sources dispute is not out of office and not a known ceiling: it leaves the figure unconfirmed, held or not.
     if(coverageApproved&&m.exercise==='outside'&&m.records===0&&m.exerciseReview){missing.push(m.month);continue;}
     if(m.held){excluded.push({month:m.month,reason:'held'});continue;}
     if(coverageApproved&&m.exercise==='outside'&&m.records===0){outside.push(m.month);continue;}
     if(coverageApproved&&m.exercise==='partial'){excluded.push({month:m.month,reason:'partial'});continue;}
-    if(coverageApproved&&noCeiling.has(m.month)){excluded.push({month:m.month,reason:'noCeiling'});continue;}
     // Only a month confirmed as fully in office has a known ceiling; anything else leaves the figure unconfirmed.
     if(coverageApproved&&m.exercise!=='full'){missing.push(m.month);continue;}
     const uf=coverageApproved&&m.ufStatus==='single'?m.uf:null;
