@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {canonical,hash,snapshotId} from '../src/model.ts';
 import type {Expense} from '../src/model.ts';
-import {CEILING_ACT,CEILING_EFFECTIVE_FROM,CEILING_SOURCES,PORTAL_2026_ACT,ceilingReport,ceilingSha,deriveCeiling} from '../src/cota-ceiling.ts';
+import {CEILING_ACT,CEILING_EFFECTIVE_FROM,CEILING_SOURCES,PORTAL_2026_ACT,ceilingReport,deriveCeiling} from '../src/cota-ceiling.ts';
 import type {CeilingReport} from '../src/cota-ceiling.ts';
 import {PORTAL_2026_CAPTURED_AT,PORTAL_2026_NOTE,PORTAL_2026_URL} from '../src/cota-ceiling-2026-portal.ts';
 import {auditCeiling} from '../src/cota-ceiling-audit.ts';
@@ -18,7 +18,7 @@ import type {CrosscheckReport} from '../src/people-legacy.ts';
 import {openDB} from '../src/store.ts';
 import {publishDomain,recordDomainAudit} from '../src/publications.ts';
 import {buildSite} from '../src/build-site.ts';
-import {ceilingFiles,mixedCeiling2026,reportFor,sourcesOf} from './fixtures/cota-ceiling.ts';
+import {ANNEX,ceilingFiles,legacyCeilingReport,legacyCeilingSha,mixedCeiling2026,reportFor,sourcesOf} from './fixtures/cota-ceiling.ts';
 
 const made=()=>{const files=ceilingFiles(),report=ceilingReport(2025,deriveCeiling(2025,files),sourcesOf(files,hash),'2026-11-11T12:00:00Z');return {report,audit:auditCeiling(report,s=>files[s.key])};};
 const person={id:1,name:'Pessoa 1',photo:null,sourceUrl:'https://x',profileFetchedAt:'2025-03-01T00:00:00Z'};
@@ -144,10 +144,10 @@ test('a review-outside month goes to missing, never outside or excluded, while a
 });
 
 test('2024 and 2025 site ceilings keep the exact current shape with no new keys',()=>{
-  for(const year of [2024,2025]){
-    const {report,audit}=reportFor(year),site=buildSiteCeiling(report,audit,year);
-    const expectedByUf=Object.fromEntries([...new Set(report.rows.map(r=>r.uf))].sort().map(uf=>[uf,new Array(12).fill(report.rows.find(r=>r.uf===uf)!.ceilingCents)]));
-    const expected={schema:'clareia.site-ceiling.v1' as const,year,unit:'monthly-ceiling-per-uf-cents' as const,act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,actUrl:CEILING_SOURCES.original,annexUrl:CEILING_SOURCES.consolidated,reportSha256:ceilingSha(report),byUf:expectedByUf};
+  for(const year of [2024,2025] as const){
+    const {report,audit}=reportFor(year),site=buildSiteCeiling(report,audit,year),legacy=legacyCeilingReport(year);
+    const expectedByUf=Object.fromEntries(Object.entries(ANNEX).sort(([a],[b])=>a<b?-1:1).map(([uf,v])=>[uf,new Array(12).fill(Number(v.replace(/\./g,'').replace(',','')))]));
+    const expected={schema:'clareia.site-ceiling.v1' as const,year,unit:'monthly-ceiling-per-uf-cents' as const,act:legacy.rows[0].act,effectiveFrom:legacy.rows[0].effectiveFrom,actUrl:legacy.rows[0].actUrl,annexUrl:legacy.rows[0].annexUrl,reportSha256:legacyCeilingSha(year),byUf:expectedByUf};
     assert.deepEqual(site,expected);
     assert.deepEqual(Object.keys(site),Object.keys(expected));
     assert.equal('noCeilingMonths' in site,false);
@@ -206,4 +206,15 @@ test('ceilingUse with mixed 2026 fixture leaves February out on both sides and s
   assert.equal(unconfirmed.status,'unconfirmed');if(unconfirmed.status!=='unconfirmed')return;
   assert.deepEqual(unconfirmed.missing,[3]);
   assert.deepEqual(unconfirmed.excluded,[{month:2,reason:'noCeiling'}]);
+});
+test('ceilingUse excludes configured no-ceiling months even when their UF is in conflict',()=>{
+  const c2026=mixedCeiling2026();
+  const u=ceilingUse([month(1,100000),month(2,9999999,{uf:null,ufStatus:'conflict'}),month(3,200000)],c2026,true);
+  assert.equal(u.status,'ok');if(u.status!=='ok')return;
+  assert.deepEqual(u.counted.map(c=>c.month),[1,3]);
+  assert.deepEqual(u.excluded,[{month:2,reason:'noCeiling'}]);
+  assert.equal(u.expenseCents,300000);
+  assert.equal(u.ceilingCents,c2026.byUf.SP[0]+c2026.byUf.SP[2]);
+  assert.equal(u.tenths,tenthsOf(300000,c2026.byUf.SP[0]+c2026.byUf.SP[2]));
+  assert.equal(ceilingUse([month(1,100000),month(2,9999999,{exercise:'conflict',uf:null,ufStatus:'conflict'}),month(3,200000)],c2026,true).status,'unconfirmed');
 });

@@ -1,5 +1,5 @@
 import {strToU8} from 'fflate';
-import {hash} from '../../src/model.ts';
+import {canonical,hash} from '../../src/model.ts';
 import {CEILING_SOURCES,ceilingReport,deriveCeiling} from '../../src/cota-ceiling.ts';
 import type {CeilingFiles} from '../../src/cota-ceiling.ts';
 import {auditCeiling} from '../../src/cota-ceiling-audit.ts';
@@ -22,3 +22,21 @@ export function mixedCeiling2026(files=ceilingFiles()){
   const {report,audit}=reportFor(2026,files);
   return buildSiteCeiling(report,audit,2026);
 }
+const LEGACY_SOURCES={
+  consolidated:'https://www2.camara.leg.br/legin/int/atomes/2009/atodamesa-43-21-maio-2009-588364-normaatualizada-cd-mesa.html',
+  original:'https://www2.camara.leg.br/legin/int/atomes/2023/atodamesa-270-19-janeiro-2023-793708-publicacaooriginal-166895-cd-mesa.html',
+  recomposition:'https://www2.camara.leg.br/legin/int/atomes/2026/atodamesa-244-20-fevereiro-2026-798720-publicacaooriginal-178157-cd-mesa.html'
+} as const;
+const LEGACY_ACT='Ato da Mesa nº 270/2023, Anexo I (Anexo Único do Ato da Mesa nº 43/2009)';
+const LEGACY_EFFECTIVE_FROM='2023-02-01';
+const LEGACY_NOTES=['Limite mensal base do Anexo Único; não inclui adicionais de cargo, trechos aéreos do art. 1º §3º, Mercosul nem a proporcionalidade do art. 11.'];
+export function legacyCeilingReport(year:2024|2025){
+  const files=ceilingFiles();
+  const sources=(['consolidated','original','recomposition'] as const).map(key=>({key,url:LEGACY_SOURCES[key],sha256:hash(files[key]),bytes:files[key].length,fetchedAt:'2026-11-11T12:00:00Z'}));
+  const rows=Object.entries(ANNEX).sort((a,b)=>a[0]<b[0]?-1:1).flatMap(([uf,v])=>{
+    const ceilingCents=Number(v.replace(/\./g,'').replace(',',''));
+    return Array.from({length:12},(_,i)=>({uf,year,month:i+1,ceilingCents,act:LEGACY_ACT,effectiveFrom:LEGACY_EFFECTIVE_FROM,annexUrl:LEGACY_SOURCES.consolidated,actUrl:LEGACY_SOURCES.original}));
+  });
+  return {schema:'clareia.cota-ceiling.v1' as const,year,unit:'monthly-ceiling-per-uf-cents' as const,generatedAt:'2026-11-11T12:00:00Z',sources,rows,metrics:{ufs:27,rows:324},publicationEligible:false as const,notes:[...LEGACY_NOTES]};
+}
+export const legacyCeilingSha=(year:2024|2025)=>hash(canonical(legacyCeilingReport(year)));

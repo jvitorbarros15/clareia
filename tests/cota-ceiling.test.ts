@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {canonical,hash} from '../src/model.ts';
+import {hash} from '../src/model.ts';
 import {CEILING_ACT,CEILING_EFFECTIVE_FROM,CEILING_SOURCES,CEILING_YEARS,PORTAL_2026_ACT,ceilingReport,ceilingSha,deriveCeiling,moneyCents,parseAnnex} from '../src/cota-ceiling.ts';
 import {PORTAL_2026_CAPTURED_AT,PORTAL_2026_CENTS,PORTAL_2026_URL} from '../src/cota-ceiling-2026-portal.ts';
 import {auditCeiling} from '../src/cota-ceiling-audit.ts';
-import {ANNEX,ceilingFiles,consolidatedHtml,originalHtml,recompositionHtml,sourcesOf} from './fixtures/cota-ceiling.ts';
+import {ANNEX,ceilingFiles,consolidatedHtml,legacyCeilingReport,legacyCeilingSha,originalHtml,recompositionHtml,sourcesOf} from './fixtures/cota-ceiling.ts';
 
 const build=(files=ceilingFiles(),year=2025)=>{const report=ceilingReport(year,deriveCeiling(year,files),sourcesOf(files,hash),'2026-11-11T12:00:00Z');return {report,files,audit:()=>auditCeiling(report,s=>files[s.key])};};
 test('annex becomes one row per UF and month with the act and source URL, in integer cents',()=>{
@@ -74,11 +74,11 @@ test('2026 report has 297 rows: January from 2023 annex, no February, March to D
   assert.equal(audit().status,'passed');
 });
 test('2024 and 2025 reports and ceilingSha stay unchanged and still require 27x12 annex rows',()=>{
-  for(const year of [2024,2025]){
-    const {report,files,audit}=build(ceilingFiles(),year);
-    assert.deepEqual(Object.keys(report),['schema','year','unit','generatedAt','sources','rows','metrics','publicationEligible','notes']);
-    assert.equal(report.rows.length,324);
-    assert.equal(ceilingSha(report),hash(canonical(report)));
+  for(const year of [2024,2025] as const){
+    const {report,files,audit}=build(ceilingFiles(),year),expected=legacyCeilingReport(year);
+    assert.deepEqual(report,expected);
+    assert.deepEqual(Object.keys(report),Object.keys(expected));
+    assert.equal(ceilingSha(report),legacyCeilingSha(year));
     assert.equal(audit().status,'passed');
     const noFeb=JSON.parse(JSON.stringify(report));
     noFeb.rows=noFeb.rows.filter((r:{month:number})=>r.month!==2);

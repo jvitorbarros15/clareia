@@ -19,8 +19,8 @@ export function ceilingUse(months:UseMonth[],ceiling:UseCeiling|null,coverageApp
     if(coverageApproved&&m.exercise==='partial'){excluded.push({month:m.month,reason:'partial'});continue;}
     // Only a month confirmed as fully in office has a known ceiling; anything else leaves the figure unconfirmed.
     if(coverageApproved&&m.exercise!=='full'){missing.push(m.month);continue;}
+    if(coverageApproved&&noCeiling.has(m.month)){excluded.push({month:m.month,reason:'noCeiling'});continue;}
     const uf=coverageApproved&&m.ufStatus==='single'?m.uf:null;
-    if(uf&&ceiling?.byUf[uf]&&noCeiling.has(m.month)){excluded.push({month:m.month,reason:'noCeiling'});continue;}
     const cents=uf&&ceiling?.byUf[uf]?.[m.month-1];
     if(!uf||!cents){missing.push(m.month);continue;}
     counted.push({month:m.month,uf,expenseCents:m.cents,ceilingCents:cents,records:m.records});
