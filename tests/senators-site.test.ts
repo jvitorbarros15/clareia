@@ -106,6 +106,8 @@ test('real/pages.js has the Senado methodology section and prerendered metodolog
   assert.match(senado,/Senado Federal \(CEAPS\)/);
   assert.match(senado,/sem tipo de despesa.*fora dos totais/i);
   assert.match(senado,/2026.*parcial.*meses.*fechados/i);
+  assert.ok(!senado.includes('Não exibimos porcentagem do teto para senadores.'));
+  assert.ok(senado.includes('O % do teto dos senadores é calculado por assento: titular e suplentes somam os gastos contra um único teto mensal da UF, e só entram os meses com teto conhecido (de março de 2023 a dezembro de 2025). Os meses de fevereiro de 2024 a fevereiro de 2025 usam teto calculado pela Clareia a partir do ATC 2/2023. Janeiro e fevereiro de 2023 e todo o ano de 2026 ficam sem %.'));
   assert.doesNotMatch(senado,/reembols/i);
 
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-metodologia-senado-'));
@@ -150,19 +152,21 @@ test('buildSite writes senadores/, manifest.senators, senator pages and sitemap 
 
     const senRows:SenatorYearRecord[]=[
       {
-        senatorId:5899,year:2025,name:'Vanderlan Cardoso',totalCents:375000,records:1,
+        senatorId:5899,year:2025,name:'Vanderlan Cardoso',totalCents:375000,unassignedCents:0,records:1,
         byType:{'Aluguel de imóveis':375000},
         byMonth:{'1':{'Aluguel de imóveis':375000}},
         suppliers:{'Fornecedor pessoa física':375000},
         months:[{month:1,exercise:'full',uf:'GO',codigoMandato:'538',participation:'Titular'}],
+        ceiling:[{codigoMandato:'538',uf:'GO',senatorIds:[5899],spentCents:375000,ceilingCents:2364638,monthsWithCeiling:1,computedMonths:1,note:'teto calculado pela Clareia a partir do ATC 2/2023'}],
         review:{'empty-type':2,'kept-company':0,withheld:0,'possible-duplicate':0},
       },
       {
-        senatorId:9999,year:2025,name:null,totalCents:10000,records:1,
+        senatorId:9999,year:2025,name:null,totalCents:10000,unassignedCents:10000,records:1,
         byType:{'Passagens':10000},
         byMonth:{'1':{'Passagens':10000}},
         suppliers:{'EMPRESA AEREA LTDA':10000},
         months:[{month:1,exercise:'outside',uf:null,codigoMandato:null,participation:null}],
+        ceiling:[],
         review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
       },
     ];
@@ -343,18 +347,53 @@ function bootAppJs(opts:{
     if(html.includes('data-house="camara"'))houseButtons.camara=makeHouseButton('camara');
     if(html.includes('data-house="senado"'))houseButtons.senado=makeHouseButton('senado');
   };
-  const withHouseHtml=(box:MockBox)=>{
+  let ceilingSectionHtml='';
+  let ceilingRows:(MockBox&{querySelector:(sel:string)=>MockBox|null})[]=[];
+  let ceilingMoreBtn:MockBox|null=null;
+  const parseCeilingSection=(html:string)=>{
+    const m=/<section class="senator-ceiling-section" id="senator-ceiling">[\s\S]*?<\/section>/.exec(html);
+    ceilingSectionHtml=m?m[0]:'';
+    ceilingRows=[];
+    ceilingMoreBtn=null;
+    if(!ceilingSectionHtml)return;
+    const rowRe=/<li class="senator-ceiling-row"([^>]*)>([\s\S]*?)<\/li>/g;
+    let rm:RegExpExecArray|null;
+    while((rm=rowRe.exec(ceilingSectionHtml))!==null){
+      const attrs=rm[1],inner=rm[2];
+      const row=makeBox() as MockBox&{querySelector:(sel:string)=>MockBox|null};
+      const mand=/data-mandato="([^"]*)"/.exec(attrs);
+      if(mand)row.dataset={mandato:mand[1]};
+      const tab=/tabindex="([^"]*)"/.exec(attrs);
+      if(tab)row.attrs.tabindex=tab[1];
+      row.focus=()=>{if('tabindex' in row.attrs)activeEl=row;};
+      const linkMatch=/<a\b[^>]*data-senator-id="([^"]*)"[^>]*>/.exec(inner);
+      let linkEl:MockBox|null=null;
+      if(linkMatch){
+        linkEl=makeBox();
+        linkEl.dataset={senatorId:linkMatch[1]};
+        linkEl.focus=()=>{activeEl=linkEl;};
+      }
+      row.querySelector=(sel:string)=>sel==='a'?linkEl:null;
+      ceilingRows.push(row);
+    }
+    if(ceilingSectionHtml.includes('data-action="senator-ceiling-more"')){
+      ceilingMoreBtn=makeBox();
+      ceilingMoreBtn.dataset={action:'senator-ceiling-more'};
+      ceilingMoreBtn.focus=()=>{activeEl=ceilingMoreBtn;};
+    }
+  };
+  const withHouseHtml=(box:MockBox,parseCeiling=false)=>{
     let html='';
     Object.defineProperty(box,'innerHTML',{
       get(){return html;},
-      set(v:string){html=v;rebuildHouseButtons(v);},
+      set(v:string){html=v;rebuildHouseButtons(v);if(parseCeiling)parseCeilingSection(v);},
       enumerable:true,
       configurable:true,
     });
     return box;
   };
   const elements:Record<string,MockBox>={
-    '#app':withHouseHtml(makeBox()),'#universo':makeBox(),'#answer-slot':makeBox(),'#rank-slot':withHouseHtml(makeBox()),
+    '#app':withHouseHtml(makeBox()),'#universo':makeBox(),'#answer-slot':makeBox(),'#rank-slot':withHouseHtml(makeBox(),true),
     '#editorial-feature':makeBox(),'#hero-portrait':makeBox(),'#query':makeBox(),'#suggestions':makeBox(),
     '.search-wrap':makeBox(),'.editorial-search-examples':makeBox(),'.header-search':makeBox(),
     '#detail-title':makeBox(),'#detail-body':makeBox(),'#detail .close-button':makeBox(),'#toast':makeBox(),
@@ -395,9 +434,20 @@ function bootAppJs(opts:{
       }
       const houseMatch=/^\[data-house="(camara|senado)"\]$/.exec(sel);
       if(houseMatch)return houseButtons[houseMatch[1]]??null;
+      if(sel==='#senator-ceiling'){
+        if(!ceilingSectionHtml)return null;
+        return {
+          get outerHTML(){return ceilingSectionHtml;},
+          set outerHTML(v:string){activeEl=bodyEl;parseCeilingSection(v);},
+        };
+      }
+      if(sel==='[data-action=senator-ceiling-more]')return ceilingMoreBtn;
       return elements[sel]??null;
     },
-    querySelectorAll(){return [];},
+    querySelectorAll(sel:string){
+      if(sel==='#senator-ceiling .senator-ceiling-row')return ceilingRows;
+      return [];
+    },
     addEventListener(type:string,fn:(ev:unknown)=>void){const list=docListeners.get(type)??[];list.push(fn);docListeners.set(type,list);},
     dispatchEvent(){},
   };
@@ -414,6 +464,10 @@ function bootAppJs(opts:{
     for(const fn of docListeners.get('click')??[])fn({target,preventDefault(){}});
   };
   const fireDoc=(type:string,ev:unknown)=>{for(const fn of docListeners.get(type)??[])fn(ev);};
+  const clickAction=(action:string)=>{
+    const target={tagName:'BUTTON',dataset:{action},closest(sel:string){return sel.includes('[data-action]')?target:null;}};
+    for(const fn of docListeners.get('click')??[])fn({target,preventDefault(){}});
+  };
   return {
     clareia:win.Clareia as {
       state:{house:string;query:string;tab:string;answer:{type:string}|null};
@@ -421,7 +475,7 @@ function bootAppJs(opts:{
       openRoute:(route:{type:string;id?:string;slug?:string},opts?:{initial?:boolean})=>void;
       closeDialog:()=>Promise<void>;
     },
-    dialog,elements,location:loc,clickHouse,fireDoc,
+    dialog,elements,location:loc,clickHouse,fireDoc,clickAction,
     activeElement:()=>activeEl,
     focusHouse:(house:'camara'|'senado')=>{houseButtons[house]?.focus();},
   };
@@ -432,10 +486,11 @@ const VALID_SENATORS_YEAR={
   schema:'clareia.senators-year.v1',publicationId:'pub1234567890',year:2025,collectedAt:'2026-11-26T12:00:00Z',
   totalCents:375000,records:1,
   senators:[{
-    senatorId:5899,year:2025,name:'Vanderlan Cardoso',totalCents:375000,records:1,
+    senatorId:5899,year:2025,name:'Vanderlan Cardoso',totalCents:375000,unassignedCents:0,records:1,
     byType:{'Aluguel de imóveis':375000},byMonth:{'1':{'Aluguel de imóveis':375000}},
     suppliers:{'Fornecedor pessoa física':375000},
     months:[{month:1,exercise:'full',uf:'GO',codigoMandato:'538',participation:'Titular'}],
+    ceiling:[{codigoMandato:'538',uf:'GO',senatorIds:[5899],spentCents:375000,ceilingCents:2364638,monthsWithCeiling:1,computedMonths:1,note:'teto calculado pela Clareia a partir do ATC 2/2023'}],
     review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
   }],
 };
@@ -679,7 +734,7 @@ test('buildSite copies valid senator JPEGs, skips missing/corrupt files, and wir
     await recordDomainAudit(db,dep.id,'passed',{checkedAt:'2025-03-02T00:00:00Z'});
     const senRows:SenatorYearRecord[]=[
       {
-        senatorId:5899,year:2025,name:'Vanderlan Cardoso',totalCents:375000,records:1,
+        senatorId:5899,year:2025,name:'Vanderlan Cardoso',totalCents:375000,unassignedCents:0,records:1,ceiling:[],
         byType:{'Aluguel de imóveis':375000},byMonth:{'1':{'Aluguel de imóveis':375000}},
         suppliers:{'Fornecedor pessoa física':375000},
         months:[
@@ -689,7 +744,7 @@ test('buildSite copies valid senator JPEGs, skips missing/corrupt files, and wir
         review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
       },
       {
-        senatorId:5917,year:2025,name:'Fernando Dueire',totalCents:10000,records:1,
+        senatorId:5917,year:2025,name:'Fernando Dueire',totalCents:10000,unassignedCents:0,records:1,ceiling:[],
         byType:{'Passagens':10000},byMonth:{'1':{'Passagens':10000}},
         suppliers:{'EMPRESA AEREA LTDA':10000},
         months:[{month:1,exercise:'full',uf:'PE',party:'MDB',codigoMandato:'526',participation:'1º Suplente'}],
@@ -820,4 +875,189 @@ test('real/app.js validates senator photo and party, renders photos/placeholder/
   const deputyWrap={dataset:{},replaceWith(el:unknown){deputyReplaced.push(el);}};
   app.fireDoc('error',{target:{tagName:'IMG',closest:(sel:string)=>sel==='.photo'?deputyWrap:null}});
   assert.equal(deputyReplaced.length,0,'deputy image error does not swap to initials');
+});
+
+test('real/app.js renders separate per-seat % do teto only in Senado view, ranks seats, deduplicates titular+suplente, hides 2026 and validates integer ceiling fields',async()=>{
+  assert.ok(!APP_JS.includes('Não exibimos porcentagem do teto para senadores.'));
+  assert.ok(APP_JS.includes('O % do teto é calculado por assento (titular e suplentes somados) e só nos meses com teto conhecido.'));
+
+  const sharedSeat={
+    codigoMandato:'701',uf:'SE',senatorIds:[100,200],
+    spentCents:5000000,ceilingCents:10000000,monthsWithCeiling:2,computedMonths:2,
+    note:'teto calculado pela Clareia a partir do ATC 2/2023',
+  };
+  const higherSeat={
+    codigoMandato:'702',uf:'AM',senatorIds:[300],
+    spentCents:4000000,ceilingCents:5000000,monthsWithCeiling:1,computedMonths:0,
+    note:null,
+  };
+  const year2025={
+    schema:'clareia.senators-year.v1',publicationId:'pub1234567890',year:2025,collectedAt:'2026-11-26T12:00:00Z',
+    totalCents:9000000,records:3,
+    senators:[
+      {
+        senatorId:100,year:2025,name:'Titular Sergipe',totalCents:3000000,unassignedCents:0,records:1,
+        byType:{Aluguel:3000000},byMonth:{'1':{Aluguel:3000000}},suppliers:{'EMPRESA A LTDA':3000000},
+        months:[{month:1,exercise:'full',uf:'SE',codigoMandato:'701',participation:'Titular'}],
+        ceiling:[sharedSeat],review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
+      },
+      {
+        senatorId:200,year:2025,name:'Suplente Sergipe',totalCents:2000000,unassignedCents:0,records:1,
+        byType:{Aluguel:2000000},byMonth:{'2':{Aluguel:2000000}},suppliers:{'EMPRESA B LTDA':2000000},
+        months:[{month:2,exercise:'full',uf:'SE',codigoMandato:'701',participation:'1º Suplente'}],
+        ceiling:[sharedSeat],review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
+      },
+      {
+        senatorId:300,year:2025,name:'Senadora Amazonas',totalCents:4000000,unassignedCents:0,records:1,
+        byType:{Aluguel:4000000},byMonth:{'3':{Aluguel:4000000}},suppliers:{'EMPRESA C LTDA':4000000},
+        months:[{month:3,exercise:'full',uf:'AM',codigoMandato:'702',participation:'Titular'}],
+        ceiling:[higherSeat],review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
+      },
+    ],
+  };
+
+  const app=bootAppJs({
+    senators:true,
+    suppliersLoaded:()=>false,
+    fetchImpl:async url=>{
+      if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+      if(url==='/senadores/2025.json')return {ok:true,json:async()=>year2025};
+      return {ok:false,status:404,json:async()=>({})};
+    },
+  });
+  assert.ok(!app.elements['#rank-slot'].innerHTML.includes('id="senator-ceiling"'),'no senator ceiling section on Câmara');
+
+  app.clickHouse('senado');
+  await flush();
+  const html=app.elements['#rank-slot'].innerHTML;
+  assert.ok(html.includes('id="senator-ceiling"'),'senator ceiling section rendered');
+  assert.equal((html.match(/class="senator-ceiling-row"/g)??[]).length,2,'one entry per seat (titular + suplente deduplicated)');
+  assert.ok(html.indexOf('data-mandato="702"')<html.indexOf('data-mandato="701"'),'higher % seat ranked first');
+  assert.ok(html.includes('80,0%'),'80,0% for seat 702');
+  assert.ok(html.includes('50,0%'),'50,0% for shared seat 701');
+  assert.ok(html.includes('Titular Sergipe')&&html.includes('Suplente Sergipe'),'lists both people on shared seat');
+  assert.ok(html.includes('SE · 2 meses com teto'),'lists UF and months covered');
+  assert.ok(html.includes('AM · 1 mês com teto'),'lists UF and singular month covered');
+  assert.equal((html.match(/teto calculado pela Clareia a partir do ATC 2\/2023/g)??[]).length,1,'note shown only on seat with computedMonths > 0');
+
+  // A year with monthsWithCeiling === 0 (like 2026) shows no % and no ranking entry.
+  const yearNoCeiling={
+    ...VALID_SENATORS_YEAR,
+    senators:[{
+      ...VALID_SENATORS_YEAR.senators[0],
+      ceiling:[{codigoMandato:'538',uf:'GO',senatorIds:[5899],spentCents:0,ceilingCents:0,monthsWithCeiling:0,computedMonths:0,note:null}],
+    }],
+  };
+  const appNoCeiling=bootAppJs({
+    senators:true,
+    fetchImpl:async url=>{
+      if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+      if(url==='/senadores/2025.json')return {ok:true,json:async()=>yearNoCeiling};
+      return {ok:false,status:404,json:async()=>({})};
+    },
+  });
+  appNoCeiling.clickHouse('senado');
+  await flush();
+  const noHtml=appNoCeiling.elements['#rank-slot'].innerHTML;
+  assert.ok(!noHtml.includes('id="senator-ceiling"'),'no ceiling section when monthsWithCeiling is 0');
+  assert.ok(!noHtml.includes('0,0%'),'never renders 0,0% for a seat with no ceiling');
+
+  // validSenatorsYear rejects floats, null and invalid integer fields in ceiling / unassignedCents.
+  const baseSeat=VALID_SENATORS_YEAR.senators[0].ceiling[0];
+  for(const badFields of [
+    {unassignedCents:1.5},
+    {unassignedCents:'0'},
+    {unassignedCents:null},
+    {ceiling:null},
+    {ceiling:[{...baseSeat,spentCents:10.5}]},
+    {ceiling:[{...baseSeat,ceilingCents:100.2}]},
+    {ceiling:[{...baseSeat,monthsWithCeiling:1.5}]},
+    {ceiling:[{...baseSeat,computedMonths:2}]},
+    {ceiling:[{...baseSeat,monthsWithCeiling:1,ceilingCents:0}]},
+    {ceiling:[{...baseSeat,senatorIds:[5899.5]}]},
+  ]){
+    const badYear={...VALID_SENATORS_YEAR,senators:[{...VALID_SENATORS_YEAR.senators[0],...badFields}]};
+    const badApp=bootAppJs({
+      senators:true,
+      fetchImpl:async url=>{
+        if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+        if(url==='/senadores/2025.json')return {ok:true,json:async()=>badYear};
+        return {ok:false,status:404,json:async()=>({})};
+      },
+    });
+    badApp.clickHouse('senado');
+    await flush();
+    assert.ok(badApp.elements['#rank-slot'].innerHTML.includes('senators-error'),`invalid ceiling fields rejected: ${JSON.stringify(badFields)}`);
+  }
+});
+
+test('real/app.js rejects clareia.senators-year.v1 rows lacking unassignedCents or ceiling instead of silently omitting the ranking',async()=>{
+  const {unassignedCents:_u,...missingUnassigned}=VALID_SENATORS_YEAR.senators[0];
+  const {ceiling:_c,...missingCeiling}=VALID_SENATORS_YEAR.senators[0];
+  const {unassignedCents:_u2,ceiling:_c2,...missingBoth}=VALID_SENATORS_YEAR.senators[0];
+  for(const senator of [missingUnassigned,missingCeiling,missingBoth]){
+    const legacyYear={...VALID_SENATORS_YEAR,senators:[senator]};
+    const app=bootAppJs({
+      senators:true,
+      fetchImpl:async url=>{
+        if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+        if(url==='/senadores/2025.json')return {ok:true,json:async()=>legacyYear};
+        return {ok:false,status:404,json:async()=>({})};
+      },
+    });
+    app.clickHouse('senado');
+    await flush();
+    const html=app.elements['#rank-slot'].innerHTML;
+    assert.ok(html.includes('senators-error'),'rows lacking ceiling/unassignedCents must fail validation');
+    assert.ok(!html.includes('O % do teto é calculado por assento'),'must not show ceiling copy without ranking');
+  }
+});
+
+test('activating senator-ceiling-more focuses the first newly revealed link, or the row itself when unnamed',async()=>{
+  const makeTwelveSeats=(eleventhNamed:boolean)=>({
+    schema:'clareia.senators-year.v1',publicationId:'pub1234567890',year:2025,collectedAt:'2026-11-26T12:00:00Z',
+    totalCents:1200000,records:12,
+    senators:Array.from({length:12},(_,i)=>({
+      senatorId:9000+i,year:2025,
+      name:i===10&&!eleventhNamed?null:`Senador ${String(i+1).padStart(2,'0')}`,
+      totalCents:100000,unassignedCents:0,records:1,
+      byType:{Aluguel:100000},byMonth:{'3':{Aluguel:100000}},suppliers:{'EMPRESA LTDA':100000},
+      months:[{month:3,exercise:'full',uf:'GO',codigoMandato:`9${String(i).padStart(2,'0')}`,participation:'Titular'}],
+      ceiling:[{
+        codigoMandato:`9${String(i).padStart(2,'0')}`,uf:'GO',senatorIds:[9000+i],
+        spentCents:(20-i)*100000,ceilingCents:5000000,monthsWithCeiling:1,computedMonths:0,note:null,
+      }],
+      review:{'empty-type':0,'kept-company':0,withheld:0,'possible-duplicate':0},
+    })),
+  });
+
+  for(const eleventhNamed of [false,true]){
+    const yearData=makeTwelveSeats(eleventhNamed);
+    const app=bootAppJs({
+      senators:true,
+      fetchImpl:async url=>{
+        if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+        if(url==='/senadores/2025.json')return {ok:true,json:async()=>yearData};
+        return {ok:false,status:404,json:async()=>({})};
+      },
+    });
+    app.clickHouse('senado');
+    await flush();
+    app.clickAction('senator-ceiling-more');
+    if(eleventhNamed){
+      assert.equal(app.activeElement()?.dataset.senatorId,'9010','focus moves to first newly revealed senator link');
+    }else{
+      assert.equal(app.activeElement()?.dataset.mandato,'910','focus moves to newly revealed unnamed seat row');
+      assert.equal(app.activeElement()?.attrs.tabindex,'-1','unnamed seat row is programmatically focusable');
+    }
+    app.clickAction('senator-ceiling-less');
+    assert.equal(app.activeElement()?.dataset.action,'senator-ceiling-more','focus returns to show-more button on collapse');
+  }
+});
+
+test('real/styles.css underlines senator ceiling profile links and gives them a 44px tap area',async()=>{
+  const css=await fs.readFile(path.join(import.meta.dirname,'..','real','styles.css'),'utf8');
+  assert.match(css,/\.senator-ceiling-people a[^{]*\{[^}]*text-decoration:underline/);
+  assert.doesNotMatch(css,/\.senator-ceiling-people a[^{]*\{[^}]*text-decoration:none/);
+  assert.match(css,/\.senator-ceiling-people a[^{]*\{[^}]*min-height:44px/);
 });

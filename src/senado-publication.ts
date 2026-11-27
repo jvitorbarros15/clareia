@@ -3,6 +3,12 @@ import path from 'node:path';
 import {scanCpfs} from './cpf-scan.ts';
 import {canonical, hash} from './model.ts';
 import type {Domain} from './publications.ts';
+import {
+  auditSenatorCeilings,
+  computeSeatCeilings,
+  SENATOR_CEILING_TABLE,
+} from './senado-ceiling.ts';
+import type {SenatorCeilingTable, SenatorSeatCeiling} from './senado-ceiling.ts';
 import type {CeapsParsed, CeapsRecord, CeapsReviewItem} from './senado-expenses.ts';
 import {partyForMonth} from './senado-profiles.ts';
 import type {SenadoProfilesFile, SenatorAffiliation} from './senado-profiles.ts';
@@ -47,11 +53,13 @@ export type SenatorYearRecord = {
   year: number;
   name: string | null;
   totalCents: number;
+  unassignedCents: number;
   records: number;
   byType: Record<string, number>;
   byMonth: Record<string, Record<string, number>>;
   suppliers: Record<string, number>;
   months: SenatorExerciseMonth[];
+  ceiling: SenatorSeatCeiling[];
   review: SenatorReviewCounts;
 };
 
@@ -112,7 +120,10 @@ function sortedRecord(map: Map<string, bigint>): Record<string, number> {
   );
 }
 
-function buildYearRows(run: SenatorsYearRun): SenatorYearRecord[] {
+function buildYearRows(
+  run: SenatorsYearRun,
+  ceilingTable: SenatorCeilingTable = SENATOR_CEILING_TABLE,
+): SenatorYearRecord[] {
   const {year, parsed, coverage} = run;
   let affiliationsById: Map<number, SenatorAffiliation[]> | null = null;
   if (run.profiles !== undefined) {
@@ -169,11 +180,15 @@ function buildYearRows(run: SenatorsYearRun): SenatorYearRecord[] {
     if (list) list.push(item); else reviewBySenator.set(item.codSenador, [item]);
   }
 
-  const rows: SenatorYearRecord[] = [];
+  const drafts: {
+    base: Omit<SenatorYearRecord, 'ceiling' | 'unassignedCents'>;
+    spendByMonth: Map<number, bigint>;
+  }[] = [];
   for (const senatorId of [...ids].sort((a, b) => a - b)) {
     const recs = recordsBySenator.get(senatorId) ?? [];
     const byType = new Map<string, bigint>();
     const byMonth = new Map<number, Map<string, bigint>>();
+    const spendByMonth = new Map<number, bigint>();
     const suppliers = new Map<string, bigint>();
     let totalCents = 0n;
     let included = 0;
@@ -190,6 +205,7 @@ function buildYearRows(run: SenatorsYearRun): SenatorYearRecord[] {
       totalCents += amount;
       included++;
       byType.set(r.tipoDespesa, (byType.get(r.tipoDespesa) ?? 0n) + amount);
+      spendByMonth.set(r.month, (spendByMonth.get(r.month) ?? 0n) + amount);
       let monthMap = byMonth.get(r.month);
       if (!monthMap) {
         monthMap = new Map<string, bigint>();
@@ -235,23 +251,52 @@ function buildYearRows(run: SenatorsYearRun): SenatorYearRecord[] {
       byMonthObj[String(month)] = sortedRecord(byMonth.get(month)!);
     }
 
-    rows.push({
-      senatorId,
-      year,
-      name: cov ? cov.name : null,
-      totalCents: toSafeNumber(totalCents),
-      records: included,
-      byType: sortedRecord(byType),
-      byMonth: byMonthObj,
-      suppliers: sortedRecord(suppliers),
-      months,
-      review,
+    drafts.push({
+      base: {
+        senatorId,
+        year,
+        name: cov ? cov.name : null,
+        totalCents: toSafeNumber(totalCents),
+        records: included,
+        byType: sortedRecord(byType),
+        byMonth: byMonthObj,
+        suppliers: sortedRecord(suppliers),
+        months,
+        review,
+      },
+      spendByMonth,
     });
   }
-  return rows;
+
+  const seatsBySenator = computeSeatCeilings(
+    year,
+    drafts.map(d => ({
+      senatorId: d.base.senatorId,
+      months: d.base.months,
+      spendByMonth: d.spendByMonth,
+    })),
+    ceilingTable,
+  );
+
+  return drafts.map(({base}) => {
+    const info = seatsBySenator.get(base.senatorId)!;
+    return {
+      ...base,
+      unassignedCents: info.unassignedCents,
+      ceiling: info.ceiling,
+    };
+  });
 }
 
-export function buildSenatorsVersion(runs: SenatorsYearRun[], builtAt: string): SenatorsVersion {
+export function buildSenatorsVersion(
+  runs: SenatorsYearRun[],
+  builtAt: string,
+  ceilingTable: SenatorCeilingTable = SENATOR_CEILING_TABLE,
+): SenatorsVersion {
+  const ceilingFailures = auditSenatorCeilings(ceilingTable);
+  if (ceilingFailures.length > 0) {
+    throw new Error(`Tabela de tetos do Senado inválida: ${ceilingFailures.join(', ')}`);
+  }
   if (!runs.length) throw new Error('Nenhum ano de senadores informado');
   const sorted = [...runs].sort((a, b) => a.year - b.year);
   const years = sorted.map(r => r.year);
@@ -287,7 +332,7 @@ export function buildSenatorsVersion(runs: SenatorsYearRun[], builtAt: string): 
       }
     }
 
-    rows.push(...buildYearRows(run));
+    rows.push(...buildYearRows(run, ceilingTable));
     sources.push({
       year,
       parsedSha256,
@@ -441,7 +486,7 @@ export async function auditSenatorsVersion(
     }
   }
 
-  const expectedRows = [...runs].sort((a, b) => a.year - b.year).flatMap(buildYearRows);
+  const expectedRows = [...runs].sort((a, b) => a.year - b.year).flatMap(r => buildYearRows(r));
   const expectedByKey = new Map(expectedRows.map(r => [`${r.year}:${r.senatorId}`, r]));
   if (rows.length !== expectedRows.length) failures.push('row-count');
   for (const row of rows) {
@@ -496,6 +541,9 @@ export async function writeSenatorsSite(
   const rows = await readSenatorRows(db, publicationId);
   if (contentId({schema: row.body.schema, metric: row.body.metric, scope: row.body.scope, rows}) !== publicationId) {
     throw new Error('Senadores no banco diferem da versão aprovada');
+  }
+  if (rows.some(item => !Number.isSafeInteger(item.unassignedCents) || !Array.isArray(item.ceiling))) {
+    throw new Error('Versão de senadores sem dados de teto; gere, audite e ative uma nova publicação');
   }
 
   const byYear = new Map<number, SenatorYearRecord[]>();
