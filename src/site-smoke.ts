@@ -13,9 +13,15 @@ export async function smokeSite(url:string,dir:string,get:Fetch=u=>fetch(u,{cach
     const r=await get(site+'/');await r.arrayBuffer();
     if(r.status!==200)throw new Error(`status ${r.status}`);
     for(const h of ['content-security-policy','strict-transport-security'])if(!r.headers.get(h))throw new Error(`sem ${h}`);
-    const noindex=/noindex/i.test(r.headers.get('x-robots-tag')??'');
-    if(!index&&!noindex)throw new Error('sem x-robots-tag noindex');
-    if(index&&noindex)throw new Error('x-robots-tag noindex num build indexado');
+    // Cloudflare adds X-Robots-Tag: noindex to every preview URL, so an indexed build is checked by its robots.txt and sitemap instead.
+    if(!index&&!/noindex/i.test(r.headers.get('x-robots-tag')??''))throw new Error('sem x-robots-tag noindex');
+  });
+  if(index)await check('/robots.txt',async()=>{
+    const r=await get(site+'/robots.txt'),body=await r.text();
+    if(r.status!==200)throw new Error(`status ${r.status}`);
+    if(!/^Allow: \/$/m.test(body)||/^Disallow: \/$/m.test(body))throw new Error('robots.txt não libera a indexação');
+    const s=await get(site+'/sitemap.xml');await s.arrayBuffer();
+    if(s.status!==200)throw new Error(`sitemap.xml status ${s.status}`);
   });
   await check('/manifest.json',async()=>{
     const r=await get(site+'/manifest.json');
