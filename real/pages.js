@@ -1,7 +1,7 @@
 /* Textos das páginas Sobre, Correções, Metodologia, Dados abertos e Apoie. Lido pelo navegador e por src/prerender.ts (via vm), para que o texto exista em um só lugar. */
 (() => {
   'use strict';
-  const CONTACT_EMAIL = '';
+  const CONTACT_EMAIL = 'contato@clareia.org';
   const POLICY = 'Respondemos em até 5 dias úteis. Toda correção vira uma nova versão dos dados, com registro público do que mudou e quando.';
   const esc = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const dateBR = value => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : esc(value);
