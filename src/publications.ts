@@ -2,7 +2,7 @@ import {snapshotId} from './model.ts';
 import type {Expense,Snapshot} from './model.ts';
 import type {DB} from './store.ts';
 
-export type Domain='pessoas'|'despesas'|'votacoes'|'projetos'|'eleicoes'|'emendas';
+export type Domain='pessoas'|'despesas'|'votacoes'|'projetos'|'eleicoes'|'emendas'|'senadores';
 export type Publication=Omit<Snapshot,'records'>&{domain:Domain};
 export type AuditDetails={checkedAt:string};
 type Row={domain:Domain;body:Omit<Snapshot,'records'>};
