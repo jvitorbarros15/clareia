@@ -104,7 +104,6 @@ function toSafeNumber(value: bigint): number {
 function sortedRecord(map: Map<string, bigint>): Record<string, number> {
   return Object.fromEntries(
     [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => [k, toSafeNumber(v)]),
   );
 }
@@ -119,8 +118,14 @@ function buildYearRows(run: SenatorsYearRun): SenatorYearRecord[] {
 
   const ids = new Set<number>();
   for (const c of coverage) ids.add(c.id);
-  for (const r of parsed.records) ids.add(r.codSenador);
-  for (const item of parsed.review) ids.add(item.codSenador);
+  for (const r of parsed.records) {
+    if (!covById.has(r.codSenador)) throw new Error(`Senadores de ${year}: senador ${r.codSenador} sem cobertura`);
+    ids.add(r.codSenador);
+  }
+  for (const item of parsed.review) {
+    if (!covById.has(item.codSenador)) throw new Error(`Senadores de ${year}: senador ${item.codSenador} sem cobertura`);
+    ids.add(item.codSenador);
+  }
 
   const recordsBySenator = new Map<number, CeapsRecord[]>();
   for (const r of parsed.records) {
@@ -417,6 +422,26 @@ export async function auditSenatorsVersion(
     records: expectedRows.reduce((s, r) => s + r.records, 0),
   };
   if (canonical(body.scope) !== canonical(expectedScope)) failures.push('scope');
+
+  for (const run of runs) {
+    let cents = 0n;
+    let count = 0;
+    const perSenator = new Map<number, bigint>();
+    for (const r of run.parsed.records) {
+      if (r.excludedFromTotals) continue;
+      cents += BigInt(r.cents);
+      count++;
+      perSenator.set(r.codSenador, (perSenator.get(r.codSenador) ?? 0n) + BigInt(r.cents));
+    }
+    const yearRows = rows.filter(r => r.year === run.year);
+    if (
+      yearRows.reduce((s, r) => s + BigInt(r.totalCents), 0n) !== cents ||
+      yearRows.reduce((s, r) => s + r.records, 0) !== count ||
+      yearRows.some(r => BigInt(r.totalCents) !== (perSenator.get(r.senatorId) ?? 0n))
+    ) {
+      failures.push(`source-total-${run.year}`);
+    }
+  }
 
   return {status: failures.length ? 'failed' : 'passed', failures, checkedAt};
 }

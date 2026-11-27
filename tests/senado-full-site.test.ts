@@ -15,6 +15,7 @@ import {parseCeapsYear} from '../src/senado-expenses.ts';
 import {auditCeapsYear} from '../src/senado-expenses-audit.ts';
 import {deriveSenatorCoverage} from '../src/senate-coverage.ts';
 import {votesReport} from '../src/votes.ts';
+import {coverageFor} from './senado-coverage-helper.ts';
 
 const execFileAsync = promisify(execFile);
 type Envelope = Parameters<typeof deriveSenatorCoverage>[0];
@@ -154,7 +155,7 @@ test('full-site build keeps deputy files and summary byte-identical with or with
     const ceapsAudit = auditCeapsYear(API_BYTES, parsed, ceapsCtx);
     assert.equal(ceapsAudit.ok, true);
     const parsedSha256 = hash(canonical(parsed));
-    const coverage = MANDATOS.map(env => deriveSenatorCoverage(env, {start: '2025-01-01', end: '2025-12-31'}));
+    const coverage = coverageFor(MANDATOS, parsed.records.map(r => r.codSenador).concat(parsed.review.map(i => i.codSenador)), {start: '2025-01-01', end: '2025-12-31'});
 
     await writeJson(path.join(priv, 'senado-ceaps', 'senado-2025', 'parsed.json'), parsed);
     await writeJson(path.join(priv, 'senado-ceaps', 'senado-2025', 'audit.json'), {...ceapsAudit, checkedAt: senatorsChecked, parsedSha256});

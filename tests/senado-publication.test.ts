@@ -22,6 +22,7 @@ import {
 import type {SenatorsYearRun} from '../src/senado-publication.ts';
 import {deriveSenatorCoverage} from '../src/senate-coverage.ts';
 import {openDB} from '../src/store.ts';
+import {coverageFor} from './senado-coverage-helper.ts';
 
 type Envelope = Parameters<typeof deriveSenatorCoverage>[0];
 
@@ -49,7 +50,7 @@ function makeRun(year = 2025, checkedAt = CHECKED_AT): SenatorsYearRun {
   const parsed = parseCeapsYear(API_BYTES, ctx);
   const auditRes = auditCeapsYear(API_BYTES, parsed, ctx);
   assert.equal(auditRes.ok, true);
-  const coverage = MANDATOS.map(env => deriveSenatorCoverage(env, {start: `${year}-01-01`, end: `${year}-12-31`}));
+  const coverage = coverageFor(MANDATOS, parsed.records.map(r => r.codSenador).concat(parsed.review.map(i => i.codSenador)), {start: `${year}-01-01`, end: `${year}-12-31`});
   return {
     year,
     parsed,
@@ -116,6 +117,10 @@ test('refuses failed audit, missing or invalid checkedAt, wrong parsedSha256, wr
   cnpjRec.supplier = `EMPRESA ${syntheticCpf(17)} LTDA`;
   cpfLeak.audit.parsedSha256 = hash(canonical(cpfLeak.parsed));
   assert.throws(() => buildSenatorsVersion([cpfLeak], BUILT_AT), /Identificador privado/);
+
+  const uncovered = structuredClone(base);
+  uncovered.coverage = uncovered.coverage.filter(c => c.id !== 999001);
+  assert.throws(() => buildSenatorsVersion([uncovered], BUILT_AT), /999001 sem cobertura/);
 });
 
 test('computes totals by tipoDespesa and month, excludes empty-type, keeps duplicates, preserves supplier labels and coverage months', () => {
@@ -215,7 +220,7 @@ test('computes totals by tipoDespesa and month, excludes empty-type, keeps dupli
     year: 2025,
     parsed: keptParsed,
     audit: {...keptAudit, checkedAt: CHECKED_AT, parsedSha256: hash(canonical(keptParsed))},
-    coverage: [],
+    coverage: coverageFor(MANDATOS, keptParsed.records.map(r => r.codSenador).concat(keptParsed.review.map(i => i.codSenador)), {start: '2025-01-01', end: '2025-12-31'}),
   }], BUILT_AT);
   assert.equal(keptVersion.rows.find(r => r.senatorId === 5672)?.suppliers['EMPRESA EXEMPLO LTDA'], 10000);
   assert.equal(keptVersion.rows.find(r => r.senatorId === 5672)?.review['kept-company'], 1);
@@ -251,6 +256,7 @@ test('id is deterministic, SQL store and re-audit round-trip detects tampering, 
     const tamperedRecord = await auditSenatorsVersion(db, version.id, [run]);
     assert.equal(tamperedRecord.status, 'failed');
     assert.ok(tamperedRecord.failures.includes('content-id'));
+    assert.ok(tamperedRecord.failures.includes('source-total-2025'));
 
     await db.query(
       `UPDATE senators_v1 SET record=$2::jsonb WHERE publication_id=$1 AND position=0`,
