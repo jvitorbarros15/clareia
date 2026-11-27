@@ -2961,8 +2961,11 @@ check('senators switch, ranking, profile and non-blocking route at 1440 and 390'
       }
 
       const visibleText = clean(await page.evaluate(() => document.body.innerText));
-      assert.ok(!visibleText.includes('% do teto'), `no "% do teto" in Senado view at ${width}`);
-      assert.equal(await page.locator('#rankings .ceiling-pill').count(), 0, `no ceiling pill for senators at ${width}`);
+      assert.ok(!visibleText.includes('Não exibimos porcentagem do teto'), `old no-ceiling copy gone in Senado view at ${width}`);
+      assert.equal(await page.locator('#rankings .ceiling-pill').count(), 0, `no deputy ceiling pill for senators at ${width}`);
+      const hasCeilingSeats = Array.isArray(yearData.senators) && yearData.senators.some(s => Array.isArray(s.ceiling) && s.ceiling.some(c => c.monthsWithCeiling > 0));
+      if (hasCeilingSeats) assert.ok(await page.locator('#senator-ceiling .senator-ceiling-row').count() > 0, `senators ceiling section lists seats at ${width}`);
+      else assert.equal(await page.locator('#senator-ceiling').count(), 0, `no senators ceiling section when year has no ceiling at ${width}`);
       for (const id of ['atlas', 'projetos', 'votacoes']) {
         assert.ok(await page.locator(`#${id}`).isHidden(), `#${id} hidden for senators at ${width}`);
       }

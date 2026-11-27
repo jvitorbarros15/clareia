@@ -7,6 +7,7 @@ import path from 'node:path';
 import {scanCpfs} from '../src/cpf-scan.ts';
 import {canonical, hash} from '../src/model.ts';
 import {activePublication, recordDomainAudit} from '../src/publications.ts';
+import {SENATOR_CEILING_TABLE, SENATOR_COMPUTED_CEILING_NOTE} from '../src/senado-ceiling.ts';
 import {parseCeapsYear} from '../src/senado-expenses.ts';
 import type {CeapsParsed} from '../src/senado-expenses.ts';
 import {auditCeapsYear} from '../src/senado-expenses-audit.ts';
@@ -121,6 +122,10 @@ test('refuses failed audit, missing or invalid checkedAt, wrong parsedSha256, wr
   const uncovered = structuredClone(base);
   uncovered.coverage = uncovered.coverage.filter(c => c.id !== 999001);
   assert.throws(() => buildSenatorsVersion([uncovered], BUILT_AT), /999001 sem cobertura/);
+
+  const badTable = structuredClone(SENATOR_CEILING_TABLE);
+  badTable.feb2025.SE += 1;
+  assert.throws(() => buildSenatorsVersion([base], BUILT_AT, badTable), /Tabela de tetos/);
 });
 
 test('computes totals by tipoDespesa and month, excludes empty-type, keeps duplicates, preserves supplier labels and coverage months', () => {
@@ -204,6 +209,29 @@ test('computes totals by tipoDespesa and month, excludes empty-type, keeps dupli
   assert.deepEqual(vanderlan.months[7], {
     month: 8, exercise: 'outside', uf: null, codigoMandato: null, participation: null,
   });
+  assert.equal(vanderlan.unassignedCents, 24983);
+  assert.deepEqual(vanderlan.ceiling, [{
+    codigoMandato: '538',
+    uf: 'GO',
+    senatorIds: [475, 825, 5422, 5672, 5899, 5967, 6335, 999001],
+    spentCents: 1965789,
+    ceilingCents: 37914917,
+    monthsWithCeiling: 10,
+    computedMonths: 2,
+    note: SENATOR_COMPUTED_CEILING_NOTE,
+  }]);
+  const dueire = byId.get(5917)!;
+  assert.equal(dueire.unassignedCents, 0);
+  assert.deepEqual(dueire.ceiling, [{
+    codigoMandato: '526',
+    uf: 'PE',
+    senatorIds: [5917],
+    spentCents: 207000,
+    ceilingCents: 55870224,
+    monthsWithCeiling: 12,
+    computedMonths: 2,
+    note: SENATOR_COMPUTED_CEILING_NOTE,
+  }]);
 
   const keptRows = BASE_ROWS.slice(0, 2).map(r => ({...r}));
   keptRows[0].cpfCnpj = '123456';
@@ -257,6 +285,21 @@ test('id is deterministic, SQL store and re-audit round-trip detects tampering, 
     assert.equal(tamperedRecord.status, 'failed');
     assert.ok(tamperedRecord.failures.includes('content-id'));
     assert.ok(tamperedRecord.failures.includes('source-total-2025'));
+
+    await db.query(
+      `UPDATE senators_v1 SET record=$2::jsonb WHERE publication_id=$1 AND position=0`,
+      [version.id, JSON.stringify(version.rows[0])],
+    );
+    const tamperedCeilingRow = structuredClone(version.rows[0]);
+    tamperedCeilingRow.ceiling[0].spentCents += 1;
+    await db.query(
+      `UPDATE senators_v1 SET record=$2::jsonb WHERE publication_id=$1 AND position=0`,
+      [version.id, JSON.stringify(tamperedCeilingRow)],
+    );
+    const tamperedCeiling = await auditSenatorsVersion(db, version.id, [run]);
+    assert.equal(tamperedCeiling.status, 'failed');
+    assert.ok(tamperedCeiling.failures.includes('content-id'));
+    assert.ok(tamperedCeiling.failures.includes(`mismatch-2025:${version.rows[0].senatorId}`));
 
     await db.query(
       `UPDATE senators_v1 SET record=$2::jsonb WHERE publication_id=$1 AND position=0`,
