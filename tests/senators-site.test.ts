@@ -1098,3 +1098,28 @@ test('real/styles.css underlines senator ceiling profile links and gives them a 
   assert.doesNotMatch(css,/\.senator-ceiling-people a[^{]*\{[^}]*text-decoration:none/);
   assert.match(css,/\.senator-ceiling-people a[^{]*\{[^}]*min-height:44px/);
 });
+
+test('real/app.js drops current-year mandate months after the last expense month',async()=>{
+  const base=VALID_SENATORS_YEAR.senators[0];
+  const current={
+    ...VALID_SENATORS_YEAR,collectedAt:'2025-11-26T12:00:00Z',
+    senators:[{
+      ...base,
+      byMonth:{'1':{'Aluguel de imóveis':100000},'11':{'Aluguel de imóveis':275000}},
+      months:Array.from({length:12},(_,i)=>({month:i+1,exercise:'full',uf:'GO',codigoMandato:'538',participation:'Titular'})),
+    }],
+  };
+  const app=bootAppJs({
+    senators:true,
+    fetchImpl:async url=>{
+      if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+      if(url==='/senadores/2025.json')return {ok:true,json:async()=>current};
+      return {ok:false,status:404,json:async()=>({})};
+    },
+  });
+  app.clickHouse('senado');
+  await flush();
+  const html=app.elements['#rank-slot'].innerHTML;
+  assert.ok(html.includes('11 meses no recorte'),'counts only months up to the last expense month');
+  assert.ok(!html.includes('12 meses no recorte'));
+});

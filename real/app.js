@@ -282,6 +282,11 @@
       if (!Array.isArray(s.months) || !s.months.every(validSenatorMonth) || !isSafeNumRecord(s.review)) return null;
       if (!Array.isArray(s.ceiling) || !s.ceiling.every(validSenatorCeiling)) return null;
     }
+    // The Senado lists mandate months through December even in the current year; months after the last expense month are not collected yet.
+    if (raw.collectedAt && Number(raw.collectedAt.slice(0, 4)) === raw.year) {
+      const last = Math.max(0, ...raw.senators.flatMap(s => Object.keys(s.byMonth).map(Number)));
+      if (last) for (const s of raw.senators) s.months = s.months.filter(m => m.month <= last);
+    }
     return raw;
   }
   let senatorsIndexPromise = null;
