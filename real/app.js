@@ -32,7 +32,7 @@
   const isSenatorPath = /^\/senador(?:\/|$)/.test(location.pathname);
   const initialHouse = D.senators && (initial.get('casa') === 'senado' || isSenatorPath) ? 'senado' : 'camara';
   const state = {
-    house: initialHouse,
+    house: initialHouse, senatorFeatured: null,
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
@@ -339,15 +339,15 @@
       if (state.house === 'senado' && $('#rank-slot')) refresh();
     });
   }
-  function senatorRanking(data) {
+  function senatorRanking(data, tab = state.tab, metric = state.metric) {
     const list = [];
     let excludedMonthly = 0;
     for (const s of data.senators) {
-      const val = state.metric === 'mensal' ? senatorMonthly(s) : s.totalCents;
+      const val = metric === 'mensal' ? senatorMonthly(s) : s.totalCents;
       if (val === null) { excludedMonthly++; continue; }
       list.push({ senator: s, value: val, exercised: senatorExercised(s) });
     }
-    list.sort((a, b) => (state.tab === 'menos' ? a.value - b.value : b.value - a.value) || senatorDisplayName(a.senator).localeCompare(senatorDisplayName(b.senator), 'pt-BR') || a.senator.senatorId - b.senator.senatorId);
+    list.sort((a, b) => (tab === 'menos' ? a.value - b.value : b.value - a.value) || senatorDisplayName(a.senator).localeCompare(senatorDisplayName(b.senator), 'pt-BR') || a.senator.senatorId - b.senator.senatorId);
     return { list, excludedMonthly };
   }
   function senatorCards(period, ranked) {
@@ -444,6 +444,10 @@
     const ms = [...new Set(data.senators.flatMap(s => (s.months || []).map(m => m.month)).filter(m => m >= 1 && m <= 12))];
     return ms.length ? `<p class="context cutoff">${escape(ClareiaView.cutoffLine(ms, data.year, data.collectedAt))}</p>` : '';
   }
+  function senatorPeriod(data) {
+    const months = data.senators.flatMap(s => s.months.map(m => m.month));
+    return months.length ? `${monthNames[Math.min(...months) - 1]}–${monthNames[Math.max(...months) - 1]} ${data.year}` : '';
+  }
   function senatorRankingSection() {
     let body = '';
     let period = '';
@@ -456,8 +460,7 @@
       body = '<div class="senators-status" role="status">Carregando dados do Senado…</div>';
     } else {
       const data = senatorState.data, { list: ranked, excludedMonthly } = senatorRanking(data);
-      const months = data.senators.flatMap(s => s.months.map(m => m.month));
-      if (months.length) period = `${monthNames[Math.min(...months) - 1]}–${monthNames[Math.max(...months) - 1]} ${data.year}`;
+      period = senatorPeriod(data);
       const note = `Dados oficiais do Senado Federal (CEAPS) em ${escape(data.year)}: ${number(data.senators.length)} senadores, total publicado de ${money(data.totalCents)} (${number(data.records)} registros). Lançamentos sem tipo de despesa ficam fora dos totais.${state.metric === 'mensal' ? ` Gasto mensal divide o total pelos meses com exercício completo ou parcial${excludedMonthly ? `; ${excludedMonthly} ${excludedMonthly === 1 ? 'senador sem mês de exercício ficou' : 'senadores sem mês de exercício ficaram'} fora do ranking por mês` : ''}.` : ''} O % do teto é calculado por assento (titular e suplentes somados) e só nos meses com teto conhecido. <button class="text-button" data-action="methodology">Fontes e metodologia →</button>`;
       body = `<div class="cards">${senatorCards(period || data.year, ranked)}</div><p class="ranking-context">${note}</p>${senatorBarSection()}${senatorCeilingSection(data)}${editorialFollowUp()}`;
     }
@@ -523,7 +526,8 @@
   }
   function layout() {
     document.body.dataset.model = model;
-    const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗︎</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗︎</button></div></div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured))}</div>${handwrittenNote()}<div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section>${universe()}<div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
+    const senate = state.house === 'senado' ? senatorFeature() : null;
+    const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗︎</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗︎</button></div></div><div class="hero-portrait" id="hero-portrait">${senate?.portrait ?? photo(person(state.featured))}</div>${handwrittenNote()}<div class="editorial-feature" id="editorial-feature">${senate?.html ?? editorialFeature()}</div></section>${universe()}<div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
     $('#app').innerHTML = `<div class="site">${header()}<main id="main">${main}</main><footer class="footer"></footer></div>`;
     syncHouseElements();
   }
@@ -532,7 +536,31 @@
     const choices = byTotal().slice(0, 3).map(c => `<button type="button" data-action="feature" data-id="${c.id}" aria-pressed="${c.id === p.id}">${avatar(c)}<span>${escape(first(c))}</span></button>`).join('');
     return `<p class="eyebrow">Destaque · dados oficiais</p><button class="feature-value" id="total" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} de despesas${state.category === 'Todas' ? '' : ' em ' + escape(label(state.category).toLowerCase())} de ${escape(p.name)} na cota parlamentar em ${span()}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? →</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destaques</span>${choices}</div>`;
   }
+  function senatorFeature() {
+    const data = senatorState.data;
+    const loading = senatorState.status === 'idle' || senatorState.status === 'loading';
+    const top = senatorState.status === 'ready' ? senatorRanking(data, 'gastos', 'total').list.slice(0, 3) : [];
+    if (!top.length) return { portrait: '', html: `<p role="status">${loading ? 'Carregando dados do Senado…' : 'Dados do Senado indisponíveis para este ano.'}</p>` };
+    const { senator: s } = top.find(({ senator }) => String(senator.senatorId) === state.senatorFeatured) ?? top[0];
+    const name = s.name?.trim() || '';
+    const period = senatorPeriod(data) || data.year;
+    const portrait = photo({ name, photo: s.photo ?? null }, true);
+    const choices = top.map(({ senator: c }) => `<button type="button" data-action="feature" data-id="${c.senatorId}" aria-pressed="${c === s}">${avatar({ name: c.name?.trim() || '', photo: c.photo ?? null }, true)}<span>${escape(c.name?.trim().split(' ')[0] || senatorDisplayName(c))}</span></button>`).join('');
+    const proof = name ? `<a class="text-button" href="${escape(withYear(senatorPath(s)))}" data-action="senator-profile" data-senator-id="${s.senatorId}">Como chegamos nisso? →</a>` : '';
+    const amount = name ? `<button type="button" class="feature-value" id="total" data-action="senator-profile" data-senator-id="${s.senatorId}">${compact(s.totalCents)}</button>` : `<span class="feature-value" id="total">${compact(s.totalCents)}</span>`;
+    const html = `<p class="eyebrow">Destaque · dados oficiais</p>${amount}<p>foi o total de despesas de ${escape(senatorDisplayName(s))} na CEAPS em ${escape(period)}.</p>${proof}<div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destaques</span>${choices}</div>`;
+    return { portrait, html };
+  }
   function feature(id) {
+    if (state.house === 'senado') {
+      if (id === state.senatorFeatured) return;
+      state.senatorFeatured = id;
+      const { portrait, html } = senatorFeature();
+      $('#editorial-feature').innerHTML = html;
+      $('#hero-portrait').innerHTML = portrait;
+      $('#editorial-feature [data-action="feature"][aria-pressed="true"]')?.focus({ preventScroll: true });
+      return;
+    }
     if (id === state.featured) return;
     const from = Number($('#editorial-feature .feature-value')?.dataset.amount) || 0;
     state.featured = id;
@@ -576,7 +604,10 @@
     const isSenado = state.house === 'senado';
     syncHouseElements();
     $('#rank-slot').innerHTML = rankingSection();
-    if (!isSenado && $('#editorial-feature')) $('#editorial-feature').innerHTML = editorialFeature();
+    const senate = isSenado ? senatorFeature() : null;
+    if ($('#editorial-feature')) $('#editorial-feature').innerHTML = senate?.html ?? editorialFeature();
+    const portrait = $('#hero-portrait'), portraitHTML = senate?.portrait ?? photo(person(state.featured));
+    if (portrait && portrait.innerHTML !== portraitHTML) portrait.innerHTML = portraitHTML;
     if (!isSenado && state.answer?.type === 'rank') state.answer.ids = ranking('gastos').slice(0, 3).map(p => p.id);
     if (!isSenado) $('#answer-slot').innerHTML = answerHTML();
     if (focusKey) document.querySelector(`[data-${focusKey[0]}="${focusKey[1]}"]`)?.focus({ preventScroll: true });
@@ -1213,7 +1244,9 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { yearSelector, yearQuery, parseRoute, openRoute, deputyPath, senatorPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, approvedText, billsPeriod, byTotal, compareValues };
+  window.Clareia = { yearSelector, yearQuery, parseRoute, openRoute, deputyPath, senatorPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, approvedText, billsPeriod, byTotal, compareValues,
+    get senatorPeriod() { const data = senatorState.data; return senatorState.status === 'ready' ? senatorPeriod(data) || String(data.year) : ''; }
+  };
   window.addEventListener('resize', () => markTab(false));
   if (state.query && state.house === 'camara') ask(state.query, false, fromURL);
 })();
