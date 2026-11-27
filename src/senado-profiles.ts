@@ -284,12 +284,14 @@ async function downloadPhoto(
     await fs.writeFile(tmpFile, bytes, {flag: 'wx'});
     try {
       await fs.link(tmpFile, destFile);
-      await fs.unlink(tmpFile);
       return 'downloaded';
     } catch (err) {
-      await fs.unlink(tmpFile).catch(() => {});
       if ((err as NodeJS.ErrnoException).code === 'EEXIST') return 'exists';
       return 'failed';
+    } finally {
+      try {
+        await fs.unlink(tmpFile);
+      } catch {}
     }
   } catch {
     await fs.unlink(tmpFile).catch(() => {});

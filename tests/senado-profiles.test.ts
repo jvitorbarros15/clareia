@@ -415,6 +415,52 @@ test('collectSenadoProfiles continues when portraits directory denies access', a
   assert.equal(written.senators[0].id, 5899);
 });
 
+test('collectSenadoProfiles counts photo as downloaded when link succeeds but temp unlink fails', async t => {
+  const dir = await tempDir(t);
+  const ceapsBaseDir = path.join(dir, 'senado-ceaps');
+  const outBaseDir = path.join(dir, 'senado-profiles');
+  const portraitsDir = path.join(dir, 'portraits');
+  await fs.mkdir(path.join(ceapsBaseDir, 'ceaps-2025'), {recursive: true});
+  await fs.writeFile(path.join(ceapsBaseDir, 'ceaps-2025', 'coverage.json'), JSON.stringify([{id: 5899}]));
+
+  const origUnlink = fs.unlink;
+  let tmpUnlinkAttempts = 0;
+  t.mock.method(fs, 'unlink', async (file: Parameters<typeof fs.unlink>[0]) => {
+    if (String(file).startsWith(portraitsDir) && String(file).endsWith('.tmp')) {
+      tmpUnlinkAttempts++;
+      throw Object.assign(new Error('busy'), {code: 'EBUSY'});
+    }
+    return origUnlink(file);
+  });
+
+  const result = await collectSenadoProfiles({
+    runId: 'profiles-unlink-fail',
+    ceapsRuns: ['ceaps-2025'],
+    portraitsDir,
+    ceapsBaseDir,
+    outBaseDir,
+    fetcher: async url => {
+      if (url === senatorDetailUrl(5899)) {
+        return Response.json(detailEnvelope(5899, {photo: 'https://www.senado.leg.br/senador5899.jpg'}));
+      }
+      if (url === senatorAffiliationsUrl(5899)) {
+        return Response.json(affiliationsEnvelope(5899, {party: 'PSD', start: '2023-01-01'}));
+      }
+      if (url === 'https://www.senado.leg.br/senador5899.jpg') {
+        return new Response(VALID_JPEG, {status: 200});
+      }
+      throw new Error(`Unexpected ${url}`);
+    },
+  });
+
+  assert.equal(tmpUnlinkAttempts, 1);
+  assert.equal(result.senators, 1);
+  assert.equal(result.photosDownloaded, 1);
+  assert.equal(result.photosSkipped, 0);
+  assert.equal(result.photosFailed, 0);
+  assert.deepEqual(await fs.readFile(path.join(portraitsDir, 'sen-5899.jpg')), VALID_JPEG);
+});
+
 test('CLI arg parser accepts valid flags and rejects duplicates and bad values', () => {
   assert.deepEqual(
     parseCollectProfilesArgs(['--run', 'p1', '--ceaps-run', 'c25,c26', '--portraits', 'ret', '--local']),
