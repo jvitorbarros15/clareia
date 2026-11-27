@@ -23,7 +23,7 @@ const curl=promisify(execFile);
 // The portal drops Node's fetch connections; curl reads it reliably. One request at a time, spaced, with one retry.
 async function get(url:string,file:string):Promise<{status:number;bytes:Uint8Array}>{
   for(let attempt=0;attempt<2;attempt++){
-    try{const {stdout}=await curl('curl',['-s','-A','Clareia verificacao (clareia.clareia.workers.dev)','-o',file,'-w','%{http_code}',url],{timeout:60000});const bytes=new Uint8Array(await fs.readFile(file));await fs.rm(file,{force:true});return {status:Number(stdout),bytes};}
+    try{const {stdout}=await curl('curl',['-s','-A','Clareia verificacao (clareia.org)','-o',file,'-w','%{http_code}',url],{timeout:60000});const bytes=new Uint8Array(await fs.readFile(file));await fs.rm(file,{force:true});return {status:Number(stdout),bytes};}
     catch{await new Promise(r=>setTimeout(r,3000));}
   }
   return {status:0,bytes:new Uint8Array()};

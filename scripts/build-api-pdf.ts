@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import {chromium} from 'playwright';
 import {apiDocsInner,loadSpec} from '../src/api-docs.ts';
 
-const REPO=path.join(import.meta.dirname,'..'),SITE='https://clareia.clareia.workers.dev';
+const REPO=path.join(import.meta.dirname,'..'),SITE='https://clareia.org';
 const sha=crypto.createHash("sha256").update((await fs.readFile(path.join(REPO,"api","openapi.yaml"),"utf8")).replace(/\r\n/g,"\n")).digest("hex").slice(0,16);
 const spec=await loadSpec(REPO),version=spec.info.version;
 const logo=(await fs.readFile(path.join(REPO,'real','app.js'),'utf8')).match(/const logo = '(<svg class="logo-mark"[\s\S]*?<\/svg>)'/)![1];
