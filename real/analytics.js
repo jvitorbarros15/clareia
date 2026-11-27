@@ -1,6 +1,6 @@
 // Counts visits only on the published hosts, so local builds and automated checks never send hits.
 (() => {
-  if (!['clareia.clareia.workers.dev'].includes(location.hostname)) return;
+  if (!['clareia.org', 'www.clareia.org', 'clareia.clareia.workers.dev'].includes(location.hostname)) return;
   const beacon = document.createElement('script');
   beacon.defer = true;
   beacon.src = 'https://static.cloudflareinsights.com/beacon.min.js';

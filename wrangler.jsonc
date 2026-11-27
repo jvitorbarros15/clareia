@@ -2,6 +2,12 @@
   "name": "clareia",
   "compatibility_date": "2026-11-01",
   "main": "worker/index.ts",
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    { "pattern": "clareia.org", "custom_domain": true },
+    { "pattern": "www.clareia.org", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./build/site",
     "binding": "ASSETS"
