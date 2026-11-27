@@ -65,6 +65,11 @@ test('amendment publication requires reviewed, unambiguous links and counts excl
   r.metrics={...r.metrics,rows:9,selected:9,individual:5,unattributed:3};
   r.contentSha256=amendmentsContentId(r);
   const audit={status:'passed',contentSha256:r.contentSha256};
+  const empty=buildAmendmentsVersion(r,audit,[],known,now);
+  assert.ok((await loadReviewedLinks()).every(l=>l.reviewer&&l.reviewedAt&&l.evidence),'every committed link records its review');
+  assert.equal(empty.rows.length,0);
+  assert.throws(()=>assertApprovable(empty),/sem linhas atribuídas/);
+
   const version=buildAmendmentsVersion(r,audit,[reviewed],known,now);
   assert.equal(version.scope.unattributedRows,7);
   assert.deepEqual(version.rows.map(({code,deputyId})=>({code,deputyId})),[{code:'10',deputyId:1},{code:'10',deputyId:1}]);
@@ -86,11 +91,6 @@ test('amendment publication requires reviewed, unambiguous links and counts excl
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-amendment-links-'));
   try{
     const file=path.join(dir,'links.json');
-    await fs.writeFile(file,'[]');
-    const empty=buildAmendmentsVersion(r,audit,await loadReviewedLinks(file),known,now);
-    assert.equal(empty.rows.length,0);
-    assert.throws(()=>assertApprovable(empty),/sem linhas atribuídas/);
-
     for(const invalid of [{},[{...reviewed,reviewer:''}],[{...reviewed,deputyId:'1'}]]){
       await fs.writeFile(file,JSON.stringify(invalid));
       await assert.rejects(loadReviewedLinks(file),/deve ser uma lista/);
