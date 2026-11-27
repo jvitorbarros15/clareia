@@ -7,6 +7,7 @@ import path from 'node:path';
 import {scanCpfs} from '../src/cpf-scan.ts';
 import {canonical, hash} from '../src/model.ts';
 import {activePublication, recordDomainAudit} from '../src/publications.ts';
+import {SENATOR_CEILING_TABLE, SENATOR_COMPUTED_CEILING_NOTE} from '../src/senado-ceiling.ts';
 import {parseCeapsYear} from '../src/senado-expenses.ts';
 import type {CeapsParsed} from '../src/senado-expenses.ts';
 import {auditCeapsYear} from '../src/senado-expenses-audit.ts';
@@ -121,6 +122,10 @@ test('refuses failed audit, missing or invalid checkedAt, wrong parsedSha256, wr
   const uncovered = structuredClone(base);
   uncovered.coverage = uncovered.coverage.filter(c => c.id !== 999001);
   assert.throws(() => buildSenatorsVersion([uncovered], BUILT_AT), /999001 sem cobertura/);
+
+  const badTable = structuredClone(SENATOR_CEILING_TABLE);
+  badTable.feb2025.SE += 1;
+  assert.throws(() => buildSenatorsVersion([base], BUILT_AT, badTable), /Tabela de tetos/);
 });
 
 test('computes totals by tipoDespesa and month, excludes empty-type, keeps duplicates, preserves supplier labels and coverage months', () => {
@@ -204,6 +209,29 @@ test('computes totals by tipoDespesa and month, excludes empty-type, keeps dupli
   assert.deepEqual(vanderlan.months[7], {
     month: 8, exercise: 'outside', uf: null, codigoMandato: null, participation: null,
   });
+  assert.equal(vanderlan.unassignedCents, 24983);
+  assert.deepEqual(vanderlan.ceiling, [{
+    codigoMandato: '538',
+    uf: 'GO',
+    senatorIds: [475, 825, 5422, 5672, 5899, 5967, 6335, 999001],
+    spentCents: 1965789,
+    ceilingCents: 37914917,
+    monthsWithCeiling: 10,
+    computedMonths: 2,
+    note: SENATOR_COMPUTED_CEILING_NOTE,
+  }]);
+  const dueire = byId.get(5917)!;
+  assert.equal(dueire.unassignedCents, 0);
+  assert.deepEqual(dueire.ceiling, [{
+    codigoMandato: '526',
+    uf: 'PE',
+    senatorIds: [5917],
+    spentCents: 207000,
+    ceilingCents: 55870224,
+    monthsWithCeiling: 12,
+    computedMonths: 2,
+    note: SENATOR_COMPUTED_CEILING_NOTE,
+  }]);
 
   const keptRows = BASE_ROWS.slice(0, 2).map(r => ({...r}));
   keptRows[0].cpfCnpj = '123456';
@@ -262,6 +290,21 @@ test('id is deterministic, SQL store and re-audit round-trip detects tampering, 
       `UPDATE senators_v1 SET record=$2::jsonb WHERE publication_id=$1 AND position=0`,
       [version.id, JSON.stringify(version.rows[0])],
     );
+    const tamperedCeilingRow = structuredClone(version.rows[0]);
+    tamperedCeilingRow.ceiling[0].spentCents += 1;
+    await db.query(
+      `UPDATE senators_v1 SET record=$2::jsonb WHERE publication_id=$1 AND position=0`,
+      [version.id, JSON.stringify(tamperedCeilingRow)],
+    );
+    const tamperedCeiling = await auditSenatorsVersion(db, version.id, [run]);
+    assert.equal(tamperedCeiling.status, 'failed');
+    assert.ok(tamperedCeiling.failures.includes('content-id'));
+    assert.ok(tamperedCeiling.failures.includes(`mismatch-2025:${version.rows[0].senatorId}`));
+
+    await db.query(
+      `UPDATE senators_v1 SET record=$2::jsonb WHERE publication_id=$1 AND position=0`,
+      [version.id, JSON.stringify(version.rows[0])],
+    );
     await db.query(
       `UPDATE senators_v1 SET senator_id=999999 WHERE publication_id=$1 AND position=0`,
       [version.id],
@@ -308,6 +351,27 @@ test('id is deterministic, SQL store and re-audit round-trip detects tampering, 
     const indexJson = JSON.parse(indexText) as {publicationId: string; years: {year: number; file: string; senators: number; records: number; totalCents: number}[]};
     assert.equal(indexJson.publicationId, version.id);
     assert.deepEqual(indexJson.years, [{year: 2025, file: '2025.json', senators: 9, records: 15, totalCents: 2236272}]);
+
+    const legacyRows = version.rows.map(({ceiling: _c, unassignedCents: _u, ...rest}) => rest);
+    const legacyBody = {
+      schema: version.schema,
+      metric: version.metric,
+      scope: version.scope,
+      sources: version.sources,
+      collectedAt: version.collectedAt,
+      publishedAt: version.publishedAt,
+    };
+    const legacyId = hash(canonical({schema: version.schema, metric: version.metric, scope: version.scope, rows: legacyRows}));
+    await db.query(
+      'INSERT INTO publications(id,domain,body) VALUES($1,$2,$3::jsonb)',
+      [legacyId, 'senadores', JSON.stringify({...legacyBody, id: legacyId})],
+    );
+    await db.query(
+      `INSERT INTO senators_v1(publication_id,position,senator_id,year,record) SELECT $1,ord::integer-1,(r->>'senatorId')::integer,(r->>'year')::integer,r FROM jsonb_array_elements($2::jsonb) WITH ORDINALITY AS rows(r,ord)`,
+      [legacyId, JSON.stringify(legacyRows)],
+    );
+    await recordDomainAudit(db, legacyId, 'passed', {checkedAt: CHECKED_AT});
+    await assert.rejects(writeSenatorsSite(db, outDir, legacyId), /sem dados de teto/);
   } finally {
     await db.close();
     await fs.rm(outDir, {recursive: true, force: true});

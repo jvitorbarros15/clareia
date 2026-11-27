@@ -2935,6 +2935,18 @@ check('senators switch, ranking, profile and non-blocking route at 1440 and 390'
   const yearRes = await fetch(`${base}/senadores/${yearEntry.file}`);
   assert.ok(yearRes.ok, `senadores/index.json advertises ${yearEntry.file} but fetch returned ${yearRes.status}`);
   const yearData = await yearRes.json();
+  assert.ok(
+    Array.isArray(yearData.senators) && yearData.senators.every(s => Array.isArray(s.ceiling) && Number.isSafeInteger(s.unassignedCents)),
+    `senadores/${yearEntry.file} lacks ceiling data; rebuild, audit and activate the senators publication`,
+  );
+  const isCoveredSenatorYear = y => Number.isInteger(y) && y >= 2023 && y <= 2025;
+  const coveredYear = isCoveredSenatorYear(yearEntry.year);
+  if (coveredYear) {
+    assert.ok(
+      yearData.senators.some(s => s.ceiling.some(c => c.monthsWithCeiling > 0 && c.ceilingCents > 0)),
+      `covered senator year ${yearEntry.year} must include seats with ceiling`,
+    );
+  }
   const firstNamed = Array.isArray(yearData.senators) ? yearData.senators.find(s => typeof s.name === 'string' && s.name.trim()) : null;
   needCase(Boolean(firstNamed), 'senators year data has a named senator');
 
@@ -2961,8 +2973,13 @@ check('senators switch, ranking, profile and non-blocking route at 1440 and 390'
       }
 
       const visibleText = clean(await page.evaluate(() => document.body.innerText));
-      assert.ok(!visibleText.includes('% do teto'), `no "% do teto" in Senado view at ${width}`);
-      assert.equal(await page.locator('#rankings .ceiling-pill').count(), 0, `no ceiling pill for senators at ${width}`);
+      assert.ok(!visibleText.includes('Não exibimos porcentagem do teto'), `old no-ceiling copy gone in Senado view at ${width}`);
+      assert.equal(await page.locator('#rankings .ceiling-pill').count(), 0, `no deputy ceiling pill for senators at ${width}`);
+      if (coveredYear) {
+        assert.ok(await page.locator('#senator-ceiling .senator-ceiling-row').count() > 0, `senators ceiling ranking required for covered year ${yearEntry.year} at ${width}`);
+      } else {
+        assert.equal(await page.locator('#senator-ceiling').count(), 0, `no senators ceiling section for uncovered year ${yearEntry.year} at ${width}`);
+      }
       for (const id of ['atlas', 'projetos', 'votacoes']) {
         assert.ok(await page.locator(`#${id}`).isHidden(), `#${id} hidden for senators at ${width}`);
       }
@@ -3006,6 +3023,15 @@ check('senators switch, ranking, profile and non-blocking route at 1440 and 390'
     await page.goto(`${base}/?casa=senado${yearParam ? `&${yearParam}` : ''}`);
     await page.waitForSelector('#rankings .bar-row');
     assert.equal(await page.locator('.house-switch [data-house=senado]').getAttribute('aria-pressed'), 'true', 'direct Senado ranking opens without deputy suppliers');
+    if (coveredYear) assert.ok(await page.locator('#senator-ceiling .senator-ceiling-row').count() > 0, `direct Senado ceiling ranking required for covered year ${yearEntry.year}`);
+    const manifestYears = new Set((manifest.years || []).map(y => y.year));
+    const extraCovered = !coveredYear ? sIndex.years.find(y => isCoveredSenatorYear(y.year) && manifestYears.has(y.year)) : null;
+    if (extraCovered) {
+      const extraParam = String(extraCovered.year) === defYear ? '' : `&ano=${extraCovered.year}`;
+      await page.goto(`${base}/?casa=senado${extraParam}`);
+      await page.waitForSelector('#senator-ceiling .senator-ceiling-row');
+      assert.ok(await page.locator('#senator-ceiling .senator-ceiling-row').count() > 0, `senators ceiling ranking required for covered year ${extraCovered.year}`);
+    }
     await page.goto(`${base}/senador/${firstNamed.senatorId}-${slug}${yearParam ? `?${yearParam}` : ''}`);
     await page.waitForSelector('#detail[open] .senator-months');
     assert.ok(await page.locator('#detail .senator-month-row').count() > 0, 'direct senator route shows exercise months without deputy suppliers');

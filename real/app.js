@@ -36,7 +36,7 @@
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
-    tab: initialHouse === 'senado' && fromURL.tab === 'projetos' ? 'gastos' : (fromURL.tab ?? 'gastos'), barLimit: BAR_STEP,
+    tab: initialHouse === 'senado' && fromURL.tab === 'projetos' ? 'gastos' : (fromURL.tab ?? 'gastos'), barLimit: BAR_STEP, senatorCeilingLimit: BAR_STEP,
     query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && comparable(D.dataset().find(p => p.id === initial.get('destaque'))) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
   let dialogTrigger = null, toastTimer, listOrigin = null;
@@ -264,6 +264,7 @@
   const isSafeNumRecord = obj => isPlainObj(obj) && Object.values(obj).every(v => typeof v === 'number' && Number.isSafeInteger(v));
   const isOptNullableStr = v => v === undefined || v === null || typeof v === 'string';
   const validSenatorMonth = m => isPlainObj(m) && Number.isInteger(m.month) && m.month >= 1 && m.month <= 12 && typeof m.exercise === 'string' && m.exercise.length > 0 && isOptNullableStr(m.uf) && isOptNullableStr(m.codigoMandato) && isOptNullableStr(m.participation);
+  const validSenatorCeiling = c => isPlainObj(c) && typeof c.codigoMandato === 'string' && c.codigoMandato.length > 0 && (c.uf === null || typeof c.uf === 'string') && Array.isArray(c.senatorIds) && c.senatorIds.length > 0 && c.senatorIds.every(id => Number.isSafeInteger(id)) && Number.isSafeInteger(c.spentCents) && Number.isSafeInteger(c.ceilingCents) && c.ceilingCents >= 0 && Number.isSafeInteger(c.monthsWithCeiling) && c.monthsWithCeiling >= 0 && c.monthsWithCeiling <= 12 && Number.isSafeInteger(c.computedMonths) && c.computedMonths >= 0 && c.computedMonths <= c.monthsWithCeiling && (c.monthsWithCeiling === 0 ? c.ceilingCents === 0 : c.ceilingCents > 0) && (c.note === null || typeof c.note === 'string');
   function validSenatorsIndex(raw) {
     if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-index.v1' || !Array.isArray(raw.years)) return null;
     if (!raw.years.every(y => isPlainObj(y) && Number.isInteger(y.year) && typeof y.file === 'string' && /^\d{4}\.json$/.test(y.file))) return null;
@@ -273,8 +274,10 @@
     if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-year.v1' || typeof raw.publicationId !== 'string' || !raw.publicationId || !Number.isInteger(raw.year) || !Number.isSafeInteger(raw.totalCents) || !Number.isSafeInteger(raw.records) || !isOptNullableStr(raw.collectedAt) || !Array.isArray(raw.senators)) return null;
     for (const s of raw.senators) {
       if (!isPlainObj(s) || !Number.isInteger(s.senatorId) || !Number.isInteger(s.year) || (s.name !== null && typeof s.name !== 'string') || !Number.isSafeInteger(s.totalCents) || !Number.isSafeInteger(s.records)) return null;
+      if (!Number.isSafeInteger(s.unassignedCents)) return null;
       if (!isSafeNumRecord(s.byType) || !isSafeNumRecord(s.suppliers) || !isPlainObj(s.byMonth) || !Object.entries(s.byMonth).every(([month, values]) => /^(?:[1-9]|1[0-2])$/.test(month) && isSafeNumRecord(values))) return null;
       if (!Array.isArray(s.months) || !s.months.every(validSenatorMonth) || !isSafeNumRecord(s.review)) return null;
+      if (!Array.isArray(s.ceiling) || !s.ceiling.every(validSenatorCeiling)) return null;
     }
     return raw;
   }
@@ -367,6 +370,54 @@
         : `<div class="bar-row is-unlinked" style="--opacity:${Math.max(.25, 1 - i * .18)}">${inner}</div>`;
     }).join('')}</div>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'senadores')}</section>`;
   }
+  const senatorCeilingPct = (spentCents, ceilingCents) => {
+    const n = BigInt(spentCents), d = BigInt(ceilingCents), neg = n < 0n, a = neg ? -n : n;
+    const tenths = Number((a * 2000n + d) / (2n * d)) * (neg ? -1 : 1);
+    return (tenths / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+  };
+  function senatorCeilingRanking(data) {
+    const byId = new Map(data.senators.map(s => [s.senatorId, s]));
+    const seats = new Map();
+    for (const s of data.senators) {
+      for (const entry of s.ceiling) {
+        if (seats.has(entry.codigoMandato) || entry.monthsWithCeiling <= 0 || entry.ceilingCents <= 0) continue;
+        seats.set(entry.codigoMandato, entry);
+      }
+    }
+    const list = [...seats.values()].map(entry => ({
+      entry,
+      people: entry.senatorIds.map(id => {
+        const sen = byId.get(id);
+        return sen ? { id, name: senatorDisplayName(sen), named: senatorNamed(sen), senator: sen } : { id, name: `Senador(a) sem nome cadastrado (ID ${id})`, named: false, senator: null };
+      }),
+    }));
+    list.sort((a, b) => {
+      const lhs = BigInt(b.entry.spentCents) * BigInt(a.entry.ceilingCents);
+      const rhs = BigInt(a.entry.spentCents) * BigInt(b.entry.ceilingCents);
+      if (lhs !== rhs) return lhs > rhs ? 1 : -1;
+      const nameA = a.people.map(p => p.name).join(', '), nameB = b.people.map(p => p.name).join(', ');
+      return nameA.localeCompare(nameB, 'pt-BR') || (a.entry.codigoMandato < b.entry.codigoMandato ? -1 : a.entry.codigoMandato > b.entry.codigoMandato ? 1 : 0);
+    });
+    return list;
+  }
+  function senatorCeilingSection(data) {
+    const ranked = senatorCeilingRanking(data);
+    if (!ranked.length) return '';
+    const rows = ranked.slice(0, state.senatorCeilingLimit).map(({ entry, people }, i) => {
+      const pct = senatorCeilingPct(entry.spentCents, entry.ceilingCents);
+      const peopleHtml = people.map(p => p.named
+        ? `<a href="${escape(withYear(senatorPath(p.senator)))}" data-action="senator-profile" data-senator-id="${p.id}">${escape(p.name)}</a>`
+        : `<span>${escape(p.name)}</span>`).join(', ');
+      const meta = [
+        entry.uf ? escape(entry.uf) : null,
+        `${entry.monthsWithCeiling} ${monthsWord(entry.monthsWithCeiling)} com teto`,
+        `${money(entry.spentCents)} de ${money(entry.ceilingCents)}`,
+      ].filter(Boolean).join(' · ');
+      const noteHtml = entry.note ? `<small class="senator-ceiling-note">${escape(entry.note)}</small>` : '';
+      return `<li class="senator-ceiling-row" data-mandato="${escape(entry.codigoMandato)}" tabindex="-1"><span class="senator-ceiling-rank">${String(i + 1).padStart(2, '0')}</span><div class="senator-ceiling-info"><div class="senator-ceiling-people">${peopleHtml}</div><span class="senator-ceiling-meta">${meta}</span>${noteHtml}</div><span class="senator-ceiling-pct">${pct}</span></li>`;
+    }).join('');
+    return `<section class="senator-ceiling-section" id="senator-ceiling"><h2>% do teto por assento · ${escape(data.year)}</h2><ol class="senator-ceiling-list">${rows}</ol>${listMore(ranked.length, state.senatorCeilingLimit, BAR_STEP, 'senator-ceiling', 'assentos')}</section>`;
+  }
   function senatorCutoff(data) {
     if (!data?.collectedAt) return '';
     const ms = [...new Set(data.senators.flatMap(s => (s.months || []).map(m => m.month)).filter(m => m >= 1 && m <= 12))];
@@ -383,8 +434,8 @@
       body = '<div class="senators-status" role="status">Carregando dados do Senado…</div>';
     } else {
       const data = senatorState.data, { list: ranked, excludedMonthly } = senatorRanking(data);
-      const note = `Dados oficiais do Senado Federal (CEAPS) em ${escape(data.year)}: ${number(data.senators.length)} senadores, total publicado de ${money(data.totalCents)} (${number(data.records)} registros). Lançamentos sem tipo de despesa ficam fora dos totais.${state.metric === 'mensal' ? ` Gasto mensal divide o total pelos meses com exercício completo ou parcial${excludedMonthly ? `; ${excludedMonthly} ${excludedMonthly === 1 ? 'senador sem mês de exercício ficou' : 'senadores sem mês de exercício ficaram'} fora do ranking por mês` : ''}.` : ''} Não exibimos porcentagem do teto para senadores. <button class="text-button" data-action="methodology">Fontes e metodologia →</button>`;
-      body = `<div class="cards">${senatorCards(data, ranked)}</div><p class="ranking-context">${note}</p>${senatorBarSection()}${editorialFollowUp()}`;
+      const note = `Dados oficiais do Senado Federal (CEAPS) em ${escape(data.year)}: ${number(data.senators.length)} senadores, total publicado de ${money(data.totalCents)} (${number(data.records)} registros). Lançamentos sem tipo de despesa ficam fora dos totais.${state.metric === 'mensal' ? ` Gasto mensal divide o total pelos meses com exercício completo ou parcial${excludedMonthly ? `; ${excludedMonthly} ${excludedMonthly === 1 ? 'senador sem mês de exercício ficou' : 'senadores sem mês de exercício ficaram'} fora do ranking por mês` : ''}.` : ''} O % do teto é calculado por assento (titular e suplentes somados) e só nos meses com teto conhecido. <button class="text-button" data-action="methodology">Fontes e metodologia →</button>`;
+      body = `<div class="cards">${senatorCards(data, ranked)}</div><p class="ranking-context">${note}</p>${senatorBarSection()}${senatorCeilingSection(data)}${editorialFollowUp()}`;
     }
     return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Senadores de ${escape(state.year)}</h2>${tabs()}<div class="editorial-controls"><div class="selects">${yearSelector()}<span class="real-year">Senado · ${escape(state.year)}${Number(state.year) === 2026 ? ' (parcial)' : ''}</span>${senatorCutoff(senatorState.data)}</div>${metricToggle()}</div>${body}</section>`;
   }
@@ -1047,6 +1098,7 @@
       if (next !== state.house) {
         state.house = next;
         state.barLimit = BAR_STEP;
+        state.senatorCeilingLimit = BAR_STEP;
         if (next === 'senado') {
           askRun++;
           if (state.answer?.type === 'loading') state.answer = null;
@@ -1057,7 +1109,7 @@
       }
       return;
     }
-    if (target.dataset.tab) { state.tab = target.dataset.tab; state.barLimit = BAR_STEP; refresh(); return; }
+    if (target.dataset.tab) { state.tab = target.dataset.tab; state.barLimit = BAR_STEP; state.senatorCeilingLimit = BAR_STEP; refresh(); return; }
     if (target.dataset.metric) { state.metric = target.dataset.metric; refresh(); return; }
     if (target.dataset.question) { ask(target.dataset.question); return; }
     if (target.dataset.year) { switchYear(target.dataset.year); return; }
@@ -1068,6 +1120,7 @@
     else if (action === 'dialog-back') goBack();
     else if (action === 'answer-evidence' && state.answer?.ids?.length) evidence(state.answer.ids[0], { kind: state.answer.kind, compare: state.answer.type === 'compare' ? state.answer.ids[1] : null });
     else if (action === 'bars-more' || action === 'bars-less') { const before = state.barLimit; state.barLimit = action === 'bars-more' ? before + BAR_STEP : BAR_STEP; $('#comparison').outerHTML = barSection(); (action === 'bars-more' ? document.querySelectorAll('#bar-chart .bar-row')[before] : document.querySelector('[data-action=bars-more]'))?.focus({ preventScroll: action === 'bars-more' }); }
+    else if (action === 'senator-ceiling-more' || action === 'senator-ceiling-less') { const before = state.senatorCeilingLimit; state.senatorCeilingLimit = action === 'senator-ceiling-more' ? before + BAR_STEP : BAR_STEP; const sec = $('#senator-ceiling'); if (sec && senatorState.data) { sec.outerHTML = senatorCeilingSection(senatorState.data); const row = action === 'senator-ceiling-more' ? document.querySelectorAll('#senator-ceiling .senator-ceiling-row')[before] : null; (action === 'senator-ceiling-more' ? (row?.querySelector('a') || row) : document.querySelector('[data-action=senator-ceiling-more]'))?.focus({ preventScroll: action === 'senator-ceiling-more' }); } }
     else if (action === 'csv-ranking') downloadRankingCsv('ranking');
     else if (action === 'csv-state') downloadRankingCsv('state', target.dataset.uf);
     else if (action === 'records') openView(() => recordTable(person(id)));
