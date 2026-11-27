@@ -270,10 +270,10 @@
     return raw;
   }
   function validSenatorsYear(raw) {
-    if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-year.v1' || !Number.isInteger(raw.year) || !Number.isSafeInteger(raw.totalCents) || !Number.isSafeInteger(raw.records) || !isOptNullableStr(raw.collectedAt) || !Array.isArray(raw.senators)) return null;
+    if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-year.v1' || typeof raw.publicationId !== 'string' || !raw.publicationId || !Number.isInteger(raw.year) || !Number.isSafeInteger(raw.totalCents) || !Number.isSafeInteger(raw.records) || !isOptNullableStr(raw.collectedAt) || !Array.isArray(raw.senators)) return null;
     for (const s of raw.senators) {
       if (!isPlainObj(s) || !Number.isInteger(s.senatorId) || !Number.isInteger(s.year) || (s.name !== null && typeof s.name !== 'string') || !Number.isSafeInteger(s.totalCents) || !Number.isSafeInteger(s.records)) return null;
-      if (!isSafeNumRecord(s.byType) || !isSafeNumRecord(s.suppliers) || !isPlainObj(s.byMonth) || !Object.values(s.byMonth).every(isSafeNumRecord)) return null;
+      if (!isSafeNumRecord(s.byType) || !isSafeNumRecord(s.suppliers) || !isPlainObj(s.byMonth) || !Object.entries(s.byMonth).every(([month, values]) => /^(?:[1-9]|1[0-2])$/.test(month) && isSafeNumRecord(values))) return null;
       if (!Array.isArray(s.months) || !s.months.every(validSenatorMonth) || !isSafeNumRecord(s.review)) return null;
     }
     return raw;
@@ -319,13 +319,13 @@
       senatorState.index = res.index;
       if (res.missingYear) { senatorState.status = 'missing-year'; senatorState.data = null; }
       else { senatorState.status = 'ready'; senatorState.data = res.data; }
-      if (state.house === 'senado' && $('#rank-slot')) { $('#rank-slot').innerHTML = rankingSection(); markTab(false); }
+      if (state.house === 'senado' && $('#rank-slot')) refresh();
     }, () => {
       if (senatorState.year !== reqYear) return;
       senatorState.status = 'error';
       senatorState.data = null;
       senatorState.error = 'Não foi possível carregar os dados do Senado agora. Nenhum valor foi estimado.';
-      if (state.house === 'senado' && $('#rank-slot')) { $('#rank-slot').innerHTML = rankingSection(); markTab(false); }
+      if (state.house === 'senado' && $('#rank-slot')) refresh();
     });
   }
   function senatorRanking(data) {
@@ -438,14 +438,19 @@
       D.ceiling ? ceilingStep(everyone, step) : D.ceilingPending ? step('—', `limite de ${state.year} em conferência`, 'A porcentagem do teto da cota ainda não é mostrada para este ano.') : ''
     }</ol><button type="button" class="text-button" data-action="methodology">Como chegamos nisso? →</button></section>`;
   }
+  function syncHouseElements() {
+    const isSenado = state.house === 'senado';
+    if (isSenado) closeSuggestions();
+    for (const sel of ['#universo', '#answer-slot', '.search-wrap', '.editorial-search-examples', '.header-search']) {
+      const el = $(sel);
+      if (el) el.hidden = isSenado;
+    }
+  }
   function layout() {
     document.body.dataset.model = model;
     const main = `<section class="editorial-hero"><h1 class="editorial-title">O poder,<em>em números.</em></h1><div class="editorial-left"><p class="editorial-subtitle">Dados públicos para uma sociedade mais informada.</p>${searchForm()}<div class="editorial-search-examples" aria-label="Perguntas para experimentar"><span>Experimente:</span><button type="button" data-question="Quem mais gastou?">Quem mais gastou? ↗︎</button><button type="button" data-question="${escape(examples()[0])}">${escape(examples()[0])} ↗︎</button></div></div><div class="hero-portrait" id="hero-portrait">${photo(person(state.featured))}</div>${handwrittenNote()}<div class="editorial-feature" id="editorial-feature">${editorialFeature()}</div></section>${universe()}<div id="answer-slot" aria-live="polite">${answerHTML()}</div><div id="rank-slot">${rankingSection()}</div>`;
     $('#app').innerHTML = `<div class="site">${header()}<main id="main">${main}</main><footer class="footer"></footer></div>`;
-    if (state.house === 'senado') {
-      if ($('#universo')) $('#universo').hidden = true;
-      if ($('#answer-slot')) $('#answer-slot').hidden = true;
-    }
+    syncHouseElements();
   }
   function editorialFeature() {
     const p = person(state.featured);
@@ -491,11 +496,10 @@
   function refresh() {
     state.popover = null;
     const focused = document.activeElement;
-    const focusKey = focused?.dataset.house ? ['house', focused.dataset.house] : focused?.dataset.metric ? ['metric', focused.dataset.metric] : focused?.dataset.tab ? ['tab', focused.dataset.tab] : null;
+    const focusKey = focused?.dataset?.house ? ['house', focused.dataset.house] : focused?.dataset?.metric ? ['metric', focused.dataset.metric] : focused?.dataset?.tab ? ['tab', focused.dataset.tab] : null;
     const before = new Map([...document.querySelectorAll('.rank-card')].map(el => [el.dataset.person, el.getBoundingClientRect()]));
     const isSenado = state.house === 'senado';
-    if ($('#universo')) $('#universo').hidden = isSenado;
-    if ($('#answer-slot')) $('#answer-slot').hidden = isSenado;
+    syncHouseElements();
     $('#rank-slot').innerHTML = rankingSection();
     if (!isSenado && $('#editorial-feature')) $('#editorial-feature').innerHTML = editorialFeature();
     if (!isSenado && state.answer?.type === 'rank') state.answer.ids = ranking('gastos').slice(0, 3).map(p => p.id);
@@ -976,7 +980,7 @@
     try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(shared.href); toast('Link com a investigação e os filtros copiado.'); }
     catch { showDialog('Compartilhar investigação', `<div class="manual-share"><p>Copie este link. Os filtros e a pergunta serão preservados.</p><label for="share-link">Link da consulta</label><input id="share-link" readonly value="${escape(shared.href)}"></div>`); $('#share-link').select(); }
   }
-  function closeSuggestions() { const list = $('#suggestions'); if (!list) return; list.hidden = true; $('#query').setAttribute('aria-expanded', 'false'); }
+  function closeSuggestions() { const list = $('#suggestions'); if (!list) return; list.hidden = true; $('#query')?.setAttribute('aria-expanded', 'false'); }
   function exportCSV(id, month) {
     const p = person(id), whole = month === undefined && state.category === 'Todas';
     const save = (href, n) => { const a = document.createElement('a'); a.href = href; a.download = `clareia-${index.snapshotId.slice(0, 12)}-${p.officialId}${month === undefined ? '' : '-' + (month + 1)}.csv`; a.click(); toast(`CSV com ${n} registros oficiais preparado.`); };
@@ -1078,7 +1082,7 @@
     }
     else if (action === 'copy-senator-link') copySenatorLink(target.dataset.senatorId, target);
     else if (action === 'methodology') methodology();
-    else if (action === 'focus-search') { $('#query').focus(); $('#query').scrollIntoView({ block: 'center' }); }
+    else if (action === 'focus-search') { if (state.house === 'senado') return; $('#query')?.focus(); $('#query')?.scrollIntoView({ block: 'center' }); }
     else if (action === 'profile-compare') { const peer = byTotal().find(o => o.id !== id); closeDialog().then(() => ask(`Compare ${person(id).name} e ${peer.name}`)); }
     else if (action === 'share') shareLink();
     else if (action === 'copy-link') copyProfileLink(id, target);

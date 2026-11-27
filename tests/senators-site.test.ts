@@ -321,14 +321,41 @@ function bootAppJs(opts:{
     attrs:{} as Record<string,string>,
     dataset:{} as Record<string,string>,
     setAttribute(k:string,v:string){this.attrs[k]=String(v);},
-    focus(){},
+    focus(_opts?:unknown){},
     scrollIntoView(){},
     before(){},
     getBoundingClientRect(){return {left:0,top:0,width:100,height:40};},
   });
-  const elements:Record<string,ReturnType<typeof makeBox>>={
-    '#app':makeBox(),'#universo':makeBox(),'#answer-slot':makeBox(),'#rank-slot':makeBox(),
+  type MockBox=ReturnType<typeof makeBox>;
+  const bodyEl=makeBox();
+  let activeEl:MockBox|null=bodyEl;
+  let houseButtons:Record<string,MockBox>={};
+  const makeHouseButton=(house:'camara'|'senado'):MockBox=>{
+    const b=makeBox();
+    b.dataset={house};
+    b.focus=()=>{activeEl=b;};
+    return b;
+  };
+  const rebuildHouseButtons=(html:string)=>{
+    if(activeEl&&Object.values(houseButtons).includes(activeEl))activeEl=bodyEl;
+    houseButtons={};
+    if(html.includes('data-house="camara"'))houseButtons.camara=makeHouseButton('camara');
+    if(html.includes('data-house="senado"'))houseButtons.senado=makeHouseButton('senado');
+  };
+  const withHouseHtml=(box:MockBox)=>{
+    let html='';
+    Object.defineProperty(box,'innerHTML',{
+      get(){return html;},
+      set(v:string){html=v;rebuildHouseButtons(v);},
+      enumerable:true,
+      configurable:true,
+    });
+    return box;
+  };
+  const elements:Record<string,MockBox>={
+    '#app':withHouseHtml(makeBox()),'#universo':makeBox(),'#answer-slot':makeBox(),'#rank-slot':withHouseHtml(makeBox()),
     '#editorial-feature':makeBox(),'#hero-portrait':makeBox(),'#query':makeBox(),'#suggestions':makeBox(),
+    '.search-wrap':makeBox(),'.editorial-search-examples':makeBox(),'.header-search':makeBox(),
     '#detail-title':makeBox(),'#detail-body':makeBox(),'#detail .close-button':makeBox(),'#toast':makeBox(),
   };
   let scopeChip:ReturnType<typeof makeBox>|null=null;
@@ -354,8 +381,9 @@ function bootAppJs(opts:{
   win.window=win;
   const doc={
     title:'Clareia — o poder, em números',
-    body:{dataset:{} as Record<string,string>},
-    activeElement:null,
+    body:bodyEl,
+    get activeElement(){return activeEl;},
+    set activeElement(v:MockBox|null){activeEl=v;},
     createElement(){const box=makeBox();scopeChip=box;return box;},
     querySelector(sel:string){
       if(sel==='#detail')return dialog;
@@ -364,6 +392,8 @@ function bootAppJs(opts:{
         const m=/data-senator-run="(\d+)"/.exec(elements['#detail-body'].innerHTML);
         return m?{dataset:{senatorRun:m[1]}}:null;
       }
+      const houseMatch=/^\[data-house="(camara|senado)"\]$/.exec(sel);
+      if(houseMatch)return houseButtons[houseMatch[1]]??null;
       return elements[sel]??null;
     },
     querySelectorAll(){return [];},
@@ -390,6 +420,8 @@ function bootAppJs(opts:{
       closeDialog:()=>Promise<void>;
     },
     dialog,elements,location:loc,clickHouse,
+    activeElement:()=>activeEl,
+    focusHouse:(house:'camara'|'senado')=>{houseButtons[house]?.focus();},
   };
 }
 
@@ -413,9 +445,15 @@ test('real/data.js enables senators only when manifest.senators is strictly true
   assert.equal(await bootDataJs(true),true);
 });
 
-test('real/app.js rejects malformed senator months ([null] or invalid month) with an error state and escapes fallback month label',async()=>{
-  for(const badMonths of [[null],[{month:'<img src=x>',exercise:'full',uf:'GO',codigoMandato:null,participation:null}],[{month:13,exercise:'full',uf:'GO',codigoMandato:null,participation:null}]]){
-    const badYear={...VALID_SENATORS_YEAR,senators:[{...VALID_SENATORS_YEAR.senators[0],months:badMonths}]};
+test('real/app.js shows an error for malformed senator exercise months or expense month keys',async()=>{
+  const invalid={exercise:'full',uf:'GO',codigoMandato:null,participation:null};
+  for(const badFields of [
+    {months:[null]},
+    {months:[{...invalid,month:'<img src=x>'}]},
+    {months:[{...invalid,month:13}]},
+    {byMonth:{'01':{'Aluguel de imóveis':375000}}},
+  ]){
+    const badYear={...VALID_SENATORS_YEAR,senators:[{...VALID_SENATORS_YEAR.senators[0],...badFields}]};
     const app=bootAppJs({
       senators:true,
       fetchImpl:async url=>{
@@ -499,4 +537,104 @@ test('starting a Câmara search while suppliers load then switching to Senado ke
   assert.equal(app2.clareia.state.house,'camara');
   assert.equal(app2.clareia.state.query,'Quem gastou menos?');
   assert.equal(app2.clareia.state.tab,'menos');
+});
+
+test('real/app.js rejects malformed publicationId (numeric, empty, missing) before caching in ranking and profile route',async()=>{
+  for(const badPub of [12345,'',null,undefined]){
+    const {publicationId:_ignored,...withoutPub}=VALID_SENATORS_YEAR;
+    const badYear=badPub===undefined?withoutPub:{...VALID_SENATORS_YEAR,publicationId:badPub};
+    let serveValid=false;
+    const fetchImpl:AppFetch=async url=>{
+      if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+      if(url==='/senadores/2025.json')return {ok:true,json:async()=>serveValid?VALID_SENATORS_YEAR:badYear};
+      return {ok:false,status:404,json:async()=>({})};
+    };
+
+    const app=bootAppJs({senators:true,fetchImpl});
+    app.clickHouse('senado');
+    await flush();
+    assert.ok(app.elements['#rank-slot'].innerHTML.includes('senators-error'),`bad publicationId ${String(badPub)} shows error`);
+    assert.ok(!app.elements['#rank-slot'].innerHTML.includes('Vanderlan Cardoso'));
+
+    // Failed validation was not cached: a subsequent valid response loads cleanly.
+    serveValid=true;
+    app.clickHouse('camara');
+    app.clickHouse('senado');
+    await flush();
+    assert.ok(app.elements['#rank-slot'].innerHTML.includes('Vanderlan Cardoso'),`retry after bad publicationId ${String(badPub)} succeeds`);
+
+    // Direct senator route also shows an error dialog instead of throwing at .slice().
+    serveValid=false;
+    const routeApp=bootAppJs({senators:true,pathname:'/senador/5899-vanderlan-cardoso',fetchImpl});
+    routeApp.clareia.openRoute({type:'senador',id:'5899',slug:'vanderlan-cardoso'},{initial:true});
+    await flush();
+    assert.equal(routeApp.dialog.open,true);
+    assert.equal(routeApp.elements['#detail-title'].textContent,'Dados indisponíveis');
+  }
+});
+
+test('keyboard activation of Senado keeps focus on the Senado button after both fetch success and failure',async()=>{
+  for(const ok of [true,false]){
+    let release!:()=>void;
+    const gate=new Promise<void>(r=>{release=r;});
+    const app=bootAppJs({
+      senators:true,
+      fetchImpl:async url=>{
+        if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+        if(url==='/senadores/2025.json'){
+          await gate;
+          return ok?{ok:true,json:async()=>VALID_SENATORS_YEAR}:{ok:false,status:500,json:async()=>({})};
+        }
+        return {ok:false,status:404,json:async()=>({})};
+      },
+    });
+    app.focusHouse('senado');
+    assert.equal(app.activeElement()?.dataset.house,'senado');
+    app.clickHouse('senado');
+    const whileLoading=app.activeElement();
+    assert.equal(whileLoading?.dataset.house,'senado','focus kept during loading');
+
+    release();
+    await flush();
+    assert.equal(app.activeElement()?.dataset.house,'senado',`focus kept after fetch ${ok?'success':'failure'}`);
+    assert.notEqual(app.activeElement(),whileLoading,'focus moved to the newly rendered switch button');
+    if(ok)assert.ok(app.elements['#rank-slot'].innerHTML.includes('Vanderlan Cardoso'));
+    else assert.ok(app.elements['#rank-slot'].innerHTML.includes('senators-error'));
+  }
+});
+
+test('Câmara-only search and examples are hidden while Senado is selected and restored on Câmara',async()=>{
+  const app=bootAppJs({
+    senators:true,
+    fetchImpl:async url=>{
+      if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+      if(url==='/senadores/2025.json')return {ok:true,json:async()=>VALID_SENATORS_YEAR};
+      return {ok:false,status:404,json:async()=>({})};
+    },
+  });
+  for(const sel of ['.search-wrap','.editorial-search-examples','.header-search','#universo','#answer-slot']){
+    assert.equal(app.elements[sel].hidden,false,`${sel} visible on Câmara`);
+  }
+  app.clickHouse('senado');
+  await flush();
+  for(const sel of ['.search-wrap','.editorial-search-examples','.header-search','#universo','#answer-slot']){
+    assert.equal(app.elements[sel].hidden,true,`${sel} hidden on Senado`);
+  }
+  app.clickHouse('camara');
+  for(const sel of ['.search-wrap','.editorial-search-examples','.header-search','#universo','#answer-slot']){
+    assert.equal(app.elements[sel].hidden,false,`${sel} restored on Câmara`);
+  }
+
+  const directSenado=bootAppJs({
+    senators:true,
+    search:'?casa=senado',
+    fetchImpl:async url=>{
+      if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+      if(url==='/senadores/2025.json')return {ok:true,json:async()=>VALID_SENATORS_YEAR};
+      return {ok:false,status:404,json:async()=>({})};
+    },
+  });
+  for(const sel of ['.search-wrap','.editorial-search-examples','.header-search','#universo','#answer-slot']){
+    assert.equal(directSenado.elements[sel].hidden,true,`${sel} hidden on direct ?casa=senado load`);
+  }
 });
