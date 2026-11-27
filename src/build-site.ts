@@ -18,8 +18,9 @@ import {partyReviewItems,ufReviewItems} from './review-list.ts';
 import {deputiesOf,resolveOptions,writePrerendered,writeStaticPages} from './prerender.ts';
 import type {Deputy,Period,Senator} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
-import {writeSenatorsSite} from './senado-publication.ts';
+import {readSenatorRows,writeSenatorsSite} from './senado-publication.ts';
 import type {SenatorYearRecord} from './senado-publication.ts';
+import {isJpegBytes} from './senado-profiles.ts';
 import {generateShareImages} from './share-images.ts';
 import {assertVotesMatchVersion,readBallots,readVotes} from './votes-publication.ts';
 import {readAmendmentRows} from './amendments-publication.ts';
@@ -211,16 +212,26 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.rename(data,path.join(outDir,'data',publicationId));
   const prerenderSenators:Senator[]=[];
   if(sitePlan.senators){
-    await writeSenatorsSite(db,outDir,sitePlan.senators.publicationId);
+    const senatorPhotoIds=new Set<number>();
+    const senatorIds=[...new Set((await readSenatorRows(db,sitePlan.senators.publicationId)).map(r=>r.senatorId))].sort((a,b)=>a-b);
+    const senatorPortraitsDir=path.join(outDir,'senadores','portraits');
+    for(const id of senatorIds){
+      const bytes=await fs.readFile(path.join(portraitsDir,`sen-${id}.jpg`)).catch((err:NodeJS.ErrnoException)=>{if(err.code==='ENOENT')return null;throw err;});
+      if(!bytes||!isJpegBytes(bytes))continue;
+      await fs.mkdir(senatorPortraitsDir,{recursive:true});
+      await fs.writeFile(path.join(senatorPortraitsDir,`${id}.jpg`),bytes);
+      senatorPhotoIds.add(id);
+    }
+    await writeSenatorsSite(db,outDir,sitePlan.senators.publicationId,senatorPhotoIds);
     const senatorsIndex=JSON.parse(await fs.readFile(path.join(outDir,'senadores','index.json'),'utf8')) as {years:{year:number;file:string}[]};
     const orderedSenatorYears=[...senatorsIndex.years].sort((a,b)=>(a.year===sitePlan.defaultYear?-1:b.year===sitePlan.defaultYear?1:a.year-b.year));
     const seenSenators=new Set<number>();
     for(const y of orderedSenatorYears){
-      const yData=JSON.parse(await fs.readFile(path.join(outDir,'senadores',y.file),'utf8')) as {collectedAt?:string;senators:SenatorYearRecord[]};
+      const yData=JSON.parse(await fs.readFile(path.join(outDir,'senadores',y.file),'utf8')) as {collectedAt?:string;senators:(SenatorYearRecord&{photo?:string|null})[]};
       for(const s of yData.senators){
         if(!s.name||!s.name.trim()||seenSenators.has(s.senatorId))continue;
         seenSenators.add(s.senatorId);
-        prerenderSenators.push({senatorId:s.senatorId,year:s.year,name:s.name,totalCents:s.totalCents,records:s.records,months:s.months,review:s.review,collectedAt:yData.collectedAt??null});
+        prerenderSenators.push({senatorId:s.senatorId,year:s.year,name:s.name,totalCents:s.totalCents,records:s.records,months:s.months,review:s.review,collectedAt:yData.collectedAt??null,photo:s.photo??null});
       }
     }
   }

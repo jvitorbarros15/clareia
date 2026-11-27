@@ -21,6 +21,7 @@ import {
   writeSenatorsSite,
 } from '../src/senado-publication.ts';
 import type {SenatorsYearRun} from '../src/senado-publication.ts';
+import type {SenadoProfilesFile} from '../src/senado-profiles.ts';
 import {deriveSenatorCoverage} from '../src/senate-coverage.ts';
 import {openDB} from '../src/store.ts';
 import {coverageFor} from './senado-coverage-helper.ts';
@@ -372,6 +373,75 @@ test('id is deterministic, SQL store and re-audit round-trip detects tampering, 
     );
     await recordDomainAudit(db, legacyId, 'passed', {checkedAt: CHECKED_AT});
     await assert.rejects(writeSenatorsSite(db, outDir, legacyId), /sem dados de teto/);
+  } finally {
+    await db.close();
+    await fs.rm(outDir, {recursive: true, force: true});
+  }
+});
+
+test('rows without profiles omit the party key, rows with profiles compute party per month, and writeSenatorsSite sets photo from photoIds', async () => {
+  const withoutProfiles = buildSenatorsVersion([makeRun()], BUILT_AT);
+  for (const row of withoutProfiles.rows) {
+    for (const m of row.months) {
+      assert.equal(Object.hasOwn(m, 'party'), false);
+    }
+  }
+
+  const profiles: SenadoProfilesFile = {
+    schema: 'clareia.senado-profiles.v1',
+    senators: [
+      {
+        id: 5899,
+        affiliations: [
+          {party: 'PSD', start: '2020-03-04', end: '2025-04-15'},
+          {party: 'MDB', start: '2025-04-16', end: null},
+        ],
+      },
+    ],
+  };
+  const runWithProfiles: SenatorsYearRun = {...makeRun(), profiles};
+  const withProfiles = buildSenatorsVersion([runWithProfiles], BUILT_AT);
+  assert.notEqual(withProfiles.id, withoutProfiles.id);
+
+  const vanderlan = withProfiles.rows.find(r => r.senatorId === 5899)!;
+  assert.equal(vanderlan.months[0].party, 'PSD'); // Jan (full)
+  assert.equal(vanderlan.months[3].party, 'MDB'); // Apr (tie 15/15 -> later start)
+  assert.equal(vanderlan.months[6].party, 'MDB'); // Jul (partial)
+  assert.equal(vanderlan.months[7].party, null);  // Aug (outside)
+  assert.equal(vanderlan.months[8].party, null);  // Sep (outside)
+  assert.equal(vanderlan.months[9].party, 'MDB'); // Oct (partial)
+  assert.equal(vanderlan.months[11].party, 'MDB'); // Dec (full)
+
+  const other = withProfiles.rows.find(r => r.senatorId === 5917)!;
+  assert.equal(other.months[0].party, null);
+
+  const db = await openDB(true);
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clareia-senators-profiles-'));
+  try {
+    await storeSenatorsVersion(db, withProfiles);
+    const auditPass = await auditSenatorsVersion(db, withProfiles.id, [runWithProfiles]);
+    assert.equal(auditPass.status, 'passed');
+    const auditMismatch = await auditSenatorsVersion(db, withProfiles.id, [makeRun()]);
+    assert.equal(auditMismatch.status, 'failed');
+
+    await recordDomainAudit(db, withProfiles.id, 'passed', auditPass);
+    await writeSenatorsSite(db, outDir, withProfiles.id, new Set([5899]));
+    const yearJson = JSON.parse(await fs.readFile(path.join(outDir, 'senadores', '2025.json'), 'utf8')) as {
+      senators: Array<{senatorId: number; photo: string | null}>;
+    };
+    assert.equal(yearJson.senators.find(s => s.senatorId === 5899)?.photo, '/senadores/portraits/5899.jpg');
+    assert.equal(yearJson.senators.find(s => s.senatorId === 5917)?.photo, null);
+
+    const outNoPhoto = await fs.mkdtemp(path.join(os.tmpdir(), 'clareia-senators-nophoto-'));
+    try {
+      await writeSenatorsSite(db, outNoPhoto, withProfiles.id);
+      const noPhotoJson = JSON.parse(await fs.readFile(path.join(outNoPhoto, 'senadores', '2025.json'), 'utf8')) as {
+        senators: Array<{senatorId: number; photo: string | null}>;
+      };
+      assert.equal(noPhotoJson.senators.every(s => s.photo === null), true);
+    } finally {
+      await fs.rm(outNoPhoto, {recursive: true, force: true});
+    }
   } finally {
     await db.close();
     await fs.rm(outDir, {recursive: true, force: true});

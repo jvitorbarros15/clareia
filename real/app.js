@@ -119,11 +119,12 @@
     };
     return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.arrow}</svg>`;
   };
-  function photo(p) {
-    if (!safeImage(p.photo)) return `<span class="initials" aria-label="${escape(p.name)} — sem retrato">${escape(p.name.split(' ').map(w => w[0]).join('').slice(0, 2))}</span>`;
-    return `<span class="photo"><img src="${escape(p.photo)}" alt="Retrato oficial de ${escape(p.name)}" loading="lazy"></span>`;
+  const initialsOf = name => name.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2);
+  function photo(p, fallback = false) {
+    if (!safeImage(p.photo)) return `<span class="initials" aria-label="${escape(p.name)} — sem retrato">${escape(initialsOf(p.name))}</span>`;
+    return `<span class="photo"${fallback ? ` data-fallback-name="${escape(p.name)}"` : ''}><img src="${escape(p.photo)}" alt="Retrato oficial de ${escape(p.name)}" loading="lazy"></span>`;
   }
-  const avatar = p => `<span class="avatar">${photo(p)}</span>`;
+  const avatar = (p, fallback = false) => `<span class="avatar">${photo(p, fallback)}</span>`;
   function setPath(path, title) {
     const url = new URL(location.href);
     if (url.pathname !== path) { url.pathname = path; writeHistory('replaceState', history.state, url); }
@@ -259,11 +260,13 @@
   // Senators with name: null stay in the ranking as "Senador(a) sem nome cadastrado (ID <id>)" in non-interactive rows, with no profile page or link.
   const senatorNamed = s => typeof s.name === 'string' && s.name.trim().length > 0;
   const senatorDisplayName = s => senatorNamed(s) ? s.name.trim() : `Senador(a) sem nome cadastrado (ID ${s.senatorId})`;
+  const senatorParty = s => [...new Set((s.months || []).map(m => m.party).filter(Boolean))].join(' / ');
   const senatorUf = s => [...new Set((s.months || []).map(m => m.uf).filter(Boolean))].join(' / ');
   const isPlainObj = v => typeof v === 'object' && v !== null && !Array.isArray(v);
   const isSafeNumRecord = obj => isPlainObj(obj) && Object.values(obj).every(v => typeof v === 'number' && Number.isSafeInteger(v));
   const isOptNullableStr = v => v === undefined || v === null || typeof v === 'string';
-  const validSenatorMonth = m => isPlainObj(m) && Number.isInteger(m.month) && m.month >= 1 && m.month <= 12 && typeof m.exercise === 'string' && m.exercise.length > 0 && isOptNullableStr(m.uf) && isOptNullableStr(m.codigoMandato) && isOptNullableStr(m.participation);
+  const isValidSenatorPhoto = v => v === undefined || v === null || (typeof v === 'string' && /^\/senadores\/portraits\/\d+\.jpg$/.test(v));
+  const validSenatorMonth = m => isPlainObj(m) && Number.isInteger(m.month) && m.month >= 1 && m.month <= 12 && typeof m.exercise === 'string' && m.exercise.length > 0 && isOptNullableStr(m.uf) && isOptNullableStr(m.party) && isOptNullableStr(m.codigoMandato) && isOptNullableStr(m.participation);
   const validSenatorCeiling = c => isPlainObj(c) && typeof c.codigoMandato === 'string' && c.codigoMandato.length > 0 && (c.uf === null || typeof c.uf === 'string') && Array.isArray(c.senatorIds) && c.senatorIds.length > 0 && c.senatorIds.every(id => Number.isSafeInteger(id)) && Number.isSafeInteger(c.spentCents) && Number.isSafeInteger(c.ceilingCents) && c.ceilingCents >= 0 && Number.isSafeInteger(c.monthsWithCeiling) && c.monthsWithCeiling >= 0 && c.monthsWithCeiling <= 12 && Number.isSafeInteger(c.computedMonths) && c.computedMonths >= 0 && c.computedMonths <= c.monthsWithCeiling && (c.monthsWithCeiling === 0 ? c.ceilingCents === 0 : c.ceilingCents > 0) && (c.note === null || typeof c.note === 'string');
   function validSenatorsIndex(raw) {
     if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-index.v1' || !Array.isArray(raw.years)) return null;
@@ -273,7 +276,7 @@
   function validSenatorsYear(raw) {
     if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-year.v1' || typeof raw.publicationId !== 'string' || !raw.publicationId || !Number.isInteger(raw.year) || !Number.isSafeInteger(raw.totalCents) || !Number.isSafeInteger(raw.records) || !isOptNullableStr(raw.collectedAt) || !Array.isArray(raw.senators)) return null;
     for (const s of raw.senators) {
-      if (!isPlainObj(s) || !Number.isInteger(s.senatorId) || !Number.isInteger(s.year) || (s.name !== null && typeof s.name !== 'string') || !Number.isSafeInteger(s.totalCents) || !Number.isSafeInteger(s.records)) return null;
+      if (!isPlainObj(s) || !Number.isInteger(s.senatorId) || !Number.isInteger(s.year) || (s.name !== null && typeof s.name !== 'string') || !Number.isSafeInteger(s.totalCents) || !Number.isSafeInteger(s.records) || !isValidSenatorPhoto(s.photo)) return null;
       if (!Number.isSafeInteger(s.unassignedCents)) return null;
       if (!isSafeNumRecord(s.byType) || !isSafeNumRecord(s.suppliers) || !isPlainObj(s.byMonth) || !Object.entries(s.byMonth).every(([month, values]) => /^(?:[1-9]|1[0-2])$/.test(month) && isSafeNumRecord(values))) return null;
       if (!Array.isArray(s.months) || !s.months.every(validSenatorMonth) || !isSafeNumRecord(s.review)) return null;
@@ -345,12 +348,12 @@
   function senatorCards(data, ranked) {
     if (!ranked.length) return `<div class="empty-state"><b>Nenhum senador neste recorte.</b><p>${state.metric === 'mensal' ? 'Nenhum senador tem mês com exercício completo ou parcial neste ano.' : 'Não há senadores listados para este ano.'}</p></div>`;
     return ranked.slice(0, 3).map(({ senator: s, value: val, exercised }, i) => {
-      const named = senatorNamed(s), name = senatorDisplayName(s), uf = senatorUf(s);
-      const ctx = ['Senador(a)', uf].filter(Boolean).join(' · ');
+      const named = senatorNamed(s), name = senatorDisplayName(s), party = senatorParty(s), uf = senatorUf(s);
+      const ctx = ['Senador(a)', party, uf].filter(Boolean).join(' · ');
       const cap = state.metric === 'mensal' ? `Média mensal · ${exercised} ${monthsWord(exercised)} de exercício` : `CEAPS ${data.year} · ${number(s.records)} ${s.records === 1 ? 'registro' : 'registros'}`;
       const portrait = named
-        ? `<button type="button" class="portrait-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="Abrir perfil de ${escape(name)}">${photo({ name, photo: null })}<span class="rank-number">0${i + 1}</span></button>`
-        : `<div class="portrait-button">${photo({ name: 'S', photo: null })}<span class="rank-number">0${i + 1}</span></div>`;
+        ? `<button type="button" class="portrait-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="Abrir perfil de ${escape(name)}">${photo({ name, photo: s.photo ?? null }, true)}<span class="rank-number">0${i + 1}</span></button>`
+        : `<div class="portrait-button">${photo({ name: 'S', photo: s.photo ?? null }, true)}<span class="rank-number">0${i + 1}</span></div>`;
       const amountEl = named
         ? `<button type="button" class="value-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="${escape(name)}: ${money(val)}. Ver detalhes">${compact(val)}</button>`
         : `<span class="value-button">${compact(val)}</span>`;
@@ -364,7 +367,7 @@
     if (!ranked.length) return '';
     const max = Math.max(1, ...ranked.map(x => Math.abs(x.value)));
     return `<section class="bar-section" id="comparison"><h2>Comparativo de senadores · ${escape(data.year)}</h2><div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map(({ senator: s, value: val }, i) => {
-      const named = senatorNamed(s), name = senatorDisplayName(s), inner = `<span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar({ name: named ? name : 'S', photo: null })}<span class="bar-name">${escape(name)}</span><span class="track"><i style="width:${Math.abs(val) / max * 100}%"></i></span><span class="bar-value">${money(val)}</span>`;
+      const named = senatorNamed(s), name = senatorDisplayName(s), inner = `<span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar({ name: named ? name : 'S', photo: s.photo ?? null }, true)}<span class="bar-name">${escape(name)}</span><span class="track"><i style="width:${Math.abs(val) / max * 100}%"></i></span><span class="bar-value">${money(val)}</span>`;
       return named
         ? `<a class="bar-row" href="${escape(withYear(senatorPath(s)))}" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="${escape(name)}, ${money(val)}: abrir perfil" style="--opacity:${Math.max(.25, 1 - i * .18)}">${inner}</a>`
         : `<div class="bar-row is-unlinked" style="--opacity:${Math.max(.25, 1 - i * .18)}">${inner}</div>`;
@@ -762,7 +765,7 @@
   const EXERCISE_LABEL = { full: 'Exercício completo', partial: 'Exercício parcial', outside: 'Fora do mandato', unknown: 'Exercício não confirmado', conflict: 'Exercício em revisão' };
   function senatorProfile(s, yearData) {
     if (!senatorNamed(s)) return;
-    const name = s.name.trim(), uf = senatorUf(s), exercised = senatorExercised(s), monthly = senatorMonthly(s);
+    const name = s.name.trim(), party = senatorParty(s), uf = senatorUf(s), ctx = ['Senador(a)', party, uf].filter(Boolean).join(' · '), exercised = senatorExercised(s), monthly = senatorMonthly(s);
     const route = { url: withYear(senatorPath(s)), title: `${name} — Clareia` };
     const types = Object.entries(s.byType).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
     const maxType = Math.max(1, ...types.map(([, v]) => Math.abs(v)));
@@ -785,7 +788,8 @@
       const ex = EXERCISE_LABEL[m.exercise] || m.exercise;
       const warn = m.exercise !== 'full';
       const isSub = typeof m.participation === 'string' && /suplente/i.test(m.participation);
-      return `<li class="senator-month-row"><strong>${months[m.month - 1] || `Mês ${escape(m.month)}`}${m.uf ? ` · ${escape(m.uf)}` : ''}</strong><span class="senator-tags"><span class="senator-tag${warn ? ' senator-tag-warn' : ''}">${escape(ex)}</span>${isSub ? `<span class="senator-tag senator-tag-sub">${escape(m.participation)}</span>` : ''}</span></li>`;
+      const monthLabel = [months[m.month - 1] || `Mês ${escape(m.month)}`, m.party ? escape(m.party) : '', m.uf ? escape(m.uf) : ''].filter(Boolean).join(' · ');
+      return `<li class="senator-month-row"><strong>${monthLabel}</strong><span class="senator-tags"><span class="senator-tag${warn ? ' senator-tag-warn' : ''}">${escape(ex)}</span>${isSub ? `<span class="senator-tag senator-tag-sub">${escape(m.participation)}</span>` : ''}</span></li>`;
     }).join('');
     const exerciseHtml = exerciseRows ? `<ul class="senator-months">${exerciseRows}</ul>` : '<p class="context">Sem cobertura mensal informada para este ano.</p>';
     const emptyCount = Number(s.review?.['empty-type'] ?? 0);
@@ -793,7 +797,7 @@
       ? `<p class="records-note" role="note">${number(emptyCount)} ${emptyCount === 1 ? 'lançamento sem tipo de despesa ficou' : 'lançamentos sem tipo de despesa ficaram'} fora dos totais desta página.</p>`
       : '<p class="records-note">Lançamentos sem tipo de despesa ficam fora dos totais.</p>';
     const cutoffHtml = yearData?.collectedAt && s.months?.length ? `<p class="context cutoff">${escape(ClareiaView.cutoffLine(s.months.map(m => m.month), s.year, yearData.collectedAt))}</p>` : '';
-    const html = `<div class="profile-head">${avatar({ name, photo: null })}<div><h3>${escape(name)}</h3><p class="context">Senador(a)${uf ? ` • ${escape(uf)}` : ''} • Código Senado ${escape(s.senatorId)}</p><p class="context">CEAPS ${escape(s.year)} • ${number(s.records)} ${s.records === 1 ? 'registro' : 'registros'}</p>${cutoffHtml}</div></div>` +
+    const html = `<div class="profile-head">${avatar({ name, photo: s.photo ?? null }, true)}<div><h3>${escape(name)}</h3><p class="context">${escape(ctx)} • Código Senado ${escape(s.senatorId)}</p><p class="context">CEAPS ${escape(s.year)} • ${number(s.records)} ${s.records === 1 ? 'registro' : 'registros'}</p>${cutoffHtml}</div></div>` +
       `<div class="profile-stats"><div class="profile-stat"><span>Despesas em ${escape(s.year)}</span><strong>${money(s.totalCents)}</strong></div><div class="profile-stat"><span>Média por mês de exercício</span><strong>${monthly !== null ? money(monthly) : 'Sem mês de exercício'}</strong></div></div>` +
       `<p class="context">${exercised > 0 ? `${exercised} ${monthsWord(exercised)} com exercício completo ou parcial no ano.` : 'Sem exercício completo ou parcial no ano; fora do ranking por mês.'}</p>${emptyNote}` +
       `<section class="detail-section"><h3>Despesas por tipo</h3>${byTypeHtml}</section>` +
@@ -1152,6 +1156,18 @@
   };
   document.addEventListener('click', carryYear, true);
   document.addEventListener('auxclick', carryYear, true);
+  document.addEventListener('error', event => {
+    const img = event.target;
+    if (!img || img.tagName !== 'IMG') return;
+    const wrap = img.closest?.('.photo[data-fallback-name]');
+    if (!wrap) return;
+    const name = wrap.dataset?.fallbackName || '';
+    const span = document.createElement('span');
+    span.className = 'initials';
+    span.setAttribute('aria-label', `${name} — sem retrato`);
+    span.textContent = initialsOf(name);
+    wrap.replaceWith(span);
+  }, true);
   document.addEventListener('change', event => { if (event.target.matches?.('[data-year-select]')) switchYear(event.target.value); });
   document.addEventListener('submit', event => { if (event.target.id === 'search-form') { event.preventDefault(); ask($('#query').value); } });
   document.addEventListener('focusin', event => { if (event.target.id === 'query') { $('#suggestions').hidden = false; $('#query').setAttribute('aria-expanded', 'true'); } });
