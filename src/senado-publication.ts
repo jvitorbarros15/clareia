@@ -504,6 +504,9 @@ export async function writeSenatorsSite(db: DB, outDir: string, publicationId: s
   if (contentId({schema: row.body.schema, metric: row.body.metric, scope: row.body.scope, rows}) !== publicationId) {
     throw new Error('Senadores no banco diferem da versão aprovada');
   }
+  if (rows.some(item => !Number.isSafeInteger(item.unassignedCents) || !Array.isArray(item.ceiling))) {
+    throw new Error('Versão de senadores sem dados de teto; gere, audite e ative uma nova publicação');
+  }
 
   const byYear = new Map<number, SenatorYearRecord[]>();
   for (const item of rows) {

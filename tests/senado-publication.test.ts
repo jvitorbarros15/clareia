@@ -351,6 +351,27 @@ test('id is deterministic, SQL store and re-audit round-trip detects tampering, 
     const indexJson = JSON.parse(indexText) as {publicationId: string; years: {year: number; file: string; senators: number; records: number; totalCents: number}[]};
     assert.equal(indexJson.publicationId, version.id);
     assert.deepEqual(indexJson.years, [{year: 2025, file: '2025.json', senators: 9, records: 15, totalCents: 2236272}]);
+
+    const legacyRows = version.rows.map(({ceiling: _c, unassignedCents: _u, ...rest}) => rest);
+    const legacyBody = {
+      schema: version.schema,
+      metric: version.metric,
+      scope: version.scope,
+      sources: version.sources,
+      collectedAt: version.collectedAt,
+      publishedAt: version.publishedAt,
+    };
+    const legacyId = hash(canonical({schema: version.schema, metric: version.metric, scope: version.scope, rows: legacyRows}));
+    await db.query(
+      'INSERT INTO publications(id,domain,body) VALUES($1,$2,$3::jsonb)',
+      [legacyId, 'senadores', JSON.stringify({...legacyBody, id: legacyId})],
+    );
+    await db.query(
+      `INSERT INTO senators_v1(publication_id,position,senator_id,year,record) SELECT $1,ord::integer-1,(r->>'senatorId')::integer,(r->>'year')::integer,r FROM jsonb_array_elements($2::jsonb) WITH ORDINALITY AS rows(r,ord)`,
+      [legacyId, JSON.stringify(legacyRows)],
+    );
+    await recordDomainAudit(db, legacyId, 'passed', {checkedAt: CHECKED_AT});
+    await assert.rejects(writeSenatorsSite(db, outDir, legacyId), /sem dados de teto/);
   } finally {
     await db.close();
     await fs.rm(outDir, {recursive: true, force: true});

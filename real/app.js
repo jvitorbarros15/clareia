@@ -274,10 +274,10 @@
     if (!isPlainObj(raw) || raw.schema !== 'clareia.senators-year.v1' || typeof raw.publicationId !== 'string' || !raw.publicationId || !Number.isInteger(raw.year) || !Number.isSafeInteger(raw.totalCents) || !Number.isSafeInteger(raw.records) || !isOptNullableStr(raw.collectedAt) || !Array.isArray(raw.senators)) return null;
     for (const s of raw.senators) {
       if (!isPlainObj(s) || !Number.isInteger(s.senatorId) || !Number.isInteger(s.year) || (s.name !== null && typeof s.name !== 'string') || !Number.isSafeInteger(s.totalCents) || !Number.isSafeInteger(s.records)) return null;
-      if (s.unassignedCents !== undefined && !Number.isSafeInteger(s.unassignedCents)) return null;
+      if (!Number.isSafeInteger(s.unassignedCents)) return null;
       if (!isSafeNumRecord(s.byType) || !isSafeNumRecord(s.suppliers) || !isPlainObj(s.byMonth) || !Object.entries(s.byMonth).every(([month, values]) => /^(?:[1-9]|1[0-2])$/.test(month) && isSafeNumRecord(values))) return null;
       if (!Array.isArray(s.months) || !s.months.every(validSenatorMonth) || !isSafeNumRecord(s.review)) return null;
-      if (s.ceiling !== undefined && (!Array.isArray(s.ceiling) || !s.ceiling.every(validSenatorCeiling))) return null;
+      if (!Array.isArray(s.ceiling) || !s.ceiling.every(validSenatorCeiling)) return null;
     }
     return raw;
   }
@@ -376,7 +376,6 @@
     return (tenths / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
   };
   function senatorCeilingRanking(data) {
-    if (data.senators.some(s => !Array.isArray(s.ceiling))) return [];
     const byId = new Map(data.senators.map(s => [s.senatorId, s]));
     const seats = new Map();
     for (const s of data.senators) {

@@ -808,24 +808,26 @@ test('real/app.js renders separate per-seat % do teto only in Senado view, ranks
   }
 });
 
-test('real/app.js accepts legacy clareia.senators-year.v1 rows lacking unassignedCents and ceiling and omits the ceiling section',async()=>{
-  const {unassignedCents:_u,ceiling:_c,...legacySenator}=VALID_SENATORS_YEAR.senators[0];
-  const legacyYear={...VALID_SENATORS_YEAR,senators:[legacySenator]};
-  const app=bootAppJs({
-    senators:true,
-    fetchImpl:async url=>{
-      if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
-      if(url==='/senadores/2025.json')return {ok:true,json:async()=>legacyYear};
-      return {ok:false,status:404,json:async()=>({})};
-    },
-  });
-  app.clickHouse('senado');
-  await flush();
-  const html=app.elements['#rank-slot'].innerHTML;
-  assert.ok(!html.includes('senators-error'),'legacy year must not fail validation');
-  assert.ok(html.includes('Vanderlan Cardoso'),'existing spending rankings stay visible');
-  assert.ok(html.includes('id="comparison"'),'spending comparison chart stays visible');
-  assert.ok(!html.includes('id="senator-ceiling"'),'ceiling section omitted until republished');
+test('real/app.js rejects clareia.senators-year.v1 rows lacking unassignedCents or ceiling instead of silently omitting the ranking',async()=>{
+  const {unassignedCents:_u,...missingUnassigned}=VALID_SENATORS_YEAR.senators[0];
+  const {ceiling:_c,...missingCeiling}=VALID_SENATORS_YEAR.senators[0];
+  const {unassignedCents:_u2,ceiling:_c2,...missingBoth}=VALID_SENATORS_YEAR.senators[0];
+  for(const senator of [missingUnassigned,missingCeiling,missingBoth]){
+    const legacyYear={...VALID_SENATORS_YEAR,senators:[senator]};
+    const app=bootAppJs({
+      senators:true,
+      fetchImpl:async url=>{
+        if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+        if(url==='/senadores/2025.json')return {ok:true,json:async()=>legacyYear};
+        return {ok:false,status:404,json:async()=>({})};
+      },
+    });
+    app.clickHouse('senado');
+    await flush();
+    const html=app.elements['#rank-slot'].innerHTML;
+    assert.ok(html.includes('senators-error'),'rows lacking ceiling/unassignedCents must fail validation');
+    assert.ok(!html.includes('O % do teto é calculado por assento'),'must not show ceiling copy without ranking');
+  }
 });
 
 test('activating senator-ceiling-more focuses the first newly revealed link, or the row itself when unnamed',async()=>{
