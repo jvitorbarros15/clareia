@@ -2974,7 +2974,13 @@ check('senators switch, ranking, profile and non-blocking route at 1440 and 390'
 
       const visibleText = clean(await page.evaluate(() => document.body.innerText));
       assert.ok(!visibleText.includes('Não exibimos porcentagem do teto'), `old no-ceiling copy gone in Senado view at ${width}`);
-      assert.equal(await page.locator('#rankings .ceiling-pill').count(), 0, `no deputy ceiling pill for senators at ${width}`);
+      for (const card of await page.locator('#rankings .rank-card').all()) {
+        const person = await card.getAttribute('data-person');
+        const senator = yearData.senators.find(s => `sen-${s.senatorId}` === person);
+        assert.ok(senator, `senator ranking card ${person} at ${width}`);
+        const hasCeiling = senator.ceiling.some(c => c.monthsWithCeiling > 0 && c.ceilingCents > 0);
+        assert.equal(await card.locator('.ceiling-pill').count(), Number(hasCeiling), `seat ceiling pill for ${person} at ${width}`);
+      }
       if (coveredYear) {
         assert.ok(await page.locator('#senator-ceiling .senator-ceiling-row').count() > 0, `senators ceiling ranking required for covered year ${yearEntry.year} at ${width}`);
       } else {

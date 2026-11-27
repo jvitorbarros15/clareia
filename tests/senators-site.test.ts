@@ -808,6 +808,43 @@ test('real/app.js renders separate per-seat % do teto only in Senado view, ranks
   }
 });
 
+test('real/app.js shows the seat ceiling, period and profile link on senator ranking cards',async()=>{
+  const senator=VALID_SENATORS_YEAR.senators[0];
+  const seat=senator.ceiling[0], month=senator.months[0];
+  const noCeiling={...seat,codigoMandato:'540',spentCents:50000,ceilingCents:0,monthsWithCeiling:0,computedMonths:0,note:null};
+  const year={...VALID_SENATORS_YEAR,senators:[
+    {...senator,months:[{...month,month:3,exercise:'partial'}],ceiling:[
+      {...seat,spentCents:99000,ceilingCents:100000},
+      {...seat,codigoMandato:'539',spentCents:215000,ceilingCents:200000},
+      noCeiling,
+    ]},
+    {...senator,senatorId:475,name:'Átila Lins',totalCents:50000,months:[{...month,month:12,exercise:'none'}],ceiling:[{...noCeiling,codigoMandato:'541',senatorIds:[475]}]},
+  ]};
+  const fetchImpl:AppFetch=async url=>{
+    if(url==='/senadores/index.json')return {ok:true,json:async()=>VALID_SENATORS_INDEX};
+    if(url==='/senadores/2025.json')return {ok:true,json:async()=>year};
+    return {ok:false,status:404,json:async()=>({})};
+  };
+  const app=bootAppJs({fetchImpl});
+  app.clickHouse('senado');
+  assert.match(app.elements['#rank-slot'].innerHTML,/<span class="real-year">Senado · 2025<\/span>/);
+  await flush();
+  const html=app.elements['#rank-slot'].innerHTML;
+  const withCeiling=html.match(/data-person="sen-5899">([\s\S]*?)<\/article>/)?.[1]??'';
+  const withoutCeiling=html.match(/data-person="sen-475">([\s\S]*?)<\/article>/)?.[1]??'';
+  assert.match(withCeiling,/<span class="ceiling-pill" title="Teto do assento \(titular e suplentes somados\)" aria-label="Vanderlan Cardoso: 104,7% do teto do assento \(titular e suplentes somados\)">104,7% do teto<\/span>/);
+  assert.doesNotMatch(withoutCeiling,/ceiling-pill/);
+  assert.match(withCeiling,/<p class="card-caption">CEAPS · Mar–Dez 2025 · 1 mês no recorte<\/p>/);
+  assert.match(withoutCeiling,/<p class="card-caption">CEAPS · Mar–Dez 2025<\/p>/);
+  assert.match(withCeiling,/<a class="editorial-proof" href="\/senador\/5899-vanderlan-cardoso" data-action="senator-profile" data-senator-id="5899">Como chegamos nisso\? →<\/a>/);
+  assert.match(withCeiling,/aria-label="Vanderlan Cardoso: [^"]+\. Como chegamos nisso\?"/);
+  assert.match(html,/<span class="real-year">Mar–Dez 2025<\/span>/);
+
+  const monthly=bootAppJs({search:'?casa=senado&aba=menos&metrica=mensal',fetchImpl});
+  await flush();
+  assert.match(monthly.elements['#rank-slot'].innerHTML,/<p class="card-caption">Média mensal · Mar–Dez 2025 · 1 mês no recorte<\/p>/);
+});
+
 test('real/app.js rejects clareia.senators-year.v1 rows lacking unassignedCents or ceiling instead of silently omitting the ranking',async()=>{
   const {unassignedCents:_u,...missingUnassigned}=VALID_SENATORS_YEAR.senators[0];
   const {ceiling:_c,...missingCeiling}=VALID_SENATORS_YEAR.senators[0];

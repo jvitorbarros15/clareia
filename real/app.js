@@ -342,19 +342,32 @@
     list.sort((a, b) => (state.tab === 'menos' ? a.value - b.value : b.value - a.value) || senatorDisplayName(a.senator).localeCompare(senatorDisplayName(b.senator), 'pt-BR') || a.senator.senatorId - b.senator.senatorId);
     return { list, excludedMonthly };
   }
-  function senatorCards(data, ranked) {
+  function senatorCards(period, ranked) {
     if (!ranked.length) return `<div class="empty-state"><b>Nenhum senador neste recorte.</b><p>${state.metric === 'mensal' ? 'Nenhum senador tem mês com exercício completo ou parcial neste ano.' : 'Não há senadores listados para este ano.'}</p></div>`;
     return ranked.slice(0, 3).map(({ senator: s, value: val, exercised }, i) => {
       const named = senatorNamed(s), name = senatorDisplayName(s), uf = senatorUf(s);
       const ctx = ['Senador(a)', uf].filter(Boolean).join(' · ');
-      const cap = state.metric === 'mensal' ? `Média mensal · ${exercised} ${monthsWord(exercised)} de exercício` : `CEAPS ${data.year} · ${number(s.records)} ${s.records === 1 ? 'registro' : 'registros'}`;
+      const monthsPart = exercised > 0 ? ` · ${exercised} ${monthsWord(exercised)} no recorte` : '';
+      const cap = `${state.metric === 'mensal' ? 'Média mensal' : 'CEAPS'} · ${period}${monthsPart}`;
       const portrait = named
         ? `<button type="button" class="portrait-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="Abrir perfil de ${escape(name)}">${photo({ name, photo: null })}<span class="rank-number">0${i + 1}</span></button>`
         : `<div class="portrait-button">${photo({ name: 'S', photo: null })}<span class="rank-number">0${i + 1}</span></div>`;
       const amountEl = named
-        ? `<button type="button" class="value-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="${escape(name)}: ${money(val)}. Ver detalhes">${compact(val)}</button>`
+        ? `<button type="button" class="value-button" data-action="senator-profile" data-senator-id="${s.senatorId}" aria-label="${escape(name)}: ${money(val)}. Como chegamos nisso?">${compact(val)}</button>`
         : `<span class="value-button">${compact(val)}</span>`;
-      const proof = named ? `<div class="card-proofs"><a class="editorial-proof" href="${escape(withYear(senatorPath(s)))}" data-action="senator-profile" data-senator-id="${s.senatorId}">Ver detalhes →</a></div>` : '';
+      const link = named ? `<a class="editorial-proof" href="${escape(withYear(senatorPath(s)))}" data-action="senator-profile" data-senator-id="${s.senatorId}">Como chegamos nisso? →</a>` : '';
+      let spent = 0n, ceiling = 0n;
+      for (const entry of s.ceiling) {
+        if (entry.monthsWithCeiling <= 0 || entry.ceilingCents <= 0) continue;
+        spent += BigInt(entry.spentCents);
+        ceiling += BigInt(entry.ceilingCents);
+      }
+      let pill = '';
+      if (ceiling > 0n) {
+        const pct = senatorCeilingPct(spent, ceiling);
+        pill = `<span class="ceiling-pill" title="Teto do assento (titular e suplentes somados)" aria-label="${escape(name)}: ${pct} do teto do assento (titular e suplentes somados)">${pct} do teto</span>`;
+      }
+      const proof = link || pill ? `<div class="card-proofs">${link}${pill}</div>` : '';
       return `<article class="rank-card editorial-card${named ? '' : ' is-unlinked'}" data-person="sen-${s.senatorId}">${portrait}<div class="card-info"><h3 class="person-name">${escape(name)}</h3><p class="editorial-person-context">${escape(ctx)}</p>${amountEl}<p class="card-caption">${cap}</p>${proof}</div></article>`;
     }).join('');
   }
@@ -425,6 +438,7 @@
   }
   function senatorRankingSection() {
     let body = '';
+    let period = '';
     if (senatorState.status === 'error') {
       body = `<div class="senators-error" role="alert"><p>${escape(senatorState.error)}</p></div>`;
     } else if (senatorState.status === 'missing-year') {
@@ -434,10 +448,12 @@
       body = '<div class="senators-status" role="status">Carregando dados do Senado…</div>';
     } else {
       const data = senatorState.data, { list: ranked, excludedMonthly } = senatorRanking(data);
+      const months = data.senators.flatMap(s => s.months.map(m => m.month));
+      if (months.length) period = `${monthNames[Math.min(...months) - 1]}–${monthNames[Math.max(...months) - 1]} ${data.year}`;
       const note = `Dados oficiais do Senado Federal (CEAPS) em ${escape(data.year)}: ${number(data.senators.length)} senadores, total publicado de ${money(data.totalCents)} (${number(data.records)} registros). Lançamentos sem tipo de despesa ficam fora dos totais.${state.metric === 'mensal' ? ` Gasto mensal divide o total pelos meses com exercício completo ou parcial${excludedMonthly ? `; ${excludedMonthly} ${excludedMonthly === 1 ? 'senador sem mês de exercício ficou' : 'senadores sem mês de exercício ficaram'} fora do ranking por mês` : ''}.` : ''} O % do teto é calculado por assento (titular e suplentes somados) e só nos meses com teto conhecido. <button class="text-button" data-action="methodology">Fontes e metodologia →</button>`;
-      body = `<div class="cards">${senatorCards(data, ranked)}</div><p class="ranking-context">${note}</p>${senatorBarSection()}${senatorCeilingSection(data)}${editorialFollowUp()}`;
+      body = `<div class="cards">${senatorCards(period || data.year, ranked)}</div><p class="ranking-context">${note}</p>${senatorBarSection()}${senatorCeilingSection(data)}${editorialFollowUp()}`;
     }
-    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Senadores de ${escape(state.year)}</h2>${tabs()}<div class="editorial-controls"><div class="selects">${yearSelector()}<span class="real-year">Senado · ${escape(state.year)}${Number(state.year) === 2026 ? ' (parcial)' : ''}</span>${senatorCutoff(senatorState.data)}</div>${metricToggle()}</div>${body}</section>`;
+    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Senadores de ${escape(state.year)}</h2>${tabs()}<div class="editorial-controls"><div class="selects">${yearSelector()}<span class="real-year">${escape(period || `Senado · ${state.year}`)}${Number(state.year) === 2026 ? ' (parcial)' : ''}</span>${senatorCutoff(senatorState.data)}</div>${metricToggle()}</div>${body}</section>`;
   }
   function rankingSection() {
     if (state.house === 'senado') return senatorRankingSection();
