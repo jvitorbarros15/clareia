@@ -69,7 +69,10 @@ export function ceilingReport(year:number,derived:{annex:[string,number][]},sour
   }else{
     for(const [uf,ceilingCents] of derived.annex)for(let month=1;month<=12;month++)rows.push({uf,year,month,ceilingCents,act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,annexUrl:CEILING_SOURCES.consolidated,actUrl:CEILING_SOURCES.original});
   }
-  return {schema:'clareia.cota-ceiling.v1',year,unit:'monthly-ceiling-per-uf-cents',generatedAt,sources,rows,metrics:{ufs:derived.annex.length,rows:rows.length},publicationEligible:false,notes:['Limite mensal base do Anexo Único; não inclui adicionais de cargo, trechos aéreos do art. 1º §3º, Mercosul nem a proporcionalidade do art. 11.']};
+  const notes=year===2026
+    ?['Limite mensal base em 2026: janeiro pelo Anexo Único do Ato da Mesa nº 270/2023, fevereiro sem teto confirmado e março a dezembro conforme a página da Câmara (gastos parlamentares); não inclui adicionais de cargo, trechos aéreos do art. 1º §3º, Mercosul nem a proporcionalidade do art. 11.']
+    :['Limite mensal base do Anexo Único; não inclui adicionais de cargo, trechos aéreos do art. 1º §3º, Mercosul nem a proporcionalidade do art. 11.'];
+  return {schema:'clareia.cota-ceiling.v1',year,unit:'monthly-ceiling-per-uf-cents',generatedAt,sources,rows,metrics:{ufs:derived.annex.length,rows:rows.length},publicationEligible:false,notes};
 }
 export type CeilingReport=ReturnType<typeof ceilingReport>;
 export const ceilingSha=(report:CeilingReport)=>hash(canonical(report));

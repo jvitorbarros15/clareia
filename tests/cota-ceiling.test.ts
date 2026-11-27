@@ -71,6 +71,9 @@ test('2026 report has 297 rows: January from 2023 annex, no February, March to D
     assert.equal(r.annexUrl,PORTAL_2026_URL);
     assert.equal(r.actUrl,PORTAL_2026_URL);
   }
+  assert.equal(report.notes.length,1);
+  assert.match(report.notes[0],/janeiro.*Anexo Único.*fevereiro sem teto confirmado.*março a dezembro.*página da Câmara/i);
+  assert.notDeepEqual(report.notes,r2024.notes);
   assert.equal(audit().status,'passed');
 });
 test('2024 and 2025 reports and ceilingSha stay unchanged and still require 27x12 annex rows',()=>{
@@ -98,20 +101,29 @@ test('auditCeiling for 2026 fails on any February row',()=>{
   added.rows.push({...added.rows[0],month:2});added.metrics.rows=added.rows.length;
   assert.equal(auditCeiling(added,s=>files[s.key]).status,'failed');
 });
-test('auditCeiling for 2026 fails on a portal row in January or an annex row in March or later',()=>{
+test('auditCeiling for 2026 fails on a portal source in January',()=>{
   const {report,files}=build(ceilingFiles(),2026);
   const portalInJan=JSON.parse(JSON.stringify(report));
   const jan=portalInJan.rows.find((r:{uf:string;month:number})=>r.uf==='AC'&&r.month===1);
-  Object.assign(jan,{ceilingCents:PORTAL_2026_CENTS.AC,act:PORTAL_2026_ACT,effectiveFrom:PORTAL_2026_CAPTURED_AT,annexUrl:PORTAL_2026_URL,actUrl:PORTAL_2026_URL});
-  assert.equal(auditCeiling(portalInJan,s=>files[s.key]).status,'failed');
+  Object.assign(jan,{act:PORTAL_2026_ACT,effectiveFrom:PORTAL_2026_CAPTURED_AT,annexUrl:PORTAL_2026_URL,actUrl:PORTAL_2026_URL});
+  const result=auditCeiling(portalInJan,s=>files[s.key]);
+  assert.equal(result.status,'failed');
+  assert.ok(result.failures.some(f=>f.includes('Ato ou fonte divergem: AC/1')));
+});
+test('auditCeiling for 2026 fails on an annex source in March or later',()=>{
+  const {report,files}=build(ceilingFiles(),2026);
   const annexInMar=JSON.parse(JSON.stringify(report));
   const mar=annexInMar.rows.find((r:{uf:string;month:number})=>r.uf==='AC'&&r.month===3);
-  Object.assign(mar,{ceilingCents:5042626,act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,annexUrl:CEILING_SOURCES.consolidated,actUrl:CEILING_SOURCES.original});
-  assert.equal(auditCeiling(annexInMar,s=>files[s.key]).status,'failed');
-  const annexActInDec=JSON.parse(JSON.stringify(report));
-  const dec=annexActInDec.rows.find((r:{uf:string;month:number})=>r.uf==='AC'&&r.month===12);
+  Object.assign(mar,{act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,annexUrl:CEILING_SOURCES.consolidated,actUrl:CEILING_SOURCES.original});
+  const marResult=auditCeiling(annexInMar,s=>files[s.key]);
+  assert.equal(marResult.status,'failed');
+  assert.ok(marResult.failures.some(f=>f.includes('Ato ou fonte do portal divergem: AC/3')));
+  const annexInDec=JSON.parse(JSON.stringify(report));
+  const dec=annexInDec.rows.find((r:{uf:string;month:number})=>r.uf==='AC'&&r.month===12);
   Object.assign(dec,{act:CEILING_ACT,effectiveFrom:CEILING_EFFECTIVE_FROM,annexUrl:CEILING_SOURCES.consolidated,actUrl:CEILING_SOURCES.original});
-  assert.equal(auditCeiling(annexActInDec,s=>files[s.key]).status,'failed');
+  const decResult=auditCeiling(annexInDec,s=>files[s.key]);
+  assert.equal(decResult.status,'failed');
+  assert.ok(decResult.failures.some(f=>f.includes('Ato ou fonte do portal divergem: AC/12')));
 });
 test('auditCeiling for 2026 fails on a row count other than 297',()=>{
   const {report,files}=build(ceilingFiles(),2026);
