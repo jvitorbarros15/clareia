@@ -65,8 +65,8 @@ test('amendment publication requires reviewed, unambiguous links and counts excl
   r.metrics={...r.metrics,rows:9,selected:9,individual:5,unattributed:3};
   r.contentSha256=amendmentsContentId(r);
   const audit={status:'passed',contentSha256:r.contentSha256};
-  assert.ok(Array.isArray(await loadReviewedLinks()));
   const empty=buildAmendmentsVersion(r,audit,[],known,now);
+  assert.ok((await loadReviewedLinks()).every(l=>l.reviewer&&l.reviewedAt&&l.evidence),'every committed link records its review');
   assert.equal(empty.rows.length,0);
   assert.throws(()=>assertApprovable(empty),/sem linhas atribuídas/);
 
