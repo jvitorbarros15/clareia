@@ -309,6 +309,26 @@ test('profile loads amendments lazily, renders separate measures, restos a pagar
   assert.ok(html.includes('Portal da Transparência (CGU), Emendas parlamentares'));
 });
 
+test('Voltar from Abrir registros re-renders the profile with the amendments block filled', async () => {
+  const app = bootAppJs({
+    fetchImpl: async url => {
+      if (url === '/data/pub1/emendas/index.json') return { ok: true, json: async () => SAMPLE_INDEX };
+      if (url === '/data/pub1/emendas/1.json') return { ok: true, json: async () => SAMPLE_DEPUTY_1 };
+      return { ok: false, status: 404, json: async () => ({}) };
+    },
+  });
+  app.clareia.profile('1');
+  await flush();
+  app.clickAction('records', '1');
+  await flush();
+  assert.equal(app.amendmentsHtml(), '', 'profile is no longer on screen');
+  app.clickAction('dialog-back');
+  await flush();
+  const html = app.amendmentsHtml();
+  assert.ok(html.includes('Emendas de 2025'), 'amendments block is filled after Voltar');
+  assert.ok(!html.includes('Carregando…'));
+});
+
 test('profile for a deputy not in the index shows no-amendments text, no R$ 0, and makes no per-deputy request', async () => {
   const app = bootAppJs({
     fetchImpl: async url => {

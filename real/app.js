@@ -367,7 +367,7 @@
   }
   const AMENDMENTS_UNAVAILABLE = 'Emendas indisponíveis nesta versão. Nenhum número foi estimado.';
   const amendmentsCache = new Map();
-  const amendmentsState = { status: 'idle', index: null, byId: new Map() };
+  const amendmentsState = { status: 'idle', byId: new Map() };
   let amendmentsProfileRun = 0;
   function validAmendmentsIndex(raw) {
     if (!isPlainObj(raw) || raw.schema !== 'clareia.amendments-index.v1' || !Array.isArray(raw.deputies)) return null;
@@ -395,7 +395,6 @@
   function loadAmendmentsIndex() {
     if (typeof D.amendmentsIndexUrl !== 'function') return Promise.reject(new Error());
     return fetchAmendmentsJson(D.amendmentsIndexUrl(), validAmendmentsIndex).then(idx => {
-      amendmentsState.index = idx;
       amendmentsState.byId = new Map(idx.deputies.map(d => [d.deputyId, d.years]));
       amendmentsState.status = 'ready';
       return idx;
@@ -413,7 +412,6 @@
       if (state.house === 'camara' && state.tab === 'emendas' && $('#rank-slot')) refresh();
     }, () => {
       amendmentsState.status = 'error';
-      amendmentsState.index = null;
       amendmentsState.byId = new Map();
       if (state.house === 'camara' && state.tab === 'emendas' && $('#rank-slot')) refresh();
     });
@@ -1307,6 +1305,10 @@
     const route = { url: withYear(deputyPath(p)), title: `${p.name} — Clareia` };
     const run = ++amendmentsProfileRun;
     showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${escape(p.officialId)}</p>${p.party ? `<p class="context">${p.partyNote ? 'Partido sem confirmação mês a mês, dos eventos da legislatura (ver nota); UF' : window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p><p class="context cutoff">${cutoff()}</p>${socialLinks(p)}</div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${(!p.noExercise || p.exerciseReviewMonths?.length) && exclusionNote(p) ? `<small class="held-note">${escape(exclusionNote(p))}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos apresentados</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${provisionalSection()}<section class="detail-section amendments-section" id="profile-amendments" data-amendments-run="${run}"><h3>Emendas</h3><p class="records-note" role="status">Carregando…</p></section>${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button><button class="share-button" data-action="copy-link" data-id="${id}">Compartilhar</button>${D.shareImages ? `<button class="outline-button" data-action="share-image" data-id="${id}">Baixar imagem</button>` : ''}${safeUrl(p.sourceUrl) ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`, true, route);
+    if (!navigating && dialogView) {
+      dialogView.render = () => profile(id, { focusAmendments });
+      if (session?.views[session.d]) session.views[session.d].render = dialogView.render;
+    }
     if (focusAmendments) $('#profile-amendments')?.scrollIntoView?.({ block: 'start' });
     hydrateProfileAmendments(p, run);
   }
