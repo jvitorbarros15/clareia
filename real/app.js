@@ -436,9 +436,11 @@
       y.carriedPaid += r.carriedPaid;
       y.destinations.push(r);
     }
-    return [...byYear.values()].sort((a, b) => b.year - a.year).map(y => {
+    return [...byYear.values()].sort((a, b) => b.year - a.year).map((y, i) => {
       const dests = [...y.destinations].sort((a, b) => b.paid - a.paid || a.destination.localeCompare(b.destination, 'pt-BR'));
-      return `<div class="amendments-year"><h4>Emendas de ${escape(y.year)}</h4><div class="amendments-measures"><div class="amendments-measure"><span>Empenhado</span><strong>${money(y.committed)}</strong></div><div class="amendments-measure"><span>Liquidado</span><strong>${money(y.liquidated)}</strong></div><div class="amendments-measure"><span>Pago</span><strong>${money(y.paid)}</strong></div></div><p class="amendments-rap"><strong>Restos a pagar:</strong> Inscritos ${money(y.carriedOver)} · Cancelados ${money(y.carriedCancelled)} · Pagos ${money(y.carriedPaid)}</p><ul class="amendments-destinations">${dests.map(d => `<li class="amendments-dest"><span>${escape(d.destination)}</span><strong>${money(d.paid)}</strong></li>`).join('')}</ul></div>`;
+      const body = `<div class="amendments-measures"><div class="amendments-measure"><span>Empenhado</span><strong>${money(y.committed)}</strong></div><div class="amendments-measure"><span>Liquidado</span><strong>${money(y.liquidated)}</strong></div><div class="amendments-measure"><span>Pago</span><strong>${money(y.paid)}</strong></div></div><p class="amendments-rap"><strong>Restos a pagar:</strong> Inscritos ${money(y.carriedOver)} · Cancelados ${money(y.carriedCancelled)} · Pagos ${money(y.carriedPaid)}</p><ul class="amendments-destinations">${dests.map(d => `<li class="amendments-dest"><span>${escape(d.destination)}</span><strong>${money(d.paid)}</strong></li>`).join('')}</ul>`;
+      if (i === 0) return `<div class="amendments-year"><h4>Emendas de ${escape(y.year)}</h4>${body}</div>`;
+      return `<details class="amendments-year amendments-past"><summary class="amendments-past-toggle"><span>Emendas de ${escape(y.year)}</span><strong>Pago ${money(y.paid)}</strong></summary><div class="amendments-past-body">${body}</div></details>`;
     }).join('');
   }
   async function hydrateProfileAmendments(p, run) {

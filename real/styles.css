@@ -1082,6 +1082,15 @@ a.bar-row{text-decoration:none;color:inherit}
 .amendments-dest{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
 .amendments-dest span{min-width:0;flex:1 1 160px;overflow-wrap:anywhere}
 .amendments-dest strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.amendments-past{margin:0 0 10px;padding-top:0;border:1px solid var(--line);border-radius:6px;background:var(--soft)}
+.amendments-past-toggle{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;min-height:44px;padding:10px 12px;cursor:pointer;list-style:none;font:600 14px/1.3 var(--sans,Arial,sans-serif);color:var(--ink)}
+.amendments-past-toggle::-webkit-details-marker{display:none}
+.amendments-past-toggle span::before{content:'▸ ';color:var(--muted)}
+.amendments-past[open] .amendments-past-toggle span::before{content:'▾ '}
+.amendments-past-toggle strong{font-size:13px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.amendments-past-toggle:hover,.amendments-past-toggle:focus-visible{color:var(--accent)}
+.amendments-past-toggle:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+.amendments-past-body{padding:12px;border-top:1px solid var(--line);background:var(--surface);border-radius:0 0 6px 6px}
 .amendments-method,.amendments-source{margin-top:10px}
 @media(max-width:560px){
   .amendments-measures{grid-template-columns:1fr}

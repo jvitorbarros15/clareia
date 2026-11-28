@@ -284,6 +284,9 @@ test('profile loads amendments lazily, renders separate measures, restos a pagar
   await flush();
   const html = app.amendmentsHtml();
   assert.ok(html.indexOf('Emendas de 2025') < html.indexOf('Emendas de 2024'), 'years ordered newest first');
+  assert.ok(html.includes('<div class="amendments-year"><h4>Emendas de 2025</h4>'), 'newest year is shown open by default');
+  assert.ok(html.includes('<details class="amendments-year amendments-past"><summary class="amendments-past-toggle"><span>Emendas de 2024</span>'), 'past year is collapsed in a foldable details block');
+  assert.ok(!html.includes('<details class="amendments-year amendments-past" open'), 'past year starts closed');
 
   // 2025 separate measures: committed 200000 (R$ 2.000,00), liquidated 160000 (R$ 1.600,00), paid 100000 (R$ 1.000,00)
   assert.match(html, /Empenhado<\/span><strong>R\$\s*2\.000,00<\/strong>/);
