@@ -750,12 +750,39 @@
   const slugOf = name => norm(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const deputyPath = p => `/deputado/${p.officialId}-${slugOf(p.name)}`;
   const senatorPath = s => `/senador/${s.senatorId}-${slugOf(s.name)}`;
+  const SAFE_VOTE_ID = /^[A-Za-z0-9._-]+$/;
+  const isSafeVoteId = id => typeof id === 'string' && SAFE_VOTE_ID.test(id) && id !== '.' && id !== '..' && id.toLowerCase() !== 'index';
+  const voteTitle = v => (Array.isArray(v?.objects) ? v.objects : []).map(o => typeof o?.title === 'string' ? o.title.trim() : '').find(Boolean) || String(v?.description ?? '');
+  const voteResult = v => `${v?.approved === '1' || v?.approved === 1 || v?.approved === true ? 'Aprovado' : 'Rejeitado'} ${Number(v?.declared?.yes ?? 0)} a ${Number(v?.declared?.no ?? 0)}`;
+  let votesIndexPromise = null, votesIndexData = null;
+  const voteDetailCache = new Map(), voteDetailData = new Map();
+  function loadVotesIndex() {
+    if (!votesIndexPromise) {
+      votesIndexPromise = fetch(`${D.sharedBase}/votacoes/index.json`)
+        .then(r => { if (!r.ok) throw new Error('Votações indisponíveis'); return r.json(); })
+        .then(raw => { if (!isPlainObj(raw) || !Array.isArray(raw.votes)) throw new Error('Índice de votações inválido'); votesIndexData = raw; return raw; })
+        .catch(err => { votesIndexPromise = null; throw err; });
+    }
+    return votesIndexPromise;
+  }
+  function loadVoteDetail(id) {
+    if (!isSafeVoteId(id)) return Promise.reject(new Error('Identificador inválido'));
+    if (!voteDetailCache.has(id)) {
+      voteDetailCache.set(id, fetch(`${D.sharedBase}/votacoes/${encodeURIComponent(id)}.json`)
+        .then(r => { if (!r.ok) throw new Error('Votação indisponível'); return r.json(); })
+        .then(raw => { if (!isPlainObj(raw) || typeof raw.id !== 'string' || !Array.isArray(raw.rows)) throw new Error('Dados da votação inválidos'); voteDetailData.set(id, raw); return raw; })
+        .catch(err => { voteDetailCache.delete(id); throw err; }));
+    }
+    return voteDetailCache.get(id);
+  }
   function parseRoute(path) {
     let parts; try { parts = path.split('/').filter(Boolean).map(decodeURIComponent); } catch { return { type: 'unknown' }; }
     if (!parts.length || (parts.length === 1 && parts[0] === 'index.html')) return null;
     if (parts[0] === 'deputado') { const m = parts.length === 2 ? /^(\d+)(?:-.*)?$/.exec(parts[1]) : null; return { type: 'deputado', id: m?.[1] ?? null, slug: m ? parts[1].slice(m[1].length + 1) : '' }; }
     if (parts[0] === 'senador') { const m = parts.length === 2 ? /^(\d+)(?:-.*)?$/.exec(parts[1]) : null; return { type: 'senador', id: m?.[1] ?? null, slug: m ? parts[1].slice(m[1].length + 1) : '' }; }
     if (parts[0] === 'estado' && parts.length === 2) return { type: 'estado', uf: parts[1].toUpperCase() };
+    if (parts.length === 1 && parts[0] === 'votacoes') return { type: 'votacoes' };
+    if (parts[0] === 'votacao') return { type: 'votacao', id: parts.length === 2 ? parts[1] : null };
     if (parts.length === 1 && ['sobre', 'correcoes', 'metodologia', 'dados-abertos', 'apoie'].includes(parts[0])) return { type: 'page', name: parts[0] };
     return { type: 'unknown' };
   }
@@ -763,6 +790,7 @@
     deputado: ['Deputado(a) não encontrado(a)', 'Não existe deputado(a) com este endereço nesta versão dos dados. Confira o link ou procure pelo nome na busca. Nenhum outro perfil foi exibido no lugar.'],
     senador: ['Senador(a) não encontrado(a)', 'Não existe senador(a) com este endereço nesta versão dos dados. Confira o link ou consulte o ranking do Senado. Nenhum outro perfil foi exibido no lugar.'],
     estado: ['Estado não encontrado', 'Este endereço não corresponde a nenhuma UF. Use a sigla de duas letras, como SP ou BA, ou escolha um estado no mapa.'],
+    votacao: ['Votação não encontrada', 'Não existe votação com este endereço nesta versão dos dados. Confira o link ou consulte a lista de votações. Nenhuma outra votação foi exibida no lugar.'],
     unknown: ['Página não encontrada', 'Este endereço não existe no Clareia. Volte ao início para ver os rankings e a busca.']
   };
   function notFound(kind, url) {
@@ -776,9 +804,100 @@
       openSenatorRoute(route, target);
       return;
     }
+    if (route.type === 'votacoes') {
+      if (initial) writeHistory('replaceState', null, '/' + location.search);
+      openVotesIndexRoute(target);
+      return;
+    }
+    if (route.type === 'votacao') {
+      if (initial) writeHistory('replaceState', null, '/' + location.search);
+      openVoteRoute(route, target);
+      return;
+    }
     if (initial) writeHistory('replaceState', null, '/' + location.search);
     const found = route.type === 'deputado' && route.id ? person(route.id) : null;
     if (found) profile(found.id); else if (route.type === 'deputado' && route.id && D.years.length > 1) absentDeputy(route, target); else notFound(route.type, target);
+  }
+  const STANDARD_BALLOTS = new Set(['Sim', 'Não', 'Abstenção', 'Obstrução', 'semVoto']);
+  const signedDiff = n => { const x = Number(n || 0); return x > 0 ? `+${x}` : String(x); };
+  function partyRowCounts(row) {
+    const c = isPlainObj(row.counts) ? row.counts : {};
+    const sim = Number(c.Sim || 0), nao = Number(c['Não'] || 0), abst = Number(c['Abstenção'] || 0), obst = Number(c['Obstrução'] || 0), semVoto = Number(c.semVoto || 0);
+    let outros = 0;
+    for (const [k, val] of Object.entries(c)) if (!STANDARD_BALLOTS.has(k)) outros += Number(val || 0);
+    const total = Array.isArray(row.deputies) ? row.deputies.length : sim + nao + abst + obst + outros + semVoto;
+    return { sim, nao, abst, obst, outros, semVoto, total };
+  }
+  function renderVotesIndexDialog(data, target) {
+    const votes = (data.votes || []).filter(v => isPlainObj(v) && isSafeVoteId(v.id));
+    const body = votes.length
+      ? `<p class="dialog-subtitle">Votações nominais-chave da Câmara dos Deputados por partido.</p><ul class="party-votes-list">${votes.map(v => `<li class="party-vote-item"><a class="party-vote-link" href="/votacao/${escape(v.id)}" data-action="votacao" data-vote-id="${escape(v.id)}"><strong class="party-vote-title">${escape(voteTitle(v))}</strong><span class="party-vote-meta">${escape(day(v.date))} · ${escape(voteResult(v))}</span></a></li>`).join('')}</ul>`
+      : '<p class="records-note">Nenhuma votação-chave publicada nesta versão.</p>';
+    showDialog('Votações por partido', body, true, { url: target, title: 'Votações por partido — Clareia' });
+  }
+  function renderVoteDialog(v, target) {
+    const title = voteTitle(v), dateText = day(v.date), resultText = voteResult(v);
+    const rows = (Array.isArray(v.rows) ? v.rows : []).map(row => ({ row, counts: partyRowCounts(row) }));
+    rows.sort((a, b) => {
+      if (a.row.party === null && b.row.party === null) return String(a.row.label || '').localeCompare(String(b.row.label || ''), 'pt-BR');
+      if (a.row.party === null) return 1;
+      if (b.row.party === null) return -1;
+      const aTot = a.counts.total, bTot = b.counts.total;
+      const cmp = aTot > 0 && bTot > 0
+        ? b.counts.sim * aTot - a.counts.sim * bTot
+        : (bTot > 0 ? b.counts.sim / bTot : 0) - (aTot > 0 ? a.counts.sim / aTot : 0);
+      if (cmp !== 0) return cmp;
+      return String(a.row.label || '').localeCompare(String(b.row.label || ''), 'pt-BR');
+    });
+    const hasOutros = rows.some(r => r.counts.outros > 0);
+    const legendItems = [['Sim', 'seg-sim'], ['Não', 'seg-nao'], ['Abstenção', 'seg-abstencao'], ['Obstrução', 'seg-obstrucao'], ...(hasOutros ? [['Outros', 'seg-outros']] : []), ['Sem voto', 'seg-sem-voto']];
+    const legendHtml = `<ul class="vote-legend" aria-label="Legenda dos votos">${legendItems.map(([lbl, cls]) => `<li><span class="vote-legend-swatch ${cls}" aria-hidden="true"></span>${escape(lbl)}</li>`).join('')}</ul>`;
+    const mismatchHtml = v.matchesDeclared === false && isPlainObj(v.differences)
+      ? `<p class="records-note vote-mismatch-note" role="note">A soma dos votos por partido diverge do placar declarado pela Câmara (Sim: ${escape(signedDiff(v.differences.yes))}, Não: ${escape(signedDiff(v.differences.no))}, Outros: ${escape(signedDiff(v.differences.other))}).</p>`
+      : '';
+    const rowsHtml = rows.map(({ row, counts }, i) => {
+      const segs = [['Sim', counts.sim, 'seg-sim'], ['Não', counts.nao, 'seg-nao'], ['Abstenção', counts.abst, 'seg-abstencao'], ['Obstrução', counts.obst, 'seg-obstrucao'], ...(counts.outros > 0 ? [['Outros', counts.outros, 'seg-outros']] : []), ['Sem voto', counts.semVoto, 'seg-sem-voto']];
+      const extraParts = segs.slice(1).filter(([, n]) => n > 0).map(([lbl, n]) => `${n} ${lbl}`);
+      const barAria = `${row.label}: ${counts.sim} de ${counts.total} Sim${extraParts.length ? ', ' + extraParts.join(', ') : ''}`;
+      const countParts = segs.filter(([, n]) => n > 0).map(([lbl, n]) => `${n} ${lbl}`);
+      const countsText = countParts.length ? countParts.join(' · ') : '0 votos';
+      const barSegs = segs.filter(([, n]) => n > 0).map(([, n, cls]) => `<span class="vote-seg ${cls}" style="width:${(counts.total > 0 ? n / counts.total * 100 : 0).toFixed(4)}%"></span>`).join('');
+      const deputies = (Array.isArray(row.deputies) ? row.deputies : []).map(d => {
+        const p = person(String(d.id));
+        return { id: d.id, name: p ? p.name : `ID ${d.id}`, href: p ? deputyPath(p) : `/deputado/${encodeURIComponent(String(d.id))}`, ballot: d.category === null || d.category === undefined || d.category === '' ? 'Sem voto' : String(d.category) };
+      }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR') || Number(a.id) - Number(b.id));
+      const depHtml = deputies.map(d => `<li class="party-deputy-item"><a href="${escape(d.href)}">${escape(d.name)}</a><span class="party-deputy-ballot">${escape(d.ballot)}</span></li>`).join('');
+      return `<li class="party-vote-row" data-party-row="${escape(row.party ?? '__unconfirmed')}"><button type="button" class="party-vote-toggle" data-action="toggle-party" aria-expanded="false" aria-controls="party-deputies-${i}"><span class="party-vote-head"><strong class="party-vote-label">${escape(row.label)} (${counts.total})</strong><span class="party-vote-counts">${escape(countsText)}</span></span><span class="vote-bar" role="img" aria-label="${escape(barAria)}">${barSegs}</span></button><ul id="party-deputies-${i}" class="party-deputies" hidden>${depHtml}</ul></li>`;
+    }).join('');
+    const descHtml = v.description && v.description.trim() !== title ? `<p class="context vote-detail-desc">${escape(v.description)}</p>` : '';
+    const sourceUrl = `https://dadosabertos.camara.leg.br/api/v2/votacoes/${encodeURIComponent(v.id)}`;
+    const html = `<h3 class="vote-detail-title">${escape(title)}</h3><p class="vote-detail-meta">${escape(dateText)} · ${escape(resultText)}</p>${descHtml}${mismatchHtml}${legendHtml}<ul class="party-vote-rows">${rowsHtml}</ul><p class="vote-source">Fonte: <a href="${escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">Câmara dos Deputados, dados abertos</a></p><div class="action-row"><a class="outline-button" href="/votacoes" data-action="votacoes">Todas as votações</a></div>`;
+    showDialog('Votação por partido', html, true, { url: target, title: `${title} — Clareia` });
+    $('#detail').classList.add('records-wide');
+  }
+  let voteRouteRun = 0;
+  async function openVotesIndexRoute(target) {
+    const run = ++voteRouteRun, nav = navigating, wasRestoring = restoring;
+    const later = fn => { navigating = nav; restoring = wasRestoring; try { fn(); } finally { navigating = false; restoring = false; } };
+    if (votesIndexData) { renderVotesIndexDialog(votesIndexData, target); return; }
+    const stillActive = () => run === voteRouteRun && $('#detail').open && $('#detail [data-vote-run]')?.dataset.voteRun === String(run);
+    showDialog('Votações por partido', `<p class="records-note records-loading" data-vote-run="${run}" role="status">Carregando votações…</p>`, true, { url: target, title: 'Votações por partido — Clareia' });
+    let data;
+    try { data = await loadVotesIndex(); }
+    catch { if (stillActive()) later(() => notFound('votacao', target)); return; }
+    if (stillActive()) later(() => renderVotesIndexDialog(data, target));
+  }
+  async function openVoteRoute(route, target) {
+    const run = ++voteRouteRun, nav = navigating, wasRestoring = restoring;
+    const later = fn => { navigating = nav; restoring = wasRestoring; try { fn(); } finally { navigating = false; restoring = false; } };
+    if (!isSafeVoteId(route.id)) { notFound('votacao', target); return; }
+    if (voteDetailData.has(route.id)) { renderVoteDialog(voteDetailData.get(route.id), target); return; }
+    const stillActive = () => run === voteRouteRun && $('#detail').open && $('#detail [data-vote-run]')?.dataset.voteRun === String(run);
+    showDialog('Votação por partido', `<p class="records-note records-loading" data-vote-run="${run}" role="status">Carregando votação…</p>`, true, { url: target, title: 'Votação por partido — Clareia' });
+    let data;
+    try { data = await loadVoteDetail(route.id); }
+    catch { if (stillActive()) later(() => notFound('votacao', target)); return; }
+    if (stillActive()) later(() => renderVoteDialog(data, target));
   }
   let senatorRouteRun = 0;
   async function openSenatorRoute(route, target) {
@@ -888,7 +1007,7 @@
     const st = history.state;
     if (session && st?.clareia === session.id && session.views[st.d]) { await restoreView(st.d); const after = afterRestore; afterRestore = null; after?.(); return; }
     const route = parseRoute(location.pathname);
-    if (route?.type === 'deputado' || route?.type === 'senador' || route?.type === 'unknown') {
+    if (route?.type === 'deputado' || route?.type === 'senador' || route?.type === 'votacoes' || route?.type === 'votacao' || route?.type === 'unknown') {
       adopting = true;
       try { openRoute(route); } finally { adopting = false; }
     } else if ($('#detail').open) closeFromHistory();
@@ -1144,7 +1263,7 @@
     const target = event.target.closest('[data-action],[data-house],[data-tab],[data-metric],[data-question],[data-year]');
     if (!event.target.closest('.search-wrap')) closeSuggestions();
     if (!target) return;
-    if (target.tagName === 'A' && target.dataset.action === 'senator-profile') {
+    if (target.tagName === 'A' && (target.dataset.action === 'senator-profile' || target.dataset.action === 'votacoes' || target.dataset.action === 'votacao')) {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
       event.preventDefault();
     }
@@ -1189,6 +1308,14 @@
       const s = senatorState.data?.senators.find(x => String(x.senatorId) === String(target.dataset.senatorId) && senatorNamed(x));
       if (s) openView(() => senatorProfile(s, senatorState.data));
     }
+    else if (action === 'votacoes') openView(() => openVotesIndexRoute('/votacoes'));
+    else if (action === 'votacao') openView(() => openVoteRoute({ type: 'votacao', id: target.dataset.voteId || null }, `/votacao/${target.dataset.voteId || ''}`));
+    else if (action === 'toggle-party') {
+      const expanded = target.getAttribute('aria-expanded') === 'true';
+      target.setAttribute('aria-expanded', String(!expanded));
+      const panel = document.getElementById(target.getAttribute('aria-controls'));
+      if (panel) panel.hidden = expanded;
+    }
     else if (action === 'copy-senator-link') copySenatorLink(target.dataset.senatorId, target);
     else if (action === 'methodology') methodology();
     else if (action === 'focus-search') { if (state.house === 'senado') return; $('#query')?.focus(); $('#query')?.scrollIntoView({ block: 'center' }); }
@@ -1232,6 +1359,7 @@
   $('#detail').addEventListener('click', event => { if (event.target === $('#detail')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right) closeDialog(); } });
   $('#detail').addEventListener('close', () => {
     senatorRouteRun++;
+    voteRouteRun++;
     dialogTrail = []; dialogView = null;
     if (session?.live) {
       session.live = false;
@@ -1244,7 +1372,7 @@
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));
-  window.Clareia = { yearSelector, yearQuery, parseRoute, openRoute, deputyPath, senatorPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, approvedText, billsPeriod, byTotal, compareValues,
+  window.Clareia = { yearSelector, yearQuery, parseRoute, openRoute, deputyPath, senatorPath, pageTitle, setPath, exclusionNote, fewMonths, MIN_MONTHS, listMore, logo, label, context, model, state, all, person, comparable, partialNote, ranking, cells, count, loadRecords, withRecords, sum, money, compact, number, share, shareBase, escape, photo, avatar, icon, ask, evidence, profile, recordTable, recordRow, recordListHTML, byRecordOrder, recordDetail, rememberList, showDialog, closeDialog, methodology, renderPage, toast, refresh, scopeChip, sourceBlock, span, pending, approvedText, billsPeriod, byTotal, compareValues, loadVotesIndex, voteTitle, voteResult, day, isSafeVoteId,
     get senatorPeriod() { const data = senatorState.data; return senatorState.status === 'ready' ? senatorPeriod(data) || String(data.year) : ''; }
   };
   window.addEventListener('resize', () => markTab(false));
