@@ -320,12 +320,15 @@ test('active votes and people coverage publish party votes without changing depu
   const {storeVotesVersion}=await import('../src/votes-publication.ts');
   const a=version([record(100,1,0)]);await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
   await storeVotesVersion(db,activityVotesVersion);await recordDomainAudit(db,activityVotesVersion.id,'passed',report);
-  const before=path.join(dist,'data',(await buildSite(db,dist,portraits)).publicationId);
+  const before=path.join(dist,'data',(await buildSite(db,dist,portraits,{siteUrl:'https://example.test',sitemap:true})).publicationId);
   await assert.rejects(fs.access(path.join(before,'votacoes')),{code:'ENOENT'});
+  await assert.rejects(fs.access(path.join(dist,'votacoes.html')),{code:'ENOENT'});
+  await assert.rejects(fs.access(path.join(dist,'votacao')),{code:'ENOENT'});
+  assert.ok(!(await fs.readFile(path.join(dist,'sitemap.xml'),'utf8')).includes('/votacoes'));
   const activity=await tree(path.join(before,'atividade'));
 
   const coverage=coverageVersion('PL');await storePeopleCoverage(db,coverage);await recordDomainAudit(db,coverage.id,'passed',report);
-  const after=path.join(dist,'data',(await buildSite(db,dist,portraits)).publicationId),dir=path.join(after,'votacoes');
+  const after=path.join(dist,'data',(await buildSite(db,dist,portraits,{siteUrl:'https://example.test',sitemap:true})).publicationId),dir=path.join(after,'votacoes');
   const {id,date,description,declared,approved}=activityVote;
   const entry={id,date,description,objects:[{billId:5,title:'PL 5/2025'}],declared,approved,matchesDeclared:true};
   assert.deepEqual(await json(dir,'index.json'),{schema:'clareia.party-votes-index.v1',votes:[{...entry,id:'nobill',objects:[]},entry]});
@@ -334,6 +337,11 @@ test('active votes and people coverage publish party votes without changing depu
     {party:'PL',label:'PL',counts:{Sim:1,semVoto:1},deputies:[{id:1,category:'Sim'},{id:2,category:null}]}
   ]});
   assert.deepEqual(await tree(path.join(after,'atividade')),activity);
+  assert.ok((await fs.readFile(path.join(dist,'votacoes.html'),'utf8')).includes('PL 5/2025'));
+  assert.ok((await fs.readFile(path.join(dist,'votacao','ok.html'),'utf8')).includes('<title>PL 5/2025 — Clareia</title>'));
+  assert.ok((await fs.readFile(path.join(dist,'votacao','nobill.html'),'utf8')).includes('Aprovado o Projeto'));
+  const sitemap=await fs.readFile(path.join(dist,'sitemap.xml'),'utf8');
+  assert.ok(sitemap.includes('https://example.test/votacoes')&&sitemap.includes('https://example.test/votacao/ok')&&sitemap.includes('https://example.test/votacao/nobill'));
 
   const unsafeVotes=[{...activityVote,id:'../outside'}];
   const unsafe={...activityVotesVersion,votes:unsafeVotes,ballots:[],id:hash(canonical({...activityVotesMeta,votes:unsafeVotes,ballotsSha256:hash(canonical([]))}))};

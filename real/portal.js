@@ -279,11 +279,32 @@
     if($('.footer-disclaimer p')?.textContent===disclaimer)return;
     $('.footer').innerHTML=`<div class="footer-brand"><span class="logo">${C.logo}</span><p>Entenda. Confira. Acompanhe.</p><p><a href="mailto:contato@clareia.org">contato@clareia.org</a></p></div><div class="footer-links"><a href="#despesas">Gastos por categoria</a><a href="#comparacao">Comparar</a><a href="/sobre">Sobre</a><a href="/correcoes">Correções</a><a href="/metodologia">Metodologia</a><a href="/dados-abertos">Dados abertos</a><a href="/apoie">Apoie o projeto</a><button data-p="coverage">Cobertura desta versão</button><button data-p="reset-saved">Apagar favoritos locais</button></div><div class="footer-disclaimer">${period?`<span>Versão ${esc(period)}</span>`:''}<p>${esc(disclaimer)}</p><button data-p="top">Voltar ao topo ↑</button></div>`;
   }
+  let latestKeyVote = null;
+  function renderKeyVoteHome() {
+    const box = $('#votacao-chave');
+    if (!box) return;
+    if (!latestKeyVote) { box.innerHTML = ''; box.hidden = true; return; }
+    const v = latestKeyVote;
+    box.innerHTML = `<div class="key-vote-home-inner"><p class="p-kicker">Última votação-chave</p><p class="key-vote-title">${esc(C.voteTitle(v))}</p><p class="key-vote-meta">${esc(C.day(v.date))} · ${esc(C.voteResult(v))}</p><div class="key-vote-actions"><a class="outline-button primary" href="/votacao/${esc(v.id)}" data-action="votacao" data-vote-id="${esc(v.id)}">Ver votação por partido</a><a class="text-button" href="/votacoes" data-action="votacoes">Todas as votações →</a></div></div>`;
+    box.hidden = C.state.house === 'senado';
+  }
+  function hydrateKeyVote() {
+    C.loadVotesIndex().then(data => {
+      const valid = (data.votes || []).filter(v => v && C.isSafeVoteId(v.id));
+      valid.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(a.id).localeCompare(String(b.id)));
+      latestKeyVote = valid[0] || null;
+      renderKeyVoteHome();
+    }).catch(() => {
+      latestKeyVote = null;
+      renderKeyVoteHome();
+    });
+  }
   function mount() {
     const main=$('#main');
     main.insertAdjacentHTML('afterbegin',`<div class="page-progress" aria-hidden="true"><i></i></div><nav class="section-dock" aria-label="Seções da página"><a href="#rankings">Rankings</a><a href="#despesas">${editorial?'Gastos':'Despesas'}</a><a href="#atlas">Mapa</a>${editorial?'':'<a href="#comparacao">Comparar</a>'}<a href="#projetos">Projetos</a><a href="#votacoes">Votações</a><a href="#acompanhar" class="follow-nav">Acompanhar <span class="follow-count" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.5 0 5.5 3.5 4.2 6.8-1.8 4.6-9.3 9.2-9.3 9.2Z"/></svg><span id="saved-count">${state.favorites.size||''}</span></span></a><button type="button" id="dock-filter" class="dock-filter" data-action="reset" hidden></button></nav>`);
     C.scopeChip();
-    main.insertAdjacentHTML('beforeend',`<div class="full-portal">${sections.map(([id,render])=>`<section class="p-section" id="${id}">${render()}</section>`).join('')}</div>`);
+    main.insertAdjacentHTML('beforeend',`<div class="full-portal"><aside class="key-vote-home" id="votacao-chave" aria-label="Última votação-chave" hidden></aside>${sections.map(([id,render])=>`<section class="p-section" id="${id}">${render()}</section>`).join('')}</div>`);
+    hydrateKeyVote();
     fillFooter();
     document.body.insertAdjacentHTML('beforeend',`<button class="assistant-launcher" data-p="assistant" aria-label="${editorial?'Fazer uma pergunta na busca':'Abrir assistente de investigação'}"><img class="assistant-spark" src="/icon.svg" alt="" width="24" height="24"><span>${editorial?'Fazer uma pergunta':'Pergunte ao Clareia'}</span>${icon('arrow')}</button>`);
     document.body.dataset.motion=state.motion?'on':'off';
@@ -565,6 +586,7 @@
     const dock=$('.section-dock');if(dock)dock.hidden=senado;
     const pending=$('.supplier-pending');if(pending)pending.hidden=senado;
     const launcher=$('.assistant-launcher');if(launcher)launcher.hidden=senado;
+    const keyVote=$('#votacao-chave');if(keyVote)keyVote.hidden=senado||!latestKeyVote;
     for(const id of ['atlas','projetos','votacoes']){const el=$('#'+id);if(el)el.hidden=senado;}
   }
   if(C.state.house==='senado'){fillFooter();syncHouse();}

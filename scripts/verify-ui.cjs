@@ -1401,6 +1401,7 @@ const stub = ({ months, records } = {}) => async page => {
   const manifest = await (await page.request.get(`${base}/manifest.json`)).json();
   const index = await (await page.request.get(`${base}/${manifest.base}/index.json`)).json();
   await page.route('**/index.json', async route => {
+    if (/\/(?:votacoes|senadores|share)\/index\.json(?:$|\?)/.test(route.request().url())) return route.fallback();
     const json = await (await route.fetch()).json();
     if (months) json.scope.months = months;
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(json) });
@@ -2004,7 +2005,7 @@ check('a test notice and held months are shown when the version declares them', 
   const { months, index } = await published();
   const page = await at(1440, { before: async p => {
     await p.route('**/summary.json', async route => { const res = await route.fetch(), s = await res.json(); Reflect.deleteProperty(s, 'coverageId'); await route.fulfill({ response: res, json: s }); });
-    await p.route('**/index.json', async route => { const res = await route.fetch(), j = await res.json(); j.validation.testNotice = 'Versão de teste.'; j.validation.heldMonths = { [j.scope.ids[0]]: 1 }; await route.fulfill({ response: res, json: j }); });
+    await p.route('**/index.json', async route => { if (/\/(?:votacoes|senadores|share)\/index\.json(?:$|\?)/.test(route.request().url())) return route.fallback(); const res = await route.fetch(), j = await res.json(); j.validation.testNotice = 'Versão de teste.'; j.validation.heldMonths = { [j.scope.ids[0]]: 1 }; await route.fulfill({ response: res, json: j }); });
   } });
   assert.equal(await text(page.locator('.test-notice')), 'Versão de teste.');
   assert.equal(await page.evaluate(id => window.ClareiaData.dataset().find(p => p.officialId === id).months, index.scope.ids[0]), months.length - 1);
@@ -2851,6 +2852,7 @@ check('provisional months mark the chart, profile and year label without changin
     const fullBefore = async page => {
       await page.route('**/manifest.json', route => route.fulfill({ json: fullManifest }));
       await page.route('**/index.json', async route => {
+        if (/\/(?:votacoes|senadores|share)\/index\.json(?:$|\?)/.test(route.request().url())) return route.fallback();
         const res = await route.fetch(), json = await res.json();
         json.scope = { ...json.scope, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] };
         json.collectedAt = fullCollectedAt;
@@ -2896,6 +2898,7 @@ check('provisional months mark the chart, profile and year label without changin
     const adjBefore = async page => {
       await page.route('**/manifest.json', route => route.fulfill({ json: adjManifest }));
       await page.route('**/index.json', async route => {
+        if (/\/(?:votacoes|senadores|share)\/index\.json(?:$|\?)/.test(route.request().url())) return route.fallback();
         const res = await route.fetch(), json = await res.json();
         json.scope = { ...json.scope, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] };
         json.collectedAt = adjCollectedAt;
@@ -3046,6 +3049,161 @@ check('senators switch, ranking, profile and non-blocking route at 1440 and 390'
   } finally {
     await page.close();
   }
+});
+
+check('party votes: /votacoes, /votacao/<id> and home block with routed fixtures at 1440 and 390', async () => {
+  const data = await published();
+  const known = data.people[0];
+  needCase(Boolean(known), 'the published data has at least one deputy');
+  const slugOf = name => name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const expectedDeputyPath = `/deputado/${known.id}-${slugOf(known.name)}`;
+  const voteOld = {
+    id: 'v-old',
+    date: '2025-03-10',
+    description: 'Rejeitado requerimento de urgência',
+    objects: [],
+    declared: { yes: 120, no: 280, other: 5 },
+    approved: '0',
+    matchesDeclared: true,
+  };
+  const voteLatest = {
+    id: 'v-latest',
+    date: '2025-11-20',
+    description: 'Aprovado o substitutivo',
+    objects: [{ billId: 42, title: 'PL 42/2025 — Reforma <teste> "chave"' }],
+    declared: { yes: 318, no: 135, other: 10 },
+    approved: '1',
+    matchesDeclared: false,
+  };
+  const indexFixture = { schema: 'clareia.party-votes-index.v1', votes: [voteOld, voteLatest] };
+  const detailFixtures = {
+    'v-latest': {
+      ...voteLatest,
+      differences: { yes: 2, no: -1, other: 0 },
+      rows: [
+        { party: null, label: 'Partido não confirmado', counts: { Sim: 2, 'Não': 0, 'Abstenção': 0, 'Obstrução': 0, semVoto: 0 }, deputies: [{ id: 999999999, category: 'Sim' }, { id: 999999998, category: 'Sim' }] },
+        { party: 'PT', label: 'PT', counts: { Sim: 1, 'Não': 1, 'Abstenção': 0, 'Obstrução': 0, semVoto: 0 }, deputies: [{ id: known.id, category: 'Sim' }, { id: 999999991, category: 'Não' }] },
+        { party: 'MDB', label: 'MDB', counts: { Sim: 1, 'Não': 0, 'Abstenção': 1, 'Obstrução': 0, semVoto: 0 }, deputies: [{ id: 999999992, category: 'Sim' }, { id: 999999993, category: 'Abstenção' }] },
+        { party: 'PL', label: 'PL', counts: { Sim: 3, 'Não': 0, 'Abstenção': 0, 'Obstrução': 1, semVoto: 1 }, deputies: [{ id: 999999994, category: 'Sim' }, { id: 999999995, category: 'Sim' }, { id: 999999996, category: 'Sim' }, { id: 999999997, category: 'Obstrução' }, { id: 999999990, category: null }] },
+      ],
+    },
+    'v-old': {
+      ...voteOld,
+      differences: { yes: 0, no: 0, other: 0 },
+      rows: [{ party: 'PL', label: 'PL', counts: { Sim: 0, 'Não': 1, semVoto: 0 }, deputies: [{ id: known.id, category: 'Não' }] }],
+    },
+  };
+  const routeShell = async page => {
+    for (const pattern of [`${base}/votacoes`, `${base}/votacao/*`]) {
+      await page.route(pattern, async route => {
+        const res = await route.fetch({ url: `${base}/` });
+        await route.fulfill({ response: res, status: 200 });
+      });
+    }
+  };
+  const routeVotes = async page => {
+    await routeShell(page);
+    await page.route('**/votacoes/*.json', async route => {
+      const url = new URL(route.request().url()).pathname;
+      if (url.endsWith('/votacoes/index.json')) return route.fallback();
+      const id = decodeURIComponent(url.split('/').pop().replace(/\.json$/, ''));
+      const fixture = detailFixtures[id];
+      if (!fixture) return route.fulfill({ status: 404, body: '' });
+      return route.fulfill({ json: fixture });
+    });
+    await page.route('**/votacoes/index.json', route => route.fulfill({ json: indexFixture }));
+  };
+
+  for (const width of [1440, 390]) {
+    const home = await at(width, { before: routeVotes });
+    try {
+      const block = home.locator('#votacao-chave');
+      await block.waitFor({ state: 'visible' });
+      const blockText = clean(await block.innerText());
+      assert.ok(blockText.includes('PL 42/2025 — Reforma <teste> "chave"'), `home block shows latest vote title at ${width}: ${blockText}`);
+      assert.ok(blockText.includes('20/11/2025'), `home block shows latest date at ${width}`);
+      assert.ok(blockText.includes('Aprovado 318 a 135'), `home block shows latest result at ${width}`);
+      assert.equal(await block.locator('a[href="/votacao/v-latest"]').count(), 1, `home block links to /votacao/v-latest at ${width}`);
+      assert.equal(await block.locator('a[href="/votacoes"]').count(), 1, `home block links to /votacoes at ${width}`);
+      assert.equal(await home.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `no home horizontal overflow at ${width}`);
+      assert.deepEqual(home.errors, [], `home party-vote errors at ${width}`);
+    } finally { await home.close(); }
+
+    const listPage = await at(width, { search: 'votacoes', before: routeVotes });
+    try {
+      await listPage.waitForSelector('#detail[open] .party-votes-list');
+      const items = await listPage.locator('#detail .party-vote-link').evaluateAll(els => els.map(a => ({ href: a.getAttribute('href'), text: a.innerText.replace(/\s+/g, ' ').trim() })));
+      assert.equal(items.length, 2, `two key votes listed at ${width}`);
+      assert.ok(items.some(i => i.href === '/votacao/v-latest' && i.text.includes('PL 42/2025 — Reforma <teste> "chave"') && i.text.includes('20/11/2025') && i.text.includes('Aprovado 318 a 135')), `latest vote item at ${width}`);
+      assert.ok(items.some(i => i.href === '/votacao/v-old' && i.text.includes('Rejeitado requerimento de urgência') && i.text.includes('10/03/2025') && i.text.includes('Rejeitado 120 a 280')), `old vote item at ${width}`);
+      const overflow = await listPage.evaluate(() => { const d = document.querySelector('#detail'); return { page: document.documentElement.scrollWidth > window.innerWidth, dialog: d.scrollWidth > d.clientWidth }; });
+      assert.equal(overflow.page, false, `no page overflow on /votacoes at ${width}`);
+      assert.equal(overflow.dialog, false, `no dialog overflow on /votacoes at ${width}`);
+      assert.deepEqual(listPage.errors, [], `/votacoes errors at ${width}`);
+    } finally { await listPage.close(); }
+
+    const votePage = await at(width, { search: 'votacao/v-latest', before: routeVotes });
+    try {
+      await votePage.waitForSelector('#detail[open] .party-vote-rows');
+      const labels = await votePage.locator('#detail .party-vote-label').allInnerTexts();
+      assert.deepEqual(labels.map(clean), ['PL (5)', 'MDB (2)', 'PT (2)', 'Partido não confirmado (2)'], `party bar order with Partido não confirmado last at ${width}`);
+
+      const bars = await votePage.locator('#detail .vote-bar').evaluateAll(els => els.map(el => ({
+        role: el.getAttribute('role'),
+        aria: el.getAttribute('aria-label'),
+        height: el.getBoundingClientRect().height,
+      })));
+      assert.equal(bars.length, 4, `four party bars at ${width}`);
+      assert.ok(bars.every(b => b.role === 'img' && b.aria && b.height >= 12), `accessible bars with minimum height at ${width}: ${JSON.stringify(bars)}`);
+      assert.ok(bars[0].aria.includes('PL: 3 de 5 Sim') && bars[0].aria.includes('1 Obstrução') && bars[0].aria.includes('1 Sem voto'), `PL bar aria-label: ${bars[0].aria}`);
+      assert.ok(await votePage.locator('#detail .vote-legend li').count() >= 5, `visible legend at ${width}`);
+
+      const mismatch = clean(await votePage.locator('#detail .vote-mismatch-note').innerText());
+      assert.ok(mismatch.includes('+2') && mismatch.includes('-1') && mismatch.includes('0'), `matchesDeclared=false note shows signed differences at ${width}: ${mismatch}`);
+
+      const ptBtn = votePage.locator('#detail .party-vote-row[data-party-row="PT"] .party-vote-toggle');
+      assert.equal(await ptBtn.getAttribute('aria-expanded'), 'false', `PT collapsed initially at ${width}`);
+      await ptBtn.click();
+      assert.equal(await ptBtn.getAttribute('aria-expanded'), 'true', `PT expanded on click at ${width}`);
+      const ptLinks = await votePage.locator('#detail .party-vote-row[data-party-row="PT"] .party-deputies a').evaluateAll(as => as.map(a => [a.getAttribute('href'), a.textContent.trim()]));
+      assert.ok(ptLinks.some(([href, name]) => href === expectedDeputyPath && name === known.name), `known deputy links to deputyPath at ${width}: ${JSON.stringify(ptLinks)}`);
+      assert.ok(ptLinks.some(([href, name]) => href === '/deputado/999999991' && name.includes('999999991')), `unknown deputy shows id and links to /deputado/<id> at ${width}: ${JSON.stringify(ptLinks)}`);
+
+      const plBtn = votePage.locator('#detail .party-vote-row[data-party-row="PL"] .party-vote-toggle');
+      await plBtn.click();
+      assert.ok(clean(await votePage.locator('#detail .party-vote-row[data-party-row="PL"] .party-deputies').innerText()).includes('Sem voto'), `null category renders as Sem voto at ${width}`);
+
+      const src = votePage.locator('#detail .vote-source a');
+      assert.equal(clean(await src.innerText()), 'Câmara dos Deputados, dados abertos', `source text at ${width}`);
+      assert.equal(await src.getAttribute('href'), 'https://dadosabertos.camara.leg.br/api/v2/votacoes/v-latest', `source URL at ${width}`);
+      assert.equal(await src.getAttribute('target'), '_blank', `source target at ${width}`);
+      assert.equal(await src.getAttribute('rel'), 'noopener noreferrer', `source rel at ${width}`);
+
+      const overflow = await votePage.evaluate(() => { const d = document.querySelector('#detail'); return { page: document.documentElement.scrollWidth > window.innerWidth, dialog: d.scrollWidth > d.clientWidth }; });
+      assert.equal(overflow.page, false, `no page overflow on /votacao/v-latest at ${width}`);
+      assert.equal(overflow.dialog, false, `no dialog overflow on /votacao/v-latest at ${width}`);
+      assert.deepEqual(votePage.errors, [], `/votacao/v-latest errors at ${width}`);
+    } finally { await votePage.close(); }
+  }
+
+  const missingVote = await at(1440, { search: 'votacao/nao-existe', before: routeVotes });
+  try {
+    await missingVote.waitForSelector('#detail[open] [role="alert"]');
+    const txt = clean(await missingVote.locator('#detail').innerText());
+    assert.ok(txt.includes('Votação não encontrada'), `missing vote shows not found: ${txt}`);
+    assert.ok(txt.includes('Nenhuma outra votação'), `missing vote states no other vote shown: ${txt}`);
+    assert.deepEqual(missingVote.errors.filter(e => !/404/.test(e)), [], 'no JS errors on missing vote');
+  } finally { await missingVote.close(); }
+
+  let index404Seen = false;
+  const home404 = await at(1440, { before: async page => { await page.route('**/votacoes/index.json', route => { index404Seen = true; return route.fulfill({ status: 404, body: '' }); }); } });
+  try {
+    await home404.waitForTimeout(300);
+    assert.equal(index404Seen, true, 'home requested votacoes/index.json');
+    assert.equal(await home404.locator('#votacao-chave').isHidden(), true, 'home block stays hidden when index returns 404');
+    assert.equal(await home404.locator('.full-portal').isVisible(), true, 'home page remains intact when index returns 404');
+    assert.deepEqual(home404.errors.filter(e => !/404/.test(e)), [], 'no JS errors on home when index returns 404');
+  } finally { await home404.close(); }
 });
 
 (async () => {

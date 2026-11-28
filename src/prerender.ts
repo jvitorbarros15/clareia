@@ -37,10 +37,17 @@ export const slugOf=(name:string)=>norm(name).replace(/[^a-z0-9]+/g,'-').replace
 export const deputyPath=(officialId:number,name:string)=>`/deputado/${officialId}-${slugOf(name)}`;
 export const senatorPath=(senatorId:number,name:string)=>`/senador/${senatorId}-${slugOf(name)}`;
 export const statePath=(uf:string)=>`/estado/${uf}`;
+const SAFE_VOTE_ID=/^[A-Za-z0-9._-]+$/;
+export function safeVoteId(id:string):string{
+  if(!SAFE_VOTE_ID.test(id)||id==='.'||id==='..'||id.toLowerCase()==='index')throw new Error(`Identificador de votação inválido: ${id}`);
+  return id;
+}
+export const votePath=(id:string)=>`/votacao/${safeVoteId(id)}`;
 export const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}).replace(/^-/,'−');
 
 export type Deputy={id:number;name:string;uf:string|null;ufNote:string|null;party:string|null;partyNote:string|null;partyInReview:boolean;lastConfirmedParty:string|null;sourceUrl:string;exercisedMonths:number;noExercise:boolean;heldMonths:number[];exerciseReviewMonths:number[];comparable:boolean;cents:number;hasCells:boolean;projects:number|null;use?:CeilingUse;social?:{network:string;url:string}[]};
 export type Senator={senatorId:number;year:number;name:string|null;totalCents:number;records:number;months:SenatorYearRecord['months'];review:SenatorYearRecord['review'];collectedAt?:string|null;photo?:string|null};
+export type PartyVote={id:string;date:string;description:string;objects:{billId:number|null;title:string|null}[];declared:{yes:number;no:number;other:number};approved:string|boolean|null;matchesDeclared:boolean};
 export type Period={year:string;coverage:number[];minMonths:number;collectedAt?:string|null};
 export const cutoffOf=(period:Period)=>cutoffLine(period.coverage.map(m=>m+1),Number(period.year),period.collectedAt);
 
@@ -166,6 +173,24 @@ export function renderSenator(shell:string,s:Senator,siteUrl:string,portraitSize
   return page(shell,{title,description,url,type:'profile',image},noscript,ld);
 }
 
+const voteTitle=(v:PartyVote)=>v.objects.map(o=>o.title?.trim()).find((t):t is string=>Boolean(t))||v.description;
+const voteDate=(value:string)=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(value||'');return m?`${m[3]}/${m[2]}/${m[1]}`:value;};
+const voteResult=(v:PartyVote)=>`${v.approved==='1'||v.approved===true?'Aprovado':'Rejeitado'} ${v.declared.yes} a ${v.declared.no}`;
+const voteListHtml=(votes:PartyVote[])=>votes.length?`<ul>${votes.map(v=>`<li><a href="${votePath(v.id)}">${esc(voteTitle(v))}</a> — ${esc(voteDate(v.date))} — ${esc(voteResult(v))}</li>`).join('')}</ul>`:'';
+
+export function renderVotesIndex(shell:string,votes:PartyVote[],siteUrl:string):string{
+  const title='Votações por partido — Clareia',description='Votações nominais-chave na Câmara dos Deputados por partido, com dados oficiais.';
+  const noscript=`<noscript><main id="main"><h1>Votações por partido</h1><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.</p>${voteListHtml(votes)}${homeLink}</main></noscript>`;
+  return page(shell,{title,description,url:siteUrl+'/votacoes',type:'website',image:icon(siteUrl)},noscript);
+}
+export function renderVote(shell:string,v:PartyVote,siteUrl:string,votes:PartyVote[]=[]):string{
+  const url=siteUrl+votePath(v.id),name=plain(voteTitle(v)),date=voteDate(v.date),result=voteResult(v);
+  const title=`${name} — Clareia`,description=`${name}. ${date}. ${result}. Votação por partido na Câmara dos Deputados, com dados oficiais.`;
+  const list=voteListHtml(votes.length?votes:[v]);
+  const noscript=`<noscript><main id="main"><h1>${esc(name)}</h1><p>${esc(date)} · ${esc(result)}</p><p>${esc(description)}</p><p>Ative o JavaScript para explorar os dados.</p>${list}<p><a href="/votacoes">Votações por partido</a></p>${homeLink}</main></noscript>`;
+  return page(shell,{title,description,url,type:'website',image:icon(siteUrl)},noscript);
+}
+
 export function jpegSize(b:Buffer):{width:number;height:number}|null{
   if(b.length<4||b[0]!==0xff||b[1]!==0xd8)return null;
   let i=2;
@@ -180,10 +205,11 @@ export function jpegSize(b:Buffer):{width:number;height:number}|null{
   return null;
 }
 
-export function sitemapXml(siteUrl:string,deputies:Deputy[],senators:Senator[]=[]):string{
+export function sitemapXml(siteUrl:string,deputies:Deputy[],senators:Senator[]=[],votes:PartyVote[]=[]):string{
   // Senators with name: null get no page or sitemap entry.
   const senatorUrls=[...senators].filter((s):s is Senator&{name:string}=>Boolean(s.name&&plain(s.name))).sort((a,b)=>a.senatorId-b.senatorId).map(s=>siteUrl+senatorPath(s.senatorId,plain(s.name)));
-  const urls=[siteUrl+'/',...FIXED_PAGES.map(([route])=>`${siteUrl}/${route}`),...Object.keys(UFS).sort().map(uf=>siteUrl+statePath(uf)),...[...deputies].sort((a,b)=>a.id-b.id).map(p=>siteUrl+deputyPath(p.id,p.name)),...senatorUrls];
+  const voteUrls=votes.length?[siteUrl+'/votacoes',...votes.map(v=>siteUrl+votePath(v.id))]:[];
+  const urls=[siteUrl+'/',...FIXED_PAGES.map(([route])=>`${siteUrl}/${route}`),...Object.keys(UFS).sort().map(uf=>siteUrl+statePath(uf)),...[...deputies].sort((a,b)=>a.id-b.id).map(p=>siteUrl+deputyPath(p.id,p.name)),...senatorUrls,...voteUrls];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(u=>`  <url><loc>${esc(u)}</loc></url>`).join('\n')}\n</urlset>\n`;
 }
 export function robotsTxt(o:ResolvedOptions):string{
@@ -235,7 +261,7 @@ export async function writeStaticPages(outDir:string,options:ResolvedOptions):Pr
   await writeApiPage(outDir,shell,pages,options);
 }
 
-export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions,shares:Map<number,{name:string;alt:string}>=new Map(),extras:{deputies:Deputy[];period:Period}[]=[],senators:Senator[]=[]):Promise<void>{
+export async function writePrerendered(outDir:string,publicationId:string,deputies:Deputy[],period:Period,options:ResolvedOptions,shares:Map<number,{name:string;alt:string}>=new Map(),extras:{deputies:Deputy[];period:Period}[]=[],senators:Senator[]=[],votes:PartyVote[]=[]):Promise<void>{
   const shell=await fs.readFile(path.join(outDir,'index.html'),'utf8');
   for(const {p,period:own} of [{deputies,period},...extras].flatMap(x=>x.deputies.map(p=>({p,period:x.period})))){
     const file=path.join(outDir,'data',publicationId,'portraits',`${p.id}.jpg`),bytes=await fs.readFile(file).catch(()=>null);
@@ -256,7 +282,14 @@ export async function writePrerendered(outDir:string,publicationId:string,deputi
     await fs.mkdir(path.join(outDir,'estado'),{recursive:true});
     await fs.writeFile(path.join(outDir,'estado',`${uf}.html`),renderState(shell,uf,deputies,period,options.siteUrl));
   }
+  if(votes.length){
+    await fs.writeFile(path.join(outDir,'votacoes.html'),renderVotesIndex(shell,votes,options.siteUrl));
+    await fs.mkdir(path.join(outDir,'votacao'),{recursive:true});
+    for(const v of votes){
+      await fs.writeFile(path.join(outDir,'votacao',`${safeVoteId(v.id)}.html`),renderVote(shell,v,options.siteUrl,votes));
+    }
+  }
   await fs.writeFile(path.join(outDir,'index.html'),renderHome(shell,options.siteUrl));
   await fs.writeFile(path.join(outDir,'robots.txt'),robotsTxt(options));
-  if(options.sitemap)await fs.writeFile(path.join(outDir,'sitemap.xml'),sitemapXml(options.siteUrl,[...deputies,...extras.flatMap(x=>x.deputies)],senators));
+  if(options.sitemap)await fs.writeFile(path.join(outDir,'sitemap.xml'),sitemapXml(options.siteUrl,[...deputies,...extras.flatMap(x=>x.deputies)],senators,votes));
 }
