@@ -11,8 +11,8 @@ import {createApp} from '../src/app.ts';
 import {snapshotId} from '../src/model.ts';
 import type {Expense,Snapshot} from '../src/model.ts';
 import {partyFieldsOf} from '../src/site-summary.ts';
-import {FIXED_PAGES,deputiesOf,loadStaticPages,writePrerendered,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,resolveOptions,robotsTxt,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
-import type {Deputy,Period,Senator} from '../src/prerender.ts';
+import {FIXED_PAGES,deputiesOf,loadStaticPages,writePrerendered,writeStaticPages,UFS,deputyDescription,deputyPath,inState,jpegSize,renderDeputy,renderHome,renderState,renderVote,renderVotesIndex,resolveOptions,robotsTxt,safeVoteId,sitemapXml,slugOf,stateDescription} from '../src/prerender.ts';
+import type {Deputy,PartyVote,Period,Senator} from '../src/prerender.ts';
 import {loadSpec} from '../src/api-docs.ts';
 
 const shell=await fs.readFile(path.join(import.meta.dirname,'..','real','index.html'),'utf8');
@@ -358,6 +358,75 @@ test('renderDeputy and the deputy entries of sitemapXml are identical with and w
     const withSen=locs(await fs.readFile(path.join(dirWith,'sitemap.xml'),'utf8'));
     assert.deepEqual(withSen.filter(u=>!u.includes('/senador/')),without);
     assert.ok(withSen.includes(`${SITE}/senador/5899-vanderlan-cardoso`));
+  }finally{
+    await fs.rm(dir,{recursive:true,force:true});
+  }
+});
+
+test('party vote pages render escaped titles, dates, results, links and sitemap entries, and refuse unsafe ids',async()=>{
+  const votes:PartyVote[]=[
+    {id:'2481234-5',date:'2025-11-20',description:'Aprovado o substitutivo',objects:[{billId:10,title:'PL 10/2025 <script>"&teste'}],declared:{yes:318,no:135,other:4},approved:'1',matchesDeclared:true},
+    {id:'v_2.0',date:'2025-03-05',description:'Rejeitado <req> "urgência"',objects:[{billId:null,title:null}],declared:{yes:100,no:250,other:2},approved:'0',matchesDeclared:false},
+  ];
+  const indexHtml=renderVotesIndex(shell,votes,SITE);
+  assert.ok(indexHtml.includes('<title>Votações por partido — Clareia</title>'));
+  assert.ok(indexHtml.includes(`<link rel="canonical" href="${SITE}/votacoes">`));
+  assert.match(indexHtml,/<meta name="description" content="[^"]+">/);
+  assert.ok(indexHtml.includes('<noscript><main id="main"><h1>Votações por partido</h1>'));
+  assert.ok(!indexHtml.includes('<script>"&teste'));
+  assert.ok(indexHtml.includes('href="/votacao/2481234-5">PL 10/2025 &lt;script&gt;&quot;&amp;teste</a> — 20/11/2025 — Aprovado 318 a 135'));
+  assert.ok(indexHtml.includes('href="/votacao/v_2.0">Rejeitado &lt;req&gt; &quot;urgência&quot;</a> — 05/03/2025 — Rejeitado 100 a 250'));
+  assert.ok(indexHtml.includes('<a href="/">Clareia: início</a>'));
+
+  const detailHtml=renderVote(shell,votes[0],SITE,votes);
+  assert.ok(detailHtml.includes('<title>PL 10/2025 &lt;script&gt;&quot;&amp;teste — Clareia</title>'));
+  assert.ok(detailHtml.includes(`<link rel="canonical" href="${SITE}/votacao/2481234-5">`));
+  assert.equal(meta(detailHtml,'og:url'),`${SITE}/votacao/2481234-5`);
+  assert.ok(meta(detailHtml,'description')!.includes('PL 10/2025 &lt;script&gt;&quot;&amp;teste'));
+  assert.ok(!detailHtml.includes('<script>"&teste'));
+  assert.ok(detailHtml.includes('<noscript><main id="main"><h1>PL 10/2025 &lt;script&gt;&quot;&amp;teste</h1>'));
+  assert.ok(detailHtml.includes('20/11/2025'));
+  assert.ok(detailHtml.includes('Aprovado 318 a 135'));
+  assert.ok(detailHtml.includes('href="/votacao/v_2.0"'));
+  assert.ok(detailHtml.includes('<a href="/">Clareia: início</a>'));
+
+  const xmlWithout=sitemapXml(SITE,[normal]);
+  assert.ok(!xmlWithout.includes('/votacoes')&&!xmlWithout.includes('/votacao/'));
+  const xmlWith=sitemapXml(SITE,[normal],[],votes);
+  assert.ok(xmlWith.includes(`<loc>${SITE}/votacoes</loc>`));
+  assert.ok(xmlWith.includes(`<loc>${SITE}/votacao/2481234-5</loc>`));
+  assert.ok(xmlWith.includes(`<loc>${SITE}/votacao/v_2.0</loc>`));
+
+  for(const bad of ['a/b','a:b','index','INDEX','.','..']){
+    assert.throws(()=>safeVoteId(bad),/Identificador de votação inválido/,bad);
+    assert.throws(()=>renderVote(shell,{...votes[0],id:bad},SITE),/Identificador de votação inválido/,bad);
+    assert.throws(()=>renderVotesIndex(shell,[{...votes[0],id:bad}],SITE),/Identificador de votação inválido/,bad);
+    assert.throws(()=>sitemapXml(SITE,[normal],[],[{...votes[0],id:bad}]),/Identificador de votação inválido/,bad);
+  }
+
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clareia-votes-prerender-'));
+  try{
+    const dirNoVotes=path.join(dir,'no-votes'),dirWithVotes=path.join(dir,'with-votes');
+    for(const d of [dirNoVotes,dirWithVotes]){await fs.mkdir(d,{recursive:true});await fs.writeFile(path.join(d,'index.html'),shell);}
+    const opts=resolveOptions({siteUrl:SITE,sitemap:true});
+    await writePrerendered(dirNoVotes,'pub1',[normal],period,opts);
+    await assert.rejects(fs.access(path.join(dirNoVotes,'votacoes.html')),{code:'ENOENT'});
+    await assert.rejects(fs.access(path.join(dirNoVotes,'votacao')),{code:'ENOENT'});
+    assert.ok(!(await fs.readFile(path.join(dirNoVotes,'sitemap.xml'),'utf8')).includes('/votacoes'));
+
+    await writePrerendered(dirWithVotes,'pub1',[normal],period,opts,new Map(),[],[],votes);
+    assert.ok((await fs.readFile(path.join(dirWithVotes,'votacoes.html'),'utf8')).includes('href="/votacao/2481234-5"'));
+    assert.ok((await fs.readFile(path.join(dirWithVotes,'votacao','2481234-5.html'),'utf8')).includes('<h1>PL 10/2025 &lt;script&gt;&quot;&amp;teste</h1>'));
+    assert.ok((await fs.readFile(path.join(dirWithVotes,'votacao','v_2.0.html'),'utf8')).includes('Rejeitado 100 a 250'));
+    const writtenSitemap=await fs.readFile(path.join(dirWithVotes,'sitemap.xml'),'utf8');
+    assert.ok(writtenSitemap.includes(`${SITE}/votacoes`));
+    assert.ok(writtenSitemap.includes(`${SITE}/votacao/2481234-5`));
+    assert.ok(writtenSitemap.includes(`${SITE}/votacao/v_2.0`));
+
+    const dirUnsafe=path.join(dir,'unsafe');
+    await fs.mkdir(dirUnsafe,{recursive:true});
+    await fs.writeFile(path.join(dirUnsafe,'index.html'),shell);
+    await assert.rejects(writePrerendered(dirUnsafe,'pub1',[normal],period,opts,new Map(),[],[],[{...votes[0],id:'a/b'}]),/Identificador de votação inválido/);
   }finally{
     await fs.rm(dir,{recursive:true,force:true});
   }

@@ -16,7 +16,7 @@ import {assertBillsMatchVersion,readBills} from './bills-publication.ts';
 import type {ReviewItem,ReviewNames} from './review-list.ts';
 import {partyReviewItems,ufReviewItems} from './review-list.ts';
 import {deputiesOf,resolveOptions,writePrerendered,writeStaticPages} from './prerender.ts';
-import type {Deputy,Period,Senator} from './prerender.ts';
+import type {Deputy,PartyVote,Period,Senator} from './prerender.ts';
 import type {SiteOptions} from './prerender.ts';
 import {readSenatorRows,writeSenatorsSite} from './senado-publication.ts';
 import type {SenatorYearRecord} from './senado-publication.ts';
@@ -184,11 +184,12 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
       await fs.mkdir(path.join(data,'atividade'),{recursive:true});const activity=JSON.stringify({bills,votes});if(scanCpfs(activity,new Set()))throw new Error('Identificador privado na atividade de um deputado');await fs.writeFile(path.join(data,'atividade',id+'.json'),activity);
     }
   }
+  const prerenderVotes:PartyVote[]=[];
   if(votesVersion&&peopleVersion){
     const keyIds:unknown=JSON.parse(await fs.readFile(path.join(import.meta.dirname,'..','config','key-votes.json'),'utf8'));
     if(!Array.isArray(keyIds)||keyIds.some(id=>typeof id!=='string'))throw new Error('config/key-votes.json deve ser uma lista de identificadores de votação');
     const selected=selectKeyVotes([...voteList.values()],keyIds),ballots=await readBallots(db,votesVersion.id);
-    const dir=path.join(data,'votacoes'),votes=[];
+    const dir=path.join(data,'votacoes'),votes:PartyVote[]=[];
     await fs.mkdir(dir,{recursive:true});
     for(const vote of selected){
       const {id,date,description,objects,approved}=vote;
@@ -203,6 +204,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
     const json=JSON.stringify({schema:'clareia.party-votes-index.v1',votes});
     if(scanCpfs(json,new Set()))throw new Error('Identificador privado nas votações por partido');
     await fs.writeFile(path.join(dir,'index.json'),json);
+    prerenderVotes.push(...votes);
   }
   if(sitePlan.amendments&&amendmentsByDeputy.size){
     const dir=path.join(data,'emendas'),{publicationId}=sitePlan.amendments;
@@ -259,7 +261,7 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   await fs.writeFile(path.join(outDir,'manifest.json'),JSON.stringify({base:`data/${publicationId}`,domains,defaultYear:sitePlan.defaultYear,years:manifestYears,...sitePlan.senators?{senators:true}:{}}));
   // Static pages first: both read the bare index.html, and the prerender overwrites it with the home page.
   await writeStaticPages(outDir,siteOptions);
-  await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names,extras,prerenderSenators);
+  await writePrerendered(outDir,publicationId,deputies,period,siteOptions,share?.names,extras,prerenderSenators,prerenderVotes);
   const files=await listFiles(outDir),sizes=await Promise.all(files.map(async f=>(await fs.stat(f)).size));
   // The all-months zip is the one file allowed past 10 MiB; zipOf already keeps it under the 25 MiB Workers asset limit.
   checkLimits(files.length,Math.max(...sizes.filter((_,i)=>!files[i].endsWith('.zip'))));
