@@ -511,7 +511,7 @@ test('the home hero and footer follow Senado data and restore the Câmara highli
     loadSuppliers:()=>new Promise<void>(()=>{}),
     fetchImpl:async(url:string)=>({ok:true,json:async()=>url.endsWith('index.json')?index:url.endsWith('2024.json')?previous:year}),
   };
-  const app=bootAppJs({...options,search:'?casa=senado&aba=menos&metrica=mensal&destaque=2'});
+  const app=bootAppJs({...options,search:'?casa=senado&destaque=2'});
   const feature=app.elements['#editorial-feature'], portrait=app.elements['#hero-portrait'], footer=app.elements['.footer'];
   assert.match(app.elements['#app'].innerHTML,/<div class="editorial-feature" id="editorial-feature"><p role="status">Carregando dados do Senado…<\/p>/);
   assert.match(footer.innerHTML,/<p>Dados oficiais do Senado Federal<\/p>/);
@@ -549,6 +549,51 @@ test('the home hero and footer follow Senado data and restore the Câmara highli
   await flush();
   assert.match(reloaded.elements['#editorial-feature'].innerHTML,/na CEAPS em Dez–Dez 2024.*href="\/senador\/475-atila-lins\?ano=2024"/);
   assert.match(reloaded.elements['.footer'].innerHTML,/<span>Versão Dez–Dez 2024<\/span><p>Dados oficiais do Senado Federal \(CEAPS\), Dez–Dez 2024<\/p>/);
+});
+
+test('hero featured person follows tab, metric and year changes in Câmara and Senado (#239)',async()=>{
+  const sample=VALID_SENATORS_YEAR.senators[0];
+  const highTotal={...sample,name:'Átila Lins',senatorId:475,totalCents:600000,months:[{...sample.months[0],month:1},{...sample.months[0],month:2},{...sample.months[0],month:3}]};
+  const highMonthly={...sample,name:'Vanderlan Cardoso',senatorId:5899,totalCents:400000,months:[{...sample.months[0],month:1}]};
+  const lowest={...sample,name:'Renzo Braz',senatorId:900,totalCents:100000,months:[{...sample.months[0],month:1}]};
+  const year={...VALID_SENATORS_YEAR,senators:[highTotal,highMonthly,lowest]};
+  const index={...VALID_SENATORS_INDEX,years:[...VALID_SENATORS_INDEX.years,{year:2024,file:'2024.json'}]};
+  const options={
+    loadSuppliers:()=>new Promise<void>(()=>{}),
+    fetchImpl:async(url:string)=>({ok:true,json:async()=>url.endsWith('index.json')?index:year}),
+  };
+
+  // Senado: switching tab and metric updates hero + Destaques
+  const sen=bootAppJs({...options,search:'?casa=senado'});
+  await flush();
+  assert.match(sen.elements['#editorial-feature'].innerHTML,/foi o total de despesas de Átila Lins na CEAPS/);
+  sen.fireDoc('click',{target:{closest:()=>({tagName:'BUTTON',dataset:{tab:'menos'}})}});
+  assert.match(sen.elements['#editorial-feature'].innerHTML,/foi o total de despesas de Renzo Braz na CEAPS/);
+  assert.deepEqual([...sen.elements['#editorial-feature'].innerHTML.matchAll(/data-action="feature" data-id="(\d+)"/g)].map(m=>m[1]),['900','5899','475']);
+  sen.fireDoc('click',{target:{closest:()=>({tagName:'BUTTON',dataset:{tab:'gastos'}})}});
+  assert.match(sen.elements['#editorial-feature'].innerHTML,/Átila Lins na CEAPS/);
+  sen.fireDoc('click',{target:{closest:()=>({tagName:'BUTTON',dataset:{metric:'mensal'}})}});
+  assert.match(sen.elements['#editorial-feature'].innerHTML,/é a média mensal de despesas de Vanderlan Cardoso na CEAPS/);
+
+  // Câmara: switching tab updates hero + Destaques, and switching year drops destaque
+  const cam=bootAppJs({...options,search:''});
+  assert.equal(cam.clareia.state.featured,'1');
+  assert.match(cam.elements['#app'].innerHTML,/Ana Souza na cota parlamentar/);
+  cam.fireDoc('click',{target:{closest:()=>({tagName:'BUTTON',dataset:{tab:'menos'}})}});
+  assert.equal(cam.clareia.state.featured,'2');
+  assert.match(cam.elements['#editorial-feature'].innerHTML,/Bruno Lima na cota parlamentar/);
+  assert.deepEqual([...cam.elements['#editorial-feature'].innerHTML.matchAll(/data-action="feature" data-id="(\d+)"/g)].map(m=>m[1]),['2','1']);
+  cam.fireDoc('click',{target:{closest:()=>({tagName:'BUTTON',dataset:{tab:'gastos'}})}});
+  assert.equal(cam.clareia.state.featured,'1');
+  cam.fireDoc('change',{target:{value:'2024',matches:(sel:string)=>sel==='[data-year-select]'}});
+  await flush();
+  assert.equal(new URLSearchParams(cam.location.search).get('ano'),'2024');
+  assert.equal(new URLSearchParams(cam.location.search).get('destaque'),null);
+
+  // Câmara: direct load with ?aba=menos starts on lowest spender when no ?destaque=
+  const camLow=bootAppJs({...options,search:'?aba=menos'});
+  assert.equal(camLow.clareia.state.featured,'2');
+  assert.match(camLow.elements['#app'].innerHTML,/Bruno Lima na cota parlamentar/);
 });
 
 test('real/data.js enables senators only when manifest.senators is strictly true',async()=>{
