@@ -396,10 +396,9 @@ test('failed index fetch, wrong schema and missing amendmentsIndexUrl show unava
   await flush();
   assert.ok(appBadSchema.elements['#rank-slot'].innerHTML.includes(UNAVAILABLE));
   serveValid = true;
-  appBadSchema.clickTab('gastos');
-  appBadSchema.clickTab('emendas');
+  appBadSchema.clareia.profile('1');
   await flush();
-  assert.ok(appBadSchema.elements['#rank-slot'].innerHTML.includes('Carla Dias'), 'error was removed from cache so retry succeeded');
+  assert.ok(appBadSchema.elements['#rank-slot'].innerHTML.includes('Carla Dias'), 'profile retry refreshes the Emendas ranking behind the dialog');
 
   // 3) Missing ClareiaData.amendmentsIndexUrl
   const appMissing = bootAppJs({ includeAmendmentsUrls: false });

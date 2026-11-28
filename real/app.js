@@ -395,8 +395,10 @@
   function loadAmendmentsIndex() {
     if (typeof D.amendmentsIndexUrl !== 'function') return Promise.reject(new Error());
     return fetchAmendmentsJson(D.amendmentsIndexUrl(), validAmendmentsIndex).then(idx => {
+      const wasReady = amendmentsState.status === 'ready';
       amendmentsState.byId = new Map(idx.deputies.map(d => [d.deputyId, d.years]));
       amendmentsState.status = 'ready';
+      if (!wasReady && state.house === 'camara' && state.tab === 'emendas' && $('#rank-slot')) refresh();
       return idx;
     });
   }
@@ -408,9 +410,7 @@
     if (typeof D.amendmentsIndexUrl !== 'function') { amendmentsState.status = 'error'; return; }
     if (amendmentsState.status === 'ready' || amendmentsState.status === 'loading') return;
     amendmentsState.status = 'loading';
-    loadAmendmentsIndex().then(() => {
-      if (state.house === 'camara' && state.tab === 'emendas' && $('#rank-slot')) refresh();
-    }, () => {
+    loadAmendmentsIndex().then(() => {}, () => {
       amendmentsState.status = 'error';
       amendmentsState.byId = new Map();
       if (state.house === 'camara' && state.tab === 'emendas' && $('#rank-slot')) refresh();
@@ -807,7 +807,7 @@
     const asked = years?.find(y => y !== state.year), askedPublished = asked && otherYears().includes(asked);
     if (askedPublished) message = ['Período de outro ano', `A pergunta cita ${asked}, mas você está vendo ${span()}.`, asked];
     else if (asked) message = ['Período fora desta versão', `Esta versão contém ${span()}. Outros períodos ainda não foram publicados.`];
-    else if (/projet|propost|votou|votaram|votac|reforma|corrup|roub|honest|melhor|pior|patrimon|emenda|salario|president|senador|partido/.test(q)) message = ['Não temos esse dado publicado', window.ClareiaData.billsApproved || window.ClareiaData.votesApproved ? 'A busca responde só sobre despesas da cota parlamentar. Projetos e votações aprovados ficam nas seções de atividade, e emendas individuais ficam no perfil do deputado e na aba Emendas; o que não está lá ainda não foi conferido.' : 'A busca responde só sobre despesas da cota parlamentar. Emendas individuais ficam no perfil do deputado e na aba Emendas; projetos, votações, eleições e patrimônio ainda não foram coletados e conferidos.'];
+    else if (/projet|propost|votou|votaram|votac|reforma|corrup|roub|honest|melhor|pior|patrimon|emenda|salario|president|senador|partido/.test(q)) message = ['A busca responde só sobre a cota parlamentar', window.ClareiaData.billsApproved || window.ClareiaData.votesApproved ? 'A busca responde só sobre despesas da cota parlamentar. Projetos e votações aprovados ficam nas seções de atividade, e emendas individuais ficam no perfil do deputado e na aba Emendas; o que não está lá ainda não foi conferido.' : 'A busca responde só sobre despesas da cota parlamentar. Emendas individuais ficam no perfil do deputado e na aba Emendas; projetos, votações, eleições e patrimônio ainda não foram coletados e conferidos.'];
     if (!message) {
       const matches = all().filter(p => p.name.split(' ').some(word => word.length > 2 && new RegExp(`\\b${norm(word)}\\b`).test(q)));
       if (matches.length === 1 && /compar|\bmais que\b|\bmenos que\b|\bversus\b/.test(q)) message = ['Qual é o outro representante?', `Neste recorte, você pode comparar ${all().map(p => p.name).join(', ')}.`];
