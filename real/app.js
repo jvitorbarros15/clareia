@@ -26,7 +26,7 @@
   const fromURL = {};
   if (categories.includes(initial.get('categoria')) || initial.get('categoria') === 'Todas') fromURL.category = initial.get('categoria');
   if (['total', 'mensal'].includes(initial.get('metrica'))) fromURL.metric = initial.get('metrica');
-  if (['gastos', 'menos', 'projetos'].includes(initial.get('aba'))) fromURL.tab = initial.get('aba');
+  if (['gastos', 'menos', 'projetos', 'emendas'].includes(initial.get('aba'))) fromURL.tab = initial.get('aba');
   const urlUf = initial.get('uf');
   if (urlUf && D.dataset().some(p => !p.noExercise && p.uf === urlUf)) fromURL.uf = urlUf;
   const isSenatorPath = /^\/senador(?:\/|$)/.test(location.pathname);
@@ -36,7 +36,7 @@
     year: D.year, uf: fromURL.uf ?? 'Brasil',
     category: fromURL.category ?? 'Todas',
     metric: fromURL.metric ?? 'total',
-    tab: initialHouse === 'senado' && fromURL.tab === 'projetos' ? 'gastos' : (fromURL.tab ?? 'gastos'), barLimit: BAR_STEP, senatorCeilingLimit: BAR_STEP,
+    tab: initialHouse === 'senado' && (fromURL.tab === 'projetos' || fromURL.tab === 'emendas') ? 'gastos' : (fromURL.tab ?? 'gastos'), barLimit: BAR_STEP, senatorCeilingLimit: BAR_STEP,
     query: initial.get('q') || '', featured: ids.includes(initial.get('destaque')) && comparable(D.dataset().find(p => p.id === initial.get('destaque'))) ? initial.get('destaque') : byTotal()[0]?.id, answer: null, hiddenSeries: new Set(), popover: null
   };
   let dialogTrigger = null, toastTimer, listOrigin = null;
@@ -79,6 +79,7 @@
   const cardContext = p => p.partyInReview ? [p.uf, p.ufNote, p.lastConfirmedParty && `${p.lastConfirmedParty} (último confirmado)`].filter(Boolean).join(' · ') || 'Deputado(a) federal' : context(p);
   function value(p, kind = state.tab) {
     if (kind === 'projetos') return null;
+    if (kind === 'emendas') return amendmentPaid(p);
     const result = sum(cells(p));
     return state.metric === 'mensal' ? result / p.months : result;
   }
@@ -175,7 +176,7 @@
   function tabs() {
     const items = state.house === 'senado'
       ? [['gastos', 'Mais gastos'], ['menos', 'Menos gastos']]
-      : [['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos']];
+      : [['gastos', 'Mais gastos'], ['menos', 'Menos gastos'], ['projetos', 'Projetos'], ['emendas', 'Emendas']];
     const list = `<div class="tabs" role="tablist" aria-label="Indicador">${items.map(([key, label]) => `<button role="tab" data-tab="${key}" aria-selected="${state.tab === key}" tabindex="${state.tab === key ? 0 : -1}">${label}</button>`).join('')}</div>`;
     return D.senators ? `<div class="rank-head">${list}${houseSwitch()}</div>` : list;
   }
@@ -184,6 +185,18 @@
     return `${state.metric === 'mensal' ? 'Média mensal' : 'Cota parlamentar'} · ${span()} · ${p.months} ${p.months === 1 ? 'mês' : 'meses'} no recorte`;
   }
   function cards() {
+    if (state.tab === 'emendas') {
+      if (typeof D.amendmentsIndexUrl !== 'function' || amendmentsState.status === 'error') {
+        return `<div class="empty-state" role="alert"><b>${AMENDMENTS_UNAVAILABLE}</b><p>Os dados de emendas não puderam ser carregados agora.</p><button class="outline-button" data-tab="gastos">Ver gastos</button></div>`;
+      }
+      if (amendmentsState.status !== 'ready') return '<div class="empty-state" role="status"><b>Carregando emendas…</b></div>';
+      const ranked = amendmentRanking();
+      if (!ranked.length) return `<div class="empty-state"><b>Nenhum deputado com emendas individuais ligadas para ${escape(state.year)}${state.uf === 'Brasil' ? '' : ` em ${escape(state.uf)}`}.</b><p>Deputados sem emendas individuais ligadas neste ano não aparecem com zero.</p><button class="outline-button" data-tab="gastos">Ver gastos</button></div>`;
+      return ranked.slice(0, 3).map((p, i) => `<article class="rank-card editorial-card" data-person="${p.id}">
+      <button class="portrait-button" data-action="profile" data-id="${p.id}" aria-label="Abrir perfil de ${escape(p.name)}">${photo(p)}<span class="rank-number">0${i + 1}</span></button>
+      <div class="card-info"><h3 class="person-name">${escape(p.name)}</h3><p class="editorial-person-context">${escape(cardContext(p))}</p><button class="value-button" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}: ${money(amendmentPaid(p))}. Como chegamos nisso?">${compact(amendmentPaid(p))}</button>
+      <p class="card-caption">Emendas individuais pagas · ano ${escape(state.year)}</p><div class="card-proofs"><button class="editorial-proof" data-action="evidence" data-id="${p.id}">Como chegamos nisso? →</button></div></div></article>`).join('');
+    }
     const projects = state.tab === 'projetos' && window.ClareiaData.billsApproved;
     if (projects && !projectRanking().length) return `<div class="empty-state"><b>Nenhum deputado com proposições coletadas neste recorte.</b><p>Quem não teve as proposições coletadas não aparece com zero projetos aprovados.</p><button class="outline-button" data-tab="gastos">Ver gastos</button></div>`;
     if (state.tab === 'projetos' && !projects) return `<div class="empty-state"><b>Projetos de lei ainda não foram coletados.</b><p>A próxima etapa inclui PL, PLP e PEC da Câmara, separando autoria principal de coautoria. Nenhum número é mostrado antes da conferência.</p><button class="outline-button" data-tab="gastos">Ver gastos</button></div>`;
@@ -193,6 +206,13 @@
       <p class="card-caption">${projects ? `Projetos aprovados · ${billsPeriod()}` : caption(p)}</p><div class="card-proofs"><button class="editorial-proof" data-action="evidence" data-id="${p.id}">Como chegamos nisso? →</button>${ceilingPill(p, projects)}</div></div></article>`).join('');
   }
   function rankNote() {
+    if (state.tab === 'emendas') {
+      const scope = all().filter(inUF).length, included = amendmentRanking().length;
+      const counts = amendmentsState.status === 'ready'
+        ? ` Inclui ${included} de ${scope} deputados${state.uf === 'Brasil' ? '' : ` de ${escape(state.uf)}`} com emendas individuais em ${escape(state.year)}; quem não tem registro ligado neste ano fica fora e não aparece com zero.`
+        : '';
+      return `Emendas individuais pagas (ano da emenda ${escape(state.year)}): entram apenas emendas individuais com ligação revisada de autoria; emendas de bancada, comissão e relator ficam de fora. Os valores são acumulados até a data do arquivo do Portal da Transparência (CGU), não pagamento dentro do ano.${counts} <button class="text-button" data-action="methodology">Fontes e metodologia →</button>`;
+    }
     if (state.tab === 'projetos' && window.ClareiaData.billsApproved) {
       const scope = all().filter(inUF).length, included = projectRanking().length, excluded = scope - included;
       return `Projetos aprovados: PL, PLP e PEC apresentados em ${billsPeriod()} em que o deputado é proponente (autor), não apenas signatário, e que viraram norma jurídica: lei ordinária, lei complementar ou emenda constitucional, com a norma identificada no despacho oficial da Câmara. Só conta a autoria; a coautoria fica de fora. Projetos apresentados não equivalem a leis aprovadas. Inclui ${included} de ${scope} deputados${state.uf === 'Brasil' ? '' : ` de ${escape(state.uf)}`}${excluded ? `; ${excluded} ficam fora porque as proposições deles não foram coletadas, e não aparecem com zero` : ', todos com proposições coletadas'}. Projetos cuja norma não pôde ser confirmada no despacho ou que estão retidos para revisão não entram na contagem. <button class="text-button" data-action="methodology">Fontes e metodologia →</button>`;
@@ -203,29 +223,35 @@
   const listMore = (total, limit, step, kind, noun) => total <= step ? '' : `<div class="list-more"><p class="list-count">Mostrando ${Math.min(limit, total)} de ${total} ${noun}</p>${total > limit ? `<button class="outline-button" data-action="${kind}-more">Mostrar mais ${Math.min(step, total - limit)}</button>` : ''}${limit > step ? `<button class="outline-button" data-action="${kind}-less">Mostrar menos</button>` : ''}</div>`;
   function barSection() {
     if (state.house === 'senado') return senatorBarSection();
-    const projects = state.tab === 'projetos';
+    const projects = state.tab === 'projetos', amendments = state.tab === 'emendas';
     if (projects && (!window.ClareiaData.billsApproved || !projectRanking().length)) return '';
-    const standings = !projects && D.ceiling && state.category === 'Todas' ? ClareiaView.ufStandings(all()) : new Map();
-    const ranked = projects ? projectRanking() : ranking(), amount = p => projects ? p.approved : Math.abs(value(p)), shown = p => projects ? approvedText(p) : money(value(p)), max = Math.max(1, ...ranked.map(amount));
+    if (amendments && (amendmentsState.status !== 'ready' || !amendmentRanking().length)) return '';
+    const standings = !projects && !amendments && D.ceiling && state.category === 'Todas' ? ClareiaView.ufStandings(all()) : new Map();
+    const ranked = projects ? projectRanking() : amendments ? amendmentRanking() : ranking();
+    const amount = p => projects ? p.approved : amendments ? Math.abs(amendmentPaid(p)) : Math.abs(value(p));
+    const shown = p => projects ? approvedText(p) : amendments ? money(amendmentPaid(p)) : money(value(p));
+    const max = Math.max(1, ...ranked.map(amount));
     const ceilingNote = D.ceiling?.note;
-    return `<section class="bar-section" id="comparison"><h2>${projects ? `Ranking de projetos aprovados · ${billsPeriod()}` : `Comparativo de gastos · ${span()}`}</h2>${ranked.length ? '<button type="button" class="outline-button" data-action="csv-ranking">Baixar CSV</button>' : ''}<div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => {
+    const heading = projects ? `Ranking de projetos aprovados · ${billsPeriod()}` : amendments ? `Ranking de emendas individuais pagas · ${escape(state.year)}` : `Comparativo de gastos · ${span()}`;
+    const actionHint = projects ? 'ver definição' : amendments ? 'ver emendas' : 'ver cálculo';
+    return `<section class="bar-section" id="comparison"><h2>${heading}</h2>${ranked.length ? '<button type="button" class="outline-button" data-action="csv-ranking">Baixar CSV</button>' : ''}<div class="bar-chart" id="bar-chart">${ranked.slice(0, state.barLimit).map((p, i) => {
       const s = standings.get(p.id);
       const use = s ? `${pctText(p)} do teto${ceilingNote ? '*' : ''}${s.total > 1 ? ` · ${s.rank}º maior uso do teto entre os ${s.total} de ${escape(s.uf)}` : ''}` : '';
-      return `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${shown(p)}${use ? `, ${use}${ceilingNote ? ` (${escape(ceilingNote)})` : ''}` : ''}: ${projects ? 'ver definição' : 'ver cálculo'}" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${amount(p) / max * 100}%"></i></span><span class="bar-value">${shown(p)}${use ? `<small class="bar-use"${ceilingNote ? ` title="${escape(ceilingNote)}"` : ''}>${use}</small>` : ''}</span></button>`;
+      return `<button class="bar-row" data-action="evidence" data-id="${p.id}" aria-label="${escape(p.name)}, ${shown(p)}${use ? `, ${use}${ceilingNote ? ` (${escape(ceilingNote)})` : ''}` : ''}: ${actionHint}" style="--opacity:${Math.max(.25, 1 - i * .18)}"><span class="bar-rank">${String(i + 1).padStart(2, '0')}</span>${avatar(p)}<span class="bar-name">${escape(p.name)}</span><span class="track"><i style="width:${amount(p) / max * 100}%"></i></span><span class="bar-value">${shown(p)}${use ? `<small class="bar-use"${ceilingNote ? ` title="${escape(ceilingNote)}"` : ''}>${use}</small>` : ''}</span></button>`;
     }).join('')}</div>${listMore(ranked.length, state.barLimit, BAR_STEP, 'bars', 'deputados')}</section>`;
   }
   function downloadRankingCsv(scope, uf) {
-    const isState = scope === 'state', projects = !isState && state.tab === 'projetos';
+    const isState = scope === 'state', projects = !isState && state.tab === 'projetos', amendments = !isState && state.tab === 'emendas';
     const people = isState
       ? all().filter(p => !p.noExercise && p.uf === uf).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
-      : projects ? projectRanking() : ranking();
+      : projects ? projectRanking() : amendments ? amendmentRanking() : ranking();
     const metric = state.metric === 'mensal' ? 'média mensal' : 'total';
-    const view = isState ? `Estado ${uf} · gastos · ${metric} · ${state.category}` : projects ? `Ranking de projetos aprovados · ${state.uf}` : `Ranking de gastos (${state.tab}) · ${metric} · ${state.category} · ${state.uf}`;
+    const view = isState ? `Estado ${uf} · gastos · ${metric} · ${state.category}` : projects ? `Ranking de projetos aprovados · ${state.uf}` : amendments ? `Ranking de emendas individuais pagas (${state.year}) · ${state.uf}` : `Ranking de gastos (${state.tab}) · ${metric} · ${state.category} · ${state.uf}`;
     const rows = people.map((p, i) => ({
       position: isState ? null : i + 1, id: p.officialId, name: p.name, uf: p.uf ?? '', party: p.party ?? '',
-      value: projects ? p.approved : Math.round(value(p, 'gastos')), warning: ClareiaView.csvWarning(p)
+      value: projects ? p.approved : amendments ? amendmentPaid(p) : Math.round(value(p, 'gastos')), warning: amendments ? '' : ClareiaView.csvWarning(p)
     }));
-    const text = ClareiaView.rankingCsv({ version: index.snapshotId, year: state.year, period: projects ? billsPeriod() : span(), view, unit: projects ? 'projetos' : 'reais', rows });
+    const text = ClareiaView.rankingCsv({ version: index.snapshotId, year: state.year, period: projects ? billsPeriod() : amendments ? String(state.year) : span(), view, unit: projects ? 'projetos' : 'reais', rows });
     const href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })), a = document.createElement('a');
     a.href = href;
     a.download = `clareia-${index.snapshotId.slice(0, 12)}-${isState ? uf : 'ranking'}.csv`;
@@ -234,7 +260,7 @@
     toast(`CSV com ${rows.length} deputados preparado.`);
   }
   function editorialFollowUp() {
-    if (state.tab === 'projetos') return '';
+    if (state.tab === 'projetos' || state.tab === 'emendas') return '';
     const monthly = state.metric === 'mensal';
     return `<div class="editorial-follow-up"><span>Continue investigando</span><button type="button" data-metric="${monthly ? 'total' : 'mensal'}">${monthly ? 'E se compararmos o total do período?' : 'A ordem muda quando comparamos por mês?'} →</button></div>`;
   }
@@ -338,6 +364,118 @@
       senatorState.error = 'Não foi possível carregar os dados do Senado agora. Nenhum valor foi estimado.';
       if (state.house === 'senado' && $('#rank-slot')) refresh();
     });
+  }
+  const AMENDMENTS_UNAVAILABLE = 'Emendas indisponíveis nesta versão. Nenhum número foi estimado.';
+  const amendmentsCache = new Map();
+  const amendmentsState = { status: 'idle', index: null, byId: new Map() };
+  let amendmentsProfileRun = 0;
+  function validAmendmentsIndex(raw) {
+    if (!isPlainObj(raw) || raw.schema !== 'clareia.amendments-index.v1' || !Array.isArray(raw.deputies)) return null;
+    for (const d of raw.deputies) {
+      if (!isPlainObj(d) || !Number.isInteger(d.deputyId) || !isSafeNumRecord(d.years)) return null;
+    }
+    return raw;
+  }
+  function validAmendmentsDeputy(raw) {
+    if (!isPlainObj(raw) || raw.schema !== 'clareia.amendments-deputy.v1' || !Array.isArray(raw.rows)) return null;
+    for (const r of raw.rows) {
+      if (!isPlainObj(r) || !Number.isInteger(r.year) || typeof r.destination !== 'string' || !Number.isSafeInteger(r.committed) || !Number.isSafeInteger(r.liquidated) || !Number.isSafeInteger(r.paid) || !Number.isSafeInteger(r.carriedOver) || !Number.isSafeInteger(r.carriedCancelled) || !Number.isSafeInteger(r.carriedPaid)) return null;
+    }
+    return raw;
+  }
+  function fetchAmendmentsJson(url, validate) {
+    if (!amendmentsCache.has(url)) {
+      amendmentsCache.set(url, fetch(url)
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(raw => { const parsed = validate(raw); if (!parsed) throw new Error(); return parsed; })
+        .catch(err => { amendmentsCache.delete(url); throw err; }));
+    }
+    return amendmentsCache.get(url);
+  }
+  function loadAmendmentsIndex() {
+    if (typeof D.amendmentsIndexUrl !== 'function') return Promise.reject(new Error());
+    return fetchAmendmentsJson(D.amendmentsIndexUrl(), validAmendmentsIndex).then(idx => {
+      amendmentsState.index = idx;
+      amendmentsState.byId = new Map(idx.deputies.map(d => [d.deputyId, d.years]));
+      amendmentsState.status = 'ready';
+      return idx;
+    });
+  }
+  function loadAmendmentsDeputy(officialId) {
+    if (typeof D.amendmentsUrl !== 'function') return Promise.reject(new Error());
+    return fetchAmendmentsJson(D.amendmentsUrl(officialId), validAmendmentsDeputy);
+  }
+  function ensureAmendmentsIndex() {
+    if (typeof D.amendmentsIndexUrl !== 'function') { amendmentsState.status = 'error'; return; }
+    if (amendmentsState.status === 'ready' || amendmentsState.status === 'loading') return;
+    amendmentsState.status = 'loading';
+    loadAmendmentsIndex().then(() => {
+      if (state.house === 'camara' && state.tab === 'emendas' && $('#rank-slot')) refresh();
+    }, () => {
+      amendmentsState.status = 'error';
+      amendmentsState.index = null;
+      amendmentsState.byId = new Map();
+      if (state.house === 'camara' && state.tab === 'emendas' && $('#rank-slot')) refresh();
+    });
+  }
+  const amendmentPaid = p => {
+    const years = amendmentsState.byId.get(p.officialId);
+    return years && Object.hasOwn(years, state.year) ? years[state.year] : null;
+  };
+  const amendmentRanking = () => amendmentsState.status === 'ready'
+    ? sortedBy(all().filter(p => amendmentPaid(p) !== null && inUF(p)), amendmentPaid)
+    : [];
+  function renderAmendmentsYears(rows) {
+    const byYear = new Map();
+    for (const r of rows) {
+      let y = byYear.get(r.year);
+      if (!y) { y = { year: r.year, committed: 0, liquidated: 0, paid: 0, carriedOver: 0, carriedCancelled: 0, carriedPaid: 0, destinations: [] }; byYear.set(r.year, y); }
+      y.committed += r.committed;
+      y.liquidated += r.liquidated;
+      y.paid += r.paid;
+      y.carriedOver += r.carriedOver;
+      y.carriedCancelled += r.carriedCancelled;
+      y.carriedPaid += r.carriedPaid;
+      y.destinations.push(r);
+    }
+    return [...byYear.values()].sort((a, b) => b.year - a.year).map(y => {
+      const dests = [...y.destinations].sort((a, b) => b.paid - a.paid || a.destination.localeCompare(b.destination, 'pt-BR'));
+      return `<div class="amendments-year"><h4>Emendas de ${escape(y.year)}</h4><div class="amendments-measures"><div class="amendments-measure"><span>Empenhado</span><strong>${money(y.committed)}</strong></div><div class="amendments-measure"><span>Liquidado</span><strong>${money(y.liquidated)}</strong></div><div class="amendments-measure"><span>Pago</span><strong>${money(y.paid)}</strong></div></div><p class="amendments-rap"><strong>Restos a pagar:</strong> Inscritos ${money(y.carriedOver)} · Cancelados ${money(y.carriedCancelled)} · Pagos ${money(y.carriedPaid)}</p><ul class="amendments-destinations">${dests.map(d => `<li class="amendments-dest"><span>${escape(d.destination)}</span><strong>${money(d.paid)}</strong></li>`).join('')}</ul></div>`;
+    }).join('');
+  }
+  async function hydrateProfileAmendments(p, run) {
+    const slot = () => {
+      if (run !== amendmentsProfileRun || !$('#detail').open) return null;
+      const el = $('#profile-amendments');
+      return el?.dataset?.amendmentsRun === String(run) ? el : null;
+    };
+    let idx;
+    try { idx = await loadAmendmentsIndex(); }
+    catch {
+      const el = slot();
+      if (el) el.innerHTML = `<h3>Emendas</h3><p class="records-note" role="alert">${AMENDMENTS_UNAVAILABLE}</p>`;
+      return;
+    }
+    if (!slot()) return;
+    if (!idx.deputies.some(d => d.deputyId === p.officialId)) {
+      const el = slot();
+      if (el) el.innerHTML = '<h3>Emendas</h3><p class="records-note">Sem emendas individuais ligadas a este deputado.</p><p class="context amendments-source">Fonte: Portal da Transparência (CGU), Emendas parlamentares.</p>';
+      return;
+    }
+    let data;
+    try { data = await loadAmendmentsDeputy(p.officialId); }
+    catch {
+      const el = slot();
+      if (el) el.innerHTML = `<h3>Emendas</h3><p class="records-note" role="alert">${AMENDMENTS_UNAVAILABLE}</p>`;
+      return;
+    }
+    const el = slot();
+    if (!el) return;
+    if (!data.rows.length) {
+      el.innerHTML = '<h3>Emendas</h3><p class="records-note">Sem emendas individuais ligadas a este deputado.</p><p class="context amendments-source">Fonte: Portal da Transparência (CGU), Emendas parlamentares.</p>';
+      return;
+    }
+    el.innerHTML = `<h3>Emendas</h3>${renderAmendmentsYears(data.rows)}<p class="context amendments-method">Apenas emendas individuais com ligação revisada de autoria. Empenhado, liquidado, pago e restos a pagar são medidas separadas e nunca são somadas entre si. Os valores são acumulados até a data do arquivo, por ano da emenda, e o destino é a localidade como a fonte escreve (valores nacionais ou múltiplos não são redistribuídos).</p><p class="context amendments-source">Fonte: Portal da Transparência (CGU), Emendas parlamentares.</p>`;
   }
   function senatorRanking(data, tab = state.tab, metric = state.metric) {
     const list = [];
@@ -468,7 +606,13 @@
   }
   function rankingSection() {
     if (state.house === 'senado') return senatorRankingSection();
-    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados de ${state.year}</h2>${tabs()}<div class="editorial-controls"><div class="selects">${yearSelector()}<span class="real-year">${state.tab === 'projetos' && D.billsApproved && D.billsYears.length ? `Projetos apresentados em ${billsPeriod()}` : span()}</span><p class="context cutoff">${cutoff()}</p></div>${state.tab === 'projetos' ? '' : metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
+    const noMetric = state.tab === 'projetos' || state.tab === 'emendas';
+    const periodLabel = state.tab === 'projetos' && D.billsApproved && D.billsYears.length
+      ? `Projetos apresentados em ${billsPeriod()}`
+      : state.tab === 'emendas'
+        ? `Emendas individuais · ano ${escape(state.year)}`
+        : span();
+    return `<section class="editorial-rank" id="rankings" aria-labelledby="editorial-rank-title"><h2 id="editorial-rank-title" class="sr-only">Deputados de ${state.year}</h2>${tabs()}<div class="editorial-controls"><div class="selects">${yearSelector()}<span class="real-year">${periodLabel}</span><p class="context cutoff">${cutoff()}</p></div>${noMetric ? '' : metricToggle()}</div><div class="cards">${cards()}</div><p class="ranking-context">${rankNote()}</p>${barSection()}${editorialFollowUp()}</section>`;
   }
   function answerHTML() {
     if (!state.answer) return '';
@@ -665,7 +809,7 @@
     const asked = years?.find(y => y !== state.year), askedPublished = asked && otherYears().includes(asked);
     if (askedPublished) message = ['Período de outro ano', `A pergunta cita ${asked}, mas você está vendo ${span()}.`, asked];
     else if (asked) message = ['Período fora desta versão', `Esta versão contém ${span()}. Outros períodos ainda não foram publicados.`];
-    else if (/projet|propost|votou|votaram|votac|reforma|corrup|roub|honest|melhor|pior|patrimon|emenda|salario|president|senador|partido/.test(q)) message = ['Não temos esse dado publicado', window.ClareiaData.billsApproved || window.ClareiaData.votesApproved ? 'A busca responde só sobre despesas da cota parlamentar. Projetos e votações aprovados ficam nas seções de atividade; o que não está lá ainda não foi conferido.' : 'Esta versão cobre só as despesas da cota parlamentar. Projetos, votações, patrimônio e emendas ainda não foram coletados e conferidos.'];
+    else if (/projet|propost|votou|votaram|votac|reforma|corrup|roub|honest|melhor|pior|patrimon|emenda|salario|president|senador|partido/.test(q)) message = ['Não temos esse dado publicado', window.ClareiaData.billsApproved || window.ClareiaData.votesApproved ? 'A busca responde só sobre despesas da cota parlamentar. Projetos e votações aprovados ficam nas seções de atividade, e emendas individuais ficam no perfil do deputado e na aba Emendas; o que não está lá ainda não foi conferido.' : 'A busca responde só sobre despesas da cota parlamentar. Emendas individuais ficam no perfil do deputado e na aba Emendas; projetos, votações, eleições e patrimônio ainda não foram coletados e conferidos.'];
     if (!message) {
       const matches = all().filter(p => p.name.split(' ').some(word => word.length > 2 && new RegExp(`\\b${norm(word)}\\b`).test(q)));
       if (matches.length === 1 && /compar|\bmais que\b|\bmenos que\b|\bversus\b/.test(q)) message = ['Qual é o outro representante?', `Neste recorte, você pode comparar ${all().map(p => p.name).join(', ')}.`];
@@ -951,8 +1095,10 @@
     return `<h3>% do teto da cota usado</h3><p>Divide as despesas dos meses contados pelo limite mensal da cota da UF de representação nesses mesmos meses. ${officialText}${missingText}${portalText}${noteText}Contam os meses de exercício completo: o mês de posse ou afastamento no meio do mês, o mês em revisão, meses sem teto confirmado e os meses fora do mandato ficam fora das duas somas. Só entram deputados comparáveis, e quem tem algum outro mês sem limite confirmado fica de fora, nunca com 0%.</p>${howToRead(sourceLinks)}`;
   }
   function evidence(id, options = {}) {
-    if (person(id)?.noExercise && options.kind !== 'projetos') { showDialog('Sem exercício confirmado', `<p>${escape(person(id).name)} não tem exercício de mandato confirmado em ${state.year} nas fontes oficiais, e não há despesas nesse período. Por isso não aparece valor nem entra no ranking de gastos.</p>`); return; }
-    const p = person(id), kind = options.kind || state.tab, comparison = options.compare ? person(options.compare) : null;
+    const kind = options.kind || state.tab;
+    if (kind === 'emendas') { profile(id, { focusAmendments: true }); return; }
+    if (person(id)?.noExercise && kind !== 'projetos') { showDialog('Sem exercício confirmado', `<p>${escape(person(id).name)} não tem exercício de mandato confirmado em ${state.year} nas fontes oficiais, e não há despesas nesse período. Por isso não aparece valor nem entra no ranking de gastos.</p>`); return; }
+    const p = person(id), comparison = options.compare ? person(options.compare) : null;
     if (kind === 'projetos' && window.ClareiaData.billsApproved) { showDialog('Projetos aprovados', `<p class="records-note">${escape(p.name)} · ${billsPeriod()}</p><h3>${p.approved === null ? pending : approvedText(p)}</h3><p>Contamos PL, PLP e PEC apresentados em ${billsPeriod()} em que o deputado é proponente (autor), não apenas signatário, e que viraram norma jurídica: lei ordinária, lei complementar ou emenda constitucional, com a norma identificada no despacho oficial da Câmara.</p>${p.projects === null ? '' : `<p class="context">Apresentou ${number(p.projects)} como proponente no período; projetos apresentados não equivalem a leis aprovadas.</p>`}<p>A autoria e a situação de cada proposta estão na seção de atividade.</p><div class="action-row"><button class="outline-button" data-action="methodology">Fontes e metodologia</button></div>${sourceNote()}`); return; }
     if (kind === 'projetos') { showDialog('Projetos de lei', `<p class="records-note">Projetos de lei ainda não foram coletados nesta versão.</p><p>A próxima etapa inclui PL, PLP e PEC, separando autoria principal de coautoria. Nenhum número é mostrado antes da conferência.</p>${sourceNote()}`); return; }
     if (kind === 'teto' && p.use.status === 'ok') { ceilingEvidence(p); return; }
@@ -1037,10 +1183,13 @@
     if (!D.provisional?.length) return '';
     return `<section class="detail-section provisional-section"><h3>Meses provisórios</h3><ul class="provisional-list">${D.provisional.map(i => `<li><strong>${months[i]}</strong>: provisório</li>`).join('')}</ul><p class="context">${escape(D.provisionalNote)}.</p></section>`;
   }
-  function profile(id) {
+  function profile(id, { focusAmendments = false } = {}) {
     const p = person(id), peer = comparable(p) ? byTotal().find(other => other.id !== id) : null;
     const route = { url: withYear(deputyPath(p)), title: `${p.name} — Clareia` };
-    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${escape(p.officialId)}</p>${p.party ? `<p class="context">${p.partyNote ? 'Partido sem confirmação mês a mês, dos eventos da legislatura (ver nota); UF' : window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p><p class="context cutoff">${cutoff()}</p>${socialLinks(p)}</div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${(!p.noExercise || p.exerciseReviewMonths?.length) && exclusionNote(p) ? `<small class="held-note">${escape(exclusionNote(p))}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos apresentados</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${provisionalSection()}${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button><button class="share-button" data-action="copy-link" data-id="${id}">Compartilhar</button>${D.shareImages ? `<button class="outline-button" data-action="share-image" data-id="${id}">Baixar imagem</button>` : ''}${safeUrl(p.sourceUrl) ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`, true, route);
+    const run = ++amendmentsProfileRun;
+    showDialog('Perfil do representante', `<div class="profile-head">${avatar(p)}<div><h3>${escape(p.name)}</h3><p class="context">Deputado(a) federal • ${escape(context(p))} • ID Câmara ${escape(p.officialId)}</p>${p.party ? `<p class="context">${p.partyNote ? 'Partido sem confirmação mês a mês, dos eventos da legislatura (ver nota); UF' : window.ClareiaData.coverageApproved ? 'Partido por competência, conforme a cobertura aprovada; UF' : 'Partido atual e UF'} conforme o cadastro da Câmara consultado em ${date(p.profileFetchedAt)}.</p>` : ''}<p class="context">${D.coverage.length} meses publicados nesta versão (${span()})</p><p class="context cutoff">${cutoff()}</p>${socialLinks(p)}</div></div><div class="profile-stats"><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="gastos"><span>${state.metric === 'mensal' ? 'Despesa média / mês' : 'Despesas no recorte'}</span><strong>${p.noExercise ? `Sem exercício confirmado em ${state.year}` : p.heldMonths?.length && !p.cells.length ? 'Em revisão' : `${money(value(p, 'gastos'))} ↗︎`}</strong>${(!p.noExercise || p.exerciseReviewMonths?.length) && exclusionNote(p) ? `<small class="held-note">${escape(exclusionNote(p))}</small>` : ''}</button><button class="profile-stat" data-action="evidence" data-id="${id}" data-kind="projetos"><span>Projetos apresentados</span><strong>${p.projects === null ? pending : number(p.projects)}</strong></button></div>${p.noExercise || p.heldMonths?.length && !p.cells.length ? '' : categoryBreakdown(p)}${provisionalSection()}<section class="detail-section amendments-section" id="profile-amendments" data-amendments-run="${run}"><h3>Emendas</h3><p class="records-note" role="status">Carregando…</p></section>${peer ? `<div class="editorial-follow-up"><span>Continue investigando</span><button data-p-ask="${escape(`Compare ${p.name} e ${peer.name}`)}">Como ${escape(first(p))} se compara a ${escape(first(peer))}? →</button></div>` : ''}<div class="action-row">${peer ? `<button class="outline-button primary" data-action="profile-compare" data-id="${id}">Comparar com ${escape(first(peer))}</button>` : ''}<button class="outline-button" data-action="records" data-id="${id}">Abrir registros</button><button class="share-button" data-action="copy-link" data-id="${id}">Compartilhar</button>${D.shareImages ? `<button class="outline-button" data-action="share-image" data-id="${id}">Baixar imagem</button>` : ''}${safeUrl(p.sourceUrl) ? `<a class="outline-button" href="${escape(p.sourceUrl)}" target="_blank" rel="noopener noreferrer">Cadastro na Câmara ↗︎</a>` : ''}</div>${sourceNote()}`, true, route);
+    if (focusAmendments) $('#profile-amendments')?.scrollIntoView?.({ block: 'start' });
+    hydrateProfileAmendments(p, run);
   }
   function methodologyBody() {
     const v = index.validation, audit = index.audit, P = window.ClareiaPages;
@@ -1158,14 +1307,14 @@
         if (next === 'senado') {
           askRun++;
           if (state.answer?.type === 'loading') state.answer = null;
-          if (state.tab === 'projetos') state.tab = 'gastos';
+          if (state.tab === 'projetos' || state.tab === 'emendas') state.tab = 'gastos';
           ensureSenatorsLoaded();
         }
         refresh();
       }
       return;
     }
-    if (target.dataset.tab) { state.tab = target.dataset.tab; state.barLimit = BAR_STEP; state.senatorCeilingLimit = BAR_STEP; refresh(); return; }
+    if (target.dataset.tab) { state.tab = target.dataset.tab; state.barLimit = BAR_STEP; state.senatorCeilingLimit = BAR_STEP; if (state.house === 'camara' && state.tab === 'emendas') ensureAmendmentsIndex(); refresh(); return; }
     if (target.dataset.metric) { state.metric = target.dataset.metric; refresh(); return; }
     if (target.dataset.question) { ask(target.dataset.question); return; }
     if (target.dataset.year) { switchYear(target.dataset.year); return; }
@@ -1232,6 +1381,7 @@
   $('#detail').addEventListener('click', event => { if (event.target === $('#detail')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right) closeDialog(); } });
   $('#detail').addEventListener('close', () => {
     senatorRouteRun++;
+    amendmentsProfileRun++;
     dialogTrail = []; dialogView = null;
     if (session?.live) {
       session.live = false;
@@ -1241,6 +1391,7 @@
     const a = document.activeElement; if (dialogTrigger?.isConnected && (!a || a === document.body || $('#detail').contains(a))) dialogTrigger.focus({ preventScroll: true }); });
   layout();
   if (state.house === 'senado') ensureSenatorsLoaded();
+  if (state.house === 'camara' && state.tab === 'emendas') ensureAmendmentsIndex();
   markTab(false);
   scopeChip();
   document.fonts?.ready.then(() => markTab(false));

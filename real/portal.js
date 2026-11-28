@@ -254,7 +254,7 @@
   }
 
   function moreSection() {
-    return `${intro('07','Conecte as peças','Um mandato tem muitas dimensões.','Trajetória, eleições, patrimônio declarado e emendas entram nas próximas etapas.')}<div class="empty-state real-pending"><b>Eleições, patrimônio e emendas ainda não foram coletados.</b><p>Essas camadas dependem de outras fontes oficiais (TSE e Portal da Transparência). Nenhum número aparece aqui antes de ser conferido com a fonte oficial.</p></div>`;
+    return `${intro('07','Conecte as peças','Um mandato tem muitas dimensões.','Trajetória, eleições e patrimônio declarado entram nas próximas etapas. Emendas individuais já aparecem no perfil de cada deputado e na aba Emendas.')}<div class="empty-state real-pending"><b>Eleições e patrimônio ainda não foram coletados.</b><p>Essas camadas dependem de outras fontes oficiais (TSE). Nenhum número aparece aqui antes de ser conferido com a fonte oficial. Para emendas individuais, consulte o perfil do deputado ou a aba Emendas no ranking.</p></div>`;
   }
 
   function events(id) { const p=C.person(id); return [
@@ -392,7 +392,7 @@
   }
 
 
-  function dossier() { C.showDialog('Ainda não coletado','<p>Eleições, patrimônio e emendas ainda não foram coletados e conferidos.</p>'); }
+  function dossier() { C.showDialog('Ainda não coletado','<p>Eleições e patrimônio ainda não foram coletados e conferidos. Emendas individuais estão disponíveis no perfil de cada deputado e na aba Emendas.</p>'); }
 
   function summary(key) {
     if(key==='expenses'||key==='records'){expenseEvidence(undefined,undefined,12);return;}
@@ -463,7 +463,7 @@
       case 'brief':brief();break;
       case 'assistant':if(editorial){$('#query').scrollIntoView({block:'center',behavior:state.motion?'smooth':'instant'});$('#query').focus({preventScroll:true});}else assistant();break;
       case 'top':window.scrollTo({top:0,behavior:state.motion?'smooth':'instant'});break;
-      case 'coverage':C.showDialog('Cobertura desta versão',`<div class="text-content"><h3>O que esta versão cobre.</h3><p>${C.all().length} deputados, ${C.span()}, despesas da cota parlamentar com dados oficiais da Câmara.</p><p>${window.ClareiaData.billsApproved||window.ClareiaData.votesApproved?`${[window.ClareiaData.billsApproved?'':'Projetos',window.ClareiaData.votesApproved?'':'Votações','Eleições','patrimônio e emendas'].filter(Boolean).join(', ')} ainda não foram publicados nesta versão.`:'Projetos, votações, eleições, patrimônio e emendas ainda não foram coletados; as seções aparecem com o aviso “ainda não coletado”.'}</p><p>A busca usa regras locais, sem IA conectada. Favoritos ficam só neste navegador.</p></div>`);break;
+      case 'coverage':C.showDialog('Cobertura desta versão',`<div class="text-content"><h3>O que esta versão cobre.</h3><p>${C.all().length} deputados, ${C.span()}, despesas da cota parlamentar com dados oficiais da Câmara. Emendas individuais com ligação revisada de autoria (Portal da Transparência/CGU) ficam no perfil do deputado e na aba Emendas.</p><p>${window.ClareiaData.billsApproved||window.ClareiaData.votesApproved?`${[window.ClareiaData.billsApproved?'':'Projetos',window.ClareiaData.votesApproved?'':'Votações','Eleições e patrimônio'].filter(Boolean).join(', ')} ainda não foram coletados nesta versão.`:'Projetos, votações, eleições e patrimônio ainda não foram coletados; as seções aparecem com o aviso “ainda não coletado”.'}</p><p>A busca usa regras locais, sem IA conectada. Favoritos ficam só neste navegador.</p></div>`);break;
       case 'reset-saved':state.favorites.clear();save('clareia-favorites',[]);updateAll();updateFollowCount();C.toast('Favoritos locais apagados.');break;
     }
   });

@@ -186,12 +186,19 @@ export async function buildSite(db:DB,finalDir:string,portraitsDir:string,option
   if(sitePlan.amendments&&amendmentsByDeputy.size){
     const dir=path.join(data,'emendas'),{publicationId}=sitePlan.amendments;
     await fs.mkdir(dir,{recursive:true});
-    for(const [deputyId,list] of amendmentsByDeputy){
+    const indexDeputies:{deputyId:number;years:Record<string,number>}[]=[];
+    for(const [deputyId,list] of [...amendmentsByDeputy].sort(([a],[b])=>a-b)){
       const items=[...list].sort((a,b)=>a.year-b.year||a.destination.localeCompare(b.destination)).map(r=>({year:r.year,destination:r.destination,rows:r.totals.rows,committed:r.totals.committed,liquidated:r.totals.liquidated,paid:r.totals.paid,carriedOver:r.totals.carriedOver,carriedCancelled:r.totals.carriedCancelled,carriedPaid:r.totals.carriedPaid}));
       const json=JSON.stringify({schema:'clareia.amendments-deputy.v1',publicationId,deputyId,rows:items});
       if(scanCpfs(json,new Set()))throw new Error('Identificador privado nas emendas de um deputado');
       await fs.writeFile(path.join(dir,deputyId+'.json'),json);
+      const years:Record<string,number>={};
+      for(const r of items)years[String(r.year)]=(years[String(r.year)]??0)+r.paid;
+      indexDeputies.push({deputyId,years});
     }
+    const indexJson=JSON.stringify({schema:'clareia.amendments-index.v1',publicationId,deputies:indexDeputies});
+    if(scanCpfs(indexJson,new Set()))throw new Error('Identificador privado no índice de emendas');
+    await fs.writeFile(path.join(dir,'index.json'),indexJson);
   }
   for(const file of ['index.html','404.html','data.js','pages.js','analytics.js','app.js','portal.js','styles.css','_headers','icon.svg','apple-touch-icon.png','favicon-32.png','site.webmanifest','icon-192.png','icon-512.png','icon-maskable-512.png','clareia-api.pdf'])await fs.copyFile(path.join(PAGE,file),path.join(outDir,file));
   await fs.mkdir(path.join(outDir,'fonts'));

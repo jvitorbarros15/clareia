@@ -2155,8 +2155,9 @@ check('a deputy with a held month shows a partial total outside rankings, and on
   const card = await revealCard(page, held);
   assert.match(await text(card), /Em revisão/); assert.doesNotMatch(await text(card), /R\$ 0,00/);
   await page.evaluate(id => window.Clareia.profile(String(id)), held);
-  assert.doesNotMatch(await text(page.locator('#detail')), /R\$ 0,00/);
-  assert.match(await text(page.locator('#detail')), /Em revisão/);
+  assert.equal(await page.locator('#detail .category-row').count(), 0);
+  assert.doesNotMatch(await text(page.locator('#detail .profile-stats')), /R\$ 0,00/);
+  assert.match(await text(page.locator('#detail .profile-stats')), /Em revisão/);
   await page.close();
 });
 
