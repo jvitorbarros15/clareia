@@ -100,6 +100,11 @@
   function ranking(kind = state.tab) {
     return sortedBy(inScope(), p => state.tab === 'menos' ? -value(p, kind) : value(p, kind));
   }
+  function featureTop() {
+    const list = state.tab === 'gastos' || state.tab === 'menos' ? ranking('gastos') : byTotal();
+    return (list.length ? list : byTotal()).slice(0, 3);
+  }
+  if (!initial.get('destaque')) state.featured = featureTop()[0]?.id ?? state.featured;
   const icon = name => {
     const paths = {
       search: '<circle cx="10.5" cy="10.5" r="6.8"/><path d="m16 16 5 5"/>',
@@ -275,9 +280,7 @@
     syncURL();
     const url = new URL(location.href);
     if (String(year) === D.defaultYear) url.searchParams.delete('ano'); else url.searchParams.set('ano', year);
-    if (state.house === 'camara' && state.featured) {
-      try { const other = await (await fetch(`${D.yearBase(year)}/index.json`)).json(); if (!other.scope.ids.map(String).includes(String(state.featured))) url.searchParams.delete('destaque'); } catch { url.searchParams.delete('destaque'); }
-    }
+    url.searchParams.delete('destaque');
     location.assign(url);
   }
   // Monthly spend = totalCents ÷ count of months whose exercise is full or partial; with zero such months the senator has no monthly value and stays out of the monthly ranking.
@@ -677,22 +680,22 @@
   }
   function editorialFeature() {
     const p = person(state.featured);
-    const choices = byTotal().slice(0, 3).map(c => `<button type="button" data-action="feature" data-id="${c.id}" aria-pressed="${c.id === p.id}">${avatar(c)}<span>${escape(first(c))}</span></button>`).join('');
+    const choices = featureTop().map(c => `<button type="button" data-action="feature" data-id="${c.id}" aria-pressed="${c.id === p.id}">${avatar(c)}<span>${escape(first(c))}</span></button>`).join('');
     return `<p class="eyebrow">Destaque · dados oficiais</p><button class="feature-value" id="total" data-action="evidence" data-id="${p.id}" data-kind="gastos" data-amount="${value(p, 'gastos')}">${compact(value(p, 'gastos'))}</button><p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} de despesas${state.category === 'Todas' ? '' : ' em ' + escape(label(state.category).toLowerCase())} de ${escape(p.name)} na cota parlamentar em ${span()}.</p><button class="text-button" data-action="evidence" data-id="${p.id}" data-kind="gastos">Como chegamos nisso? →</button><div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destaques</span>${choices}</div>`;
   }
   function senatorFeature() {
     const data = senatorState.data;
     const loading = senatorState.status === 'idle' || senatorState.status === 'loading';
-    const top = senatorState.status === 'ready' ? senatorRanking(data, 'gastos', 'total').list.slice(0, 3) : [];
+    const top = senatorState.status === 'ready' ? senatorRanking(data).list.slice(0, 3) : [];
     if (!top.length) return { portrait: '', html: `<p role="status">${loading ? 'Carregando dados do Senado…' : 'Dados do Senado indisponíveis para este ano.'}</p>` };
-    const { senator: s } = top.find(({ senator }) => String(senator.senatorId) === state.senatorFeatured) ?? top[0];
+    const { senator: s, value: val } = top.find(({ senator }) => String(senator.senatorId) === state.senatorFeatured) ?? top[0];
     const name = s.name?.trim() || '';
     const period = senatorPeriod(data) || data.year;
     const portrait = photo({ name, photo: s.photo ?? null }, true);
     const choices = top.map(({ senator: c }) => `<button type="button" data-action="feature" data-id="${c.senatorId}" aria-pressed="${c === s}">${avatar({ name: c.name?.trim() || '', photo: c.photo ?? null }, true)}<span>${escape(c.name?.trim().split(' ')[0] || senatorDisplayName(c))}</span></button>`).join('');
     const proof = name ? `<a class="text-button" href="${escape(withYear(senatorPath(s)))}" data-action="senator-profile" data-senator-id="${s.senatorId}">Como chegamos nisso? →</a>` : '';
-    const amount = name ? `<button type="button" class="feature-value" id="total" data-action="senator-profile" data-senator-id="${s.senatorId}">${compact(s.totalCents)}</button>` : `<span class="feature-value" id="total">${compact(s.totalCents)}</span>`;
-    const html = `<p class="eyebrow">Destaque · dados oficiais</p>${amount}<p>foi o total de despesas de ${escape(senatorDisplayName(s))} na CEAPS em ${escape(period)}.</p>${proof}<div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destaques</span>${choices}</div>`;
+    const amount = name ? `<button type="button" class="feature-value" id="total" data-action="senator-profile" data-senator-id="${s.senatorId}">${compact(val)}</button>` : `<span class="feature-value" id="total">${compact(val)}</span>`;
+    const html = `<p class="eyebrow">Destaque · dados oficiais</p>${amount}<p>${state.metric === 'mensal' ? 'é a média mensal' : 'foi o total'} de despesas de ${escape(senatorDisplayName(s))} na CEAPS em ${escape(period)}.</p>${proof}<div class="feature-switch" role="group" aria-label="Escolha quem aparece no destaque"><span>Destaques</span>${choices}</div>`;
     return { portrait, html };
   }
   function feature(id) {
@@ -1437,8 +1440,8 @@
       }
       return;
     }
-    if (target.dataset.tab) { state.tab = target.dataset.tab; state.barLimit = BAR_STEP; state.senatorCeilingLimit = BAR_STEP; if (state.house === 'camara' && state.tab === 'emendas') ensureAmendmentsIndex(); refresh(); return; }
-    if (target.dataset.metric) { state.metric = target.dataset.metric; refresh(); return; }
+    if (target.dataset.tab) { state.tab = target.dataset.tab; state.barLimit = BAR_STEP; state.senatorCeilingLimit = BAR_STEP; if (state.house === 'senado') state.senatorFeatured = null; else if (state.tab === 'gastos' || state.tab === 'menos') state.featured = featureTop()[0]?.id ?? state.featured; if (state.house === 'camara' && state.tab === 'emendas') ensureAmendmentsIndex(); refresh(); return; }
+    if (target.dataset.metric) { state.metric = target.dataset.metric; if (state.house === 'senado') state.senatorFeatured = null; else if (state.tab === 'gastos' || state.tab === 'menos') state.featured = featureTop()[0]?.id ?? state.featured; refresh(); return; }
     if (target.dataset.question) { ask(target.dataset.question); return; }
     if (target.dataset.year) { switchYear(target.dataset.year); return; }
     const id = target.dataset.id, action = target.dataset.action;
