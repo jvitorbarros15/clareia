@@ -107,6 +107,47 @@ test('amendments publish per-deputy files with separate measures, leave cota byt
   await assert.rejects(fs.access(path.join(distWithout,'data',builtWithoutAfter.publicationId,'emendas')));
 }));
 
+test('amendments build writes emendas/index.json sorted by deputyId with per-year paid sums and omits it without amendments',()=>setup(async(db,dist,portraits)=>{
+  const a=version([record(100,1,0),record(50,2,1),record(200,3,2)],[1,2,3]);
+  await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
+  const planWithout={defaultYear:2025,years:[{year:2025,publicationId:a.id,ceiling:null}]};
+  const distWithout=dist+'-without';
+  const builtWithout=await buildSite(db,distWithout,portraits,{approvedNames:[]},planWithout);
+  await assert.rejects(fs.access(path.join(distWithout,'data',builtWithout.publicationId,'emendas','index.json')));
+
+  const {report:amReport,version:am}=makeAmendments([
+    {code:'050',deputyId:3,years:{'2025':{'MG':totals(1,400,300,250,10,0,0)}}},
+    {code:'100',deputyId:1,years:{
+      '2025':{'SP':totals(2,1000,800,700,100,20,30),'BA':totals(1,500,400,300,50,10,5)},
+      '2024':{'RJ':totals(3,2000,1500,1200,300,40,60)}
+    }},
+  ],new Set([1,2,3]));
+  await storeAmendmentsVersion(db,am);
+  const audited=await auditAmendmentsVersion(db,am.id,amReport);
+  assert.equal(audited.status,'passed');
+  await recordDomainAudit(db,am.id,'passed',audited);
+
+  const built=await buildSite(db,dist,portraits,{approvedNames:[]},{...planWithout,amendments:{publicationId:am.id}});
+  const base=path.join(dist,'data',built.publicationId);
+  const rawIndex=await fs.readFile(path.join(base,'emendas','index.json'),'utf8');
+  const idx=JSON.parse(rawIndex);
+  assert.deepEqual(Object.keys(idx).sort(),['deputies','publicationId','schema']);
+  assert.equal(idx.schema,'clareia.amendments-index.v1');
+  assert.equal(idx.publicationId,am.id);
+  assert.deepEqual(idx.deputies,[
+    {deputyId:1,years:{'2024':1200,'2025':1000}},
+    {deputyId:3,years:{'2025':250}},
+  ]);
+  for(const d of idx.deputies)assert.deepEqual(Object.keys(d).sort(),['deputyId','years']);
+  assert.equal(rawIndex.includes('revisor-teste'),false);
+  assert.equal(rawIndex.includes('evidencia-teste'),false);
+  assert.equal(rawIndex.includes('"code"'),false);
+  assert.equal(rawIndex.includes('"committed"'),false);
+  assert.equal(rawIndex.includes('"liquidated"'),false);
+  assert.equal(rawIndex.includes('"carriedOver"'),false);
+  await assert.rejects(fs.access(path.join(base,'emendas','2.json')));
+}));
+
 test('unaudited, failed, withheld or wrong-domain amendments versions are refused',()=>setup(async(db,dist,portraits)=>{
   const a=version([record(100,1,0)]);
   await publishDomain(db,'despesas',a);await recordDomainAudit(db,a.id,'passed',report);
